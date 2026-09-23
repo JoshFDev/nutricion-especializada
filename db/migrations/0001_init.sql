@@ -218,9 +218,6 @@ CREATE TABLE compra_detalle (
     precio_kg       NUMERIC(10,2) NOT NULL,
     subtotal        NUMERIC(12,2) GENERATED ALWAYS AS
                      (cantidad_bultos * precio_kg) STORED
-                     -- ojo: aquí "precio_kg" ya viene multiplicado por el
-                     -- peso del bulto si tu hermana cotiza por bulto;
-                     -- ajusta la fórmula si prefieres precio_kg * kg_bulto
 );
 
 CREATE TABLE pagos_proveedor (

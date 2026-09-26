@@ -1,71 +1,76 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
-import morgan from 'morgan';
 import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
+import morgan from 'morgan';
 import { env, origenesCORS } from './config/entorno.js';
 import { prepararSesion } from './middleware/sesion.js';
-import { manejadorErrores, noEncontrado } from './middleware/errores.js';import { baseViva } from './db/pool.js';
+import { manejadorErrores } from './middleware/errores.js';
+import { limiteGeneral, limiteLogin } from './middleware/limites.js';
+import { NoEncontrado } from './core/errores.js';
+import { rutasSalud } from './modules/salud/rutas.js';
 import { rutasAuth } from './modules/auth/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
 
-export function crearApp() {
+/**
+ * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
+ * middleware. Ese orden es la parte sutil de Express, por eso esta
+ * separado de index.ts (que solo arranca el servidor) y de los modulos.
+ *
+ * El orden importa y va de fuera hacia dentro:
+ *   1. confianza en el proxy
+ *   2. cabeceras de seguridad
+ *   3. CORS
+ *   4. cuerpo JSON
+ *   5. logs
+ *   6. limites de peticiones
+ *   7. sesion (abre la conexion a la base)
+ *   8. rutas
+ *   9. 404
+ *  10. manejador de errores (siempre al final)
+ */
+export function crearApp(): Express {
   const app = express();
 
-  // Detras de un proxy (nginx, Heroku) req.ip da la IP del proxy.
-  // Sin esto, todos los registros de auditoria quedan con la misma IP.
-  app.set('trust proxy', 1);
+  // 1. Confiar en X-Forwarded-For SOLO si hay un proxy delante. Con 0, cada
+  //    peticion registra la IP real y nadie puede falsearla mandando la
+  //    cabecera a mano.
+  app.set('trust proxy', env.TRUST_PROXY);
 
+  // 2. Cabeceras de seguridad (CSP, X-Content-Type-Options, HSTS...)
   app.use(helmet());
-  app.use(
-    cors({
-      origin: origenesCORS,
-      credentials: true,
-    }),
-  );
+
+  // 3. CORS con lista blanca, no comodin: el origen se compara exacto.
+  app.use(cors({ origin: origenesCORS, credentials: true }));
+
+  // 4. Solo JSON. El limite de 1mb evita que alguien mande un cuerpo
+  //    gigante para tumbar el proceso.
   app.use(express.json({ limit: '1mb' }));
+
+  // 5. Logs de acceso
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-  // Limite global, y uno mas estricto para el login: es la puerta que
-  // se ataca con fuerza bruta.
-  app.use(
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: 300,
-      standardHeaders: 'draft-7',
-      legacyHeaders: false,
-    }),
-  );
-  app.use(
-    '/api/auth/login',
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: 10,
-      standardHeaders: 'draft-7',
-      legacyHeaders: false,
-      message: { error: 'Demasiados intentos. Espera unos minutos.' },
-    }),
-  );
+  // 6. Limites de peticiones
+  app.use(limiteGeneral);
+  app.use('/api/auth/login', limiteLogin);
 
-  // Cada request recibe su propia conexion y su identidad.
+  // 7. Sesion: abre la conexion dedicada del request y la devuelve al pool
+  //    al terminar. Se monta en /api para que las rutas de salud no
+  //    dependan de la base.
   app.use('/api', prepararSesion);
 
-  app.get('/api/salud', async (_req, res) => {
-    const viva = await baseViva();
-    res.status(viva ? 200 : 503).json({
-      estado: viva ? 'ok' : 'degradado',
-      baseDatos: viva ? 'conectada' : 'sin respuesta',
-      version: process.env.npm_package_version ?? '1.0.0',
-    });
-  });
-
+  // 8. Rutas
+  app.use('/api', rutasSalud);
   app.use('/api/auth', rutasAuth);
   app.use('/api/clientes', rutasClientes);
 
-  // Cualquier ruta /api que no exista cae aqui.
+  // 9. Cualquier otra ruta de /api no existe
   app.use('/api', (_req, _res, next) => {
-    next(noEncontrado('Ese endpoint no existe'));
+    next(new NoEncontrado('Ese endpoint no existe'));
   });
+
+  // 10. Manejador de errores. Siempre el ultimo: Express lo reconoce
+  //     por tener 4 argumentos, y todo lo que se registre despues ya
+  //     nunca se ejecutaria.
   app.use(manejadorErrores);
 
   return app;

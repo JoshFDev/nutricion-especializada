@@ -3,9 +3,10 @@
 //   pnpm dev            (en otra terminal)
 //   pnpm test:api
 //
-// Ojo: el rate limit de /api/auth/login es de 10 intentos por 15 minutos,
-// asi que si Corres esto varias veces seguidas fallara con 429. Reinicia el
-// servidor para reiniciar el contador.
+// Ojo: /api/auth/login tiene un rate limit por IP (LOGIN_MAX_INTENTOS, que
+// en el .env local esta en 100). El contador vive en la memoria del
+// servidor, asi que corriendola varias veces seguidas sin reiniciar
+// termina en 429. La suite se detiene con un mensaje claro cuando pasa.
 
 const BASE = process.env.API_URL ?? 'http://localhost:3000';
 
@@ -58,9 +59,10 @@ const login = async (correo, contrasena) => {
 };
 
 /**
- * El rate limit de /api/auth/login es de 10 intentos por 15 min. Este script
- * gasta 4 en cada corrida, asi que la tercera falla con 429 y las demas
- * empiezan a dar NO_AUTENTICADO en cascada, que es un fallo muy confuso.
+ * El limite de login se agota sooner o later si se corre la suite varias
+ * veces sin reiniciar el servidor. Cuando eso pasa, cada login posterior
+ * responde NO_AUTENTICADO en vez de 429, y el resultado es una cascada de
+ * fallas que apuntan al modulo de permisos y no al rate limit.
  *
  * Se avisa y se sale aqui en vez de desactiver la proteccion: mejor un
  * mensaje claro que bajar la seguridad para que las pruebas pasen.
@@ -113,7 +115,10 @@ const pedir = async (ruta, token, opciones = {}) => {
     process.exit(3);
   }
 
-  return { status: r.status, cuerpo };
+  // Se devuelven las cabeceras y no solo el cuerpo porque el Location del
+  // 201 es parte del contrato: un cliente que lo lea tiene que poder
+  // encontrar el recurso recien creado sin armarlo a mano.
+  return { status: r.status, cuerpo, headers: r.headers };
 };
 
 let fallos = 0;
@@ -1037,11 +1042,337 @@ if (especieEnUso.cuerpo?.nombre) {
   revisar('la especie en uso NO se borro', sigueAhí.status === 200);
 }
 
+// --- productos ---
+//
+// El permiso de productos YA venia de la migracion 0001 (Administrador
+// edita, Empleada lee, Cajera nada), asi que a diferencia del catalogo
+// este bloque no necesita migracion de permisos.
+//
+// Ojo con los nombres de los roles: el bloque del catalogo llama "cajera"
+// a la empleada porque en la base de pruebas no hay cuenta de cajera. Aqui
+// se dice "empleada" porque es lo que es.
+
+const limpiarProductosDePrueba = async () => {
+  const r = await sqlDirecto(`DELETE FROM pos.productos WHERE codigo = ANY($1::text[])`, [
+    ['TST-ALTA', 'TST-BORRABLE', 'TST-INACTIVO'],
+  ]);
+  return r.rowCount;
+};
+
+// Limpieza de corridas anteriores, por codigo exacto.
+await limpiarProductosDePrueba();
+
+/**
+ * `token` NO lleva valor por omision, a proposito.
+ *
+ * Con `token = tokenAdmin` como default, un login que falla devuelve
+ * `undefined` y JavaScript aplica el default: la peticion sale con el
+ * token del ADMINISTRADOR sin avisar. Y eso no solo falsea la prueba,
+ * falsea la conclusion: "la cajera no puede crear productos" pasaria en
+ * verde porque la peticion la termino haciendo el admin. Un default
+ * silencioso en un helper de pruebas convierte un fallo en un falso
+ * positivo, que es la peor falla que puede tener una suite.
+ */
+const crearProducto = (cuerpo, token) =>
+  pedir('/api/productos', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const parcheProducto = (id, cuerpo, token) =>
+  pedir(`/api/productos/${id}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+// --- permisos ---
+const listaEmpleada = await pedir('/api/productos', tokenEmpleada);
+revisar(
+  'la empleada SI lee productos',
+  listaEmpleada.status === 200,
+  JSON.stringify(listaEmpleada.cuerpo),
+);
+
+const altaEmpleada = await crearProducto(
+  { codigo: 'TST-NO', nombre: 'NO DEBERIA', presentacion_kg: 10 },
+  tokenEmpleada,
+);
+revisar(
+  'la empleada NO escribe productos -> 403',
+  altaEmpleada.status === 403,
+  JSON.stringify(altaEmpleada.cuerpo),
+);
+
+const sinTokenProducto = await pedir('/api/productos');
+revisar('productos sin token -> 401', sinTokenProducto.status === 401);
+
+// --- el listado trae datos, total y paginacion ---
+revisar(
+  'productos trae datos, total y paginacion',
+  Array.isArray(listaEmpleada.cuerpo?.datos) &&
+    typeof listaEmpleada.cuerpo?.total === 'number' &&
+    listaEmpleada.cuerpo?.limite === 50 &&
+    listaEmpleada.cuerpo?.offset === 0,
+  JSON.stringify(listaEmpleada.cuerpo?.paginacion ?? listaEmpleada.cuerpo),
+);
+
+revisar(
+  'cada producto trae id, codigo, nombre y presentacion',
+  listaEmpleada.cuerpo?.datos?.every(
+    (p) =>
+      Number.isInteger(p.id) &&
+      typeof p.codigo === 'string' &&
+      typeof p.nombre === 'string' &&
+      typeof p.presentacion_kg === 'number',
+  ),
+);
+
+// El nombre del catalogo viene resuelto por JOIN, no por id suelto.
+const conCatalogo = listaEmpleada.cuerpo?.datos?.find((p) => p.codigo === 'LAC');
+revisar(
+  'el producto trae el nombre de su categoria y su especie',
+  typeof conCatalogo?.categoria === 'string' && typeof conCatalogo?.especie === 'string',
+  JSON.stringify(conCatalogo),
+);
+
+// --- el listado trae SOLO activos por omision ---
+// Se comprueba contra el estado final, mas abajo, cuando ya exista un
+// producto inactivo. Aqui solo se deja constancia de que el parametro
+// existe y responde.
+
+// --- validacion de la presentacion ---
+// NUMERIC(10,3): hasta 3 decimales, y mayor que cero. Se manda el texto
+// para comprobar que 12.345 entra y que 12.3456 no.
+const presentacionOK = await crearProducto(
+  { codigo: 'TST-ALTA', nombre: 'Producto de prueba', presentacion_kg: '12.345' },
+  tokenAdmin,
+);
+revisar(
+  'alta con 3 decimales -> 201',
+  presentacionOK.status === 201,
+  JSON.stringify(presentacionOK.cuerpo),
+);
+revisar(
+  'la presentacion se guarda como numero',
+  presentacionOK.cuerpo?.presentacion_kg === 12.345,
+  JSON.stringify(presentacionOK.cuerpo?.presentacion_kg),
+);
+revisar(
+  'el alta responde 201 con Location',
+  /^\/api\/productos\/\d+$/.test(presentacionOK.headers?.get('location') ?? ''),
+  presentacionOK.headers?.get('location') ?? '(sin cabecera location)',
+);
+
+const prodId = presentacionOK.cuerpo?.id;
+
+for (const [descripcion, presentacion] of [
+  ['cuatro decimales', '12.3456'],
+  ['cero', '0'],
+  ['negativa', '-5'],
+  ['texto', 'mucho'],
+  ['vacia', ''],
+]) {
+  const r = await crearProducto(
+    { codigo: 'TST-MALO', nombre: 'No deberia existir', presentacion_kg: presentacion },
+    tokenAdmin,
+  );
+  revisar(`presentacion ${descripcion} -> 400`, r.status === 400, JSON.stringify(r.cuerpo));
+}
+
+// --- otras validaciones ---
+for (const [descripcion, cuerpo] of [
+  ['codigo vacio', { codigo: '  ', nombre: 'Algo', presentacion_kg: 1 }],
+  ['nombre de 1 caracter', { codigo: 'TST-X', nombre: 'A', presentacion_kg: 1 }],
+  ['codigo larguisimo', { codigo: 'X'.repeat(41), nombre: 'Algo', presentacion_kg: 1 }],
+  ['campo de mas', { codigo: 'TST-Y', nombre: 'Algo', presentacion_kg: 1, color: 'rojo' }],
+]) {
+  const r = await crearProducto(cuerpo, tokenAdmin);
+  revisar(`alta con ${descripcion} -> 400`, r.status === 400, JSON.stringify(r.cuerpo));
+}
+
+// --- codigo prodDuplicado sin distinguir mayusculas ---
+// 'LAC' esta en el seed. Este es el caso que el indice ux_productos_codigo_ci
+// de la migracion 0005 existe para atrapar.
+const prodDuplicado = await crearProducto(
+  { codigo: 'lac', nombre: 'Otro vimilac', presentacion_kg: 20 },
+  tokenAdmin,
+);
+revisar(
+  'codigo prodDuplicado por mayusculas -> 409',
+  prodDuplicado.status === 409,
+  JSON.stringify(prodDuplicado.cuerpo),
+);
+revisar(
+  'el 409 dice CODIGO_DUPLICADO',
+  prodDuplicado.cuerpo?.codigo === 'CODIGO_DUPLICADO',
+  JSON.stringify(prodDuplicado.cuerpo),
+);
+
+// --- referencias al catalogo que no existen ---
+// 999 cabe en el SMALLINT del catalogo, asi que pasa la validacion del
+// id y lo agarra la comprobacion del servicio. Si el servicio no lo
+// revisara, esto seria un 23503 traducido a un 409 sin informacion.
+const categoriaFantasma = await crearProducto(
+  { codigo: 'TST-FANT', nombre: 'Categoria inventada', presentacion_kg: 5, categoria_id: 999 },
+  tokenAdmin,
+);
+revisar(
+  'categoria inexistente -> 400',
+  categoriaFantasma.status === 400,
+  JSON.stringify(categoriaFantasma.cuerpo),
+);
+revisar(
+  'el 400 dice QUE categoria no existe',
+  /categoria 999/.test(categoriaFantasma.cuerpo?.error ?? ''),
+  categoriaFantasma.cuerpo?.error,
+);
+
+// --- ver uno ---
+const prodVerUno = await pedir(`/api/productos/${prodId}`, tokenAdmin);
+revisar('ver un producto -> 200', prodVerUno.status === 200, JSON.stringify(prodVerUno.cuerpo));
+
+const prodVerFantasma = await pedir('/api/productos/999999', tokenAdmin);
+revisar(
+  'ver un id inexistente -> 404',
+  prodVerFantasma.status === 404,
+  JSON.stringify(prodVerFantasma.cuerpo),
+);
+
+const prodVerMalo = await pedir('/api/productos/abc', tokenAdmin);
+revisar('id no numerico -> 400', prodVerMalo.status === 400, JSON.stringify(prodVerMalo.cuerpo));
+
+// --- PATCH parcial ---
+// Se manda SOLO el nombre. Todo lo demai tiene que quedarse como estaba;
+// si el PATCH fuera de reemplazo completo, estos tres campos se perderian.
+const parche = await parcheProducto(prodId, { nombre: 'Producto renombrado' }, tokenAdmin);
+revisar('patch parcial -> 200', parche.status === 200, JSON.stringify(parche.cuerpo));
+revisar('el nombre si cambio', parche.cuerpo?.nombre === 'Producto renombrado');
+revisar('el codigo no cambio', parche.cuerpo?.codigo === 'TST-ALTA', parche.cuerpo?.codigo);
+revisar(
+  'la presentacion no cambio',
+  parche.cuerpo?.presentacion_kg === 12.345,
+  String(parche.cuerpo?.presentacion_kg),
+);
+revisar('el activo no cambio', parche.cuerpo?.activo === true);
+
+const parcheVacio = await parcheProducto(prodId, {}, tokenAdmin);
+revisar('patch sin campos -> 400', parcheVacio.status === 400, JSON.stringify(parcheVacio.cuerpo));
+
+const parcheFantasma = await parcheProducto(999999, { nombre: 'Fantasma' }, tokenAdmin);
+revisar(
+  'patch a id inexistente -> 404',
+  parcheFantasma.status === 404,
+  JSON.stringify(parcheFantasma.cuerpo),
+);
+
+// --- buscar ---
+const buscarCodigo = await pedir('/api/productos?buscar=TST-ALTA', tokenAdmin);
+revisar(
+  'buscar por codigo encuentra el producto',
+  buscarCodigo.cuerpo?.datos?.some((p) => p.codigo === 'TST-ALTA'),
+  JSON.stringify(buscarCodigo.cuerpo?.datos?.map((p) => p.codigo)),
+);
+
+const buscarNada = await pedir('/api/productos?busrar=ZXQ', tokenAdmin);
+revisar(
+  'parametro de busqueda mal escrito -> 400',
+  buscarNada.status === 400,
+  JSON.stringify(buscarNada.cuerpo),
+);
+
+// --- dar de baja, y como se refleja en el listado ---
+const bajaLogica = await parcheProducto(prodId, { activo: false }, tokenAdmin);
+revisar(
+  'dar de baja por patch -> 200',
+  bajaLogica.status === 200,
+  JSON.stringify(bajaLogica.cuerpo),
+);
+revisar('el producto quedo inactivo', bajaLogica.cuerpo?.activo === false);
+
+const listaPorOmision = await pedir('/api/productos?limite=200', tokenAdmin);
+revisar(
+  'el listado por omision ya NO trae el producto dado de baja',
+  !listaPorOmision.cuerpo?.datos?.some((p) => p.codigo === 'TST-ALTA'),
+  JSON.stringify(listaPorOmision.cuerpo?.datos?.map((p) => p.codigo)),
+);
+
+const listaInactivos = await pedir('/api/productos?activo=false', tokenAdmin);
+revisar(
+  '?activo=false si trae el dado de baja',
+  listaInactivos.cuerpo?.datos?.some((p) => p.codigo === 'TST-ALTA'),
+  JSON.stringify(listaInactivos.cuerpo?.datos?.map((p) => p.codigo)),
+);
+
+const listaTodos = await pedir('/api/productos?activo=todos&limite=200', tokenAdmin);
+revisar(
+  '?activo=todos trae los dos',
+  listaTodos.cuerpo?.datos?.some((p) => p.codigo === 'TST-ALTA') &&
+    listaTodos.cuerpo?.datos?.some((p) => p.codigo === 'LAC'),
+  JSON.stringify(listaTodos.cuerpo?.datos?.map((p) => p.codigo)),
+);
+
+// --- borrar lo que NO se usa ---
+const borrable = await crearProducto(
+  { codigo: 'TST-BORRABLE', nombre: 'Se puede borrar', presentacion_kg: 1 },
+  tokenAdmin,
+);
+const borrarSi = await pedir(`/api/productos/${borrable.cuerpo?.id}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar(
+  'borrar un producto sin uso -> 204',
+  borrarSi.status === 204,
+  JSON.stringify(borrarSi.cuerpo),
+);
+
+const prodBorrarDoble = await pedir(`/api/productos/${borrable.cuerpo?.id}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar(
+  'borrar dos veces -> 404',
+  prodBorrarDoble.status === 404,
+  JSON.stringify(prodBorrarDoble.cuerpo),
+);
+
+// --- borrar lo que SI se usa ---
+// LAC esta en el seed y tiene precios, inventario y auditoria. Nueve tablas
+// lo referencian y ninguna tiene ON DELETE, asi que sin el conteo previo
+// esto seria un 23503 seco.
+const prodBorrarEnUso = await pedir('/api/productos/1', tokenAdmin, { method: 'DELETE' });
+revisar(
+  'borrar un producto con historial -> 409',
+  prodBorrarEnUso.status === 409,
+  JSON.stringify(prodBorrarEnUso.cuerpo),
+);
+revisar(
+  'el 409 dice EN_USO',
+  prodBorrarEnUso.cuerpo?.codigo === 'EN_USO',
+  JSON.stringify(prodBorrarEnUso.cuerpo),
+);
+revisar(
+  'el 409 explica en cuantos lugares se usa',
+  /\d+ (precio|movimiento|auditoria|renglon|registro)/.test(prodBorrarEnUso.cuerpo?.error ?? ''),
+  prodBorrarEnUso.cuerpo?.error,
+);
+revisar(
+  'el 409 sugiere darlo de baja',
+  /baja/i.test(prodBorrarEnUso.cuerpo?.error ?? ''),
+  prodBorrarEnUso.cuerpo?.error,
+);
+
+const prodSigueAhi = await pedir('/api/productos/1', tokenAdmin);
+revisar('el producto en uso NO se borro', prodSigueAhi.status === 200);
+
 // Limpia lo que creo esta suite. No hay endpoint DELETE a proposito (en
 // el negocio se da de baja, no se borra), asi que el borrado de prueba se
 // hace por SQL.
 const borrados = await limpiarUsuariosDePrueba();
 revisar('los usuarios de prueba se borraron', borrados > 0, `${borrados} filas`);
+
+const productosBorrados = await limpiarProductosDePrueba();
+revisar('los productos de prueba se borraron', productosBorrados > 0, `${productosBorrados} filas`);
 void idNuevo;
 
 // Es el unico punto del archivo que toca la base sin pasar por HTTP, y

@@ -9,6 +9,45 @@
 
 const BASE = process.env.API_URL ?? 'http://localhost:3000';
 
+/**
+ * GUARDIA: esta suite crea, modifica y borra registros, y cambia
+ * contrasenas. Si por descuido el servidor `pnpm dev` esta apuntando a la
+ * base de datos REAL, la prueba le deja la cuenta del administrador con
+ * otra contrasena. Ya paso una vez, asi que ahora se comprueba antes de
+ * tocar nada: se lee el nombre de la base que reporta /api/salud y, si no
+ * parece una base de pruebas, se sale.
+ *
+ * Para correr contra otra base de pruebas:  API_BASE_ESPERADA=mi_base_test
+ */
+const BASE_ESPERADA = process.env.API_BASE_ESPERADA ?? 'test';
+
+const verificarBaseDePruebas = async () => {
+  let salud;
+  try {
+    salud = await fetch(`${BASE}/api/salud`).then((r) => r.json());
+  } catch {
+    console.error(`No se pudo contactar el servidor en ${BASE}. ¿Está 'pnpm dev' corriendo?`);
+    process.exit(3);
+  }
+
+  const base = String(salud.base ?? '');
+  if (!base.toLowerCase().includes(BASE_ESPERADA.toLowerCase())) {
+    console.error('');
+    console.error('=== LA SUITE NO CORRE CONTRA ESTA BASE ===');
+    console.error(`El servidor en ${BASE} está usando:  ${base || '(desconocida)'}`);
+    console.error(`Se esperaba una base que contenga:   ${BASE_ESPERADA}`);
+    console.error('');
+    console.error('Esta suite cambia la contraseña del admin y borra registros.');
+    console.error('Para correrla, levanta el servidor contra una base de pruebas:');
+    console.error('  PGDATABASE=nutr_test pnpm dev');
+    console.error('O cambia la base esperada:');
+    console.error('  API_BASE_ESPERADA=nutr_test pnpm test:api');
+    console.error('=============================================');
+    process.exit(3);
+  }
+  return base;
+};
+
 const login = async (correo, contrasena) => {
   const r = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
@@ -63,6 +102,8 @@ const revisar = (nombre, ok, detalle = '') => {
 };
 
 // ---------------------------------------------------------------- salud
+const baseEnUso = await verificarBaseDePruebas();
+console.log(`Base en uso: ${baseEnUso}`);
 const salud = await pedir('/api/salud');
 revisar('GET /api/salud responde 200', salud.status === 200, JSON.stringify(salud.cuerpo));
 
@@ -334,7 +375,10 @@ const pool = new Pool({
   host: process.env.PGHOST ?? '127.0.0.1',
   user: process.env.PGUSER ?? 'postgres',
   password: process.env.PGPASSWORD ?? 'postgresql',
-  database: process.env.PGDATABASE ?? 'nutr_test',
+  // Debe ser la MISMA base que reporta el servidor, no un default fijo:
+  // si el servidor corriera contra otra base de pruebas, el restore
+  // reescribiria contrasenas en la base equivocada.
+  database: baseEnUso,
   port: Number(process.env.PGPORT ?? 5432),
 });
 try {

@@ -18,7 +18,10 @@
     "format:check": "prettier --check .",
     "verificar": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migrar": "tsx scripts/migrar.ts",
+    "migrar:estado": "tsx scripts/migrar.ts --estado",
+    "migrar:seed": "tsx scripts/migrar.ts --seed"
   },
   "dependencies": {
     "cors": "^2.8.5",

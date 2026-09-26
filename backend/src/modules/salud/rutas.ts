@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { baseViva } from '../../db/pool.js';
+import { env } from '../../config/entorno.js';
 
 export const rutasSalud = Router();
 
@@ -14,7 +15,14 @@ rutasSalud.get('/salud', async (_req, res) => {
   const viva = await baseViva();
   res.status(viva ? 200 : 503).json({
     estado: viva ? 'ok' : 'degradado',
-    baseDatos: viva ? 'conectada' : 'sin respuesta',
+    // El nombre de la base va exposed a proposito. Las pruebas de
+    // integracion lo leen para negarse a correr contra la base real: sin
+    // esto, un `pnpm dev` olvidado apuntando a la base verdadera hace que
+    // la suite cree y borre registros de verdad, y deje contrasenas
+    // cambiadas. En una app de escritorio no hay nada que filtrar aqui;
+    // en un servicio publico esto no se expondría.
+    base: env.PGDATABASE,
+    conexion: viva ? 'ok' : 'sin respuesta',
     version: process.env.npm_package_version ?? '1.0.0',
   });
 });

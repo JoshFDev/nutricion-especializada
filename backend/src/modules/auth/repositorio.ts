@@ -115,3 +115,73 @@ export async function podarSesiones(
   );
   return resultado.rowCount ?? 0;
 }
+
+/**
+ * Compara la contrasena contra el hash guardado, dentro de Postgres.
+ * Devuelve false en vez de lanzar para que el servicio decida el error.
+ */
+export async function verificarContrasena(
+  cliente: PoolClient,
+  usuarioId: number,
+  contrasena: string,
+): Promise<boolean> {
+  const fila = await consultarUno<{ ok: boolean }>(
+    cliente,
+    `SELECT crypt($2, contrasena) = contrasena AS ok
+       FROM usuarios
+      WHERE id = $1 AND activo`,
+    [usuarioId, contrasena],
+  );
+  return fila?.ok === true;
+}
+
+/**
+ * El hash se genera en la base con gen_salt: el hash nunca se arma en Node
+ * ni viaja por el proceso. De paso baja el flag de cambio pendiente y
+ * limpia el bloqueo por intentos fallidos, porque quien cambia su
+ * contrasena ya demostro que es el dueno de la cuenta.
+ */
+export async function cambiarContrasena(
+  cliente: PoolClient,
+  usuarioId: number,
+  nueva: string,
+): Promise<boolean> {
+  const resultado = await cliente.query(
+    `UPDATE usuarios
+        SET contrasena = crypt($2, gen_salt('bf', 12)),
+            debe_cambiar_contrasena = false,
+            intentos_fallidos = 0,
+            bloqueado_hasta = NULL
+      WHERE id = $1 AND activo`,
+    [usuarioId, nueva],
+  );
+  return (resultado.rowCount ?? 0) > 0;
+}
+
+/**
+ * Cierra TODAS las demas sesiones del usuario menos la actual.
+ *
+ * Es lo importante: si alguien cambio su contrasena porque se la
+ * robaron, las sesiones del ladrón tienen que morir en el acto. Dejar la
+ * sesion actual viva es para que no se cierre a si mismo y lose el
+ * token que esta usando.
+ */
+export async function cerrarOtrasSesiones(
+  cliente: PoolClient,
+  usuarioId: number,
+  sesionActualId: number,
+): Promise<number> {
+  // 'manual' es uno de los valores que admite el CHECK sesiones_cierre_motivo_check
+  // ('logout','expiracion','manual','reinicio'). Cuando exista el runner de
+  // migraciones se puede agregar un valor propio 'cambio_contrasena', que daria
+  // mas precision al auditar, pero no es necesario para que funcione.
+  const resultado = await cliente.query(
+    `UPDATE sesiones
+        SET cerrada_en = now(), cierre_motivo = 'manual'
+      WHERE usuario_id = $1
+        AND id <> $2
+        AND cerrada_en IS NULL`,
+    [usuarioId, sesionActualId],
+  );
+  return resultado.rowCount ?? 0;
+}

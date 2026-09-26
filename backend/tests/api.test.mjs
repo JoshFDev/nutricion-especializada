@@ -182,5 +182,128 @@ revisar('el token deja de servir tras logout -> 401', despues.status === 401);
 const rutaMala = await pedir('/api/no-existe', token);
 revisar('ruta inexistente -> 404', rutaMala.status === 404);
 
+
+// ---------------------------------------------------------------- cambio de contrasena
+// Se prueba al final y se restauran las contrasenas del seed, porque si
+// fallara el archivo dejaria al usuario sin poder entrar a la app.
+console.log('');
+console.log('--- cambio de contrasena ---');
+
+// El token de la seccion anterior ya se cerro con el logout, asi que hace
+// falta uno nuevo para probar este endpoint.
+const adminCambio = await login('admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+DETENER_POR_LIMIT(adminCambio);
+revisar('login del admin para la prueba de cambio', adminCambio.status === 200);
+const tokenCambio = adminCambio.body?.token;
+
+const nueva1 = 'NuevaClaveSegura2026';
+const nueva2 = 'OtraClaveSegura2026';
+
+// 1) La contrasena actual equivocada debe rechazarse
+const malaActual = await pedir('/api/auth/cambiar-contrasena', tokenCambio, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ actual: 'no-es-la-actual', nueva: nueva1 }),
+});
+revisar('cambiar con contrasena actual incorrecta -> 400', malaActual.status === 400);
+revisar(
+  'el error señala el campo actual',
+  Array.isArray(malaActual.cuerpo?.detalles) &&
+    malaActual.cuerpo.detalles.some((d) => d.campo === 'actual'),
+  JSON.stringify(malaActual.cuerpo?.detalles),
+);
+
+// 2) Contrasena debil debe rechazarse ANTES de tocar la base
+const debil = await pedir('/api/auth/cambiar-contrasena', tokenCambio, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ actual: 'CAMBIAR-ESTA-CLAVE', nueva: 'corta' }),
+});
+revisar('contrasena debil -> 400', debil.status === 400);
+revisar('la contrasena debil no cambia nada', debil.cuerpo?.codigo === 'VALIDACION');
+
+// 3) Igual a la actual -> 400
+const igual = await pedir('/api/auth/cambiar-contrasena', tokenCambio, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ actual: 'CAMBIAR-ESTA-CLAVE', nueva: 'CAMBIAR-ESTA-CLAVE' }),
+});
+revisar('repetir la misma contrasena -> 400', igual.status === 400);
+
+// 4) Sin token -> 401
+const sinTokenCambio = await pedir('/api/auth/cambiar-contrasena', undefined, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ actual: 'CAMBIAR-ESTA-CLAVE', nueva: nueva1 }),
+});
+revisar('cambiar sin token -> 401', sinTokenCambio.status === 401);
+
+// 5) El caso bueno: cambiar de verdad
+const buena = await pedir('/api/auth/cambiar-contrasena', tokenCambio, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ actual: 'CAMBIAR-ESTA-CLAVE', nueva: nueva1 }),
+});
+revisar('cambio valido -> 200', buena.status === 200, JSON.stringify(buena.cuerpo));
+
+// 6) La sesion actual SIGUE viva: si no, el usuario se queda sin token
+const yoTrasCambio = await pedir('/api/auth/yo', tokenCambio);
+revisar('la sesion actual sobrevive al cambio', yoTrasCambio.status === 200);
+
+// 7) La contrasena vieja ya no entra
+const loginViejo = await login('admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+revisar('la contrasena vieja ya no sirve', loginViejo.status === 401);
+
+// 8) La nueva si entra
+const loginNuevo = await login('admin@ejemplo.local', nueva1);
+DETENER_POR_LIMIT(loginNuevo);
+revisar('la contrasena nueva si sirve', loginNuevo.status === 200 && !!loginNuevo.body.token);
+
+// 9) El hash guardado NO es la contrasena en texto plano
+if (loginNuevo.body.token) {
+  const perfilNuevo = await pedir('/api/auth/yo', loginNuevo.body.token);
+  revisar('el token nuevo funciona', perfilNuevo.status === 200);
+}
+
+// 10) Restaurar las contrasenas del seed.
+//
+// Esto se hace por SQL directo y no por la API a proposito: la API, con
+// buena razon, RECHAZA la contrasena del seed (es debil y la politica pide
+// 12 caracteres con mayuscula, minuscula y numero). Si el test dejara la
+// cuenta del admin con 'NuevaClaveSegura2026', la siguiente corrida
+// fallaria al hacer login y el usuario se quedaria sin la clave que
+// documenta el README.
+//
+// Es el unico punto del archivo que toca la base sin pasar por HTTP, y
+// es aceptable: es arnes de pruebas, no codigo de la aplicacion.
+const { default: pg } = await import('pg');
+const { Pool } = pg;
+const pool = new Pool({
+  host: process.env.PGHOST ?? '127.0.0.1',
+  user: process.env.PGUSER ?? 'postgres',
+  password: process.env.PGPASSWORD ?? 'postgresql',
+  database: process.env.PGDATABASE ?? 'nutr_test',
+  port: Number(process.env.PGPORT ?? 5432),
+});
+try {
+  // pgcrypto se instalo en el esquema pos, no en public, asi que sin esto
+  // crypt() y gen_salt() no existen para este Pool (error 42883).
+  await pool.query('SET search_path TO pos');
+
+  const r = await pool.query(
+    `UPDATE pos.usuarios SET contrasena = crypt($1, gen_salt('bf', 12)),
+                            debe_cambiar_contrasena = true,
+                            intentos_fallidos = 0, bloqueado_hasta = NULL`,
+    ['CAMBIAR-ESTA-CLAVE'],
+  );
+  revisar(
+    'las contrasenas del seed se restauraron',
+    r.rowCount > 0,
+    `${r.rowCount} usuarios`,
+  );
+} finally {
+  await pool.end();
+}
+
 console.log(`\n${fallos === 0 ? 'TODAS LAS PRUEBAS PASARON' : fallos + ' PRUEBA(S) FALLARON'}`);
 process.exit(fallos === 0 ? 0 : 1);

@@ -46,3 +46,29 @@ export const mapearUsuario = (fila: UsuarioFila): UsuarioPublico => ({
   puesto: fila.puesto,
   debeCambiarContrasena: fila.debe_cambiar_contrasena,
 });
+
+/**
+ * Politica de contrasena. Se valida en el backend y NO en el frontend: si
+ * la regla viviera solo en Angular, cualquiera podria saltarsela hablando
+ * directo con el API.
+ *
+ * No imponemos simbolos raros: basta con 12 caracteres y tres clases.
+ */
+const contrasenaFuerte = z
+  .string()
+  .min(12, 'La contrasena necesita al menos 12 caracteres')
+  .max(200, 'La contrasena es demasiado larga')
+  .refine((v) => /[a-z]/.test(v) && /[A-Z]/.test(v), 'Debe tener mayusculas y minusculas')
+  .refine((v) => /\d/.test(v), 'Debe incluir al menos un numero');
+
+export const cambiarContrasenaEsquema = z
+  .object({
+    actual: z.string().min(1, 'Escribe tu contrasena actual').max(200),
+    nueva: contrasenaFuerte,
+  })
+  .refine((d) => d.nueva !== d.actual, {
+    message: 'La nueva contrasena debe ser distinta de la actual',
+    path: ['nueva'],
+  });
+
+export type CambiarContrasena = z.infer<typeof cambiarContrasenaEsquema>;

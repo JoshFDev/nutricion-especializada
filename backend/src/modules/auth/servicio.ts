@@ -1,10 +1,12 @@
 import type { PoolClient } from 'pg';
-import { NoAutenticado } from '../../core/errores.js';
+import { ErrorValidacion, NoAutenticado } from '../../core/errores.js';
 import { env } from '../../config/entorno.js';
 import { generarToken, hashToken } from '../../middleware/sesion.js';
+import { enTransaccionDe } from '../../db/transaccion.js';
 import * as repo from './repositorio.js';
 import {
   mapearUsuario,
+  type CambiarContrasena,
   type Login,
   type RespuestaLogin,
   type Perfil,
@@ -82,4 +84,45 @@ export async function perfil(cliente: PoolClient, usuarioId: number): Promise<Pe
 export async function cerrar(cliente: PoolClient, sesionId: number): Promise<void> {
   // Idempotente: cerrar dos veces la misma sesion no es un error.
   await repo.cerrarSesion(cliente, sesionId);
+}
+
+/**
+ * Cambio de contrasena con la sesion viva.
+ *
+ * Se pide la contrasena ACTUAL a proposito: sin ella, basta con que te
+ * roben el token para quedarse con la cuenta para siempre.
+ */
+export async function cambiarContrasena(
+  cliente: PoolClient,
+  usuarioId: number,
+  sesionId: number,
+  datos: CambiarContrasena,
+): Promise<{ sesionesCerradas: number }> {
+  if (!(await repo.verificarContrasena(cliente, usuarioId, datos.actual))) {
+    throw new ErrorValidacion('No se pudo cambiar la contrasena', [
+      { campo: 'actual', problema: 'La contrasena actual no es correcta' },
+    ]);
+  }
+
+  // O se cambia la contrasena y se cierran las sesiones, o no se hace
+  // nada. Sin esto, si el UPDATE entra y el de sesiones revienta,
+  // el ladron conserva el acceso con la contrasena vieja.
+  //
+  // Se usa enTransaccionDe y no enTransaccion a proposito: ambas comparten
+  // el MISMO cliente. Si se pidiera uno nuevo al pool, perderiamos el GUC
+  // app.usuario_id y el trigger de auditoria registraria la operacion
+  // como si la hubiera hecho el usuario NULL.
+  let sesionesCerradas = 0;
+
+  await enTransaccionDe(cliente, async (c) => {
+    const cambiada = await repo.cambiarContrasena(c, usuarioId, datos.nueva);
+    if (!cambiada) {
+      // verificarContrasena dixo hace un momento que estaba activo, asi
+      // que esto es una carrera: alguien lo desactivo entre ambas consultas.
+      throw new NoAutenticado('La cuenta ya no esta activa');
+    }
+    sesionesCerradas = await repo.cerrarOtrasSesiones(c, usuarioId, sesionId);
+  });
+
+  return { sesionesCerradas };
 }

@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { cuerpo } from '../../core/validacion.js';
 import { NoAutenticado } from '../../core/errores.js';
-import type { Login } from './esquemas.js';
+import type { CambiarContrasena, Login } from './esquemas.js';
 import * as servicio from './servicio.js';
 
 /**
@@ -32,4 +32,19 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   if (!req.sesion) throw new NoAutenticado();
   await servicio.cerrar(req.db, req.sesion.sesionId);
   res.status(204).end();
+};
+
+export const cambiarContrasena = async (req: Request, res: Response): Promise<void> => {
+  if (!req.sesion) throw new NoAutenticado();
+  const datos = cuerpo<CambiarContrasena>(req);
+  const resultado = await servicio.cambiarContrasena(
+    req.db,
+    req.sesion.usuarioId,
+    req.sesion.sesionId,
+    datos,
+  );
+  res.json({
+    mensaje: 'Contrasena actualizada. Las demas sesiones se cerraron.',
+    ...resultado,
+  });
 };

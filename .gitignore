@@ -1,1 +1,30 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+.angular/
+out-tsc/
+*.tsbuildinfo
+
+# Entorno: NUNCA subir la contraseña de la base de datos
 .env
+.env.*
+!.env.example
+
+# Datos reales de clientes: nunca deben llegar al repositorio
+*.sql.gz
+*.dump
+dump/
+backups/
+db/data/
+
+# Logs y temporales
+*.log
+npm-debug.log*
+pnpm-debug.log*
+coverage/
+.DS_Store
+Thumbs.db

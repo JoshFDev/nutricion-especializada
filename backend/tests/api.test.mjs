@@ -18,6 +18,27 @@ const login = async (correo, contrasena) => {
   return { status: r.status, body: await r.json() };
 };
 
+/**
+ * El rate limit de /api/auth/login es de 10 intentos por 15 min. Este script
+ * gasta 4 en cada corrida, asi que la tercera falla con 429 y las demas
+ * empiezan a dar NO_AUTENTICADO en cascada, que es un fallo muy confuso.
+ *
+ * Se avisa y se sale aqui en vez de desactiver la proteccion: mejor un
+ * mensaje claro que bajar la seguridad para que las pruebas pasen.
+ */
+const DETENER_POR_LIMIT = (r) => {
+  if (r.status === 429) {
+    console.log('');
+    console.log('=== LIMITE DE INTENTOS ALCANZADO (429) ===');
+    console.log('El rate limit de login ya se consumio. Reinicia el servidor:');
+    console.log('  pkill -f "tsx watch"   (o Ctrl+C en la terminal del pnpm dev)');
+    console.log('O sube el limite solo para desarrollo en backend/.env:');
+    console.log('  LOGIN_MAX_INTENTOS=50');
+    console.log('============================================');
+    process.exit(2);
+  }
+};
+
 const pedir = async (ruta, token, opciones = {}) => {
   const r = await fetch(BASE + ruta, {
     ...opciones,
@@ -40,12 +61,19 @@ revisar('GET /api/salud responde 200', salud.status === 200, JSON.stringify(salu
 
 // ---------------------------------------------------------------- sin token
 const sinToken = await pedir('/api/clientes');
-revisar('clientes sin token -> 401', sinToken.status === 401, JSON.stringify(salud.cuerpo));
+revisar('clientes sin token -> 401', sinToken.status === 401, JSON.stringify(sinToken.cuerpo));
+revisar(
+  'el 401 dice NO_AUTENTICADO y no revela nada',
+  sinToken.cuerpo?.codigo === 'NO_AUTENTICADO',
+  JSON.stringify(sinToken.cuerpo),
+);
 
 // ---------------------------------------------------------------- login malo
 const malo = await login('admin@ejemplo.local', 'mala');
+DETENER_POR_LIMIT(malo);
 revisar('login con contrasena incorrecta -> 401', malo.status === 401);
 const inexistente = await login('nadie@ejemplo.local', 'x');
+DETENER_POR_LIMIT(inexistente);
 revisar('login de usuario inexistente -> 401', inexistente.status === 401);
 revisar(
   'el mensaje NO revela si el correo existe',
@@ -55,6 +83,7 @@ revisar(
 
 // ---------------------------------------------------------------- login bueno
 const ok = await login('admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+DETENER_POR_LIMIT(ok);
 revisar('login correcto -> 200 con token', ok.status === 200 && !!ok.body.token);
 const token = ok.body.token;
 revisar('el token no es el hash de la base', !/^[a-f0-9]{64}$/.test(token));
@@ -114,6 +143,7 @@ revisar('DELETE borra', borrado.status === 204);
 // Los roles estan definidos en 0001_init.sql: la Empleada opera el mostrador
 // (puede dar de alta clientes) pero no toca lo sensible. La Cajera solo cobra.
 const empleada = await login('empleada@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+DETENER_POR_LIMIT(empleada);
 revisar('login de la empleada -> 200', empleada.status === 200);
 
 if (empleada.body.token) {

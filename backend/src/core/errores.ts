@@ -69,5 +69,4 @@ export class DemasiadasPeticiones extends AppError {
   }
 }
 
-export const esAppError = (error: unknown): error is AppError =>
-  error instanceof AppError;
+export const esAppError = (error: unknown): error is AppError => error instanceof AppError;

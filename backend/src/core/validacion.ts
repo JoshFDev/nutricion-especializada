@@ -1,5 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { ZodError, type ZodType } from 'zod';
+import { type ZodError, type ZodType } from 'zod';
 import { ErrorValidacion } from './errores.js';
 
 declare global {

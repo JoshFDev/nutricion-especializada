@@ -42,10 +42,17 @@ const DETENER_POR_LIMIT = (r) => {
 const pedir = async (ruta, token, opciones = {}) => {
   const r = await fetch(BASE + ruta, {
     ...opciones,
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(opciones.headers || {}) },
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opciones.headers || {}),
+    },
   });
   let cuerpo;
-  try { cuerpo = await r.json(); } catch { cuerpo = '(sin cuerpo)'; }
+  try {
+    cuerpo = await r.json();
+  } catch {
+    cuerpo = '(sin cuerpo)';
+  }
   return { status: r.status, cuerpo };
 };
 
@@ -91,19 +98,38 @@ revisar('el token no es el hash de la base', !/^[a-f0-9]{64}$/.test(token));
 // ---------------------------------------------------------------- sesion
 const yo = await pedir('/api/auth/yo', token);
 revisar('GET /api/auth/yo -> 200', yo.status === 200);
-revisar('el admin ve muchos permisos', (yo.cuerpo.permisos?.length ?? 0) >= 30, `${yo.cuerpo.permisos?.length} permisos`);
-revisar('el admin tiene rol Administrador', yo.cuerpo.roles?.includes('Administrador'), JSON.stringify(yo.cuerpo.roles));
+revisar(
+  'el admin ve muchos permisos',
+  (yo.cuerpo.permisos?.length ?? 0) >= 30,
+  `${yo.cuerpo.permisos?.length} permisos`,
+);
+revisar(
+  'el admin tiene rol Administrador',
+  yo.cuerpo.roles?.includes('Administrador'),
+  JSON.stringify(yo.cuerpo.roles),
+);
 
 // ---------------------------------------------------------------- clientes
 const lista = await pedir('/api/clientes', token);
 revisar('GET /api/clientes -> 200', lista.status === 200);
-revisar('la lista trae saldo_actual', lista.cuerpo.datos?.[0] !== undefined && 'saldo_actual' in lista.cuerpo.datos[0]);
+revisar(
+  'la lista trae saldo_actual',
+  lista.cuerpo.datos?.[0] !== undefined && 'saldo_actual' in lista.cuerpo.datos[0],
+);
 
 const filtrada = await pedir('/api/clientes?buscar=CL01', token);
-revisar('el filtro buscar funciona', filtrada.cuerpo.datos?.length === 1, `${filtrada.cuerpo.datos?.length} resultados`);
+revisar(
+  'el filtro buscar funciona',
+  filtrada.cuerpo.datos?.length === 1,
+  `${filtrada.cuerpo.datos?.length} resultados`,
+);
 
 const inexistenteId = await pedir('/api/clientes/999999', token);
-revisar('GET /api/clientes/999999 -> 404', inexistenteId.status === 404, JSON.stringify(inexistenteId.cuerpo));
+revisar(
+  'GET /api/clientes/999999 -> 404',
+  inexistenteId.status === 404,
+  JSON.stringify(inexistenteId.cuerpo),
+);
 
 // validacion: el cuerpo se valida con zod
 const maloBody = await pedir('/api/clientes', token, {
@@ -111,15 +137,27 @@ const maloBody = await pedir('/api/clientes', token, {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ nombre: 'Sin codigo' }),
 });
-revisar('POST sin codigo -> 400 con detalle', maloBody.status === 400 && Array.isArray(maloBody.cuerpo.detalles), JSON.stringify(maloBody.cuerpo).slice(0, 120));
+revisar(
+  'POST sin codigo -> 400 con detalle',
+  maloBody.status === 400 && Array.isArray(maloBody.cuerpo.detalles),
+  JSON.stringify(maloBody.cuerpo).slice(0, 120),
+);
 
 // crear y borrar de verdad
 const creado = await pedir('/api/clientes', token, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ codigo_cliente: 'PRUEBA-API', nombre: 'Cliente de prueba API', establo: 'Establo 1' }),
+  body: JSON.stringify({
+    codigo_cliente: 'PRUEBA-API',
+    nombre: 'Cliente de prueba API',
+    establo: 'Establo 1',
+  }),
 });
-revisar('POST /api/clientes crea', creado.status === 201, JSON.stringify(creado.cuerpo).slice(0, 120));
+revisar(
+  'POST /api/clientes crea',
+  creado.status === 201,
+  JSON.stringify(creado.cuerpo).slice(0, 120),
+);
 const id = creado.cuerpo.id;
 
 const actualizado = await pedir(`/api/clientes/${id}`, token, {
@@ -127,14 +165,22 @@ const actualizado = await pedir(`/api/clientes/${id}`, token, {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ telefono: '618-000-0000' }),
 });
-revisar('PATCH actualiza', actualizado.status === 200 && actualizado.cuerpo.telefono === '618-000-0000', JSON.stringify(actualizado.cuerpo).slice(0,120));
+revisar(
+  'PATCH actualiza',
+  actualizado.status === 200 && actualizado.cuerpo.telefono === '618-000-0000',
+  JSON.stringify(actualizado.cuerpo).slice(0, 120),
+);
 
 const duplicado = await pedir('/api/clientes', token, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ codigo_cliente: 'PRUEBA-API', nombre: 'Duplicado' }),
 });
-revisar('POST duplicado -> 409', duplicado.status === 409, JSON.stringify(duplicado.cuerpo).slice(0, 120));
+revisar(
+  'POST duplicado -> 409',
+  duplicado.status === 409,
+  JSON.stringify(duplicado.cuerpo).slice(0, 120),
+);
 
 const borrado = await pedir(`/api/clientes/${id}`, token, { method: 'DELETE' });
 revisar('DELETE borra', borrado.status === 204);
@@ -155,11 +201,19 @@ if (empleada.body.token) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ codigo_cliente: 'EMPLEADA-OK', nombre: 'Alta por empleada' }),
   });
-  revisar('la empleada SI puede crear clientes (por diseño)', creada.status === 201, JSON.stringify(creada.cuerpo).slice(0, 100));
+  revisar(
+    'la empleada SI puede crear clientes (por diseño)',
+    creada.status === 201,
+    JSON.stringify(creada.cuerpo).slice(0, 100),
+  );
 
   // pero NO puede eliminarlos: clientes.eliminar no esta en su rol
   const borrado = await pedir(`/api/clientes/${creada.cuerpo.id}`, t, { method: 'DELETE' });
-  revisar('la empleada NO puede borrar clientes -> 403', borrado.status === 403, JSON.stringify(borrado.cuerpo).slice(0, 120));
+  revisar(
+    'la empleada NO puede borrar clientes -> 403',
+    borrado.status === 403,
+    JSON.stringify(borrado.cuerpo).slice(0, 120),
+  );
 
   // limpieza con el admin
   const limpiar = await pedir(`/api/clientes/${creada.cuerpo.id}`, token, { method: 'DELETE' });
@@ -182,7 +236,6 @@ revisar('el token deja de servir tras logout -> 401', despues.status === 401);
 const rutaMala = await pedir('/api/no-existe', token);
 revisar('ruta inexistente -> 404', rutaMala.status === 404);
 
-
 // ---------------------------------------------------------------- cambio de contrasena
 // Se prueba al final y se restauran las contrasenas del seed, porque si
 // fallara el archivo dejaria al usuario sin poder entrar a la app.
@@ -197,7 +250,6 @@ revisar('login del admin para la prueba de cambio', adminCambio.status === 200);
 const tokenCambio = adminCambio.body?.token;
 
 const nueva1 = 'NuevaClaveSegura2026';
-const nueva2 = 'OtraClaveSegura2026';
 
 // 1) La contrasena actual equivocada debe rechazarse
 const malaActual = await pedir('/api/auth/cambiar-contrasena', tokenCambio, {
@@ -296,11 +348,7 @@ try {
                             intentos_fallidos = 0, bloqueado_hasta = NULL`,
     ['CAMBIAR-ESTA-CLAVE'],
   );
-  revisar(
-    'las contrasenas del seed se restauraron',
-    r.rowCount > 0,
-    `${r.rowCount} usuarios`,
-  );
+  revisar('las contrasenas del seed se restauraron', r.rowCount > 0, `${r.rowCount} usuarios`);
 } finally {
   await pool.end();
 }

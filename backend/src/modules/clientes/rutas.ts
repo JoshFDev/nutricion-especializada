@@ -22,17 +22,9 @@ export const rutasClientes = Router();
 // ver clientes es muy distinto a borrarlos.
 rutasClientes.use(requiereSesion);
 
-rutasClientes.get(
-  '/',
-  validarQuery(listarClientesEsquema),
-  controlador.listar,
-);
+rutasClientes.get('/', validarQuery(listarClientesEsquema), controlador.listar);
 
-rutasClientes.get(
-  '/:id',
-  validarParams(idClienteEsquema),
-  controlador.obtener,
-);
+rutasClientes.get('/:id', validarParams(idClienteEsquema), controlador.obtener);
 
 rutasClientes.post(
   '/',

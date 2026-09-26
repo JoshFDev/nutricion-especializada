@@ -28,11 +28,10 @@ interface ErrorPostgres {
 function desdePostgres(error: ErrorPostgres): AppError | null {
   switch (error.code) {
     case '23505': // unique_violation
-      return new Conflicto(
-        'DUPLICADO',
-        'Ya existe un registro con esos datos',
-        { constraint: error.constraint, detalle: error.detail },
-      );
+      return new Conflicto('DUPLICADO', 'Ya existe un registro con esos datos', {
+        constraint: error.constraint,
+        detalle: error.detail,
+      });
     case '23503': // foreign_key_violation
       return new Conflicto(
         'REFERENCIA_EN_USO',
@@ -40,11 +39,10 @@ function desdePostgres(error: ErrorPostgres): AppError | null {
         { constraint: error.constraint, detalle: error.detail },
       );
     case '23514': // check_violation
-      return new ReglaNegocio(
-        'REGLA_NEGOCIO',
-        'La operacion viola una regla del negocio',
-        { constraint: error.constraint, detalle: error.detail },
-      );
+      return new ReglaNegocio('REGLA_NEGOCIO', 'La operacion viola una regla del negocio', {
+        constraint: error.constraint,
+        detalle: error.detail,
+      });
     case '42501': // insufficient_privilege
       return new Prohibido(error.message);
     case 'P0001': // raise_exception de los triggers
@@ -118,8 +116,6 @@ export function manejadorErrores(
   res.status(500).json({
     codigo: 'ERROR_INTERNO',
     error: 'Error interno del servidor',
-    ...(env.NODE_ENV === 'development' && error instanceof Error
-      ? { detalle: error.message }
-      : {}),
+    ...(env.NODE_ENV === 'development' && error instanceof Error ? { detalle: error.message } : {}),
   });
 }

@@ -26,7 +26,7 @@ export async function consultarUno<T>(
   return filas[0] ?? null;
 }
 
-export async function contar<T>(
+export async function contar(
   cliente: PoolClient,
   texto: string,
   valores: readonly unknown[] = [],
@@ -45,9 +45,7 @@ export async function contar<T>(
  * (req.db), usa ese cliente en vez de abrir otra conexion del pool,
  * porque si no el COMMIT no incluye lo que hizo el trigger.
  */
-export async function enTransaccion<T>(
-  trabajo: (cliente: PoolClient) => Promise<T>,
-): Promise<T> {
+export async function enTransaccion<T>(trabajo: (cliente: PoolClient) => Promise<T>): Promise<T> {
   const cliente = await pool.connect();
   try {
     await cliente.query('BEGIN');

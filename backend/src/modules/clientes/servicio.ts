@@ -1,11 +1,7 @@
 import type { PoolClient } from 'pg';
 import { Conflicto, NoEncontrado } from '../../core/errores.js';
 import * as repo from './repositorio.js';
-import type {
-  ActualizarCliente,
-  CrearCliente,
-  ListarClientes,
-} from './esquemas.js';
+import type { ActualizarCliente, CrearCliente, ListarClientes } from './esquemas.js';
 import { mapeoCliente, mapeoNota, type Cliente, type ClienteConNotas } from './modelo.js';
 
 /**

@@ -1,10 +1,6 @@
 import type { PoolClient } from 'pg';
 import { consultar, consultarUno, contar } from '../../db/transaccion.js';
-import type {
-  ActualizarCliente,
-  CrearCliente,
-  ListarClientes,
-} from './esquemas.js';
+import type { ActualizarCliente, CrearCliente, ListarClientes } from './esquemas.js';
 import type { ClienteFila, NotaResumenFila } from './modelo.js';
 
 /**
@@ -73,18 +69,16 @@ export async function listar(
   return { filas, total };
 }
 
-export async function obtenerPorId(
-  cliente: PoolClient,
-  id: number,
-): Promise<ClienteFila | null> {
-  return consultarUno<ClienteFila>(
-    cliente,
-    `SELECT ${CAMPOS} ${FROM_CLIENTES} WHERE c.id = $1`,
-    [id],
-  );
+export async function obtenerPorId(cliente: PoolClient, id: number): Promise<ClienteFila | null> {
+  return consultarUno<ClienteFila>(cliente, `SELECT ${CAMPOS} ${FROM_CLIENTES} WHERE c.id = $1`, [
+    id,
+  ]);
 }
 
-export async function listarNotas(cliente: PoolClient, clienteId: number): Promise<NotaResumenFila[]> {
+export async function listarNotas(
+  cliente: PoolClient,
+  clienteId: number,
+): Promise<NotaResumenFila[]> {
   return consultar<NotaResumenFila>(
     cliente,
     `SELECT n.id,

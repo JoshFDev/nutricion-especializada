@@ -1,0 +1,17 @@
+# Lo que define el editor de cada persona. Prettier se encarga del
+# formato del codigo; esto es para el whitespace invisible (tabs, fin de
+# linea, indentacion) que Prettier no controla.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{ts,js,mjs,json}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

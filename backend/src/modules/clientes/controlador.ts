@@ -28,9 +28,7 @@ export const obtener = async (req: Request, res: Response): Promise<void> => {
 export const crear = async (req: Request, res: Response): Promise<void> => {
   const datos = cuerpo<CrearCliente>(req);
   const cliente = await servicio.crear(req.db, datos);
-  res.status(201)
-    .location(`/api/clientes/${cliente.id}`)
-    .json(cliente);
+  res.status(201).location(`/api/clientes/${cliente.id}`).json(cliente);
 };
 
 export const actualizar = async (req: Request, res: Response): Promise<void> => {

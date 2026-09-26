@@ -119,7 +119,18 @@ export async function prepararSesion(
   try {
     const token = extraerToken(req);
     if (token) {
-      const { rows } = await cliente.query(
+      // El tipo explicito importa: sin el, `pg` devuelve any y cualquier
+      // renombrado de columna en el SQL pasaria desapercibido hasta el
+      // runtime (fila.sesion_id seria undefined sin avisar).
+      interface FilaSesion {
+        sesion_id: string;
+        usuario_id: string;
+        nombre: string;
+        email: string | null;
+        debe_cambiar_contrasena: boolean;
+      }
+
+      const { rows } = await cliente.query<FilaSesion>(
         `SELECT s.id         AS sesion_id,
                 s.usuario_id,
                 u.nombre,
@@ -146,7 +157,12 @@ export async function prepararSesion(
       }
     }
 
-    await fijarUsuario(cliente, req.sesion?.usuarioId ?? null, req.ip ?? null, req.get('user-agent') ?? null);
+    await fijarUsuario(
+      cliente,
+      req.sesion?.usuarioId ?? null,
+      req.ip ?? null,
+      req.get('user-agent') ?? null,
+    );
     next();
   } catch (error) {
     next(error);

@@ -26,7 +26,10 @@ export function requierePermiso(codigo: string) {
       return;
     }
     try {
-      const { rows } = await req.db.query('SELECT fn_tiene_permiso($1) AS ok', [codigo]);
+      // Sin el tipo, `pg` devuelve any y `rows[0].ok` pasaria sin revisar.
+      const { rows } = await req.db.query<{ ok: boolean }>('SELECT fn_tiene_permiso($1) AS ok', [
+        codigo,
+      ]);
       if (!rows[0]?.ok) {
         next(new Prohibido(`Tu rol no tiene el permiso ${codigo}`));
         return;
@@ -47,14 +50,18 @@ export function requiereAdmin(req: Request, _res: Response, next: NextFunction):
     next(new NoAutenticado());
     return;
   }
-  req.db
-    .query('SELECT fn_es_admin() AS ok')
-    .then(({ rows }) => {
+  // Se escribe con async/await y no con .then() para que las dos funciones
+  // de este archivo se lean igual.
+  void (async () => {
+    try {
+      const { rows } = await req.db.query<{ ok: boolean }>('SELECT fn_es_admin() AS ok');
       if (!rows[0]?.ok) {
         next(new Prohibido('Esta accion es solo para administradores'));
         return;
       }
       next();
-    })
-    .catch(next);
+    } catch (error) {
+      next(error);
+    }
+  })();
 }

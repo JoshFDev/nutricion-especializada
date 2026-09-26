@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { consultar, consultarUno } from '../../db/transaccion.js';
+import { consultarUno } from '../../db/transaccion.js';
 import type { UsuarioFila } from './esquemas.js';
 
 /**
@@ -10,7 +10,6 @@ import type { UsuarioFila } from './esquemas.js';
  * solo existe en la memoria del proceso entre que se recibe y se manda a
  * esa consulta.
  */
-
 
 export async function buscarPorCorreo(
   cliente: PoolClient,
@@ -72,7 +71,10 @@ export async function crearSesion(
   );
 }
 
-export async function obtenerPerfil(cliente: PoolClient, usuarioId: number): Promise<UsuarioFila | null> {
+export async function obtenerPerfil(
+  cliente: PoolClient,
+  usuarioId: number,
+): Promise<UsuarioFila | null> {
   return consultarUno<UsuarioFila>(
     cliente,
     `SELECT u.id, u.nombre, u.email, u.activo, u.debe_cambiar_contrasena, u.puesto,
@@ -103,10 +105,7 @@ export async function cerrarSesion(cliente: PoolClient, sesionId: number): Promi
 }
 
 /** Sesiones muertas que se limpian al arrancar. Ver servicio.ts. */
-export async function podarSesiones(
-  cliente: PoolClient,
-  diasAntiguedad: number,
-): Promise<number> {
+export async function podarSesiones(cliente: PoolClient, diasAntiguedad: number): Promise<number> {
   const resultado = await cliente.query(
     `DELETE FROM sesiones
       WHERE cerrada_en IS NOT NULL

@@ -471,6 +471,10 @@ revisar('el admin vuelve a entrar para gestionar usuarios', !!tokenAdmin);
 // letras, 6 digitos (la fecha) y EXACTAMENTE 3 alfanumericos. 13 chars.
 const RFC_NUEVO_A = 'GODL900101HDR';
 const RFC_NUEVO_B = 'MEXT800202MDS';
+// La cajera de prueba del bloque de permisos. Va en la misma limpieza
+// porque si esa corrida se muere a mitad, el RFC choca con el UNIQUE de la
+// siguiente.
+const RFC_CAJERA = 'COCJ900303HDA';
 const RFC_LARGO = 'RFC_MAL_CORTO';
 
 /**
@@ -483,9 +487,10 @@ const RFC_LARGO = 'RFC_MAL_CORTO';
  * cuantas veces se quiera sin intervencion manual.
  */
 const limpiarUsuariosDePrueba = async () => {
-  const r = await sqlDirecto('DELETE FROM pos.usuarios WHERE rfc IN ($1, $2)', [
+  const r = await sqlDirecto('DELETE FROM pos.usuarios WHERE rfc IN ($1, $2, $3)', [
     RFC_NUEVO_A,
     RFC_NUEVO_B,
+    RFC_CAJERA,
   ]);
   return r.rowCount;
 };
@@ -1054,7 +1059,11 @@ if (especieEnUso.cuerpo?.nombre) {
 
 const limpiarProductosDePrueba = async () => {
   const r = await sqlDirecto(`DELETE FROM pos.productos WHERE codigo = ANY($1::text[])`, [
-    ['TST-ALTA', 'TST-BORRABLE', 'TST-INACTIVO'],
+    // TST-INACTIVO no lo crea nadie hoy (la baja logica se hace sobre
+    // TST-ALTA), pero se limpia por si una version anterior de esta
+    // prueba lo dejaba ahi. TST-CAJ lo crea la cajera del bloque de
+    // permisos, mas abajo.
+    ['TST-ALTA', 'TST-BORRABLE', 'TST-INACTIVO', 'TST-CAJ'],
   ]);
   return r.rowCount;
 };
@@ -1364,6 +1373,140 @@ revisar(
 
 const prodSigueAhi = await pedir('/api/productos/1', tokenAdmin);
 revisar('el producto en uso NO se borro', prodSigueAhi.status === 200);
+
+// --- la cajera quedo casi como el administrador (migracion 0006) ---
+//
+// Esto es lo que cambia con 0006: la Cajera paso de 10 permisos a 38 de
+// 43. Se comprueba en las dos direcciones, y las dos importan:
+//
+//   - que ahora PUEDA hacer lo que antes no podia (escribir productos y
+//     clientes), que es el motivo del cambio;
+//   - que siga SIN poder administrar cuentas, que es la razon por la que
+//     el permiso esta en la base y no concedido.
+//
+// La segunda es la que de verdad protege. Si alguien mas adelante
+//afloja "que la cajera sea casi admin" y afloja la exclusion de usuarios.*,
+// esta prueba se pone roja.
+
+const altaCajeraRol = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: 'Carla',
+    apellido_paterno: 'Rivas',
+    rfc: RFC_CAJERA,
+    email: 'carla.prueba@ejemplo.local',
+    puesto: 'Cajera',
+    roles: [3],
+  }),
+});
+revisar(
+  'alta de la cajera de prueba -> 201',
+  altaCajeraRol.status === 201,
+  JSON.stringify(altaCajeraRol.cuerpo),
+);
+
+const loginCajera = await login(
+  'carla.prueba@ejemplo.local',
+  altaCajeraRol.cuerpo?.contrasenaTemporal,
+);
+DETENER_POR_LIMIT(loginCajera);
+const tokenCajera = loginCajera.body?.token;
+revisar('la cajera de prueba entra', !!tokenCajera);
+
+// Sin esto se seguiria con un token undefined y cada peticion de las de
+// abajo saldria sin cabecera de autorizacion: se verian 401 en todas y el
+// diagnostico apuntaria al modulo de permisos en vez de al login.
+if (!tokenCajera) {
+  console.log('');
+  console.log('=== NO SE PUDO ENTRAR CON LA CAJERA DE PRUEBA ===');
+  console.log('El alta de la cuenta paso, pero el login con la contrasena');
+  console.log('temporal fallo. Sin ese token las pruebas de permisos de');
+  console.log('este bloque no dicen nada, asi que la suite se detiene aqui.');
+  console.log('=======================================================');
+  process.exit(3);
+}
+
+// --- lo que la cajera ya puede hacer ---
+const cajeraLeeProductos = await pedir('/api/productos', tokenCajera);
+revisar(
+  'la cajera lee productos -> 200',
+  cajeraLeeProductos.status === 200,
+  JSON.stringify(cajeraLeeProductos.cuerpo),
+);
+
+const cajeraEscribeProducto = await crearProducto(
+  { codigo: 'TST-CAJ', nombre: 'Producto de la cajera', presentacion_kg: 20 },
+  tokenCajera,
+);
+revisar(
+  'la cajera ahora SI crea productos -> 201',
+  cajeraEscribeProducto.status === 201,
+  JSON.stringify(cajeraEscribeProducto.cuerpo),
+);
+
+const cajeraEditaProducto = await parcheProducto(
+  cajeraEscribeProducto.cuerpo?.id ?? 0,
+  { nombre: 'Editado por la cajera' },
+  tokenCajera,
+);
+revisar(
+  'la cajera ahora SI edita productos -> 200',
+  cajeraEditaProducto.status === 200,
+  JSON.stringify(cajeraEditaProducto.cuerpo),
+);
+
+const cajeraLeeClientes = await pedir('/api/clientes', tokenCajera);
+revisar(
+  'la cajera lee clientes -> 200',
+  cajeraLeeClientes.status === 200,
+  JSON.stringify(cajeraLeeClientes.cuerpo),
+);
+
+const cajeraLeeCatalogo = await pedir('/api/especies', tokenCajera);
+revisar('la cajera lee el catalogo -> 200', cajeraLeeCatalogo.status === 200);
+
+// --- lo que la cajera NO debe poder hacer ---
+// Estas son las cinco exclusiones de 0006. Que usuarios.* siga cerrado es
+// lo que evita que la cajera se cree un Administrador y con eso suba de
+// privilegios ella sola.
+const cajeraNoListaUsuarios = await pedir('/api/usuarios', tokenCajera);
+revisar(
+  'la cajera NO lista usuarios -> 403',
+  cajeraNoListaUsuarios.status === 403,
+  JSON.stringify(cajeraNoListaUsuarios.cuerpo),
+);
+
+const cajeraNoCreaUsuarios = await pedir('/api/usuarios', tokenCajera, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: 'Escalada', apellido_paterno: 'De', rfc: RFC_NUEVO_B }),
+});
+revisar(
+  'la cajera NO crea usuarios -> 403',
+  cajeraNoCreaUsuarios.status === 403,
+  JSON.stringify(cajeraNoCreaUsuarios.cuerpo),
+);
+
+const cajeraNoResetea = await pedir('/api/usuarios/1/resetear-contrasena', tokenCajera, {
+  method: 'POST',
+});
+revisar(
+  'la cajera NO resetea contrasenas -> 403',
+  cajeraNoResetea.status === 403,
+  JSON.stringify(cajeraNoResetea.cuerpo),
+);
+
+const cajeraNoCambiaRoles = await pedir('/api/usuarios/1/roles', tokenCajera, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ roles: [1] }),
+});
+revisar(
+  'la cajera NO cambia roles -> 403',
+  cajeraNoCambiaRoles.status === 403,
+  JSON.stringify(cajeraNoCambiaRoles.cuerpo),
+);
 
 // Limpia lo que creo esta suite. No hay endpoint DELETE a proposito (en
 // el negocio se da de baja, no se borra), asi que el borrado de prueba se

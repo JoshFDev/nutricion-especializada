@@ -41,27 +41,23 @@ export function requierePermiso(codigo: string) {
   };
 }
 
-/**
- * Igual que requierePermiso, pero exige que el usuario sea duena/admin.
- * Para lo que no tiene un permiso granular, como ver la bitacora completa.
+/*
+ * requiereAdmin se elimino.
+ *
+ * Era un segundo filtro, paralelo al de permisos, que preguntaba por el
+ * ROL (fn_es_admin()) en vez de por lo que el permiso concede. Las cinco
+ * rutas de /api/usuarios lo usaban; ahora van por requierePermiso y ya
+ * no queda ninguna ruta que lo llame.
+ *
+ * Se quito en vez de dejarlo sin usar por una razon: con las dos cosas
+ * vivas, la proxima ruta que "necesite ser de admin" se escribe con el
+ * que el autor encuentre primero, y el resultado es un sistema donde la
+ * mitad de las rutas se audita en la tabla de permisos y la otra mitad en
+ * el codigo. Un solo camino.
+ *
+ * Lo que `requiereAdmin` protegia de mas, el poder crear cuentas, sigue
+ * protegido: usuarios.crear no se le concede a nadie salvo al
+ * administrador (migracion 0006), el trigger de 0001 se niega a dejar el
+ * sistema sin administrador activo, y la guarda ULTIMO_ADMIN del
+ * servicio de usuarios avisa antes de llegar ahi.
  */
-export function requiereAdmin(req: Request, _res: Response, next: NextFunction): void {
-  if (!req.sesion) {
-    next(new NoAutenticado());
-    return;
-  }
-  // Se escribe con async/await y no con .then() para que las dos funciones
-  // de este archivo se lean igual.
-  void (async () => {
-    try {
-      const { rows } = await req.db.query<{ ok: boolean }>('SELECT fn_es_admin() AS ok');
-      if (!rows[0]?.ok) {
-        next(new Prohibido('Esta accion es solo para administradores'));
-        return;
-      }
-      next();
-    } catch (error) {
-      next(error);
-    }
-  })();
-}

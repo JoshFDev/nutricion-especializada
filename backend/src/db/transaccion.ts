@@ -68,14 +68,15 @@ export async function enTransaccion<T>(trabajo: (cliente: PoolClient) => Promise
  * el COMMIT incluya lo que hicieron los triggers. Si la peticion va a
  * escribir, esta es la que se usa.
  */
-export async function enTransaccionDe(
+export async function enTransaccionDe<T>(
   cliente: PoolClient,
-  trabajo: (c: PoolClient) => Promise<void>,
-): Promise<void> {
+  trabajo: (c: PoolClient) => Promise<T>,
+): Promise<T> {
   await cliente.query('BEGIN');
   try {
-    await trabajo(cliente);
+    const resultado = await trabajo(cliente);
     await cliente.query('COMMIT');
+    return resultado;
   } catch (error) {
     await cliente.query('ROLLBACK').catch(() => {
       /* ver nota en enTransaccion */

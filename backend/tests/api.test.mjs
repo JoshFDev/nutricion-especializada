@@ -104,6 +104,62 @@ const revisar = (nombre, ok, detalle = '') => {
 // ---------------------------------------------------------------- salud
 const baseEnUso = await verificarBaseDePruebas();
 console.log(`Base en uso: ${baseEnUso}`);
+
+/**
+ * Pool de SQL directo para la suite.
+ *
+ * Hace falta porque no hay endpoint DELETE a proposito (en el negocio se
+ * da de baja, no se borra) y porque la suite tiene que ser reejecutable:
+ * si una corrida se muere a mitad, la siguiente encuentra los datos de la
+ * anterior y falla por cosas que no esta probando. Este helper limpia
+ * antes de correr y limpia al terminar.
+ *
+ * El search_path es obligatorio: los triggers llaman a fn_usuario_actual()
+ * y las funciones viven en el esquema pos, no en public (error 42883).
+ */
+let poolDirecto = null;
+const sqlDirecto = async (texto, valores = []) => {
+  if (!poolDirecto) {
+    const { default: pgDirecto } = await import('pg');
+    poolDirecto = new pgDirecto.Pool({
+      host: process.env.PGHOST ?? '127.0.0.1',
+      user: process.env.PGUSER ?? 'postgres',
+      password: process.env.PGPASSWORD ?? 'postgresql',
+      database: baseEnUso,
+      port: Number(process.env.PGPORT ?? 5432),
+    });
+    await poolDirecto.query('SET search_path TO pos');
+  }
+  return poolDirecto.query(texto, valores);
+};
+const cerrarPoolDirecto = async () => {
+  if (poolDirecto) {
+    await poolDirecto.end();
+    poolDirecto = null;
+  }
+};
+
+/**
+ * Deja las contrasenas del seed como estaban, ANTES de probar nada.
+ *
+ * La seccion de cambio de contrasena modifica la del administrador, y al
+ * final del archivo se restauran. Pero si la corrida se muere antes (se
+ * agota el rate limit, revienta un assert...), ese restore no se ejecuta
+ * y la base queda con una contrasena que nadie mas va a saber. Con esta
+ * restauracion previa la suite se autorepara sola: da igual como termino
+ * la corrida anterior.
+ */
+const restaurarSemilla = async () => {
+  const r = await sqlDirecto(
+    `UPDATE pos.usuarios
+        SET contrasena = crypt('CAMBIAR-ESTA-CLAVE', gen_salt('bf', 12)),
+            debe_cambiar_contrasena = true,
+            intentos_fallidos = 0,
+            bloqueado_hasta = NULL`,
+  );
+  return r.rowCount;
+};
+console.log(`Contrasenas del seed restauradas: ${await restaurarSemilla()}`);
 const salud = await pedir('/api/salud');
 revisar('GET /api/salud responde 200', salud.status === 200, JSON.stringify(salud.cuerpo));
 
@@ -237,6 +293,9 @@ if (empleada.body.token) {
   const t = empleada.body.token;
 
   // por diseño la empleada SI puede crear clientes
+  // Limpia el alta de una corrida anterior: si quedo, el UNIQUE de
+  // codigo_cliente revienta y la prueba falla por otra cosa.
+  await sqlDirecto(`DELETE FROM pos.clientes WHERE codigo_cliente = 'EMPLEADA-OK'`);
   const creada = await pedir('/api/clientes', t, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -367,6 +426,368 @@ if (loginNuevo.body.token) {
 // fallaria al hacer login y el usuario se quedaria sin la clave que
 // documenta el README.
 //
+// ================================================================ usuarios
+// El modulo con el que la dueña da de alta a la gente. Aqui se prueba
+// sobre todo que los candados aguanten: que no se pueda quedar sin
+// admins, ni desactivarse a uno mismo, ni crear cuentas sin ser admin.
+console.log('\n--- usuarios ---');
+
+// El `token` de arriba ya no sirve: la seccion de cambio de contrasena
+// cerro las demas sesiones del admin (por diseno, para que el token
+// robado no sobreviva). La contrasena vigente en este punto es `nueva1`,
+// asi que se entra de nuevo.
+const loginAdminUsuarios = await login('admin@ejemplo.local', nueva1);
+DETENER_POR_LIMIT(loginAdminUsuarios);
+const tokenAdmin = loginAdminUsuarios.body?.token;
+revisar('el admin vuelve a entrar para gestionar usuarios', !!tokenAdmin);
+
+// El CHECK de la tabla es ^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$: 3 o 4
+// letras, 6 digitos (la fecha) y EXACTAMENTE 3 alfanumericos. 13 chars.
+const RFC_NUEVO_A = 'GODL900101HDR';
+const RFC_NUEVO_B = 'MEXT800202MDS';
+const RFC_LARGO = 'RFC_MAL_CORTO';
+
+/**
+ * Borra a los usuarios que dejo una corrida anterior.
+ *
+ * Va ANTES de las pruebas, no solo despues. Una corrida que se muere a
+ * mitad deja el usuario creatingo en la base, y la siguiente choca con el
+ * UNIQUE del RFC y falla por algo que no tiene nada que ver con lo que
+ * esta probando. Con esta limpieza la suite se puede volver a correr
+ * cuantas veces se quiera sin intervencion manual.
+ */
+const limpiarUsuariosDePrueba = async () => {
+  const r = await sqlDirecto('DELETE FROM pos.usuarios WHERE rfc IN ($1, $2)', [
+    RFC_NUEVO_A,
+    RFC_NUEVO_B,
+  ]);
+  return r.rowCount;
+};
+
+const sobrantes = await limpiarUsuariosDePrueba();
+if (sobrantes > 0) {
+  console.log(`(se limpiaron ${sobrantes} usuario(s) de una corrida anterior)`);
+}
+
+// --- la cajera no puede administrar cuentas ---
+const loginEmpleada = await login('empleada@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+DETENER_POR_LIMIT(loginEmpleada);
+const tokenEmpleada = loginEmpleada.body?.token;
+revisar('la cajera puede entrar', !!tokenEmpleada);
+
+const noPuedeCrear = await pedir('/api/usuarios', tokenEmpleada, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: 'X', apellido_paterno: 'Y', rfc: RFC_NUEVO_A }),
+});
+revisar(
+  'la cajera NO puede crear usuarios -> 403',
+  noPuedeCrear.status === 403,
+  JSON.stringify(noPuedeCrear.cuerpo),
+);
+revisar(
+  'el 403 de la cajera dice PROHIBIDO',
+  noPuedeCrear.cuerpo?.codigo === 'PROHIBIDO',
+  JSON.stringify(noPuedeCrear.cuerpo),
+);
+const noPuedeListar = await pedir('/api/usuarios', tokenEmpleada);
+revisar('la cajera NO puede listar usuarios -> 403', noPuedeListar.status === 403);
+const noPuedeResetear = await pedir('/api/usuarios/1/resetear-contrasena', tokenEmpleada, {
+  method: 'POST',
+});
+revisar('la cajera NO puede resetear contrasenas -> 403', noPuedeResetear.status === 403);
+const sinTokenUsuarios = await pedir('/api/usuarios');
+revisar('usuarios sin token -> 401', sinTokenUsuarios.status === 401);
+
+// --- validacion antes de tocar la base ---
+const rfcMalo = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: 'Mal', apellido_paterno: 'Rfc', rfc: RFC_LARGO }),
+});
+revisar('RFC con formato invalido -> 400', rfcMalo.status === 400, JSON.stringify(rfcMalo.cuerpo));
+
+const sinRoles = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: 'Sin', apellido_paterno: 'Roles', rfc: RFC_NUEVO_A, roles: [] }),
+});
+revisar('alta sin roles -> 400', sinRoles.status === 400, JSON.stringify(sinRoles.cuerpo));
+
+const rolFantasma = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: 'Rol',
+    apellido_paterno: 'Fantasma',
+    rfc: RFC_NUEVO_A,
+    roles: [999],
+  }),
+});
+revisar('rol que no existe -> 400', rolFantasma.status === 400, JSON.stringify(rolFantasma.cuerpo));
+
+// --- alta valida ---
+const nuevo = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: 'Maria',
+    apellido_paterno: 'Hernandez',
+    apellido_materno: 'Lopez',
+    rfc: RFC_NUEVO_A,
+    email: 'maria@ejemplo.local',
+    puesto: 'Cajera',
+    roles: [3],
+  }),
+});
+revisar('alta valida -> 201', nuevo.status === 201, JSON.stringify(nuevo.cuerpo));
+const idNuevo = nuevo.cuerpo?.usuario?.id;
+const claveTemporal = nuevo.cuerpo?.contrasenaTemporal;
+revisar('el alta devuelve el id', Number.isInteger(idNuevo), String(idNuevo));
+revisar('el alta devuelve una contrasena temporal', typeof claveTemporal === 'string');
+revisar(
+  'la contrasena temporal es larga y tiene mayuscula, minuscula y numero',
+  (claveTemporal?.length ?? 0) >= 12 &&
+    /[A-Z]/.test(claveTemporal ?? '') &&
+    /[a-z]/.test(claveTemporal ?? '') &&
+    /[0-9]/.test(claveTemporal ?? ''),
+  `longitud ${claveTemporal?.length}`,
+);
+revisar('el usuario nace activo', nuevo.cuerpo?.usuario?.activo === true);
+revisar(
+  'el usuario nace con debe_cambiar_contrasena',
+  nuevo.cuerpo?.usuario?.debe_cambiar_contrasena === true,
+);
+revisar('trae exactamente un rol', nuevo.cuerpo?.usuario?.roles?.length === 1);
+revisar('el rol es Cajera', nuevo.cuerpo?.usuario?.roles?.[0]?.nombre === 'Cajera');
+revisar('la respuesta NO trae el hash', !/"contrasena"\s*:/.test(JSON.stringify(nuevo.cuerpo)));
+
+// --- duplicados ---
+const correoDuplicado = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: 'Otra',
+    apellido_paterno: 'Maria',
+    rfc: RFC_NUEVO_B,
+    email: 'maria@ejemplo.local',
+    roles: [3],
+  }),
+});
+revisar(
+  'correo repetido -> 409',
+  correoDuplicado.status === 409,
+  JSON.stringify(correoDuplicado.cuerpo),
+);
+revisar(
+  'el 409 de correo dice EMAIL_DUPLICADO',
+  correoDuplicado.cuerpo?.codigo === 'EMAIL_DUPLICADO',
+  JSON.stringify(correoDuplicado.cuerpo),
+);
+
+const rfcDuplicado = await pedir('/api/usuarios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: 'Gemela',
+    apellido_paterno: 'Hernandez',
+    rfc: RFC_NUEVO_A,
+    email: 'gemela@ejemplo.local',
+    roles: [3],
+  }),
+});
+revisar('RFC repetido -> 409', rfcDuplicado.status === 409, JSON.stringify(rfcDuplicado.cuerpo));
+revisar(
+  'el 409 de RFC dice RFC_DUPLICADO',
+  rfcDuplicado.cuerpo?.codigo === 'RFC_DUPLICADO',
+  JSON.stringify(rfcDuplicado.cuerpo),
+);
+
+// --- la contrasena temporal sirve para entrar, pero hay que cambiarla ---
+if (claveTemporal) {
+  const loginNuevoUsuario = await login('maria@ejemplo.local', claveTemporal);
+  DETENER_POR_LIMIT(loginNuevoUsuario);
+  revisar('la contrasena temporal sirve para entrar', loginNuevoUsuario.status === 200);
+  revisar(
+    'el usuario nuevo entra marcado para cambiar la contrasena',
+    loginNuevoUsuario.body?.usuario?.debeCambiarContrasena === true,
+    JSON.stringify(loginNuevoUsuario.body?.usuario),
+  );
+}
+
+// --- listar, buscar, ver ---
+const listado = await pedir('/api/usuarios', tokenAdmin);
+revisar('listar usuarios -> 200', listado.status === 200);
+revisar(
+  'el listado trae datos y total',
+  Array.isArray(listado.cuerpo?.datos) && listado.cuerpo?.total >= 3,
+);
+revisar('el total no es cero', listado.cuerpo?.total > 0, `total ${listado.cuerpo?.total}`);
+revisar(
+  'el listado incluye al usuario nuevo',
+  listado.cuerpo?.datos?.some((u) => u.id === idNuevo),
+);
+// Ojo: el campo debe_cambiar_contrasena SI contiene la palabra, asi que
+// hay que buscar la clave exacta del hash y no la palabra suelta.
+revisar(
+  'el listado NO trae el hash de la contrasena',
+  !/"contrasena"\s*:/.test(JSON.stringify(listado.cuerpo)),
+);
+
+const busqueda = await pedir('/api/usuarios?buscar=Hernandez', tokenAdmin);
+revisar('buscar por apellido -> 200', busqueda.status === 200);
+revisar(
+  'la busqueda encuentra al usuario nuevo',
+  busqueda.cuerpo?.datos?.every((u) => /hernandez/i.test(`${u.apellido_paterno} ${u.nombre}`)),
+  `${busqueda.cuerpo?.datos?.length} resultados`,
+);
+
+const porRol = await pedir('/api/usuarios?rol=3', tokenAdmin);
+revisar('filtrar por rol -> 200', porRol.status === 200);
+revisar(
+  'el filtro por rol solo trae ese rol',
+  porRol.cuerpo?.datos?.every((u) => u.roles?.some((r) => r.nombre === 'Cajera')),
+  `${porRol.cuerpo?.datos?.length} resultados`,
+);
+
+const verUno = await pedir(`/api/usuarios/${idNuevo}`, tokenAdmin);
+revisar('ver un usuario -> 200', verUno.status === 200);
+revisar('el usuario trae sus roles', Array.isArray(verUno.cuerpo?.roles));
+
+const verFantasma = await pedir('/api/usuarios/999999', tokenAdmin);
+revisar(
+  'ver un id que no existe -> 404',
+  verFantasma.status === 404,
+  JSON.stringify(verFantasma.cuerpo),
+);
+
+const verMalo = await pedir('/api/usuarios/abc', tokenAdmin);
+revisar('ver con id no numerico -> 400', verMalo.status === 400, JSON.stringify(verMalo.cuerpo));
+
+// --- candados: el administrador no puede dejar la caja sin entrada ---
+const autoDesactivar = await pedir(`/api/usuarios/${yo.cuerpo?.id ?? 1}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ activo: false }),
+});
+revisar(
+  'el admin NO puede desactivar su propia cuenta -> 422',
+  autoDesactivar.status === 422,
+  JSON.stringify(autoDesactivar.cuerpo),
+);
+revisar(
+  'el error dice NO_SELF_DESACTIVAR',
+  autoDesactivar.cuerpo?.codigo === 'NO_SELF_DESACTIVAR',
+  JSON.stringify(autoDesactivar.cuerpo),
+);
+
+const autoBajarDeRol = await pedir(`/api/usuarios/${yo.cuerpo?.id ?? 1}/roles`, tokenAdmin, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ roles: [2] }),
+});
+revisar(
+  'el admin NO puede quitarse su propio rol de admin -> 422',
+  autoBajarDeRol.status === 422,
+  JSON.stringify(autoBajarDeRol.cuerpo),
+);
+revisar(
+  'el error dice NO_SELF_DEMOTEAR',
+  autoBajarDeRol.cuerpo?.codigo === 'NO_SELF_DEMOTEAR',
+  JSON.stringify(autoBajarDeRol.cuerpo),
+);
+
+// --- editar ---
+const renombrar = await pedir(`/api/usuarios/${idNuevo}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ puesto: 'Cajera titular' }),
+});
+revisar('editar un usuario -> 200', renombrar.status === 200, JSON.stringify(renombrar.cuerpo));
+revisar('el puesto quedo actualizado', renombrar.cuerpo?.puesto === 'Cajera titular');
+
+const editarVacio = await pedir(`/api/usuarios/${idNuevo}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+});
+revisar('editar sin campos -> 400', editarVacio.status === 400, JSON.stringify(editarVacio.cuerpo));
+
+const editarRolInvalido = await pedir(`/api/usuarios/${idNuevo}/roles`, tokenAdmin, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ roles: [888] }),
+});
+revisar('asignar un rol inexistente -> 400', editarRolInvalido.status === 400);
+
+// --- cambiar roles ---
+const cambiarRoles = await pedir(`/api/usuarios/${idNuevo}/roles`, tokenAdmin, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ roles: [2, 3] }),
+});
+revisar(
+  'asignar varios roles -> 200',
+  cambiarRoles.status === 200,
+  JSON.stringify(cambiarRoles.cuerpo),
+);
+revisar(
+  'el usuario queda con los dos roles',
+  cambiarRoles.cuerpo?.roles?.length === 2,
+  JSON.stringify(cambiarRoles.cuerpo?.roles?.map((r) => r.nombre)),
+);
+
+// --- resetear contrasena ---
+const reseteo = await pedir(`/api/usuarios/${idNuevo}/resetear-contrasena`, tokenAdmin, {
+  method: 'POST',
+});
+revisar('resetear contrasena -> 200', reseteo.status === 200, JSON.stringify(reseteo.cuerpo));
+const claveReseteada = reseteo.cuerpo?.contrasenaTemporal;
+revisar('el reseteo devuelve una contrasena nueva', typeof claveReseteada === 'string');
+revisar(
+  'el reseteo devuelve cuantas sesiones cerro',
+  typeof reseteo.cuerpo?.sesionesCerradas === 'number',
+  JSON.stringify(reseteo.cuerpo?.sesionesCerradas),
+);
+
+if (claveReseteada) {
+  const conClaveVieja = await login('maria@ejemplo.local', claveTemporal ?? 'x');
+  DETENER_POR_LIMIT(conClaveVieja);
+  revisar('tras el reseteo la contrasena anterior ya no entra', conClaveVieja.status === 401);
+
+  const conClaveNueva = await login('maria@ejemplo.local', claveReseteada);
+  DETENER_POR_LIMIT(conClaveNueva);
+  revisar('tras el reseteo la contrasena nueva si entra', conClaveNueva.status === 200);
+}
+
+// --- desactivar cierra las sesiones de una vez ---
+await pedir(`/api/usuarios/${idNuevo}/resetear-contrasena`, tokenAdmin, { method: 'POST' });
+const baja = await pedir(`/api/usuarios/${idNuevo}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ activo: false }),
+});
+revisar('dar de baja a un usuario -> 200', baja.status === 200, JSON.stringify(baja.cuerpo));
+revisar('el usuario queda inactivo', baja.cuerpo?.activo === false);
+
+const filtrarInactivos = await pedir('/api/usuarios?activo=false', tokenAdmin);
+revisar('filtrar por inactivos -> 200', filtrarInactivos.status === 200);
+revisar(
+  'el filtro de inactivos trae al dado de baja',
+  filtrarInactivos.cuerpo?.datos?.some((u) => u.id === idNuevo),
+);
+revisar(
+  'el filtro de inactivos no trae activos',
+  filtrarInactivos.cuerpo?.datos?.every((u) => u.activo === false),
+);
+
+// Limpia lo que creo esta suite. No hay endpoint DELETE a proposito (en
+// el negocio se da de baja, no se borra), asi que el borrado de prueba se
+// hace por SQL.
+const borrados = await limpiarUsuariosDePrueba();
+revisar('los usuarios de prueba se borraron', borrados > 0, `${borrados} filas`);
+void idNuevo;
+
 // Es el unico punto del archivo que toca la base sin pasar por HTTP, y
 // es aceptable: es arnes de pruebas, no codigo de la aplicacion.
 const { default: pg } = await import('pg');
@@ -395,6 +816,7 @@ try {
   revisar('las contrasenas del seed se restauraron', r.rowCount > 0, `${r.rowCount} usuarios`);
 } finally {
   await pool.end();
+  await cerrarPoolDirecto();
 }
 
 console.log(`\n${fallos === 0 ? 'TODAS LAS PRUEBAS PASARON' : fallos + ' PRUEBA(S) FALLARON'}`);

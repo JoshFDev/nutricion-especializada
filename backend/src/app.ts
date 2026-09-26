@@ -10,6 +10,7 @@ import { NoEncontrado } from './core/errores.js';
 import { rutasSalud } from './modules/salud/rutas.js';
 import { rutasAuth } from './modules/auth/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
+import { rutasUsuarios } from './modules/usuarios/rutas.js';
 
 /**
  * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
@@ -62,6 +63,7 @@ export function crearApp(): Express {
   app.use('/api', rutasSalud);
   app.use('/api/auth', rutasAuth);
   app.use('/api/clientes', rutasClientes);
+  app.use('/api/usuarios', rutasUsuarios);
 
   // 9. Cualquier otra ruta de /api no existe
   app.use('/api', (_req, _res, next) => {

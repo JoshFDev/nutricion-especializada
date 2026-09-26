@@ -9,6 +9,7 @@ import { limiteGeneral, limiteLogin } from './middleware/limites.js';
 import { NoEncontrado } from './core/errores.js';
 import { rutasSalud } from './modules/salud/rutas.js';
 import { rutasAuth } from './modules/auth/rutas.js';
+import { rutasCatalogo } from './modules/catalogo/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
 import { rutasUsuarios } from './modules/usuarios/rutas.js';
 
@@ -63,6 +64,8 @@ export function crearApp(): Express {
   app.use('/api', rutasSalud);
   app.use('/api/auth', rutasAuth);
   app.use('/api/clientes', rutasClientes);
+  app.use('/api/especies', rutasCatalogo.especies);
+  app.use('/api/categorias-producto', rutasCatalogo.categorias);
   app.use('/api/usuarios', rutasUsuarios);
 
   // 9. Cualquier otra ruta de /api no existe

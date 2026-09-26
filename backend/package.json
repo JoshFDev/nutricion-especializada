@@ -11,12 +11,14 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.test.json",
     "lint": "eslint .",
     "test:api": "node tests/api.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verificar": "pnpm format:check && pnpm lint && pnpm typecheck"
+    "verificar": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -41,7 +43,8 @@
     "prettier": "^3.9.9",
     "tsx": "^4.20.7",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

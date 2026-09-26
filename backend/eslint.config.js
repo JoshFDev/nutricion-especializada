@@ -31,7 +31,7 @@ export default tseslint.config(
   // reglas que necesitan informacion de tipos fallan si el archivo no
   // esta en un tsconfig.
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts'],
     extends: [
       ...tseslint.configs.recommendedTypeChecked,
       // Este paquete obliga a tipar las promesas que se disparan sin
@@ -41,9 +41,11 @@ export default tseslint.config(
     ],
     languageOptions: {
       parserOptions: {
-        // projectService encuentra el tsconfig correcto de cada archivo
-        // solo, en vez de tener que apuntarlo a mano.
-        projectService: true,
+        // projectService NO sirve aqui: busca el tsconfig.json mas cercano
+        // y ese solo incluye src/, asi que los tests de tests/ quedarian
+        // fuera y las reglas con informacion de tipos reventarian.
+        // Por eso se nombra el tsconfig de pruebas, que si cubre ambos.
+        project: ['./tsconfig.test.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },

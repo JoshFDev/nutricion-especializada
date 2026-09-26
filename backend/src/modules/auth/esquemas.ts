@@ -1,7 +1,15 @@
 import { z } from 'zod';
 
+/**
+ * OJO con el orden: `z.email().trim()` NO funciona. Zod aplica las
+ * comprobaciones en el orden en que se encadenan, asi que el formato se
+ * valida ANTES de recortar y un correo con espacios de mas ("  a@b.com",
+ * tipico al copiar y pegar) se rechaza con "formato invalido" en vez de
+ * entrar bien. Por eso se recorta primero con z.string().trim() y el
+ * formato se comprueba despues.
+ */
 export const loginEsquema = z.object({
-  correo: z.email('El correo no tiene formato valido').max(200).trim(),
+  correo: z.string().trim().max(200).pipe(z.email('El correo no tiene formato valido')),
   contrasena: z.string().min(1, 'La contrasena no puede ir vacia').max(200),
 });
 

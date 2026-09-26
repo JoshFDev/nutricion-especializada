@@ -1,0 +1,17 @@
+// Typecheck de TODO (app + tests). No emite nada: solo verifica tipos.
+//
+// El build usa tsconfig.json, que es solo src, para no compilar las
+// pruebas dentro de dist/.
+//
+// rootDir se amplia a '.' porque el de tsconfig.json es 'src' y TypeScript
+// rechaza los tests por estar fuera de esa carpeta. Da igual que no sea
+// preciso: como noEmit es true, no se genera ningun archivo.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -28,6 +28,14 @@ const esquema = z.object({
 
   /** Intentos de login por ventana. Ver middleware/limites.ts */
   LOGIN_MAX_INTENTOS: z.coerce.number().int().min(1).max(100).default(10),
+  /**
+   * Peticiones de API por ventana de 15 min. Ver middleware/limites.ts.
+   *
+   * El tope se sube solo en el .env local, porque la suite de integracion
+   * hace mas de 300 peticiones en una corrida y sin esto se traba a media
+   * prueba. En cualquier otro lado manda el default de 300.
+   */
+  API_MAX_PETICIONES: z.coerce.number().int().min(10).max(1_000_000).default(300),
 
   // Despite the old name, this is the session DURATION, not a JWT: the token
   // is opaque (random bytes) and what gets stored is its sha256.

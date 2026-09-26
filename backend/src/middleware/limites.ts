@@ -13,11 +13,19 @@ const comun = {
   },
 } satisfies Partial<Options>;
 
-/** Techo general: evita que un bucle de scripting se coma la API. */
+/**
+ * Techo general: evita que un bucle de scripting se coma la API.
+ *
+ * Mismo criterio que limiteLogin y por el mismo motivo: el valor sale de
+ * API_MAX_PETICIONES y NO se relaja solo por estar en desarrollo. Si
+ * alguien despliega arrastrando el .env de desarrollo, este limite queda
+ * inservible sin que nadie se entere. Para correr la suite de integracion
+ * se sube explicitamente en el .env local.
+ */
 export const limiteGeneral = rateLimit({
   ...comun,
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: env.API_MAX_PETICIONES,
   message: { codigo: 'DEMASIADAS_PETICIONES', error: 'Demasiadas peticiones' },
 });
 

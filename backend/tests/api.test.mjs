@@ -69,10 +69,13 @@ const DETENER_POR_LIMIT = (r) => {
   if (r.status === 429) {
     console.log('');
     console.log('=== LIMITE DE INTENTOS ALCANZADO (429) ===');
-    console.log('El rate limit de login ya se consumio. Reinicia el servidor:');
-    console.log('  pkill -f "tsx watch"   (o Ctrl+C en la terminal del pnpm dev)');
-    console.log('O sube el limite solo para desarrollo en backend/.env:');
-    console.log('  LOGIN_MAX_INTENTOS=50');
+    console.log('El rate limit de login ya se consumio. Esto NO es un fallo');
+    console.log('del modulo. El contador vive en la memoria del servidor, asi');
+    console.log('que se reinicia apagandolo y arrancandolo de nuevo:');
+    console.log('  Windows:  taskkill /F /IM node.exe');
+    console.log('  Linux:    pkill -f "tsx watch"');
+    console.log('O sube el limite solo en desarrollo, en backend/.env:');
+    console.log('  LOGIN_MAX_INTENTOS=100   (100 es el tope que acepta el esquema)');
     console.log('============================================');
     process.exit(2);
   }
@@ -92,6 +95,24 @@ const pedir = async (ruta, token, opciones = {}) => {
   } catch {
     cuerpo = '(sin cuerpo)';
   }
+
+  // Un 429 a media corrida produce decenas de fallas que parecen bugs del
+  // modulo y no son: son el limite de peticiones. Se para aqui, con un
+  // mensaje que diga que subir.
+  if (r.status === 429) {
+    console.log('');
+    console.log('=== SE AGOTO EL LIMITE DE PETICIONES (429) ===');
+    console.log('Esto NO es un fallo del modulo. El servidor corta a las');
+    console.log('15 minutos o a las API_MAX_PETICIONES peticiones, lo que');
+    console.log('llegue primero, y la suite hace mas de 300.');
+    console.log('');
+    console.log('Para correrla, sube el limite en backend/.env:');
+    console.log('  API_MAX_PETICIONES=5000');
+    console.log('y reinicia el servidor (el limite vive en memoria).');
+    console.log('==================================================');
+    process.exit(3);
+  }
+
   return { status: r.status, cuerpo };
 };
 
@@ -780,6 +801,241 @@ revisar(
   'el filtro de inactivos no trae activos',
   filtrarInactivos.cuerpo?.datos?.every((u) => u.activo === false),
 );
+
+// ================================================================ catalogo
+// Especies y categorias de producto. Son la misma tabla con distinto
+// nombre, asi que la suite recorre las dos rutas con el mismo codigo.
+console.log('\n--- catalogo (especies y categorias) ---');
+
+// `tabla` NO es lo mismo que `plural`: la tabla real se llama
+// categorias_producto, no categorias. Confundir las dos hace que el SQL
+// de limpieza reviente con 42P01.
+const CATALOGO = [
+  { ruta: 'especies', plural: 'especies', tabla: 'especies' },
+  { ruta: 'categorias-producto', plural: 'categorias', tabla: 'categorias_producto' },
+];
+
+for (const { ruta, plural, tabla } of CATALOGO) {
+  const crearEn = (nombre, token = tokenAdmin) =>
+    pedir(`/api/${ruta}`, token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre }),
+    });
+
+  // Limpieza de corridas anteriores, por nombre exacto.
+  //
+  // NO DEBERIA entra en la lista aunque hoy nunca llega a existir: el
+  // intento de alta de la cajera tiene que rebotar con 403, asi que no
+  // escribe nada. Se limpia igual porque una version vieja de esta misma
+  // prueba usaba el token del admin para esa llamada, el alta si se
+  // guardaba, y el 4 se quedo atorado en la base de pruebas para siempre.
+  for (const sobrante of ['PRUEBA UNICA', 'RENOMBRADA', 'CON ESPACIOS', 'NO DEBERIA']) {
+    await sqlDirecto(`DELETE FROM pos.${tabla} WHERE nombre = $1`, [sobrante]);
+  }
+
+  // --- la cajera si lee, pero no escribe ---
+  const listaCajera = await pedir(`/api/${ruta}`, tokenEmpleada);
+  revisar(`la cajera SI lee ${plural}`, listaCajera.status === 200);
+  revisar(
+    `${plural} trae datos y total`,
+    Array.isArray(listaCajera.cuerpo?.datos) && listaCajera.cuerpo?.total > 0,
+    `total ${listaCajera.cuerpo?.total}`,
+  );
+  revisar(
+    `cada elemento de ${plural} trae id y nombre`,
+    listaCajera.cuerpo?.datos?.every((x) => Number.isInteger(x.id) && typeof x.nombre === 'string'),
+  );
+
+  const sinToken = await pedir(`/api/${ruta}`);
+  revisar(`${plural} sin token -> 401`, sinToken.status === 401);
+
+  const altaCajera = await crearEn('NO DEBERIA', tokenEmpleada);
+  revisar(
+    `la cajera NO puede crear en ${plural} -> 403`,
+    altaCajera.status === 403,
+    JSON.stringify(altaCajera.cuerpo),
+  );
+
+  // --- validacion ---
+  const vacio = await crearEn('');
+  revisar(`nombre vacio en ${plural} -> 400`, vacio.status === 400, JSON.stringify(vacio.cuerpo));
+
+  const corto = await crearEn('A');
+  revisar(`nombre de 1 caracter en ${plural} -> 400`, corto.status === 400);
+
+  const larguisimo = await crearEn('X'.repeat(150));
+  revisar(`nombre de 150 caracteres en ${plural} -> 400`, larguisimo.status === 400);
+
+  const conCampoExtra = await pedir(`/api/${ruta}`, tokenAdmin, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: 'PRUEBA UNICA', id: 999 }),
+  });
+  revisar(
+    `campo desconocido en ${plural} -> 400`,
+    conCampoExtra.status === 400,
+    JSON.stringify(conCampoExtra.cuerpo),
+  );
+
+  // --- alta valida ---
+  const alta = await crearEn('PRUEBA UNICA');
+  revisar(`alta en ${plural} -> 201`, alta.status === 201, JSON.stringify(alta.cuerpo));
+  const idAlta = alta.cuerpo?.id;
+  revisar(
+    `el alta devuelve id y nombre`,
+    Number.isInteger(idAlta) && alta.cuerpo?.nombre === 'PRUEBA UNICA',
+  );
+
+  // Los espacios de los bordes se recortan: " PRUEBA " es "PRUEBA".
+  const conEspacios = await crearEn('  CON ESPACIOS  ');
+  revisar(
+    `los espacios de los bordes se recortan en ${plural}`,
+    conEspacios.cuerpo?.nombre === 'CON ESPACIOS',
+    JSON.stringify(conEspacios.cuerpo),
+  );
+  if (conEspacios.cuerpo?.id) {
+    await sqlDirecto(`DELETE FROM pos.${tabla} WHERE id = $1`, [conEspacios.cuerpo.id]);
+  }
+
+  // --- duplicados, incluyendo el juego de mayusculas ---
+  const repetido = await crearEn('PRUEBA UNICA');
+  revisar(
+    `nombre repetido en ${plural} -> 409`,
+    repetido.status === 409,
+    JSON.stringify(repetido.cuerpo),
+  );
+  revisar(
+    `el 409 dice NOMBRE_DUPLICADO`,
+    repetido.cuerpo?.codigo === 'NOMBRE_DUPLICADO',
+    JSON.stringify(repetido.cuerpo),
+  );
+
+  const minusculas = await crearEn('prueba unica');
+  revisar(
+    `un nombre que solo difiere en mayusculas tambien choca en ${plural} -> 409`,
+    minusculas.status === 409,
+    JSON.stringify(minusculas.cuerpo),
+  );
+
+  // --- ver uno ---
+  const verUno = await pedir(`/api/${ruta}/${idAlta}`, tokenAdmin);
+  revisar(
+    `ver un elemento de ${plural} -> 200`,
+    verUno.status === 200,
+    JSON.stringify(verUno.cuerpo),
+  );
+  revisar(`el elemento existe`, verUno.cuerpo?.nombre === 'PRUEBA UNICA');
+
+  // 30000 cabe en un smallint (max 32767) pero no existe: eso es un 404.
+  const verFantasma = await pedir(`/api/${ruta}/30000`, tokenAdmin);
+  revisar(
+    `ver un id inexistente en ${plural} -> 404`,
+    verFantasma.status === 404,
+    JSON.stringify(verFantasma.cuerpo),
+  );
+  // 999999 no cabe: el id del catalogo es SMALLINT y Postgres suelta
+  // 22003. Se valida en el esquema para que el 400 lo diga.
+  const verFueraDeRango = await pedir(`/api/${ruta}/999999`, tokenAdmin);
+  revisar(
+    `id fuera de rango en ${plural} -> 400`,
+    verFueraDeRango.status === 400,
+    JSON.stringify(verFueraDeRango.cuerpo),
+  );
+  revisar(
+    `el 400 de rango explica que el catalogo usa numeros pequenos`,
+    /numeros pequenos/.test(JSON.stringify(verFueraDeRango.cuerpo)),
+    JSON.stringify(verFueraDeRango.cuerpo),
+  );
+  const verMalo = await pedir(`/api/${ruta}/abc`, tokenAdmin);
+  revisar(`id no numerico en ${plural} -> 400`, verMalo.status === 400);
+
+  // --- renombrar ---
+  const renombrar = await pedir(`/api/${ruta}/${idAlta}`, tokenAdmin, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: 'RENOMBRADA' }),
+  });
+  revisar(
+    `renombrar en ${plural} -> 200`,
+    renombrar.status === 200,
+    JSON.stringify(renombrar.cuerpo),
+  );
+  revisar(`el nombre quedo actualizado`, renombrar.cuerpo?.nombre === 'RENOMBRADA');
+  revisar(`el id no cambia al renombrar`, renombrar.cuerpo?.id === idAlta);
+
+  const renombrarAExistente = await pedir(`/api/${ruta}/${idAlta}`, tokenAdmin, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: listaCajera.cuerpo?.datos?.[0]?.nombre ?? 'x' }),
+  });
+  revisar(
+    `renombrar a un nombre que ya existe -> 409`,
+    renombrarAExistente.status === 409,
+    JSON.stringify(renombrarAExistente.cuerpo),
+  );
+
+  const renombrarFantasma = await pedir(`/api/${ruta}/30000`, tokenAdmin, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: 'NADA QUE VER' }),
+  });
+  revisar(`renombrar un id inexistente en ${plural} -> 404`, renombrarFantasma.status === 404);
+
+  const edicionPorPost = await pedir(`/api/${ruta}/${idAlta}`, tokenAdmin, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: 'POR POST' }),
+  });
+  revisar(`editar por POST en ${plural} no existe -> 404`, edicionPorPost.status === 404);
+
+  // --- borrar lo que no se usa ---
+  const borrar = await pedir(`/api/${ruta}/${idAlta}`, tokenAdmin, { method: 'DELETE' });
+  revisar(
+    `borrar un elemento sin uso -> 204`,
+    borrar.status === 204,
+    JSON.stringify(borrar.cuerpo),
+  );
+
+  const borrarDoble = await pedir(`/api/${ruta}/${idAlta}`, tokenAdmin, { method: 'DELETE' });
+  revisar(`borrar dos veces en ${plural} -> 404`, borrarDoble.status === 404);
+}
+
+// --- borrar lo que SI se usa ---
+// Se toma un elemento del seed que ya esta en uso y se intenta borrar.
+const especieEnUso = await pedir(`/api/especies/1`, tokenAdmin);
+revisar(
+  'la especie 1 del seed existe',
+  especieEnUso.status === 200,
+  JSON.stringify(especieEnUso.cuerpo),
+);
+if (especieEnUso.cuerpo?.nombre) {
+  const borrarEnUso = await pedir('/api/especies/1', tokenAdmin, { method: 'DELETE' });
+  revisar(
+    'borrar una especie que tiene clientes -> 409',
+    borrarEnUso.status === 409,
+    JSON.stringify(borrarEnUso.cuerpo),
+  );
+  revisar(
+    'el 409 dice EN_USO',
+    borrarEnUso.cuerpo?.codigo === 'EN_USO',
+    JSON.stringify(borrarEnUso.cuerpo),
+  );
+  // El orden de la lista depende del orden del arreglo `usos` del
+  // recurso, asi que se comprueba que aparezcan los dos, no en que orden.
+  revisar(
+    'el mensaje explica cuantos clientes la usan',
+    /\d+ clientes?/.test(borrarEnUso.cuerpo?.error ?? ''),
+    borrarEnUso.cuerpo?.error,
+  );
+  revisar(
+    'el mensaje menciona tambien los productos',
+    /\d+ productos?/.test(borrarEnUso.cuerpo?.error ?? ''),
+    borrarEnUso.cuerpo?.error,
+  );
+  const sigueAhí = await pedir('/api/especies/1', tokenAdmin);
+  revisar('la especie en uso NO se borro', sigueAhí.status === 200);
+}
 
 // Limpia lo que creo esta suite. No hay endpoint DELETE a proposito (en
 // el negocio se da de baja, no se borra), asi que el borrado de prueba se

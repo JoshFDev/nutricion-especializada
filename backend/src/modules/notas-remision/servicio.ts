@@ -387,7 +387,11 @@ async function prepararRenglones(
      */
     const disponible = info.existencia + (consumoPropio.get(clave) ?? 0);
     if (total > disponible) {
-      throw new ReglaNegocio(
+      // 409 y no 422: no es una peticion mal formada, es una peticion que
+      // choca con el estado actual del almacen. Es la misma familia que
+      // NOTA_CONGELADA o TALONARIO_YA_CARGADO, y el frontend puede
+      // distinguirla de un error de tecleo por el codigo.
+      throw new Conflicto(
         'STOCK_INSUFICIENTE',
         `No hay producto suficiente en el almacen ${r.almacen_id}`,
         {

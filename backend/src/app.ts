@@ -14,6 +14,10 @@ import { rutasProductos } from './modules/productos/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
 import { rutasUsuarios } from './modules/usuarios/rutas.js';
 import { rutasNotasRemision } from './modules/notas-remision/rutas.js';
+import { rutasPagos } from './modules/pagos/rutas.js';
+import { rutasCompras } from './modules/compras/rutas.js';
+import { rutasProveedores } from './modules/proveedores/rutas.js';
+import { rutasInventario } from './modules/inventario/rutas.js';
 
 /**
  * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
@@ -66,6 +70,10 @@ export function crearApp(): Express {
   app.use('/api/precios', rutasPrecios);
   app.use('/api/productos', rutasProductos);
   app.use('/api/notas-remision', rutasNotasRemision);
+  app.use('/api/pagos', rutasPagos);
+  app.use('/api/compras', rutasCompras);
+  app.use('/api/proveedores', rutasProveedores);
+  app.use('/api/inventario', rutasInventario);
   app.use('/api/usuarios', rutasUsuarios);
 
   // 9. Cualquier otra ruta de /api no existe

@@ -1066,7 +1066,7 @@ if (especieEnUso.cuerpo?.nombre) {
 // limpiezas: esta al arrancar y la del bloque de notas al terminar.
 
 const limpiarNotasDePrueba = async () => {
-  const cuenta = { notas: 0, productos: 0, folios: 0, existencia: null };
+  const cuenta = { notas: 0, productos: 0, existencia: null };
 
   // Los pagos van PRIMERO. `pagos_aplicacion.nota_id` es FK DURA a la nota
   // (sin ON DELETE), asi que borrar la nota antes deja la limpieza colgada
@@ -1139,7 +1139,159 @@ const limpiarNotasDePrueba = async () => {
   return cuenta;
 };
 
+/**
+ * Limpia pagos, compras, proveedores y los productos de compra de la suite.
+ *
+ * Va antes que `limpiarNotasDePrueba` y por un motivo puntual: los pagos de
+ * estos bloques se aplican a notas del cliente `CNOTA`, y `auditoria_log`
+ * NO tiene FK al pago (solo guarda el `registro_id` como numero). Si esta
+ * limpieza corriera despues de que el otro borra los pagos, sus renglones
+ * de bitacora se quedarian apuntando a ids que ya no existen. Aqui todavia
+ * estan los clientes, asi que se puede borrar por codigo.
+ *
+ * El resto del orden tambien importa, y es el de siempre:
+ *
+ * 1. `pagos_proveedor` antes que `compras`: es FK DURA a la compra.
+ * 2. Los movimientos de inventario de los productos de prueba antes que los
+ *    productos, porque `auditoria_inventario.producto_id` es FK DURA y borrar
+ *    movimientos GENERA bitacora nueva, que se va justo despues. Es el mismo
+ *    truco de `limpiarNotasDePrueba` y `limpiarProductosDePrueba`.
+ * 3. Los costos antes que el proveedor y el producto, por la misma razon.
+ *
+ * Se reconoce todo por nombre y por codigo, nunca "lo que no sea del seed":
+ * el seed trae un proveedor y una compra de verdad, y esta suite no tiene por
+ * que llevarselos.
+ */
+const limpiarPagosComprasProveedoresDePrueba = async () => {
+  const cuenta = {
+    pagos: 0,
+    compras: 0,
+    proveedores: 0,
+    productos: 0,
+    movimientos: 0,
+    costos: 0,
+    folios: 0,
+  };
+
+  const clientes = await sqlDirecto(
+    `SELECT id FROM pos.clientes WHERE codigo_cliente IN ('CNOTA', 'CFECHA')`,
+  );
+  const idsCliente = clientes.rows.map((c) => c.id);
+  if (idsCliente.length > 0) {
+    const rastro = await sqlDirecto(
+      `DELETE FROM pos.auditoria_log
+        WHERE tabla = 'pagos'
+          AND registro_id IN (SELECT id FROM pos.pagos WHERE cliente_id = ANY($1::bigint[]))`,
+      [idsCliente],
+    );
+    cuenta.pagos = rastro.rowCount;
+  }
+
+  const prods = await sqlDirecto(`SELECT id FROM pos.productos WHERE codigo LIKE 'TST-COMP%'`);
+  const idsProd = prods.rows.map((p) => p.id);
+
+  // Dos criterios para el proveedor, porque solo con el primero se caia: una
+  // corrida vieja llego a RENOMBRAR el proveedor de prueba (a un nombre
+  // libre, que si existe), dejo compras sin nombre reconocible, y la corrida
+  // siguiente se caia al borrar el producto con un 23503. El nombre sigue
+  // siendo el criterio principal; el segundo es la red para lo que quedo sin
+  // nombre reconocible: un proveedor DADO DE BAJA y sin compras ni costos no
+  // es nada que valga la pena conservar en una base de pruebas. Uno activo,
+  // aunque lo haya puesto una persona a mano, no se toca.
+  const provs = await sqlDirecto(
+    `SELECT id FROM pos.proveedores
+      WHERE nombre LIKE 'Proveedor de prueba%'
+         OR (activo = false
+             AND NOT EXISTS (SELECT 1 FROM pos.compras c WHERE c.proveedor_id = proveedores.id)
+             AND NOT EXISTS (SELECT 1 FROM pos.producto_proveedor_precios k
+                              WHERE k.proveedor_id = proveedores.id))`,
+  );
+  const idsProv = provs.rows.map((p) => p.id);
+
+  // Y las compras se buscan por DOS lados tambien: por proveedor, y por los
+  // productos de la suite. El segundo es el que no falla aunque el
+  // proveedor se haya ido de paseo.
+  if (idsProv.length > 0 || idsProd.length > 0) {
+    await sqlDirecto(
+      `DELETE FROM pos.pagos_proveedor
+        WHERE proveedor_id = ANY($1::bigint[])
+           OR compra_id IN (SELECT compra_id FROM pos.compra_detalle
+                             WHERE producto_id = ANY($2::bigint[]))`,
+      [idsProv, idsProd],
+    );
+    // `compra_detalle` va en CASCADE, asi que una sola operacion.
+    const c = await sqlDirecto(
+      `DELETE FROM pos.compras
+        WHERE proveedor_id = ANY($1::bigint[])
+           OR id IN (SELECT compra_id FROM pos.compra_detalle
+                      WHERE producto_id = ANY($2::bigint[]))`,
+      [idsProv, idsProd],
+    );
+    cuenta.compras = c.rowCount;
+  }
+
+  if (idsProd.length > 0) {
+    const movs = await sqlDirecto(
+      `SELECT id FROM pos.inventario_movimientos WHERE producto_id = ANY($1::bigint[])`,
+      [idsProd],
+    );
+    if (movs.rows.length > 0) {
+      const idsMov = movs.rows.map((m) => m.id);
+      await sqlDirecto(
+        `DELETE FROM pos.auditoria_log
+          WHERE tabla = 'inventario_movimientos' AND registro_id = ANY($1::bigint[])`,
+        [idsMov],
+      );
+    }
+    const m = await sqlDirecto(
+      `DELETE FROM pos.inventario_movimientos WHERE producto_id = ANY($1::bigint[])`,
+      [idsProd],
+    );
+    cuenta.movimientos = m.rowCount;
+    await sqlDirecto(`DELETE FROM pos.auditoria_inventario WHERE producto_id = ANY($1::bigint[])`, [
+      idsProd,
+    ]);
+    // Los costos ANTES que su rastro, al reves de como parece: el trigger
+    // `fn_auditar_precios` escribe una fila en cada borrado de costo, y
+    // `auditoria_precios.producto_id` es FK DURA. Borrando el rastro primero,
+    // el DELETE de productos revienta con 23503. Es el mismo orden y el
+    // mismo motivo que en `limpiarNotasDePrueba`.
+    const k = await sqlDirecto(
+      `DELETE FROM pos.producto_proveedor_precios WHERE producto_id = ANY($1::bigint[])`,
+      [idsProd],
+    );
+    cuenta.costos = k.rowCount;
+    await sqlDirecto(`DELETE FROM pos.auditoria_precios WHERE producto_id = ANY($1::bigint[])`, [
+      idsProd,
+    ]);
+    const p = await sqlDirecto(`DELETE FROM pos.productos WHERE id = ANY($1::bigint[])`, [idsProd]);
+    cuenta.productos = p.rowCount;
+  }
+
+  if (idsProv.length > 0) {
+    const p = await sqlDirecto(`DELETE FROM pos.proveedores WHERE id = ANY($1::bigint[])`, [
+      idsProv,
+    ]);
+    cuenta.proveedores = p.rowCount;
+  }
+
+  return cuenta;
+};
+
+/**
+ * El talonario de la serie PGO es de esta suite, y va en su propia funcion
+ * porque su orden SI importa: las notas apuntan a `folios.folio_id` y
+ * `limpiarNotasDePrueba` es la que las borra. Por eso esto va DESPUES de
+ * `limpiarNotasDePrueba` y no dentro de la limpieza de pagos, que corre antes.
+ */
+const limpiarFoliosPago = async () => {
+  const f = await sqlDirecto(`DELETE FROM pos.folios WHERE serie = 'PGO'`);
+  return f.rowCount;
+};
+
+await limpiarPagosComprasProveedoresDePrueba();
 await limpiarNotasDePrueba();
+await limpiarFoliosPago();
 
 const limpiarProductosDePrueba = async () => {
   const codigos = [
@@ -2879,8 +3031,8 @@ const sinStock = await crearNota({
   renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '9999' }],
 });
 revisar(
-  'vender mas de lo que hay -> 422 STOCK_INSUFICIENTE',
-  sinStock.status === 422 && sinStock.cuerpo?.codigo === 'STOCK_INSUFICIENTE',
+  'vender mas de lo que hay -> 409 STOCK_INSUFICIENTE',
+  sinStock.status === 409 && sinStock.cuerpo?.codigo === 'STOCK_INSUFICIENTE',
   JSON.stringify(sinStock.cuerpo),
 );
 revisar(
@@ -2907,7 +3059,7 @@ const dobleRenglon = await crearNota({
 });
 revisar(
   'el mismo producto en dos renglones suma antes de comparar -> 422',
-  dobleRenglon.status === 422 && dobleRenglon.cuerpo?.codigo === 'STOCK_INSUFICIENTE',
+  dobleRenglon.status === 409 && dobleRenglon.cuerpo?.codigo === 'STOCK_INSUFICIENTE',
   JSON.stringify(dobleRenglon.cuerpo),
 );
 revisar(
@@ -3025,7 +3177,6 @@ revisar(
   notaConEspecial.cuerpo?.renglones?.[0]?.precio_unit_kg === 9,
   JSON.stringify(notaConEspecial.cuerpo?.renglones?.[0]),
 );
-const notaConEspecialId = notaConEspecial.cuerpo?.id;
 
 // ---------------------------------------------------------------- edicion
 
@@ -3645,13 +3796,1373 @@ revisar(
   JSON.stringify(cajeraCancela.cuerpo?.error),
 );
 
+// =======================================================================
+// PAGOS (COBRANZA)
+// =======================================================================
+//
+// Va despues del bloque de notas a proposito: los pagos se aplican a notas,
+// y las notas de este bloque las crea la suite de arriba. No se reescribe
+// nada de ese bloque: este usa su propia serie de folios (PGO) y notas
+// nuevas, para que una prueba de cobranza no dependa de en que estado
+// quedo la nota que uso la de edicion.
+
+const talonarioPagos = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'PGO', desde: 3001, hasta: 3010 }),
+});
+revisar(
+  'talonario de la serie PGO -> 201',
+  talonarioPagos.status === 201,
+  JSON.stringify(talonarioPagos.cuerpo),
+);
+
+const notaDePago = async (productoId, bultos, almacen = 1) => {
+  const r = await pedir('/api/notas-remision', tokenAdmin, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cliente_id: clienteNotaId,
+      // La serie va explicita: el talonario se cargo con una sola serie, pero
+      // el endpoint no la deduce, y esta prueba no depende de que se agregue
+      // otra despues.
+      serie: 'PGO',
+      renglones: [
+        { producto_id: productoId, almacen_id: almacen, cantidad_bultos: String(bultos) },
+      ],
+    }),
+  });
+  return r;
+};
+
+const notaPago1 = await notaDePago(prodNota, 2);
+revisar('nota para cobrar -> 201', notaPago1.status === 201, JSON.stringify(notaPago1.cuerpo));
+const notaPago1Id = notaPago1.cuerpo?.id;
+const totalPago1 = notaPago1.cuerpo?.subtotal;
+
+const notaPago2 = await notaDePago(prodOtro, 1);
+const notaPago2Id = notaPago2.cuerpo?.id;
+const totalPago2 = notaPago2.cuerpo?.subtotal;
+revisar('segunda nota para cobrar -> 201', notaPago2.status === 201, JSON.stringify(notaPago2));
+
+const crearPago = (cuerpo, token = tokenAdmin) =>
+  pedir('/api/pagos', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+// A proposito NO se usa `crearPago` para esta: ese helper trae
+// `token = tokenAdmin` por omision, y un `undefined` explicito se convierte
+// en el token del ADMIN. La prueba pasaria en verde haciendo la operacion
+// con la sesion de otro. Mismo motivo por el que `crearProducto` no tiene
+// default, y por eso que este comentario este aqui y no en el helper.
+const pagoSinToken = await pedir('/api/pagos', undefined, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ cliente_id: clienteNotaId, monto: '10.00' }),
+});
+revisar('pago sin token -> 401', pagoSinToken.status === 401, JSON.stringify(pagoSinToken.cuerpo));
+
+const pagoMontoCero = await crearPago({ cliente_id: clienteNotaId, monto: '0.00' });
+revisar(
+  'monto 0 -> 400',
+  pagoMontoCero.status === 400 && pagoMontoCero.cuerpo?.codigo === 'VALIDACION',
+  JSON.stringify(pagoMontoCero.cuerpo),
+);
+
+const pagoNegativo = await crearPago({ cliente_id: clienteNotaId, monto: '-50.00' });
+revisar('monto negativo -> 400', pagoNegativo.status === 400, JSON.stringify(pagoNegativo.cuerpo));
+
+const pagoClienteFantasma = await crearPago({ cliente_id: 999999, monto: '10.00' });
+revisar(
+  'pago de un cliente que no existe -> 400',
+  pagoClienteFantasma.status === 400,
+  JSON.stringify(pagoClienteFantasma.cuerpo),
+);
+
+const pagoMetodoInventado = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  metodo: 'Bitcoin',
+});
+revisar(
+  'metodo de pago que no existe -> 400',
+  pagoMetodoInventado.status === 400,
+  JSON.stringify(pagoMetodoInventado.cuerpo),
+);
+
+const pagoCampoExtra = await crearPago({ cliente_id: clienteNotaId, monto: '10.00', notas: 1 });
+revisar(
+  'campo que no existe en el cuerpo -> 400',
+  pagoCampoExtra.status === 400,
+  JSON.stringify(pagoCampoExtra.cuerpo),
+);
+
+// El anticipo: un pago sin destino es una operacion real (un abono a
+// cuenta), y el saldo del cliente lo descuenta igual. Si esto no se
+// aceptara, el operador tendria que inventar una nota para poder cobrar.
+const anticipo = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '500.00',
+  metodo: 'Efectivo',
+  requiere_factura: true,
+  referencia: 'ANTICIPO-PRUEBA',
+});
+revisar('anticipo sin aplicar -> 201', anticipo.status === 201, JSON.stringify(anticipo.cuerpo));
+revisar(
+  'y sale con saldo a favor, no aplicado',
+  anticipo.cuerpo?.monto_aplicado === 0 && anticipo.cuerpo?.saldo === 500,
+  JSON.stringify(anticipo.cuerpo),
+);
+revisar(
+  'y el Location apunta al pago nuevo',
+  String(anticipo.headers?.get?.('location') ?? '').includes(String(anticipo.cuerpo?.id)),
+  anticipo.headers?.get?.('location'),
+);
+const anticipoId = anticipo.cuerpo?.id;
+
+const saldoClienteTrasAnticipo = await sqlDirecto(
+  `SELECT saldo_actual::TEXT AS s FROM pos.clientes WHERE id = $1`,
+  [clienteNotaId],
+);
+revisar(
+  'y el saldo del cliente ya descuenta el anticipo aunque no este aplicado',
+  Number(saldoClienteTrasAnticipo.rows[0].s) < 0,
+  `saldo ${saldoClienteTrasAnticipo.rows[0].s}`,
+);
+
+// Aplicar de mas a una nota: el servicio lo ve antes que la base.
+const pagoDeMas = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  aplicaciones: [{ nota_id: notaPago1Id, monto: '999999.00' }],
+});
+revisar(
+  'aplicar mas que el total de la nota -> 422',
+  pagoDeMas.status === 422 && pagoDeMas.cuerpo?.codigo === 'MONTO_MAYOR_A_NOTA',
+  JSON.stringify(pagoDeMas.cuerpo),
+);
+
+const pagoSinReach = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  aplicaciones: [{ nota_id: notaPago1Id, monto: '50.00' }],
+});
+revisar(
+  'aplicar mas de lo que trae el pago -> 422',
+  pagoSinReach.status === 422 && pagoSinReach.cuerpo?.codigo === 'EL_PAGO_NO_ALCANZA',
+  JSON.stringify(pagoSinReach.cuerpo),
+);
+
+// La nota del cliente equivocado tiene que ser una nota REAL de otro
+// cliente, y no una nota cualquiera: si se usara la del seed, la prueba
+// pasaria por 404 (nota inexistente) o por el cliente equivocado, y no por
+// lo que esta probando.
+const notaAjena = await pedir('/api/notas-remision', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    cliente_id: clienteFechasId,
+    serie: 'PGO',
+    renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+  }),
+});
+revisar('nota de otro cliente -> 201', notaAjena.status === 201, JSON.stringify(notaAjena.cuerpo));
+const pagoAjenoReal = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  aplicaciones: [{ nota_id: notaAjena.cuerpo?.id, monto: '10.00' }],
+});
+revisar(
+  'y aplicar a ESA nota -> 422 NOTA_DE_OTRO_CLIENTE',
+  pagoAjenoReal.status === 422 && pagoAjenoReal.cuerpo?.codigo === 'NOTA_DE_OTRO_CLIENTE',
+  JSON.stringify(pagoAjenoReal.cuerpo),
+);
+
+// Cancelada es 409 y no 422, a proposito: la nota esta en un estado, no en
+// uno invalido. Es la misma familia que NOTA_CONGELADA al editar una pagada.
+const pagoNotaCancelada = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  aplicaciones: [{ nota_id: notaAlBordeId, monto: '10.00' }],
+});
+revisar(
+  'aplicar a una nota CANCELADA -> 409',
+  pagoNotaCancelada.status === 409 &&
+    pagoNotaCancelada.cuerpo?.codigo === 'NOTA_CANCELADA_NO_SE_COBRA',
+  JSON.stringify(pagoNotaCancelada.cuerpo),
+);
+
+const pagoNotaFantasma = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  aplicaciones: [{ nota_id: 999999, monto: '10.00' }],
+});
+revisar(
+  'aplicar a una nota que no existe -> 400',
+  pagoNotaFantasma.status === 400,
+  JSON.stringify(pagoNotaFantasma.cuerpo),
+);
+
+// Pago parcial: la nota pasa a 'parcial' sola, que es el estatus que
+// mantiene `fn_actualizar_estatus_por_aplicaciones`.
+const laMitad = (totalPago1 / 2).toFixed(2);
+const parcial = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: laMitad,
+  metodo: 'Transferencia',
+  aplicaciones: [{ nota_id: notaPago1Id, monto: laMitad }],
+});
+revisar('pago parcial -> 201', parcial.status === 201, JSON.stringify(parcial.cuerpo));
+revisar(
+  'y el pago queda entero aplicado (saldo 0)',
+  parcial.cuerpo?.saldo === 0 && parcial.cuerpo?.monto_aplicado === Number(laMitad),
+  JSON.stringify(parcial.cuerpo),
+);
+const notaTrasParcial = await pedir(`/api/notas-remision/${notaPago1Id}`, tokenAdmin);
+revisar(
+  'y la nota queda PARCIAL',
+  notaTrasParcial.cuerpo?.estatus === 'parcial',
+  JSON.stringify(notaTrasParcial.cuerpo?.estatus),
+);
+
+const sobrante = (totalPago1 - Number(laMitad)).toFixed(2);
+const completa = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: sobrante,
+  metodo: 'Efectivo',
+  aplicaciones: [{ nota_id: notaPago1Id, monto: sobrante }],
+});
+revisar('pago del resto -> 201', completa.status === 201, JSON.stringify(completa.cuerpo));
+const notaTrasPagar = await pedir(`/api/notas-remision/${notaPago1Id}`, tokenAdmin);
+revisar(
+  'y la nota queda PAGADA',
+  notaTrasPagar.cuerpo?.estatus === 'pagada',
+  JSON.stringify(notaTrasPagar.cuerpo?.estatus),
+);
+
+const sobrePago = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: '10.00',
+  aplicaciones: [{ nota_id: notaPago1Id, monto: '10.00' }],
+});
+revisar(
+  'pagar de mas una nota ya pagada -> 409',
+  sobrePago.status === 409 && sobrePago.cuerpo?.codigo === 'NOTA_YA_COBRADA',
+  JSON.stringify(sobrePago.cuerpo),
+);
+
+// Un pago repartido en dos notas de una vez: es el caso normal de "cobro
+// en efectivo y dejo saldada la otra". Las dos notas tienen que seguir
+// PENDIENTES: aplicar a una ya pagada es el 409 que se acaba de probar.
+const notaPago3 = await notaDePago(prodOtro, 1);
+const notaPago3Id = notaPago3.cuerpo?.id;
+const totalPago3 = notaPago3.cuerpo?.subtotal;
+revisar('tercera nota para cobrar -> 201', notaPago3.status === 201, JSON.stringify(notaPago3));
+
+const dosNotas = (totalPago2 + totalPago3).toFixed(2);
+const repartido = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: dosNotas,
+  metodo: 'Efectivo',
+  aplicaciones: [
+    { nota_id: notaPago2Id, monto: totalPago2 },
+    { nota_id: notaPago3Id, monto: totalPago3 },
+  ],
+});
+revisar(
+  'pago repartido en dos notas -> 201',
+  repartido.status === 201,
+  JSON.stringify(repartido.cuerpo),
+);
+revisar(
+  'y queda entero aplicado, sin sobrante',
+  repartido.cuerpo?.saldo === 0 && repartido.cuerpo?.monto_aplicado === Number(dosNotas),
+  JSON.stringify(repartido.cuerpo),
+);
+for (const [nombre, id] of [
+  ['la segunda', notaPago2Id],
+  ['la tercera', notaPago3Id],
+]) {
+  const n = await pedir(`/api/notas-remision/${id}`, tokenAdmin);
+  revisar(
+    `${nombre} nota queda PAGADA`,
+    n.cuerpo?.estatus === 'pagada',
+    JSON.stringify(n.cuerpo?.estatus),
+  );
+}
+
+// Y el caso del otro lado: un pago MAS GRANDE que lo que se aplica. La
+// diferencia no se pierde ni se reparte sola: queda a favor del cliente.
+const notaPago4 = await notaDePago(prodNota, 1);
+const notaPago4Id = notaPago4.cuerpo?.id;
+const totalPago4 = notaPago4.cuerpo?.subtotal;
+const conSobrante = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: (totalPago4 + 50).toFixed(2),
+  metodo: 'Efectivo',
+  aplicaciones: [{ nota_id: notaPago4Id, monto: totalPago4 }],
+});
+revisar('pago con sobrante -> 201', conSobrante.status === 201, JSON.stringify(conSobrante.cuerpo));
+revisar(
+  'y el sobrante queda como saldo del pago',
+  conSobrante.cuerpo?.monto_aplicado === totalPago4 && conSobrante.cuerpo?.saldo === 50,
+  JSON.stringify(conSobrante.cuerpo),
+);
+const nota4TrasPagar = await pedir(`/api/notas-remision/${notaPago4Id}`, tokenAdmin);
+revisar(
+  'y la nota queda pagada igual',
+  nota4TrasPagar.cuerpo?.estatus === 'pagada',
+  JSON.stringify(nota4TrasPagar.cuerpo?.estatus),
+);
+
+// El trigger de la base tambien frena el exceso, no solo el servicio: si
+// esto pasara, un script de psql podria cobrar de mas una nota. Se usa el
+// pago con sobrante (tiene 50 disponibles) contra una nota ya pagada.
+// Se aplican LOS 50 DISPONIBLES del pago a una nota que ya esta pagada: con
+// esa cantidad el chequeo del pago pasa de largo, y el unico que puede
+// rebotar es el de la nota. Asi la prueba apunta al 23514 del "por cubrir" y
+// no al del "el pago solo tiene tanto", que son dos validaciones distintas.
+const repartidoId = conSobrante.cuerpo?.id;
+const sqlSobrePago = await intentaSql(
+  `INSERT INTO pos.pagos_aplicacion (pago_id, nota_id, monto_aplicado) VALUES ($1, $2, $3)`,
+  [repartidoId, notaPago1Id, 50],
+);
+revisar(
+  'y la BASE frena aplicar a una nota ya pagada por SQL (23514)',
+  sqlSobrePago.filas === 0 && String(sqlSobrePago.fallo?.message ?? '').includes('por cubrir'),
+  sqlSobrePago.fallo?.message ?? `paso, rowCount ${sqlSobrePago.filas}`,
+);
+
+// Tampoco se puede aplicar dos veces a la misma nota en la MISMA peticion
+// para pasarse del total: el servicio lleva lo ya pedido por nota.
+const dobleEnLaMisma = await crearPago({
+  cliente_id: clienteNotaId,
+  monto: (totalPago4 * 2).toFixed(2),
+  aplicaciones: [
+    { nota_id: notaPago4Id, monto: '0.01' },
+    { nota_id: notaPago4Id, monto: totalPago4 },
+  ],
+});
+revisar(
+  'aplicar dos veces a la misma nota pasandose -> 409 (ya cobrada)',
+  dobleEnLaMisma.status === 409 && dobleEnLaMisma.cuerpo?.codigo === 'NOTA_YA_COBRADA',
+  JSON.stringify(dobleEnLaMisma.cuerpo),
+);
+
+const verPago = await pedir(`/api/pagos/${repartidoId}`, tokenAdmin);
+revisar('GET /api/pagos/:id -> 200', verPago.status === 200, JSON.stringify(verPago.cuerpo));
+revisar(
+  'y trae las aplicaciones con el folio de cada nota',
+  Array.isArray(verPago.cuerpo?.aplicaciones) &&
+    verPago.cuerpo.aplicaciones.length === 1 &&
+    String(verPago.cuerpo.aplicaciones[0]?.nota).includes('PGO'),
+  JSON.stringify(verPago.cuerpo?.aplicaciones),
+);
+revisar(
+  'y cada aplicacion trae su monto y el estatus en que quedo la nota',
+  typeof verPago.cuerpo?.aplicaciones?.[0]?.monto === 'number' &&
+    typeof verPago.cuerpo?.aplicaciones?.[0]?.nota_estatus === 'string',
+  JSON.stringify(verPago.cuerpo?.aplicaciones?.[0]),
+);
+revisar(
+  'y la fecha es AAAA-MM-DD, no un timestamp ISO',
+  /^\d{4}-\d{2}-\d{2}$/.test(verPago.cuerpo?.fecha ?? ''),
+  verPago.cuerpo?.fecha,
+);
+
+const verPagoFantasma = await pedir('/api/pagos/999999', tokenAdmin);
+revisar(
+  'pago que no existe -> 404',
+  verPagoFantasma.status === 404,
+  JSON.stringify(verPagoFantasma.cuerpo),
+);
+
+const parchePago = await pedir(`/api/pagos/${anticipoId}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ monto: '1.00' }),
+});
+revisar(
+  'PATCH /api/pagos/:id -> 404',
+  parchePago.status === 404,
+  JSON.stringify(parchePago.cuerpo),
+);
+
+const borrarPago = await pedir(`/api/pagos/${anticipoId}`, tokenAdmin, { method: 'DELETE' });
+revisar(
+  'DELETE /api/pagos/:id -> 404',
+  borrarPago.status === 404,
+  JSON.stringify(borrarPago.cuerpo),
+);
+
+const pagosSinToken = await pedir('/api/pagos');
+revisar(
+  'listar pagos sin token -> 401',
+  pagosSinToken.status === 401,
+  JSON.stringify(pagosSinToken.cuerpo),
+);
+
+const pagosDelCliente = await pedir(
+  `/api/pagos?cliente_id=${clienteNotaId}&limite=200`,
+  tokenAdmin,
+);
+revisar(
+  'listar pagos del cliente -> 200',
+  pagosDelCliente.status === 200 && pagosDelCliente.cuerpo?.datos.length >= 4,
+  JSON.stringify(pagosDelCliente.cuerpo?.datos?.length),
+);
+revisar(
+  'y TODOS son del cliente pedido',
+  pagosDelCliente.cuerpo?.datos.every((p) => p.cliente_id === clienteNotaId),
+  'se colaron pagos de otro cliente',
+);
+revisar(
+  'y el listado tambien trae la fecha como AAAA-MM-DD',
+  pagosDelCliente.cuerpo?.datos.every((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.fecha)),
+  JSON.stringify(pagosDelCliente.cuerpo?.datos?.[0]?.fecha),
+);
+
+const pagosPorNota = await pedir(`/api/pagos?nota_id=${notaPago1Id}`, tokenAdmin);
+revisar(
+  'filtrar pagos por nota: los dos que la cubrieron',
+  pagosPorNota.status === 200 && pagosPorNota.cuerpo?.datos.length === 2,
+  JSON.stringify(pagosPorNota.cuerpo?.datos?.map((p) => p.id)),
+);
+
+const pagosPorMetodo = await pedir('/api/pagos?metodo=Efectivo&limite=200', tokenAdmin);
+revisar(
+  'filtrar pagos por metodo',
+  pagosPorMetodo.status === 200 &&
+    pagosPorMetodo.cuerpo?.datos.every((p) => p.metodo === 'Efectivo'),
+  JSON.stringify(pagosPorMetodo.cuerpo?.datos?.length),
+);
+
+const pagosBuscados = await pedir('/api/pagos?buscar=ANTICIPO-PRUEBA', tokenAdmin);
+revisar(
+  'buscar pagos por referencia',
+  pagosBuscados.status === 200 && pagosBuscados.cuerpo?.datos.length === 1,
+  JSON.stringify(pagosBuscados.cuerpo?.datos?.length),
+);
+
+const pagosRango = await pedir('/api/pagos?desde=2000-01-01&hasta=2000-01-02', tokenAdmin);
+revisar(
+  'un rango sin pagos -> lista vacia, no error',
+  pagosRango.status === 200 && pagosRango.cuerpo?.datos.length === 0,
+  JSON.stringify(pagosRango.cuerpo?.datos?.length),
+);
+
+const pagosRangoInvertido = await pedir('/api/pagos?desde=2026-12-01&hasta=2026-01-01', tokenAdmin);
+revisar(
+  'rango al reves -> 400',
+  pagosRangoInvertido.status === 400,
+  JSON.stringify(pagosRangoInvertido.cuerpo),
+);
+
+const pagosLimiteCero = await pedir('/api/pagos?limite=0', tokenAdmin);
+revisar('limite 0 -> 400', pagosLimiteCero.status === 400, JSON.stringify(pagosLimiteCero.cuerpo));
+
+const pagosPagina = await pedir(
+  `/api/pagos?cliente_id=${clienteNotaId}&limite=1&offset=1`,
+  tokenAdmin,
+);
+revisar(
+  'la paginacion no repite renglones',
+  pagosPagina.status === 200 && pagosPagina.cuerpo?.datos.length === 1,
+  JSON.stringify(pagosPagina.cuerpo?.datos?.map((p) => p.id)),
+);
+
+// =======================================================================
+// PROVEEDORES
+// =======================================================================
+
+const crearProveedor = (cuerpo, token = tokenAdmin) =>
+  pedir('/api/proveedores', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const parcheProveedor = (id, cuerpo, token = tokenAdmin) =>
+  pedir(`/api/proveedores/${id}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const nuevoProveedor = await crearProveedor({
+  nombre: 'Proveedor de pruebaUno',
+  contacto: 'Ventas',
+  telefono: '000-000-0001',
+});
+revisar(
+  'alta de proveedor -> 201',
+  nuevoProveedor.status === 201,
+  JSON.stringify(nuevoProveedor.cuerpo),
+);
+// `compras` NO se comprueba aqui: es una columna del LISTADO, y el detalle
+// (igual que el alta) devuelve solo la entidad. Se comprueba mas abajo, en
+// el listado.
+revisar(
+  'y arranca activo y en cero',
+  nuevoProveedor.cuerpo?.activo === true && nuevoProveedor.cuerpo?.saldo_actual === 0,
+  JSON.stringify(nuevoProveedor.cuerpo),
+);
+revisar(
+  'y el detalle no se trae campos del listado',
+  nuevoProveedor.cuerpo?.compras === undefined,
+  JSON.stringify(nuevoProveedor.cuerpo),
+);
+revisar(
+  'y el Location del proveedor apunta al nuevo',
+  String(nuevoProveedor.headers?.get('location') ?? '').endsWith(`/${nuevoProveedor.cuerpo?.id}`),
+  nuevoProveedor.headers?.get('location') ?? '(sin cabecera location)',
+);
+const provUnoId = nuevoProveedor.cuerpo?.id;
+
+const proveedorDuplicado = await crearProveedor({ nombre: 'Proveedor de pruebaUno' });
+revisar(
+  'nombre repetido -> 409',
+  proveedorDuplicado.status === 409 && proveedorDuplicado.cuerpo?.codigo === 'PROVEEDOR_DUPLICADO',
+  JSON.stringify(proveedorDuplicado.cuerpo),
+);
+
+const proveedorSinNombre = await crearProveedor({ contacto: 'Nadie' });
+revisar(
+  'alta sin nombre -> 400',
+  proveedorSinNombre.status === 400,
+  JSON.stringify(proveedorSinNombre.cuerpo),
+);
+
+const proveedorNombreLargo = await crearProveedor({ nombre: 'P'.repeat(121) });
+revisar(
+  'nombre de 121 caracteres -> 400',
+  proveedorNombreLargo.status === 400,
+  JSON.stringify(proveedorNombreLargo.cuerpo),
+);
+
+const proveedorCampoExtra = await crearProveedor({ nombre: 'Proveedor de pruebaExtra', rfc: 'X' });
+revisar(
+  'campo que no existe -> 400',
+  proveedorCampoExtra.status === 400,
+  JSON.stringify(proveedorCampoExtra.cuerpo),
+);
+
+const proveedorEmpleada = await crearProveedor(
+  { nombre: 'Proveedor de pruebaEmpleada' },
+  tokenEmpleada,
+);
+revisar(
+  'la empleada NO da de alta proveedores -> 403',
+  proveedorEmpleada.status === 403,
+  JSON.stringify(proveedorEmpleada.cuerpo),
+);
+
+const verProveedor = await pedir(`/api/proveedores/${provUnoId}`, tokenAdmin);
+revisar('ver proveedor -> 200', verProveedor.status === 200, JSON.stringify(verProveedor.cuerpo));
+
+const verProveedorFantasma = await pedir('/api/proveedores/999999', tokenAdmin);
+revisar(
+  'proveedor que no existe -> 404',
+  verProveedorFantasma.status === 404,
+  JSON.stringify(verProveedorFantasma.cuerpo),
+);
+
+const proveedorSinToken = await pedir('/api/proveedores');
+revisar(
+  'listar proveedores sin token -> 401',
+  proveedorSinToken.status === 401,
+  JSON.stringify(proveedorSinToken.cuerpo),
+);
+
+const proveedorEditado = await parcheProveedor(provUnoId, { contacto: 'Compras', telefono: null });
+revisar(
+  'editar proveedor -> 200',
+  proveedorEditado.status === 200,
+  JSON.stringify(proveedorEditado.cuerpo),
+);
+revisar(
+  'y el telefono se puede vaciar (queda null)',
+  proveedorEditado.cuerpo?.telefono === null && proveedorEditado.cuerpo?.contacto === 'Compras',
+  JSON.stringify(proveedorEditado.cuerpo),
+);
+
+const proveedorParcheVacio = await parcheProveedor(provUnoId, {});
+revisar(
+  'editar sin mandar nada -> 400',
+  proveedorParcheVacio.status === 400,
+  JSON.stringify(proveedorParcheVacio.cuerpo),
+);
+
+// Renombrar a un nombre LIBRE: 200. Y da igual cual sea, mientras conserve
+// el prefijo "Proveedor de prueba": la limpieza recognizes a sus proveedores
+// por nombre, asi que uno que lo pierda se queda en la base.
+const renombrarAUnoLibre = await parcheProveedor(provUnoId, {
+  nombre: 'Proveedor de pruebaRenombrado',
+});
+revisar(
+  'renombrar a un nombre libre -> 200',
+  renombrarAUnoLibre.status === 200,
+  JSON.stringify(renombrarAUnoLibre.cuerpo),
+);
+revisar(
+  'y el nombre nuevo es el que se guardo',
+  renombrarAUnoLibre.cuerpo?.nombre === 'Proveedor de pruebaRenombrado',
+  JSON.stringify(renombrarAUnoLibre.cuerpo?.nombre),
+);
+
+// Y renombrar a un nombre que ya existe: 409. Se usa el del proveedor del
+// seed porque es el unico que se sabe ocupado sin depender de esta suite:
+// usar aqui un nombre de la propia suite seria probar el caso contrario
+// (un nombre libre), que es justo lo que paso una vez.
+const nombreDelSeed = (await pedir('/api/proveedores?limite=1', tokenAdmin)).cuerpo?.datos?.[0]
+  ?.nombre;
+revisar(
+  'el listado trae al proveedor del seed',
+  typeof nombreDelSeed === 'string',
+  String(nombreDelSeed),
+);
+
+const proveedorRenombrado = await parcheProveedor(provUnoId, { nombre: nombreDelSeed });
+revisar(
+  'no se puede renombrar a un nombre ya usado -> 409',
+  proveedorRenombrado.status === 409 &&
+    proveedorRenombrado.cuerpo?.codigo === 'PROVEEDOR_DUPLICADO',
+  JSON.stringify(proveedorRenombrado.cuerpo),
+);
+// El 409 no trae el proveedor entero (trae el mensaje y el detalle del
+// choque), asi que el nombre se comprueba yendo a leerlo, que es como lo
+// veria el operador: recarga la pantalla y sigue igual.
+revisar(
+  'y el nombre no cambia (el 409 no dejo el nombre a medias)',
+  (await pedir(`/api/proveedores/${provUnoId}`, tokenAdmin)).cuerpo?.nombre ===
+    'Proveedor de pruebaRenombrado',
+  (await pedir(`/api/proveedores/${provUnoId}`, tokenAdmin)).cuerpo?.nombre,
+);
+
+const buscable = await crearProveedor({ nombre: 'Proveedor de pruebaBuscable' });
+const buscableId = buscable.cuerpo?.id;
+revisar('proveedor buscable -> 201', buscable.status === 201, JSON.stringify(buscable.cuerpo));
+
+const listarProveedores = await pedir('/api/proveedores?buscar=Buscable', tokenAdmin);
+revisar(
+  'buscar proveedores por nombre',
+  listarProveedores.status === 200,
+  JSON.stringify(listarProveedores.cuerpo),
+);
+revisar(
+  'y encuentra al que se busca',
+  listarProveedores.cuerpo?.datos.some((p) => p.id === buscableId),
+  JSON.stringify(listarProveedores.cuerpo?.datos?.map((p) => p.nombre)),
+);
+
+const listarTodos = await pedir('/api/proveedores?limite=200', tokenAdmin);
+revisar(
+  'el listado trae el total del encabezado',
+  listarTodos.status === 200 && typeof listarTodos.cuerpo?.total === 'number',
+  JSON.stringify(listarTodos.cuerpo?.total),
+);
+revisar(
+  'y la pagina no se pasa del total',
+  listarTodos.cuerpo?.datos.length <= listarTodos.cuerpo?.total,
+  JSON.stringify({ datos: listarTodos.cuerpo?.datos.length, total: listarTodos.cuerpo?.total }),
+);
+
+const listarProveedoresPagina = await pedir('/api/proveedores?limite=1&offset=1', tokenAdmin);
+revisar(
+  'la paginacion de proveedores funciona',
+  listarProveedoresPagina.status === 200 && listarProveedoresPagina.cuerpo?.datos.length === 1,
+  JSON.stringify(listarProveedoresPagina.cuerpo?.datos?.map((p) => p.id)),
+);
+
+const proveedoresLimiteCero = await pedir('/api/proveedores?limite=0', tokenAdmin);
+revisar(
+  'limite 0 en proveedores -> 400',
+  proveedoresLimiteCero.status === 400,
+  JSON.stringify(proveedoresLimiteCero.cuerpo),
+);
+
+const verProveedorFantasmaId = await pedir('/api/proveedores/abc', tokenAdmin);
+revisar(
+  'id que no es numero -> 400',
+  verProveedorFantasmaId.status === 400,
+  JSON.stringify(verProveedorFantasmaId.cuerpo),
+);
+
+// =======================================================================
+// COMPRAS
+// =======================================================================
+//
+// Los productos de compra son propios (TST-COMP) y no los de las notas: las
+// pruebas de existencias comparan un numero exacto antes y despues, y si
+// compartieran producto las dos secciones se estorbarían.
+
+const prodCompra = await crearProducto(
+  { codigo: 'TST-COMP', nombre: 'Producto de compra', presentacion_kg: '25.000' },
+  tokenAdmin,
+).then((r) => r.cuerpo?.id);
+revisar('producto de compra -> 201', Number.isInteger(prodCompra), String(prodCompra));
+
+const prodCompraSinCosto = await crearProducto(
+  { codigo: 'TST-COMP2', nombre: 'Producto de compra sin costo', presentacion_kg: '10.000' },
+  tokenAdmin,
+).then((r) => r.cuerpo?.id);
+revisar(
+  'segundo producto de compra -> 201',
+  Number.isInteger(prodCompraSinCosto),
+  String(prodCompraSinCosto),
+);
+
+for (const pid of [prodCompra, prodCompraSinCosto]) {
+  await sqlDirecto(
+    `INSERT INTO pos.inventario_movimientos (producto_id, almacen_id, tipo, cantidad_bultos, referencia_tabla)
+     VALUES ($1, 1, 'entrada_compra', 50, 'seed')`,
+    [pid],
+  );
+}
+revisar(
+  'y arrancan con 50 bultos',
+  (await existenciaDe(prodCompra)) === 50,
+  `${await existenciaDe(prodCompra)}`,
+);
+
+// El costo historico se mete por SQL porque no hay API de costos todavia:
+// `producto_proveedor_precios` se alimenta desde la compra misma, no desde
+// una pantalla.
+//
+// Dos ventanas que NO se traslapan, y ese es el caso que hay que probar: si
+// el costo se resolvio con "el ultimo costo" en vez de "el costo vigente
+// en la fecha de la compra", una compra de hoy tomaria el de 30 que todavia
+// no empieza, y una compra futura tomaria el de 20 que ya caduco.
+const costoPasado = await sqlDirecto(
+  `INSERT INTO pos.producto_proveedor_precios
+     (proveedor_id, producto_id, precio_kg, vigente_desde, vigente_hasta)
+   VALUES ($1, $2, 20.00, CURRENT_DATE - 10, CURRENT_DATE + 4)
+   RETURNING precio_bulto::TEXT AS pb`,
+  [provUnoId, prodCompra],
+);
+revisar(
+  'costo historico de 20 -> el trigger calcula el precio por bulto',
+  costoPasado.rows[0]?.pb === '500.00',
+  JSON.stringify(costoPasado.rows[0]),
+);
+const costoFuturo = await sqlDirecto(
+  `INSERT INTO pos.producto_proveedor_precios
+     (proveedor_id, producto_id, precio_kg, vigente_desde)
+   VALUES ($1, $2, 30.00, CURRENT_DATE + 5)`,
+  [provUnoId, prodCompra],
+);
+revisar('costo futuro de 30 -> 1 fila', costoFuturo.rowCount === 1);
+
+const crearCompra = (cuerpo, token = tokenAdmin) =>
+  pedir('/api/compras', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const cancelarCompra = (id, cuerpo, token = tokenAdmin) =>
+  pedir(`/api/compras/${id}/cancelar`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+// Igual que en pagos: fuera del helper, para que el `undefined` del token no
+// se convierta en el token del admin y la compra se cree de todos modos.
+const compraSinToken = await pedir('/api/compras', undefined, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    proveedor_id: provUnoId,
+    renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1' }],
+  }),
+});
+revisar(
+  'alta de compra sin token -> 401',
+  compraSinToken.status === 401,
+  JSON.stringify(compraSinToken.cuerpo),
+);
+
+// El costo de HOY con vigente_hasta = CURRENT_DATE + 4 y el de CURRENT_DATE
+// + 5 se tocan en un dia. En los precios de venta eso es traslape (0007) y
+// la base lo rechaza; en los costos NO hay trigger de traslape, y por eso
+// esta suite los escribe sin cerrarlos. No es un olvido: se deja asi a
+// proposito para probar que la resolucion por fecha usa la ventana correcta
+// aun cuando dos ventanas abiertas se pisan. Si algun dia se agrega el
+// trigger de traslape a `producto_proveedor_precios`, estas dos filas
+// empiezan a rebotar y hay que cerrarlas.
+const traslapeDeCostos = await sqlDirecto(
+  `SELECT COUNT(*)::TEXT AS n FROM pos.producto_proveedor_precios
+    WHERE proveedor_id = $1 AND producto_id = $2`,
+  [provUnoId, prodCompra],
+);
+revisar(
+  'hay 2 ventanas de costo para el mismo producto',
+  traslapeDeCostos.rows[0].n === '2',
+  traslapeDeCostos.rows[0].n,
+);
+
+const compraSinRenglones = await crearCompra({ proveedor_id: provUnoId, renglones: [] });
+revisar(
+  'compra sin renglones -> 400',
+  compraSinRenglones.status === 400,
+  JSON.stringify(compraSinRenglones.cuerpo),
+);
+
+const compraProveedorFantasma = await crearCompra({
+  proveedor_id: 999999,
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'compra a un proveedor inexistente -> 400',
+  compraProveedorFantasma.status === 400,
+  JSON.stringify(compraProveedorFantasma.cuerpo),
+);
+
+const compraProductoFantasma = await crearCompra({
+  proveedor_id: provUnoId,
+  renglones: [{ producto_id: 999999, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'compra de un producto inexistente -> 400',
+  compraProductoFantasma.status === 400,
+  JSON.stringify(compraProductoFantasma.cuerpo),
+);
+
+const compraSinCosto = await crearCompra({
+  proveedor_id: provUnoId,
+  renglones: [{ producto_id: prodCompraSinCosto, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'compra sin costo y sin precio -> 422',
+  compraSinCosto.status === 422 && compraSinCosto.cuerpo?.codigo === 'SIN_COSTO',
+  JSON.stringify(compraSinCosto.cuerpo),
+);
+
+const compraCantidadCero = await crearCompra({
+  proveedor_id: provUnoId,
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '0' }],
+});
+revisar(
+  'cantidad 0 -> 400',
+  compraCantidadCero.status === 400,
+  JSON.stringify(compraCantidadCero.cuerpo),
+);
+
+const compraConSubtotal = await crearCompra({
+  proveedor_id: provUnoId,
+  subtotal: 1,
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'mandar el subtotal a mano -> 400 (es GENERATED)',
+  compraConSubtotal.status === 400,
+  JSON.stringify(compraConSubtotal.cuerpo),
+);
+
+// El camino feliz: sin precio_kg, el costo sale del historico DE HOY (20).
+const compraOk = await crearCompra({
+  proveedor_id: provUnoId,
+  folio_proveedor: 'FOLIO-PRUEBA-1',
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '4' }],
+});
+revisar('alta de compra -> 201', compraOk.status === 201, JSON.stringify(compraOk.cuerpo));
+revisar(
+  'y el monto sale del costo vigente de HOY, no del futuro',
+  compraOk.cuerpo?.monto_total === 4 * 25 * 20,
+  `monto ${compraOk.cuerpo?.monto_total}, esperado ${4 * 25 * 20}`,
+);
+revisar(
+  'y cada renglon guarda el precio ya resuelto',
+  compraOk.cuerpo?.renglones?.[0]?.precio_kg === 20,
+  JSON.stringify(compraOk.cuerpo?.renglones?.[0]),
+);
+revisar(
+  'y arranca PENDIENTE y sin motivo de cancelacion',
+  compraOk.cuerpo?.estatus === 'pendiente' && compraOk.cuerpo?.motivo_cancelacion === null,
+  JSON.stringify(compraOk.cuerpo),
+);
+revisar(
+  'y la compra trae su Location',
+  /^\/api\/compras\/\d+$/.test(compraOk.headers?.get('location') ?? ''),
+  compraOk.headers?.get('location') ?? '(sin cabecera location)',
+);
+const compraOkId = compraOk.cuerpo?.id;
+
+revisar(
+  'y el almacen recibio los 4 bultos',
+  (await existenciaDe(prodCompra)) === 54,
+  `${await existenciaDe(prodCompra)}`,
+);
+
+const verCompra = await pedir(`/api/compras/${compraOkId}`, tokenAdmin);
+revisar('ver compra -> 200', verCompra.status === 200, JSON.stringify(verCompra.cuerpo));
+revisar(
+  'y trae el nombre del proveedor y el codigo del producto',
+  typeof verCompra.cuerpo?.proveedor === 'string' &&
+    verCompra.cuerpo?.renglones?.[0]?.producto_codigo === 'TST-COMP',
+  JSON.stringify(verCompra.cuerpo?.renglones?.[0]),
+);
+revisar(
+  'y la fecha es AAAA-MM-DD',
+  /^\d{4}-\d{2}-\d{2}$/.test(verCompra.cuerpo?.fecha ?? ''),
+  verCompra.cuerpo?.fecha,
+);
+
+const compraFechada = await crearCompra({
+  proveedor_id: provUnoId,
+  fecha: '2099-01-01',
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1', precio_kg: '5.00' }],
+});
+revisar(
+  'compra con fecha propia -> 201',
+  compraFechada.status === 201,
+  JSON.stringify(compraFechada.cuerpo),
+);
+revisar(
+  'y con precio explicito manda el explicito, no el del catalogo',
+  compraFechada.cuerpo?.monto_total === 25 * 5,
+  `monto ${compraFechada.cuerpo?.monto_total}`,
+);
+revisar(
+  'y la fecha guardada es la que se mando',
+  compraFechada.cuerpo?.fecha === '2099-01-01',
+  compraFechada.cuerpo?.fecha,
+);
+const compraFechadaId = compraFechada.cuerpo?.id;
+
+// El precio del historico FUTURO: una compra fechada despues de que empiece
+// esa ventana tiene que usar 30, no 20. Es la prueba de que el costo se
+// resuelve por FECHA y no "el ultimo costo".
+const compraFuturaConCosto = await crearCompra({
+  proveedor_id: provUnoId,
+  fecha: '2099-06-01',
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'compra fechada dentro de la ventana futura -> 201',
+  compraFuturaConCosto.status === 201,
+  JSON.stringify(compraFuturaConCosto.cuerpo),
+);
+revisar(
+  'y toma el costo que estaba vigente EN ESA FECHA (30)',
+  compraFuturaConCosto.cuerpo?.monto_total === 25 * 30,
+  `monto ${compraFuturaConCosto.cuerpo?.monto_total}, esperado ${25 * 30}`,
+);
+const compraFuturaId = compraFuturaConCosto.cuerpo?.id;
+
+const parcheCompra = await pedir(`/api/compras/${compraOkId}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ folio_proveedor: 'OTRO' }),
+});
+revisar(
+  'PATCH /api/compras/:id -> 404',
+  parcheCompra.status === 404,
+  JSON.stringify(parcheCompra.cuerpo),
+);
+
+const borrarCompra = await pedir(`/api/compras/${compraOkId}`, tokenAdmin, { method: 'DELETE' });
+revisar(
+  'DELETE /api/compras/:id -> 404',
+  borrarCompra.status === 404,
+  JSON.stringify(borrarCompra.cuerpo),
+);
+
+// --------------------------------------------------------------- cancelar
+
+const cancelarCompraSinMotivo = await cancelarCompra(compraFechadaId, {});
+revisar(
+  'cancelar compra sin motivo -> 400',
+  cancelarCompraSinMotivo.status === 400,
+  JSON.stringify(cancelarCompraSinMotivo.cuerpo),
+);
+
+const cancelarMotivoCorto = await cancelarCompra(compraFechadaId, { motivo: 'x' });
+revisar(
+  'motivo de 1 letra -> 400',
+  cancelarMotivoCorto.status === 400,
+  JSON.stringify(cancelarMotivoCorto.cuerpo),
+);
+
+const existenciaAntesDeCancelar = await existenciaDe(prodCompra);
+const cancelarOk = await cancelarCompra(compraFechadaId, {
+  motivo: 'La prueba de compra se cancela para no dejar basura',
+});
+revisar('cancelar compra -> 200', cancelarOk.status === 200, JSON.stringify(cancelarOk.cuerpo));
+revisar(
+  'y queda CANCELADA con su motivo',
+  cancelarOk.cuerpo?.estatus === 'cancelada' &&
+    cancelarOk.cuerpo?.motivo_cancelacion === 'La prueba de compra se cancela para no dejar basura',
+  JSON.stringify(cancelarOk.cuerpo),
+);
+revisar(
+  'y el almacen devuelve lo que habia recibido',
+  (await existenciaDe(prodCompra)) === existenciaAntesDeCancelar - 1,
+  `${existenciaAntesDeCancelar} -> ${await existenciaDe(prodCompra)}`,
+);
+
+const cancelarCompraDosVeces = await cancelarCompra(compraFechadaId, { motivo: 'otra vez' });
+revisar(
+  'cancelar dos veces la misma compra -> 409',
+  cancelarCompraDosVeces.status === 409 &&
+    cancelarCompraDosVeces.cuerpo?.codigo === 'COMPRA_YA_CANCELADA',
+  JSON.stringify(cancelarCompraDosVeces.cuerpo),
+);
+revisar(
+  'y el 409 trae el motivo con el que se cancelo',
+  cancelarCompraDosVeces.cuerpo?.detalles?.motivo ===
+    'La prueba de compra se cancela para no dejar basura',
+  JSON.stringify(cancelarCompraDosVeces.cuerpo?.detalles),
+);
+
+// La BASE exige el motivo, no solo el servicio: sin esto, un UPDATE a mano
+// podria dejar una compra cancelada sin razon. Ojo con lo que NO se toca
+// aqui: el estatus. Volverlo a 'pendiente' por la viajcita del trigger
+// `trg_cancelar_compra_inventario` volveria a meter los movimientos de
+// entrada, y la prueba estaria comprobando dos cosas a la vez.
+const sqlCancelarSinMotivo = await intentaSql(
+  `UPDATE pos.compras SET motivo_cancelacion = NULL WHERE id = $1`,
+  [compraFechadaId],
+);
+revisar(
+  'y la BASE no deja vaciar el motivo de una cancelada (23514)',
+  sqlCancelarSinMotivo.filas === 0,
+  sqlCancelarSinMotivo.fallo?.message ?? `paso, rowCount ${sqlCancelarSinMotivo.filas}`,
+);
+const motivoLargoVacio = await intentaSql(
+  `UPDATE pos.compras SET motivo_cancelacion = '   ' WHERE id = $1`,
+  [compraFechadaId],
+);
+revisar(
+  'ni un motivo de puros espacios',
+  motivoLargoVacio.filas === 0,
+  motivoLargoVacio.fallo?.message ?? `paso, rowCount ${motivoLargoVacio.filas}`,
+);
+
+// Compra con pago registrado: no se puede cancelar desde aqui.
+await sqlDirecto(
+  `INSERT INTO pos.pagos_proveedor (proveedor_id, compra_id, monto, metodo) VALUES ($1, $2, $3, 'Transferencia')`,
+  [provUnoId, compraFuturaId, 25 * 30],
+);
+const compraPagada = await pedir(`/api/compras/${compraFuturaId}`, tokenAdmin);
+revisar(
+  'el pago por SQL la deja PAGADA sola',
+  compraPagada.cuerpo?.estatus === 'pagada',
+  JSON.stringify(compraPagada.cuerpo?.estatus),
+);
+const existenciaConPagada = await existenciaDe(prodCompra);
+const cancelarCompraPagada = await cancelarCompra(compraFuturaId, {
+  motivo: 'ya la pague, quiero el dinero',
+});
+revisar(
+  'cancelar una compra PAGADA -> 409',
+  cancelarCompraPagada.status === 409 && cancelarCompraPagada.cuerpo?.codigo === 'COMPRA_CON_PAGO',
+  JSON.stringify(cancelarCompraPagada.cuerpo),
+);
+revisar(
+  'y el mensaje dice que hacer primero',
+  /devolver/.test(cancelarCompraPagada.cuerpo?.error ?? ''),
+  cancelarCompraPagada.cuerpo?.error,
+);
+revisar(
+  'y el almacen NO se toco (la compra sigue viva)',
+  (await existenciaDe(prodCompra)) === existenciaConPagada,
+  `${existenciaConPagada} -> ${await existenciaDe(prodCompra)}`,
+);
+revisar(
+  'y la compra sigue PAGADA, no la dejo a medias',
+  (await pedir(`/api/compras/${compraFuturaId}`, tokenAdmin)).cuerpo?.estatus === 'pagada',
+  'quedo en otro estatus',
+);
+
+// --------------------------------------------------------------- listado
+
+const listarCompras = await pedir(`/api/compras?proveedor_id=${provUnoId}&limite=50`, tokenAdmin);
+revisar(
+  'listar compras del proveedor -> 200',
+  listarCompras.status === 200 && listarCompras.cuerpo?.datos.length >= 3,
+  JSON.stringify(listarCompras.cuerpo?.datos?.length),
+);
+revisar(
+  'y TODAS son de ese proveedor',
+  listarCompras.cuerpo?.datos.every((c) => c.proveedor_id === provUnoId),
+  'se colaron compras de otro proveedor',
+);
+revisar(
+  'y el listado trae la fecha como AAAA-MM-DD',
+  listarCompras.cuerpo?.datos.every((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.fecha)),
+  JSON.stringify(listarCompras.cuerpo?.datos?.[0]?.fecha),
+);
+
+const comprasCanceladas = await pedir('/api/compras?estatus=cancelada', tokenAdmin);
+revisar(
+  'filtrar compras por estatus',
+  comprasCanceladas.status === 200 &&
+    comprasCanceladas.cuerpo?.datos.every((c) => c.estatus === 'cancelada'),
+  JSON.stringify(comprasCanceladas.cuerpo?.datos?.length),
+);
+
+const comprasBuscadas = await pedir('/api/compras?buscar=FOLIO-PRUEBA', tokenAdmin);
+revisar(
+  'buscar compras por folio del proveedor',
+  comprasBuscadas.status === 200 && comprasBuscadas.cuerpo?.datos.length === 1,
+  JSON.stringify(comprasBuscadas.cuerpo?.datos?.length),
+);
+
+const comprasSinToken = await pedir('/api/compras');
+revisar(
+  'listar compras sin token -> 401',
+  comprasSinToken.status === 401,
+  JSON.stringify(comprasSinToken.cuerpo),
+);
+
+const comprasLimiteCero = await pedir('/api/compras?limite=0', tokenAdmin);
+revisar(
+  'limite 0 en compras -> 400',
+  comprasLimiteCero.status === 400,
+  JSON.stringify(comprasLimiteCero.cuerpo),
+);
+
+// =======================================================================
+// INVENTARIO (LECTURA)
+// =======================================================================
+//
+// Se prueba DESPUES que las compras a proposito: la existencia que se mira
+// aqui es la que dejaron las compras de arriba, y asi se comprueba de un
+// vistazo que comprar entra a inventario.
+
+const existenciaProducto = async (productoId) =>
+  pedir(`/api/inventario/existencia?producto_id=${productoId}`, tokenAdmin);
+
+const verExistencia = await existenciaProducto(prodCompra);
+revisar(
+  'existencia del producto de compra',
+  verExistencia.status === 200 && verExistencia.cuerpo?.datos.length === 1,
+  JSON.stringify(verExistencia.cuerpo),
+);
+revisar(
+  'y coincide con lo que dice la base: 50 de apertura + 4 de la compra buena - 1 de la cancelada + 1 de la futura + 1 de la reactivada - 1 de esa ultima cancelacion',
+  verExistencia.cuerpo?.datos[0]?.existencia_bultos === 55,
+  `existencia ${verExistencia.cuerpo?.datos[0]?.existencia_bultos}`,
+);
+revisar(
+  'y trae el almacen y el codigo del producto',
+  typeof verExistencia.cuerpo?.datos[0]?.almacen === 'string' &&
+    verExistencia.cuerpo?.datos[0]?.producto_codigo === 'TST-COMP',
+  JSON.stringify(verExistencia.cuerpo?.datos[0]),
+);
+
+const existenciaTodos = await pedir('/api/inventario/existencia?limite=200', tokenAdmin);
+revisar(
+  'sin filtros sale el CRUZADO producto x almacen',
+  existenciaTodos.status === 200 && existenciaTodos.cuerpo?.datos.length > 3,
+  JSON.stringify(existenciaTodos.cuerpo?.datos?.length),
+);
+revisar(
+  'y el total del encabezado es el del cruzado, no el de productos',
+  existenciaTodos.cuerpo?.total >= existenciaTodos.cuerpo?.datos.length,
+  JSON.stringify({
+    total: existenciaTodos.cuerpo?.total,
+    datos: existenciaTodos.cuerpo?.datos.length,
+  }),
+);
+
+const existenciaPorAlmacen = await pedir(
+  '/api/inventario/existencia?almacen_id=1&limite=200',
+  tokenAdmin,
+);
+revisar(
+  'filtrar por almacen',
+  existenciaPorAlmacen.status === 200 &&
+    existenciaPorAlmacen.cuerpo?.datos.every((e) => e.almacen_id === 1),
+  JSON.stringify(existenciaPorAlmacen.cuerpo?.datos?.length),
+);
+
+const existenciaAlmacenFantasma = await pedir(
+  '/api/inventario/existencia?almacen_id=9999',
+  tokenAdmin,
+);
+revisar(
+  'almacen que no existe -> lista vacia, no 404',
+  existenciaAlmacenFantasma.status === 200 && existenciaAlmacenFantasma.cuerpo?.datos.length === 0,
+  JSON.stringify(existenciaAlmacenFantasma.cuerpo),
+);
+
+const existenciaProductoFantasma = await pedir(
+  '/api/inventario/existencia?producto_id=999999',
+  tokenAdmin,
+);
+revisar(
+  'producto que no existe -> lista vacia, no 404',
+  existenciaProductoFantasma.status === 200 &&
+    existenciaProductoFantasma.cuerpo?.datos.length === 0,
+  JSON.stringify(existenciaProductoFantasma.cuerpo),
+);
+
+const existenciaAlmacenGrande = await pedir(
+  '/api/inventario/existencia?almacen_id=32768',
+  tokenAdmin,
+);
+revisar(
+  'almacen_id fuera del rango de SMALLINT -> 400',
+  existenciaAlmacenGrande.status === 400,
+  JSON.stringify(existenciaAlmacenGrande.cuerpo),
+);
+
+const existenciaBusqueda = await pedir(
+  '/api/inventario/existencia?buscar=TST-COMP&limite=50',
+  tokenAdmin,
+);
+revisar(
+  'buscar por codigo de producto',
+  existenciaBusqueda.status === 200 && existenciaBusqueda.cuerpo?.datos.length > 0,
+  JSON.stringify(existenciaBusqueda.cuerpo?.datos?.length),
+);
+
+const existenciaSinToken = await pedir('/api/inventario/existencia');
+revisar(
+  'inventario sin token -> 401',
+  existenciaSinToken.status === 401,
+  JSON.stringify(existenciaSinToken.cuerpo),
+);
+
+const existenciaLimiteCero = await pedir('/api/inventario/existencia?limite=0', tokenAdmin);
+revisar(
+  'limite 0 en inventario -> 400',
+  existenciaLimiteCero.status === 400,
+  JSON.stringify(existenciaLimiteCero.cuerpo),
+);
+
+const existenciaVacios = await pedir(
+  '/api/inventario/existencia?vacios=true&limite=200',
+  tokenAdmin,
+);
+revisar(
+  'solo lo que esta en cero',
+  existenciaVacios.status === 200 &&
+    existenciaVacios.cuerpo?.datos.every((e) => e.existencia_bultos <= 0),
+  JSON.stringify(existenciaVacios.cuerpo?.datos?.length),
+);
+
+const existenciaConCosas = await pedir(
+  '/api/inventario/existencia?vacios=false&limite=200',
+  tokenAdmin,
+);
+revisar(
+  'y con vacios=false solo sale lo que SI hay',
+  existenciaConCosas.status === 200 &&
+    existenciaConCosas.cuerpo?.datos.every((e) => e.existencia_bultos > 0),
+  JSON.stringify(existenciaConCosas.cuerpo?.datos?.length),
+);
+
+// Se da de baja un producto para ver que el inventario lo sigue
+// mostrando, marcado, en vez de esconderlo: esconder el producto que esta
+// en cero es justo cuando mas hace falta verlo.
+await parcheProveedor(provUnoId, { activo: false });
+const compraProveedorInactivo = await crearCompra({
+  proveedor_id: provUnoId,
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1', precio_kg: '10.00' }],
+});
+revisar(
+  'comprar a un proveedor dado de baja -> 409',
+  compraProveedorInactivo.status === 409 &&
+    compraProveedorInactivo.cuerpo?.codigo === 'PROVEEDOR_INACTIVO',
+  JSON.stringify(compraProveedorInactivo.cuerpo),
+);
+
+// El filtro del listado es `?activo=true|false`, y SIN filtro salen todos,
+// dados de baja incluidos: en la pantalla de proveedores hace falta ver a
+// quien se le dio de baja, no solo a quien se le puede comprar. Lo que no
+// hay que hacer es adivinarlo, asi que el caso de uso de una compra pide
+// `?activo=true` explicito.
+const soloActivos = await pedir('/api/proveedores?activo=true&limite=200', tokenAdmin);
+revisar(
+  'con ?activo=true el dado de baja NO sale',
+  soloActivos.status === 200 &&
+    soloActivos.cuerpo?.datos.every((p) => p.activo === true) &&
+    !soloActivos.cuerpo?.datos.some((p) => p.id === provUnoId),
+  JSON.stringify(soloActivos.cuerpo?.datos?.map((p) => [p.id, p.activo])),
+);
+
+const soloInactivos = await pedir('/api/proveedores?activo=false&limite=200', tokenAdmin);
+revisar(
+  'con ?activo=false SI sale, marcado como inactivo',
+  soloInactivos.status === 200 &&
+    soloInactivos.cuerpo?.datos.some((p) => p.id === provUnoId && p.activo === false),
+  JSON.stringify(soloInactivos.cuerpo?.datos?.map((p) => [p.id, p.activo])),
+);
+
+const sinFiltro = await pedir('/api/proveedores?limite=200', tokenAdmin);
+revisar(
+  'y sin filtro salen todos, el dado de baja incluido',
+  sinFiltro.status === 200 && sinFiltro.cuerpo?.datos.some((p) => p.id === provUnoId),
+  JSON.stringify(sinFiltro.cuerpo?.datos?.map((p) => [p.id, p.activo])),
+);
+
+const activoMal = await pedir('/api/proveedores?activo=quiza', tokenAdmin);
+revisar('activo=quiza -> 400', activoMal.status === 400, JSON.stringify(activoMal.cuerpo));
+
+await parcheProveedor(provUnoId, { activo: true });
+const compraTrasReactivar = await crearCompra({
+  proveedor_id: provUnoId,
+  renglones: [{ producto_id: prodCompra, almacen_id: 1, cantidad_bultos: '1', precio_kg: '10.00' }],
+});
+revisar(
+  'y tras reactivarlo ya se le puede comprar (-> 201)',
+  compraTrasReactivar.status === 201,
+  JSON.stringify(compraTrasReactivar.cuerpo),
+);
+await cancelarCompra(compraTrasReactivar.cuerpo?.id, { motivo: 'prueba de reactivacion' });
+
 // -------------------------------------------------------------- limpieza
 //
 // El ORDEN importa y no es obvio, asi que va en la funcion de limpieza
 // compartida, que se corre al arrancar el archivo y otra vez aqui. Lo que
 // no se ve desde aqui esta todo comentado ahi.
 
+const limpiezaCompras = await limpiarPagosComprasProveedoresDePrueba();
+revisar(
+  'las compras de prueba se borraron',
+  limpiezaCompras.compras > 0 && limpiezaCompras.proveedores > 0,
+  JSON.stringify(limpiezaCompras),
+);
+revisar(
+  'y con las compras fuera, el almacen vuelve a los 50 de apertura',
+  (await existenciaDe(prodCompra)) === 0,
+  `quedaron ${await existenciaDe(prodCompra)} movimientos de un producto que ya no existe`,
+);
+revisar(
+  'y no quedo ninguno de los productos de compra',
+  (await sqlDirecto(`SELECT COUNT(*)::TEXT AS n FROM pos.productos WHERE codigo LIKE 'TST-COMP%'`))
+    .rows[0].n === '0',
+  'sobro un TST-COMP',
+);
+revisar(
+  'ni sus costos historicos',
+  (
+    await sqlDirecto(
+      `SELECT COUNT(*)::TEXT AS n FROM pos.producto_proveedor_precios
+      WHERE producto_id NOT IN (SELECT id FROM pos.productos)`,
+    )
+  ).rows[0].n === '0',
+  'sobro un costo de proveedor huerfano',
+);
+revisar(
+  'ni sus rastros de inventario',
+  (
+    await sqlDirecto(
+      `SELECT COUNT(*)::TEXT AS n FROM pos.auditoria_inventario
+      WHERE producto_id NOT IN (SELECT id FROM pos.productos)`,
+    )
+  ).rows[0].n === '0',
+  'sobro una auditoria de inventario huerfana',
+);
+
 const limpieza = await limpiarNotasDePrueba();
+const foliosPago = await limpiarFoliosPago();
 revisar('las notas de prueba se borraron', limpieza.notas > 0, `${limpieza.notas} notas`);
 revisar(
   'y con las notas fuera, el stock de cada producto vuelve a los 50 de apertura',
@@ -3663,8 +5174,24 @@ revisar(
   limpieza.productos > 1 && limpieza.folios > 0,
   JSON.stringify(limpieza),
 );
+revisar(
+  'y el talonario de pagos, que se borra aparte porque depende de las notas',
+  foliosPago > 0,
+  `${foliosPago} folios PGO`,
+);
 void pagoId;
-void notaConEspecialId;
+void notaPago1Id;
+void notaPago2Id;
+void totalPago2;
+void totalPago3;
+void anticipoId;
+void provUnoId;
+void prodCompraSinCosto;
+void compraOkId;
+void compraFechadaId;
+void compraFuturaId;
+void verExistencia;
+void pagosDelCliente;
 void notaFutura;
 void notaPasada;
 void notaConTrato;

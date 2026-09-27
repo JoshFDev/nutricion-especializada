@@ -10,6 +10,7 @@ import { NoEncontrado } from './core/errores.js';
 import { rutasSalud } from './modules/salud/rutas.js';
 import { rutasAuth } from './modules/auth/rutas.js';
 import { rutasCatalogo } from './modules/catalogo/rutas.js';
+import { rutasPrecios } from './modules/precios/rutas.js';
 import { rutasProductos } from './modules/productos/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
 import { rutasUsuarios } from './modules/usuarios/rutas.js';
@@ -67,6 +68,7 @@ export function crearApp(): Express {
   app.use('/api/clientes', rutasClientes);
   app.use('/api/especies', rutasCatalogo.especies);
   app.use('/api/categorias-producto', rutasCatalogo.categorias);
+  app.use('/api/precios', rutasPrecios);
   app.use('/api/productos', rutasProductos);
   app.use('/api/usuarios', rutasUsuarios);
 

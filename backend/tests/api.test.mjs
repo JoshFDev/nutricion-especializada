@@ -153,8 +153,15 @@ const sqlDirecto = async (texto, valores = []) => {
       password: process.env.PGPASSWORD ?? 'postgresql',
       database: baseEnUso,
       port: Number(process.env.PGPORT ?? 5432),
+      // `options` se aplica al abrir CADA conexion del pool. Un
+      // `SET search_path` suuelto NO: solo se queda en la conexion que lo
+      // ejecuto, y cuando el pool crece y reparte el trabajo, hay conexiones
+      // nuevas que nunca lo corrieron. Por eso la primera sentencia directa
+      // de la suite funcionaba y la que iba veinte despues reventaba con
+      // "no existe la relacion precios_publicos": no era la sentencia, era
+      // que le toco otra conexion.
+      options: '-c search_path=pos',
     });
-    await poolDirecto.query('SET search_path TO pos');
   }
   return poolDirecto.query(texto, valores);
 };
@@ -1058,13 +1065,55 @@ if (especieEnUso.cuerpo?.nombre) {
 // se dice "empleada" porque es lo que es.
 
 const limpiarProductosDePrueba = async () => {
-  const r = await sqlDirecto(`DELETE FROM pos.productos WHERE codigo = ANY($1::text[])`, [
-    // TST-INACTIVO no lo crea nadie hoy (la baja logica se hace sobre
-    // TST-ALTA), pero se limpia por si una version anterior de esta
-    // prueba lo dejaba ahi. TST-CAJ lo crea la cajera del bloque de
-    // permisos, mas abajo.
-    ['TST-ALTA', 'TST-BORRABLE', 'TST-INACTIVO', 'TST-CAJ'],
-  ]);
+  const codigos = [
+    'TST-ALTA',
+    'TST-BORRABLE',
+    'TST-INACTIVO',
+    'TST-CAJ',
+    'TST-PREC',
+    'TST-CADE',
+    'TST-CERO',
+    'TST-SINP',
+  ];
+
+  // ORDEN IMPORTANTE, y no es intuitivo. `auditoria_precios` tiene FK
+  // DURA a productos (sin ON DELETE) y el trigger de 0001 escribe una fila
+  // ahi en cada alta, cambio O BORRADO de un precio. O sea: borrar un precio
+  // GENERA auditoria nueva.
+  //
+  // La primera version de esta limpieza borraba auditoria -> precios ->
+  // productos, que parece la correcta ("primero el rastro, luego la cosa").
+  // Es al reves de lo que funciona: los precios se van, dejan rastro nuevo, y
+  // el DELETE de productos revienta con 23503 sobre auditoria_precios. La
+  // suite moria en la linea 175 con 162 OK, sin una sola FALLA, y el error
+  // de FK no decia nada de que el problema era el orden de tres lineas.
+  //
+  // Y eso es la mejor prueba de que el modulo de precios no debe exponer
+  // DELETE: la propia base ya no deja deshacer un cambio de precio. El 23503
+  // no es un accidente de la suite, es el diseno funcionando.
+  await sqlDirecto(
+    `DELETE FROM pos.precios_cliente
+      WHERE producto_id IN (SELECT id FROM pos.productos WHERE codigo = ANY($1::text[]))`,
+    [codigos],
+  );
+  await sqlDirecto(
+    `DELETE FROM pos.precios_publicos
+      WHERE producto_id IN (SELECT id FROM pos.productos WHERE codigo = ANY($1::text[]))`,
+    [codigos],
+  );
+
+  // Ahora si: el rastro que dejaron esos borrados.
+  await sqlDirecto(
+    `DELETE FROM pos.auditoria_precios
+      WHERE producto_id IN (SELECT id FROM pos.productos WHERE codigo = ANY($1::text[]))`,
+    [codigos],
+  );
+
+  // TST-INACTIVO no lo crea nadie hoy (la baja logica se hace sobre
+  // TST-ALTA), pero se limpia por si una version anterior de esta prueba
+  // lo dejaba ahi. TST-CAJ lo crea la cajera del bloque de permisos, y los
+  // TST-PREC/CADE/CERO/SINP los de precios, mas abajo.
+  const r = await sqlDirecto(`DELETE FROM pos.productos WHERE codigo = ANY($1::text[])`, [codigos]);
   return r.rowCount;
 };
 
@@ -1508,6 +1557,855 @@ revisar(
   JSON.stringify(cajeraNoCambiaRoles.cuerpo),
 );
 
+// --- PRECIOS: vigencia, traslape y el precio que toca cobrar ---
+//
+// Lo que se prueba, y por que:
+//
+// 1. El listado sale solo con los vigentes por omision, y `historicos` es
+//    exactamente lo contrario.
+// 2. El trigger anti-traslape de 0007 rechaza las ventanas encimadas, y
+//    deja pasar el encadenado. Se prueba CONTRA LA BASE ademas de contra
+//    la API, porque el trigger es lo que decide cuando dos peticiones
+//    simultaneas se chocan entre si y el servicio no ve la otra.
+// 3. `GET /efectivo` resuelve la precedencia (especial sobre publico) y
+//    devuelve `vigente: false` en vez de 404 cuando no hay precio, porque
+//    eso es una respuesta de negocio y no un error.
+// 4. NO hay DELETE. Un precio se cierra, no se borra, y la fila se queda.
+//
+// Cada grupo de pruebas usa SU producto. Se hizo asi a proposito: con un
+// solo producto, el precio abierto del primer grupo se traslapa con todos
+// los demas y las pruebas se pisan entre si. La primera version de este
+// bloque fallaba por exactamente eso, y el sintoma (seis fallas en cascada
+// desde una sola) se decia mas rapido aislando los casos que mirando las
+// aserciones una por una.
+
+const desplazar = (dias) => {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const HOY = desplazar(0);
+
+const nuevoProductoDePrecios = async (codigo, nombre) => {
+  const r = await crearProducto({ codigo, nombre, presentacion_kg: '5.000' }, tokenAdmin);
+  return r.cuerpo?.id;
+};
+
+const prodPrincipal = await nuevoProductoDePrecios('TST-PREC', 'Producto con precio');
+revisar('el producto principal se creo', Number.isInteger(prodPrincipal), String(prodPrincipal));
+const prodCadena = await nuevoProductoDePrecios('TST-CADE', 'Producto para encadenar');
+revisar('el producto de encadenamiento se creo', Number.isInteger(prodCadena), String(prodCadena));
+const prodCero = await nuevoProductoDePrecios('TST-CERO', 'Producto con precio de cortesia');
+revisar('el producto de cortesia se creo', Number.isInteger(prodCero), String(prodCero));
+const prodSinPrecio = await nuevoProductoDePrecios('TST-SINP', 'Producto sin precio');
+revisar('el producto sin precio se creo', Number.isInteger(prodSinPrecio), String(prodSinPrecio));
+
+// El cliente se da de alta por SQL y no por la API: el alta de clientes
+// todavia no se reviso en este bloque, y lo que se prueba aqui son los
+// PRECIOS. SI este bloque fallara al crear el cliente, las pruebas de
+// precios no dirian nada.
+const clientePrecio = await sqlDirecto(
+  `INSERT INTO clientes (nombre, estatus) VALUES ('Cliente de precios', 'Activo') RETURNING id`,
+);
+const clientePrecioId = clientePrecio?.rows?.[0]?.id ?? clientePrecio.id;
+revisar('el cliente de la prueba se creo', clientePrecioId !== undefined, String(clientePrecioId));
+
+const crearPublico = (productoId, cuerpo) =>
+  pedir('/api/precios/publicos', tokenAdmin, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ producto_id: productoId, ...cuerpo }),
+  });
+
+// ------------------------------------------------------------------
+// Alta y listado de un precio abierto
+// ------------------------------------------------------------------
+
+const pubAbierto = await crearPublico(prodPrincipal, {
+  precio_kg: '90.00',
+  vigente_desde: desplazar(-30),
+});
+revisar(
+  'alta de precio publico -> 201',
+  pubAbierto.status === 201,
+  JSON.stringify(pubAbierto.cuerpo),
+);
+const pubPrincipalId = pubAbierto.cuerpo?.id;
+revisar('el precio abierto trae vigente_hasta null', pubAbierto.cuerpo?.vigente_hasta === null);
+revisar('el precio sale como numero', pubAbierto.cuerpo?.precio_kg === 90);
+revisar(
+  'y trae el nombre del producto resuelto',
+  pubAbierto.cuerpo?.producto_nombre === 'Producto con precio',
+);
+revisar('y el codigo', pubAbierto.cuerpo?.producto_codigo === 'TST-PREC');
+
+const vigentes = await pedir(`/api/precios/publicos?producto_id=${prodPrincipal}`, tokenAdmin);
+revisar(
+  'el abierto sale en el listado de vigentes',
+  vigentes.cuerpo?.datos?.length === 1,
+  JSON.stringify(vigentes.cuerpo),
+);
+revisar('con el total bien puesto', vigentes.cuerpo?.total === 1);
+
+const todos = await pedir(
+  `/api/precios/publicos?producto_id=${prodPrincipal}&vigencia=todos`,
+  tokenAdmin,
+);
+revisar('con vigencia=todos tambien sale', todos.cuerpo?.datos?.length === 1);
+
+const historicos = await pedir(
+  `/api/precios/publicos?producto_id=${prodPrincipal}&vigencia=historicos`,
+  tokenAdmin,
+);
+revisar(
+  'un precio abierto no es historico',
+  historicos.cuerpo?.datos?.length === 0,
+  JSON.stringify(historicos.cuerpo),
+);
+
+const taquigrafia = await pedir(
+  `/api/precios/publicos?producto_id=${prodPrincipal}&vigencia=true`,
+  tokenAdmin,
+);
+revisar('vigencia=true quiere decir vigentes', taquigrafia.cuerpo?.datos?.length === 1);
+
+// ------------------------------------------------------------------
+// El traslape, que es lo que 0007 existe por
+// ------------------------------------------------------------------
+
+const segundoAbierto = await crearPublico(prodPrincipal, {
+  precio_kg: '95.00',
+  vigente_desde: desplazar(10),
+});
+revisar(
+  'un segundo precio abierto del mismo producto -> 409',
+  segundoAbierto.status === 409,
+  JSON.stringify(segundoAbierto.cuerpo),
+);
+revisar(
+  'y se identifica como traslape',
+  segundoAbierto.cuerpo?.codigo === 'VIGENCIA_TRASLAPADA',
+  JSON.stringify(segundoAbierto.cuerpo),
+);
+
+const encimaCerrado = await crearPublico(prodPrincipal, {
+  precio_kg: '95.00',
+  vigente_desde: desplazar(10),
+  vigente_hasta: desplazar(60),
+});
+revisar(
+  'un precio que se encima con el abierto -> 409',
+  encimaCerrado.status === 409,
+  JSON.stringify(encimaCerrado.cuerpo),
+);
+
+// Este precio va en prodSinPrecio, NO en prodCadena. La primera version lo
+// ponia en prodCadena "porque era el otro producto", y desde ahi solapo con
+// el grupo de cadena de abajo: aquel dejaba un 90 abierto de hace 30 dias y
+// la cadena empezaba pidiendole un 90 que acabara ayer, que se traslapan
+// porque el primero seguia abierto. Cinco de las seis fallas del bloque
+// venian de ahi. Cada grupo tiene SU producto y ninguno se loan el precio.
+const otroProductoMismoDia = await crearPublico(prodSinPrecio, {
+  precio_kg: '90.00',
+  vigente_desde: desplazar(-30),
+});
+revisar(
+  'otro producto el mismo dia NO se traslapa -> 201',
+  otroProductoMismoDia.status === 201,
+  JSON.stringify(otroProductoMismoDia.cuerpo),
+);
+
+// Se borra enseguida porque prodSinPrecio tiene que quedar SIN precios para
+// la prueba de `vigente: false` de mas abajo.
+await sqlDirecto('DELETE FROM precios_publicos WHERE id = $1', [otroProductoMismoDia.cuerpo?.id]);
+const sinPrecioDeNuevo = await pedir(
+  `/api/precios/efectivo?producto_id=${prodSinPrecio}`,
+  tokenAdmin,
+);
+revisar(
+  'prodSinPrecio vuelve a quedarse sin precio',
+  sinPrecioDeNuevo.cuerpo?.vigente === false,
+  JSON.stringify(sinPrecioDeNuevo.cuerpo),
+);
+
+// El caso que 0001 NO atrapaba: un precio abierto y otro CERRADO que
+// empieza dentro de la ventana del abierto. El indice parcial de 0001
+// (`WHERE vigente_hasta IS NULL`) mira solo los abiertos, asi que las dos
+// filas conviven y el 15 de julio el producto tendria dos precios. Este es
+// el motivo de que exista la migracion 0007.
+const cerradoDentroDeAbierto = await crearPublico(prodPrincipal, {
+  precio_kg: '99.00',
+  vigente_desde: desplazar(-20),
+  vigente_hasta: desplazar(5),
+});
+revisar(
+  'un cerrado dentro de la ventana de un abierto -> 409',
+  cerradoDentroDeAbierto.status === 409,
+  JSON.stringify(cerradoDentroDeAbierto.cuerpo),
+);
+
+// ------------------------------------------------------------------
+// Encadenar y cerrar
+// ------------------------------------------------------------------
+//
+// El producto de la cadena tiene HOY en el medio de su linea de tiempo, que
+// es como se ve en la vida real:
+//
+//   [----A----]   [---B---]      [---C-----------]
+//   -30    -1     HOY   +45     +46
+//
+// Se armo asi a proposito, y la primera version de este bloque se cayo
+// por crearlos mal: encadenaba con `desplazar(46)` un precio que EMPEZABA
+// en el futuro y despues afirmaba que ese era el vigente. No lo era: hoy
+// sigue mandando el precio de antes. El sintoma eran seis fallas que
+// parecian del servicio y eran de la prueba.
+
+const cadenaA = await crearPublico(prodCadena, {
+  precio_kg: '90.00',
+  vigente_desde: desplazar(-30),
+  vigente_hasta: desplazar(-1),
+});
+revisar(
+  'un precio ya vencido se puede dar de alta -> 201',
+  cadenaA.status === 201,
+  JSON.stringify(cadenaA.cuerpo),
+);
+
+const cadenaB = await crearPublico(prodCadena, {
+  precio_kg: '95.00',
+  vigente_desde: HOY,
+});
+revisar(
+  'el que empieza HOY se acepta -> 201',
+  cadenaB.status === 201,
+  JSON.stringify(cadenaB.cuerpo),
+);
+revisar('y nace abierto', cadenaB.cuerpo?.vigente_hasta === null);
+const cadenaBId = cadenaB.cuerpo?.id;
+
+// El traslape en sus dos formas, ya con A y B conviviendo.
+const encimaDeB = await crearPublico(prodCadena, {
+  precio_kg: '99.00',
+  vigente_desde: desplazar(10),
+  vigente_hasta: desplazar(50),
+});
+revisar(
+  'un cerrado dentro de un abierto -> 409',
+  encimaDeB.status === 409,
+  JSON.stringify(encimaDeB.cuerpo),
+);
+
+const otroAbierto = await crearPublico(prodCadena, {
+  precio_kg: '99.00',
+  vigente_desde: HOY,
+});
+revisar(
+  'abierto encima de otro cerrado -> 409',
+  otroAbierto.status === 409,
+  JSON.stringify(otroAbierto.cuerpo),
+);
+
+const mismosInicio = await crearPublico(prodCadena, {
+  precio_kg: '99.00',
+  vigente_desde: HOY,
+  vigente_hasta: desplazar(20),
+});
+revisar(
+  'mismo dia de inicio que otro -> 409',
+  mismosInicio.status === 409,
+  JSON.stringify(mismosInicio.cuerpo),
+);
+
+// Antes de cerrar nada: A ya paso, B manda.
+const historicosAntes = await pedir(
+  `/api/precios/publicos?producto_id=${prodCadena}&vigencia=historicos`,
+  tokenAdmin,
+);
+revisar(
+  'A ya aparece como historico',
+  historicosAntes.cuerpo?.datos?.length === 1,
+  JSON.stringify(historicosAntes.cuerpo),
+);
+revisar(
+  'y es el de 90',
+  historicosAntes.cuerpo?.datos?.[0]?.precio_kg === 90,
+  JSON.stringify(historicosAntes.cuerpo),
+);
+
+const vigentesAntes = await pedir(`/api/precios/publicos?producto_id=${prodCadena}`, tokenAdmin);
+revisar(
+  'y B es el vigente',
+  vigentesAntes.cuerpo?.datos?.[0]?.precio_kg === 95,
+  JSON.stringify(vigentesAntes.cuerpo),
+);
+
+// ------------------------------------------------------------------
+// Cerrar
+// ------------------------------------------------------------------
+
+const cerrarEnElPasado = await pedir(`/api/precios/publicos/${cadenaBId}/cerrar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ vigente_hasta: desplazar(-5) }),
+});
+revisar(
+  'cerrar con fecha que ya paso -> 400',
+  cerrarEnElPasado.status === 400,
+  JSON.stringify(cerrarEnElPasado.cuerpo),
+);
+
+const acortarCerrado = await pedir(
+  `/api/precios/publicos/${cadenaA.cuerpo?.id}/cerrar`,
+  tokenAdmin,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vigente_hasta: desplazar(-5) }),
+  },
+);
+revisar(
+  'acortar una vigencia ya cerrada hacia atras -> 400',
+  acortarCerrado.status === 400,
+  JSON.stringify(acortarCerrado.cuerpo),
+);
+
+// Cerrar hoy un precio que empieza HOY: se deja una ventana de un solo dia.
+const cerrarHoy = await pedir(`/api/precios/publicos/${cadenaBId}/cerrar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ vigente_hasta: HOY }),
+});
+revisar(
+  'cerrar HOY un precio que empieza HOY -> 200',
+  cerrarHoy.status === 200,
+  JSON.stringify(cerrarHoy.cuerpo),
+);
+revisar('la ventana queda de un dia', cerrarHoy.cuerpo?.vigente_hasta === HOY);
+
+// Y AQUI esta el detalle que conviene no pasar por alto: cerrar HOY deja el
+// precio VIGENTE HOY, porque el fin es inclusivo. `vigente_hasta = hoy` se
+// lee "valido hasta hoy incluido", que es lo mismo que dicen el CHECK de
+// 0001, el trigger de 0007 y el filtro `vigente_hasta >= $fecha` de la API.
+//
+// La consecuencia incomoda: NO hay forma de sacar un precio de la circulacion
+// en el mismo dia, porque "cerrar antes de hoy" esta rechazado. Se quita
+// mañana. Es coherente con todo lo demas y por eso se quedo asi, pero es una
+// decision de negocio, no un detalle tecnico, asi que va fijada con pruebas.
+const vigenteTrasCerrarHoy = await pedir(
+  `/api/precios/publicos?producto_id=${prodCadena}`,
+  tokenAdmin,
+);
+revisar(
+  'cerrado hoy SIGUE vigente hoy (fin inclusivo)',
+  vigenteTrasCerrarHoy.cuerpo?.datos?.length === 1,
+  JSON.stringify(vigenteTrasCerrarHoy.cuerpo),
+);
+revisar('es el de 95', vigenteTrasCerrarHoy.cuerpo?.datos?.[0]?.precio_kg === 95);
+
+const historicoTrasCerrarHoy = await pedir(
+  `/api/precios/publicos?producto_id=${prodCadena}&vigencia=historicos`,
+  tokenAdmin,
+);
+revisar(
+  'y no pasa a historico hasta mañana',
+  historicoTrasCerrarHoy.cuerpo?.datos?.length === 1,
+  JSON.stringify(historicoTrasCerrarHoy.cuerpo),
+);
+
+// ------------------------------------------------------------------
+// Encadenar despues de cerrar
+// ------------------------------------------------------------------
+
+const mismoDiaQueAcaba = await crearPublico(prodCadena, {
+  precio_kg: '99.00',
+  vigente_desde: HOY,
+});
+revisar(
+  'encadenar el MISMO dia que acaba el anterior -> 409',
+  mismoDiaQueAcaba.status === 409,
+  JSON.stringify(mismoDiaQueAcaba.cuerpo),
+);
+
+const alDiaSiguiente = await crearPublico(prodCadena, {
+  precio_kg: '99.00',
+  vigente_desde: desplazar(1),
+});
+revisar(
+  'encadenar al dia siguiente -> 201',
+  alDiaSiguiente.status === 201,
+  JSON.stringify(alDiaSiguiente.cuerpo),
+);
+
+// El nuevo empieza MAÑANA, asi que hoy no manda todavia. Esta es la misma
+// confusion que hizo fallar la primera version, y queda fijada con una
+// prueba para que no vuelva.
+const vigentesConFuturo = await pedir(
+  `/api/precios/publicos?producto_id=${prodCadena}`,
+  tokenAdmin,
+);
+revisar(
+  'el de mañana NO es el vigente de hoy',
+  vigentesConFuturo.cuerpo?.datos?.[0]?.precio_kg === 95,
+  JSON.stringify(vigentesConFuturo.cuerpo),
+);
+revisar('y hay un solo vigente', vigentesConFuturo.cuerpo?.datos?.length === 1);
+
+// Pero a la fecha del nuevo, ese precio ya es el que toca.
+const lineaDeTiempo = await pedir(
+  `/api/precios/publicos?producto_id=${prodCadena}&vigencia=todos`,
+  tokenAdmin,
+);
+revisar(
+  'la linea de tiempo completa trae los tres',
+  lineaDeTiempo.cuerpo?.total === 3,
+  JSON.stringify(lineaDeTiempo.cuerpo),
+);
+revisar(
+  'y viene del mas nuevo al mas viejo',
+  lineaDeTiempo.cuerpo?.datos?.[0]?.precio_kg === 99,
+  JSON.stringify(lineaDeTiempo.cuerpo),
+);
+
+// ------------------------------------------------------------------
+// El precio que toca cobrar
+// ------------------------------------------------------------------
+
+const efectivoSinCliente = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}`,
+  tokenAdmin,
+);
+revisar(
+  'efectivo sin cliente -> 200',
+  efectivoSinCliente.status === 200,
+  JSON.stringify(efectivoSinCliente.cuerpo),
+);
+revisar('trae el precio publico', efectivoSinCliente.cuerpo?.precio_kg === 90);
+revisar('diciendo de donde sale', efectivoSinCliente.cuerpo?.origen === 'publico');
+revisar(
+  'con la fecha de HOY segun la base',
+  efectivoSinCliente.cuerpo?.fecha === HOY,
+  `${efectivoSinCliente.cuerpo?.fecha} vs ${HOY}`,
+);
+revisar('y diciendo que si esta vigente', efectivoSinCliente.cuerpo?.vigente === true);
+
+const especialAlta = await pedir('/api/precios/clientes', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    cliente_id: clientePrecioId,
+    producto_id: prodPrincipal,
+    precio_kg: '80',
+    vigente_desde: desplazar(-10),
+    vigente_hasta: desplazar(100),
+  }),
+});
+revisar(
+  'alta de precio especial -> 201',
+  especialAlta.status === 201,
+  JSON.stringify(especialAlta.cuerpo),
+);
+revisar(
+  'el especial trae el nombre del cliente',
+  especialAlta.cuerpo?.cliente_nombre === 'Cliente de precios',
+);
+revisar('y acepta numero sin decimales', especialAlta.cuerpo?.precio_kg === 80);
+
+const efectivoConEspecial = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}&cliente_id=${clientePrecioId}`,
+  tokenAdmin,
+);
+revisar(
+  'el especial gana sobre el publico',
+  efectivoConEspecial.cuerpo?.precio_kg === 80,
+  JSON.stringify(efectivoConEspecial.cuerpo),
+);
+revisar('y lo dice', efectivoConEspecial.cuerpo?.origen === 'cliente');
+
+const listadoEspeciales = await pedir(
+  `/api/precios/clientes?cliente_id=${clientePrecioId}&producto_id=${prodPrincipal}`,
+  tokenAdmin,
+);
+revisar(
+  'el listado de especiales sale',
+  listadoEspeciales.cuerpo?.datos?.length === 1,
+  JSON.stringify(listadoEspeciales.cuerpo),
+);
+
+// Cotizar a futuro: el caso real es un cliente al que le vence el especial
+// y se lo lleva ese dia, y ya no le aplica.
+const cotizarDentro = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}&cliente_id=${clientePrecioId}&fecha=${desplazar(50)}`,
+  tokenAdmin,
+);
+revisar(
+  'dentro de la vigencia del especial sigue el especial',
+  cotizarDentro.cuerpo?.origen === 'cliente',
+);
+
+const cotizarDespues = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}&cliente_id=${clientePrecioId}&fecha=${desplazar(150)}`,
+  tokenAdmin,
+);
+revisar(
+  'despues de que venza, manda el publico',
+  cotizarDespues.cuerpo?.origen === 'publico',
+  JSON.stringify(cotizarDespues.cuerpo),
+);
+revisar('y trae el precio publico', cotizarDespues.cuerpo?.precio_kg === 90);
+
+// Un producto sin ningun precio no es un 404: es vigente:false, porque la
+// cajera tiene que poder vender igual dejando el precio en cero.
+const efectivoSinPrecio = await pedir(
+  `/api/precios/efectivo?producto_id=${prodSinPrecio}`,
+  tokenAdmin,
+);
+revisar(
+  'producto sin precio -> 200, no 404',
+  efectivoSinPrecio.status === 200,
+  JSON.stringify(efectivoSinPrecio.cuerpo),
+);
+revisar('diciendo que no esta vigente', efectivoSinPrecio.cuerpo?.vigente === false);
+revisar('con precio null', efectivoSinPrecio.cuerpo?.precio_kg === null);
+revisar('y origen null', efectivoSinPrecio.cuerpo?.origen === null);
+
+const efectivoFantasma = await pedir('/api/precios/efectivo?producto_id=999999', tokenAdmin);
+revisar(
+  'producto inexistente -> 404',
+  efectivoFantasma.status === 404,
+  JSON.stringify(efectivoFantasma.cuerpo),
+);
+
+const fechaMala = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}&fecha=20-01-2026`,
+  tokenAdmin,
+);
+revisar(
+  'una fecha en otro formato -> 400',
+  fechaMala.status === 400,
+  JSON.stringify(fechaMala.cuerpo),
+);
+
+const fechaImposible = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}&fecha=2026-13-45`,
+  tokenAdmin,
+);
+revisar(
+  'una fecha que no existe -> 400',
+  fechaImposible.status === 400,
+  JSON.stringify(fechaImposible.cuerpo),
+);
+
+const efectivoSinProductoId = await pedir('/api/precios/efectivo', tokenAdmin);
+revisar(
+  'efectivo sin producto_id -> 400',
+  efectivoSinProductoId.status === 400,
+  JSON.stringify(efectivoSinPrecio.cuerpo),
+);
+
+// ------------------------------------------------------------------
+// Lo que el modulo NO tiene
+// ------------------------------------------------------------------
+
+const borrarPublico = await pedir(`/api/precios/publicos/${pubPrincipalId}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar(
+  'no hay DELETE de precios publicos -> 404',
+  borrarPublico.status === 404,
+  JSON.stringify(borrarPublico.cuerpo),
+);
+
+const borrarEspecial = await pedir(`/api/precios/clientes/${especialAlta.cuerpo?.id}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar(
+  'no hay DELETE de precios de cliente -> 404',
+  borrarEspecial.status === 404,
+  JSON.stringify(borrarEspecial.cuerpo),
+);
+
+const sigueEnLaBase = await sqlDirecto(
+  'SELECT count(*)::int AS n FROM precios_publicos WHERE id = $1',
+  [pubPrincipalId],
+);
+revisar(
+  'el precio sigue en la base',
+  sigueEnLaBase.rows?.[0]?.n === 1,
+  JSON.stringify(sigueEnLaBase.rows),
+);
+
+// ------------------------------------------------------------------
+// Validaciones de entrada
+// ------------------------------------------------------------------
+
+const precioNegativo = await crearPublico(prodCero, { precio_kg: '-5', vigente_desde: HOY });
+revisar(
+  'precio negativo -> 400',
+  precioNegativo.status === 400,
+  JSON.stringify(precioNegativo.cuerpo),
+);
+
+// El precio en CERO si se acepta: hay precios de cortesia y de muestra. A
+// diferencia de la presentacion, que no puede ser cero.
+const precioCeroReal = await crearPublico(prodCero, { precio_kg: '0', vigente_desde: HOY });
+revisar(
+  'precio en cero SI se acepta -> 201',
+  precioCeroReal.status === 201,
+  JSON.stringify(precioCeroReal.cuerpo),
+);
+
+const tresDecimales = await crearPublico(prodCero, { precio_kg: '90.555', vigente_desde: HOY });
+revisar(
+  'tres decimales -> 400',
+  tresDecimales.status === 400,
+  JSON.stringify(tresDecimales.cuerpo),
+);
+
+const centavosDeMas = await crearPublico(prodCero, { precio_kg: '90.5.5', vigente_desde: HOY });
+revisar('formato raro -> 400', centavosDeMas.status === 400, JSON.stringify(centavosDeMas.cuerpo));
+
+const textoNoNumero = await crearPublico(prodCero, { precio_kg: 'noventa', vigente_desde: HOY });
+revisar(
+  'texto en vez de numero -> 400',
+  textoNoNumero.status === 400,
+  JSON.stringify(textoNoNumero.cuerpo),
+);
+
+const vigenciaAlReves = await crearPublico(prodCero, {
+  precio_kg: '90',
+  vigente_desde: desplazar(10),
+  vigente_hasta: desplazar(5),
+});
+revisar(
+  'vigencia al reves -> 400',
+  vigenciaAlReves.status === 400,
+  JSON.stringify(vigenciaAlReves.cuerpo),
+);
+
+const productoFantasmaPrecio = await crearPublico(999999, { precio_kg: '90', vigente_desde: HOY });
+revisar(
+  'precio de producto inexistente -> 400',
+  productoFantasmaPrecio.status === 400,
+  JSON.stringify(productoFantasmaPrecio.cuerpo),
+);
+
+const clienteFantasmaPrecio = await pedir('/api/precios/clientes', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    cliente_id: 999999,
+    producto_id: prodPrincipal,
+    precio_kg: '90',
+    vigente_desde: HOY,
+  }),
+});
+revisar(
+  'precio de cliente inexistente -> 400',
+  clienteFantasmaPrecio.status === 400,
+  JSON.stringify(clienteFantasmaPrecio.cuerpo),
+);
+
+const sinFechaInicio = await crearPublico(prodCero, { precio_kg: '90' });
+revisar(
+  'alta sin vigente_desde -> 400, porque el trigger compara contra ella',
+  sinFechaInicio.status === 400,
+  JSON.stringify(sinFechaInicio.cuerpo),
+);
+
+const parchePrecioVacio = await pedir(`/api/precios/publicos/${pubPrincipalId}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+});
+revisar(
+  'PATCH vacio -> 400',
+  parchePrecioVacio.status === 400,
+  JSON.stringify(parchePrecioVacio.cuerpo),
+);
+
+const parchePrecio = await pedir(`/api/precios/publicos/${pubPrincipalId}`, tokenAdmin, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ precio_kg: '92.50' }),
+});
+revisar(
+  'PATCH de un campo solo -> 200',
+  parchePrecio.status === 200,
+  JSON.stringify(parchePrecio.cuerpo),
+);
+revisar('y cambia solo ese campo', parchePrecio.cuerpo?.precio_kg === 92.5);
+revisar(
+  'sin tocar la vigencia',
+  parchePrecio.cuerpo?.vigente_desde === pubAbierto.cuerpo?.vigente_desde,
+);
+
+const queryMalEscrita = await pedir('/api/precios/publicos?vigensia=todos', tokenAdmin);
+revisar(
+  'parametro de vigencia mal escrito -> 400',
+  queryMalEscrita.status === 400,
+  JSON.stringify(queryMalEscrita.cuerpo),
+);
+
+// ------------------------------------------------------------------
+// El trigger, contra la base y no contra la API
+// ------------------------------------------------------------------
+//
+// Todo lo de arriba pasa por el servicio, que traduce el error. Esto va
+// directo a la base para comprobar que el TRIGGER esta, que es lo que
+// decide cuando dos peticiones simultaneas se chocan entre si.
+
+/**
+ * `sqlDirecto` NO atrapa errores: revienta la exception. Estas dos pruebas
+ * quieren justamente eso, el error del trigger, asi que se envuelven en
+ * try/catch a mano. Sin esto la suite muere ahi y se lleva por delante las
+ * ultimas 300 comprobaciones, que es la forma mas cara de tener una prueba
+ * mal escrita.
+ *
+ * La primera version de este bloque dejo las llamadas sueltas y
+ * fallo justo en la ultima: 301 OK, 0 FALLA, y un crash. Un resumen de
+ * "todo paso" con el proceso muerto es peor que uno con una falla, porque
+ * parece que se probo todo.
+ */
+const intentaSql = async (texto, valores) => {
+  try {
+    const r = await sqlDirecto(texto, valores);
+    return { fallo: null, filas: r.rowCount };
+  } catch (error) {
+    return { fallo: error, filas: 0 };
+  }
+};
+
+const porSqlTraslape = await intentaSql(
+  `INSERT INTO pos.precios_publicos (producto_id, precio_kg, vigente_desde)
+   VALUES ($1, 99, CURRENT_DATE + 5)`,
+  [prodPrincipal],
+);
+revisar(
+  'el trigger salta tambien escribiendo directo a SQL',
+  porSqlTraslape.filas === 0 && String(porSqlTraslape.fallo?.message ?? '').includes('se traslapa'),
+  porSqlTraslape.fallo?.message ?? `paso, rowCount ${porSqlTraslape.filas}`,
+);
+
+// Y por UPDATE, que es la puerta de atras que dejaria abierta un trigger
+// que solo mirara los INSERT. Mover el inicio de un precio historico hacia
+// dentro de la ventana abierta lo dejaria solapado.
+//
+// Se crea el historico aqui, con SQL, en vez de reusar `pubPrincipalId`.
+// La primera version apuntava al precio abierto y "paso con rowCount 1":
+// el trigger excluye a si mismo de la comparacion (p.id <> NEW.id), asi
+// que mover ese precio no se chocaba con nadie, porque el unico que se
+// cruzaba consigo mismo era el. La prueba no fallaba por un trigger roto,
+// fallaba por haber elegido mal la fila objetivo.
+const historicoSql = await intentaSql(
+  `INSERT INTO pos.precios_publicos (producto_id, precio_kg, vigente_desde, vigente_hasta)
+   VALUES ($1, 88, CURRENT_DATE - 90, CURRENT_DATE - 60)`,
+  [prodPrincipal],
+);
+revisar(
+  'el historico de apoyo se creo por SQL',
+  historicoSql.filas === 1,
+  historicoSql.fallo?.message ?? `rowCount ${historicoSql.filas}`,
+);
+
+const porSqlUpdate = await intentaSql(
+  `UPDATE pos.precios_publicos
+      SET vigente_desde = CURRENT_DATE + 1, vigente_hasta = CURRENT_DATE + 90
+    WHERE producto_id = $1 AND precio_kg = 88`,
+  [prodPrincipal],
+);
+revisar(
+  'y tambien en UPDATE',
+  porSqlUpdate.filas === 0 && String(porSqlUpdate.fallo?.message ?? '').includes('se traslapa'),
+  porSqlUpdate.fallo?.message ?? `paso, rowCount ${porSqlUpdate.filas}`,
+);
+
+// Y que el trigger NO salta cuando no hay choque, para que la prueba de
+// arriba no sea "el trigger siempre avienta".
+const porSqlLibre = await intentaSql(
+  `INSERT INTO pos.precios_publicos (producto_id, precio_kg, vigente_desde, vigente_hasta)
+   VALUES ($1, 77, CURRENT_DATE - 400, CURRENT_DATE - 200)`,
+  [prodPrincipal],
+);
+revisar(
+  'el trigger NO salta cuando la ventana esta libre',
+  porSqlLibre.filas === 1,
+  porSqlLibre.fallo?.message ?? `rowCount ${porSqlLibre.filas}`,
+);
+
+// ------------------------------------------------------------------ cajera
+//
+// Que puede y que no puede hacer una cajera REAL contra este modulo. No es
+// teoria: son los mismos 38 permisos que le dejo 0006, leidos de la base.
+//
+// El comentario de rutas.ts decia "Cajera no entra", copiado del modulo de
+// productos, donde si es cierto. Aqui es falso, y no por una diferencia de
+// detalle: entre los 38 hay `precios.editar`. La cajera consulta el precio
+// del producto justo antes de cobrarlo, asi que quitarle la lectura la
+// obliga a pedirle el numero a otra persona en cada venta.
+
+const cajeraVePublicos = await pedir('/api/precios/publicos', tokenCajera);
+revisar(
+  'la cajera lee los precios publicos',
+  cajeraVePublicos.status === 200,
+  JSON.stringify(cajeraVePublicos.cuerpo),
+);
+
+const cajeraVeEfectivo = await pedir(
+  `/api/precios/efectivo?producto_id=${prodPrincipal}`,
+  tokenCajera,
+);
+revisar(
+  'y el precio efectivo del producto que esta cobrando',
+  cajeraVeEfectivo.status === 200 && cajeraVeEfectivo.cuerpo?.vigente === true,
+  JSON.stringify(cajeraVeEfectivo.cuerpo),
+);
+
+const cajeraCierra = await pedir(`/api/precios/publicos/${pubPrincipalId}/cerrar`, tokenCajera, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ vigente_hasta: HOY }),
+});
+revisar(
+  'y tambien los cierra, porque 0006 le dejo precios.editar',
+  cajeraCierra.status === 200,
+  JSON.stringify(cajeraCierra.cuerpo),
+);
+
+// Lo que si debe quedar cerrado, y no es un detalle de permisos: el
+// empleado de mostrador NO edita precios. Si esto pasara, cualquier
+// transaccion podria cambiar el precio del producto entre que se autoriza
+// y se cobra, y el cobro ya no cuadraria con la lista.
+const sinTokenCierra = await pedir(`/api/precios/publicos/${pubPrincipalId}/cerrar`, undefined, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ vigente_hasta: HOY }),
+});
+revisar(
+  'pero sin token no, ni de broma',
+  sinTokenCierra.status === 401,
+  JSON.stringify(sinTokenCierra.cuerpo),
+);
+
+// Limpia lo de esta seccion. Los productos van tambien en la limpieza
+// general por codigo, pero los precios no tienen codigo y se van por
+// producto.
+await sqlDirecto(`DELETE FROM pos.precios_cliente WHERE producto_id = ANY($1::bigint[])`, [
+  [prodPrincipal, prodCadena, prodCero, prodSinPrecio],
+]);
+await sqlDirecto(`DELETE FROM pos.precios_publicos WHERE producto_id = ANY($1::bigint[])`, [
+  [prodPrincipal, prodCadena, prodCero, prodSinPrecio],
+]);
+// Igual que con los productos: borrar los precios deja rastro en
+// auditoria_precios, y ese rastro apunta tambien al cliente. Sin esta
+// linea, el DELETE de clientes revienta con 23503.
+await sqlDirecto(
+  `DELETE FROM pos.auditoria_precios
+    WHERE cliente_id IN (SELECT id FROM pos.clientes WHERE nombre = 'Cliente de precios')`,
+  [],
+);
+await sqlDirecto(`DELETE FROM pos.clientes WHERE nombre = 'Cliente de precios'`);
+
 // Limpia lo que creo esta suite. No hay endpoint DELETE a proposito (en
 // el negocio se da de baja, no se borra), asi que el borrado de prueba se
 // hace por SQL.
@@ -1531,11 +2429,12 @@ const pool = new Pool({
   // reescribiria contrasenas en la base equivocada.
   database: baseEnUso,
   port: Number(process.env.PGPORT ?? 5432),
+  // Mismo motivo que en el pool de arriba: en la conexion, no en la sesion.
+  options: '-c search_path=pos',
 });
 try {
   // pgcrypto se instalo en el esquema pos, no en public, asi que sin esto
   // crypt() y gen_salt() no existen para este Pool (error 42883).
-  await pool.query('SET search_path TO pos');
 
   const r = await pool.query(
     `UPDATE pos.usuarios SET contrasena = crypt($1, gen_salt('bf', 12)),

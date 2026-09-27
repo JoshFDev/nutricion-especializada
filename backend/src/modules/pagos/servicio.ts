@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { consultarUno, enTransaccionDe } from '../../db/transaccion.js';
+import { enTransaccionDe, hoyEnLaBase } from '../../db/transaccion.js';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import {
   mapearAplicacion,
@@ -144,14 +144,6 @@ export async function crear(cliente: PoolClient, d: CrearPago): Promise<Pago> {
 
     return leer(c, pagoId);
   });
-}
-
-async function hoyEnLaBase(cliente: PoolClient): Promise<string> {
-  const f = await consultarUno<{ hoy: string }>(
-    cliente,
-    `SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS hoy`,
-  );
-  return f?.hoy ?? '';
 }
 
 /**

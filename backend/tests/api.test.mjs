@@ -157,6 +157,7 @@ const RASTROS = [
   'auditoria_accesos',
   'auditoria_precios',
   'auditoria_inventario',
+  'auditoria_caja',
   'sesiones',
 ];
 const marcasDeRastro = {};
@@ -1289,6 +1290,88 @@ const limpiarFoliosPago = async () => {
   return f.rowCount;
 };
 
+/**
+ * Limpia facturas, movimientos de caja y cuentas de prueba.
+ *
+ * Va la PRIMERA de las tres, antes que pagos y notas, por un motivo puntual:
+ * `factura_nota.nota_id` es FK DURA a la nota (sin ON DELETE), asi que
+ * `limpiarNotasDePrueba` -- que borra todas las notas de CNOTA y CFECHA --
+ * revienta con 23503 en cuanto existe una factura de las de esta suite. Y
+ * el 23503 no dice nada de facturacion: dice "notas_remision", que es un
+ * modulo que aqui se esta limpiando sin problema. Es el mismolechazo de
+ * siempre: el error aparece en el modulo que limpia, no en el que dejo el
+ * dato.
+ *
+ * `factura_id` si es CASCADE, asi que un solo DELETE de facturas se lleva
+ * tambien las lineas de `factura_nota`.
+ *
+ * Y el orden interno de caja es el de siempre, al reves de como parece:
+ * los movimientos PRIMERO y el rastro DESPUES, porque borrar un movimiento
+ * dispara `fn_auditar_caja` y genera `auditoria_caja` nueva, y
+ * `auditoria_caja.cuenta_id` es FK DURA a `cuentas_financieras`. Si la cuenta
+ * se borrara antes que su rastro, el DELETE de la cuenta revienta con 23503.
+ * Es el mismo truco y el mismo error que `limpiarProductosDePrueba` con
+ * `auditoria_precios`.
+ *
+ * Las cuentas se reconocen por NOMBRE EXACTO y no por un `LIKE`: el seed trae
+ * 'Caja chica' y 'Banco principal', y una cuenta de banco puesta a mano en
+ * una base de pruebas vale la pena.
+ */
+const limpiarCajaFacturasDePrueba = async () => {
+  const cuenta = {
+    facturas: 0,
+    log: 0,
+    movimientos: 0,
+    auditoriaCaja: 0,
+    cuentas: 0,
+  };
+
+  const clientes = await sqlDirecto(
+    `SELECT id FROM pos.clientes WHERE codigo_cliente IN ('CNOTA','CFECHA')`,
+  );
+  const idsCliente = clientes.rows.map((c) => c.id);
+  if (idsCliente.length > 0) {
+    const f = await sqlDirecto(`DELETE FROM pos.facturas WHERE cliente_id = ANY($1::bigint[])`, [
+      idsCliente,
+    ]);
+    cuenta.facturas = f.rowCount;
+  }
+
+  // El rastro de las facturas va por TABLA y no por `registro_id`, y no es
+  // descuido: las filas de `factura_nota` no tienen id (su clave es el par
+  // factura_id/nota_id), asi que `fn_auditoria` les deja `registro_id` en
+  // NULL. Es la concesion que la 0010 documenta.
+  const log = await sqlDirecto(
+    `DELETE FROM pos.auditoria_log WHERE tabla IN ('facturas','factura_nota')`,
+  );
+  cuenta.log = log.rowCount;
+
+  const cuentas = await sqlDirecto(
+    `SELECT id FROM pos.cuentas_financieras WHERE nombre IN ('Caja de prueba','Banco de prueba')`,
+  );
+  const idsCuenta = cuentas.rows.map((c) => c.id);
+  if (idsCuenta.length > 0) {
+    const m = await sqlDirecto(
+      `DELETE FROM pos.movimientos_financieros WHERE cuenta_id = ANY($1::smallint[])`,
+      [idsCuenta],
+    );
+    cuenta.movimientos = m.rowCount;
+    const a = await sqlDirecto(
+      `DELETE FROM pos.auditoria_caja WHERE cuenta_id = ANY($1::smallint[])`,
+      [idsCuenta],
+    );
+    cuenta.auditoriaCaja = a.rowCount;
+    const c = await sqlDirecto(
+      `DELETE FROM pos.cuentas_financieras WHERE id = ANY($1::smallint[])`,
+      [idsCuenta],
+    );
+    cuenta.cuentas = c.rowCount;
+  }
+
+  return cuenta;
+};
+
+await limpiarCajaFacturasDePrueba();
 await limpiarPagosComprasProveedoresDePrueba();
 await limpiarNotasDePrueba();
 await limpiarFoliosPago();
@@ -5117,11 +5200,1984 @@ revisar(
 );
 await cancelarCompra(compraTrasReactivar.cuerpo?.id, { motivo: 'prueba de reactivacion' });
 
+// =======================================================================
+// CAJA Y BANCOS
+// =======================================================================
+//
+// El unico modulo con DELETE, asi que aqui se prueba de mas lo que en los
+// demas: no solo que el movimiento se guarda, sino que el saldo de la cuenta
+// se recalcula en el sentido correcto y que borrar uno lo devuelve.
+//
+// Las cuentas son PROPIAS de la suite ('Caja de prueba', 'Banco de prueba') y
+// no se tocan las del seed ('Caja chica', 'Banco principal'): el saldo de la
+// caja chica es un numero que el seed dejo a proposito, y las pruebas de
+// "el saldo quedo en X" se compararian contra el historial de la tienda.
+//
+// Y el saldo NO va pegado en los asserts. Se lleva en una variable y se
+// compara el delta, que es lo mismo que hace el bloque de notas con las
+// existencias y por el mismo motivo: el saldo depende de cuantos movimientos
+// queden vivos, y en cuanto se agregue una prueba mas todos los numeros
+// pegados quedan viejos a la vez sin que se sepa cual mintio.
+
+console.log('\n--- caja y bancos ---');
+
+const crearCuentaCaja = (cuerpo, token) =>
+  pedir('/api/caja/cuentas', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const crearMovimientoCaja = (cuerpo, token) =>
+  pedir('/api/caja/movimientos', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+// El saldo que la base tiene ahora mismo, y el que la suite espera. La
+// cuenta se lleva aparte porque los movimientos del banco no cuentan para el
+// saldo de la caja y si se sumaran todos los dos totales no cuadrarian.
+const saldoDe = async (id) =>
+  Number(
+    (
+      await sqlDirecto(
+        `SELECT saldo_actual::TEXT AS s FROM pos.cuentas_financieras WHERE id = $1`,
+        [id],
+      )
+    ).rows[0].s,
+  );
+
+// ------------------------------------------------------------- cuentas
+const cuentaEfectivo = await crearCuentaCaja(
+  { nombre: 'Caja de prueba', tipo: 'efectivo' },
+  tokenAdmin,
+);
+revisar(
+  'alta de cuenta de efectivo -> 201',
+  cuentaEfectivo.status === 201,
+  JSON.stringify(cuentaEfectivo.cuerpo),
+);
+revisar(
+  'y sale con el Location, para poder leerla sin armarla a mano',
+  String(cuentaEfectivo.headers?.get?.('location') ?? '').includes(
+    String(cuentaEfectivo.cuerpo?.id ?? 'x'),
+  ),
+  String(cuentaEfectivo.headers?.get?.('location')),
+);
+revisar(
+  'una cuenta nueva vale cero, no null',
+  cuentaEfectivo.cuerpo?.saldo_actual === 0,
+  JSON.stringify(cuentaEfectivo.cuerpo?.saldo_actual),
+);
+const cuentaEfectivoId = cuentaEfectivo.cuerpo?.id;
+
+const cuentaBanco = await crearCuentaCaja(
+  { nombre: 'Banco de prueba', tipo: 'banco', banco: 'BANCO DE PRUEBA', titular: 'La dueña' },
+  tokenAdmin,
+);
+revisar('alta de cuenta de banco -> 201', cuentaBanco.status === 201);
+const cuentaBancoId = cuentaBanco.cuerpo?.id;
+
+// Una cuenta de banco sin nombre de banco no se distingue de otra en la
+// lista, que es justo donde se mira cuando hay que encontrar un pago. La base
+// NO lo exige (la columna es TEXT sin CHECK), asi que el 400 es del esquema.
+const bancoSinNombre = await crearCuentaCaja(
+  { nombre: 'Banco sin nombre', tipo: 'banco' },
+  tokenAdmin,
+);
+revisar(
+  'cuenta de banco sin `banco` -> 400',
+  bancoSinNombre.status === 400,
+  JSON.stringify(bancoSinNombre.cuerpo),
+);
+
+const cuentaDuplicada = await crearCuentaCaja(
+  { nombre: 'Caja de prueba', tipo: 'efectivo' },
+  tokenAdmin,
+);
+revisar(
+  'nombre repetido -> 409',
+  cuentaDuplicada.status === 409,
+  JSON.stringify(cuentaDuplicada.cuerpo),
+);
+revisar(
+  'y el codigo del 409 es CUENTA_DUPLICADA',
+  cuentaDuplicada.cuerpo?.codigo === 'CUENTA_DUPLICADA',
+  JSON.stringify(cuentaDuplicada.cuerpo),
+);
+
+const cuentas = await pedir('/api/caja/cuentas', tokenAdmin);
+revisar('listar cuentas -> 200', cuentas.status === 200, JSON.stringify(cuentaEfectivo.cuerpo));
+revisar(
+  'trae las del seed Y las de la suite',
+  cuentas.cuerpo?.some((c) => c.nombre === 'Caja chica') &&
+    cuentas.cuerpo?.some((c) => c.nombre === 'Caja de prueba'),
+  JSON.stringify(cuentas.cuerpo?.map((c) => c.nombre)),
+);
+revisar(
+  'el saldo de la caja chica es el del seed, no el de la suite',
+  cuentas.cuerpo?.find((c) => c.nombre === 'Caja chica')?.saldo_actual === 600,
+  JSON.stringify(cuentas.cuerpo?.find((c) => c.nombre === 'Caja chica')),
+);
+
+const soloBancos = await pedir('/api/caja/cuentas?tipo=banco', tokenAdmin);
+revisar(
+  'filtrar por tipo',
+  soloBancos.cuerpo?.length > 0 && soloBancos.cuerpo?.every((c) => c.tipo === 'banco'),
+  JSON.stringify(soloBancos.cuerpo?.map((c) => [c.nombre, c.tipo])),
+);
+const tipoMal = await pedir('/api/caja/cuentas?tipo=cripto', tokenAdmin);
+revisar('tipo de cuenta que no existe -> 400', tipoMal.status === 400);
+
+const verCuenta = await pedir(`/api/caja/cuentas/${cuentaEfectivoId}`, tokenAdmin);
+revisar(
+  'ver la cuenta -> 200',
+  verCuenta.status === 200 && verCuenta.cuerpo?.id === cuentaEfectivoId,
+);
+const cuentaFantasma = await pedir('/api/caja/cuentas/999', tokenAdmin);
+revisar(
+  'cuenta que no existe -> 404',
+  cuentaFantasma.status === 404,
+  JSON.stringify(cuentaFantasma.cuerpo),
+);
+const cuentaNoNumero = await pedir('/api/caja/cuentas/abc', tokenAdmin);
+revisar('id que no es numero -> 400', cuentaNoNumero.status === 400);
+
+// --------------------------------------------------------- movimientos
+// El saldo esperado de la caja de la suite, que se actualiza solo con cada
+// movimiento que la suite acepta. Si un movimiento se rechaza, no suma: por
+// eso `mover` mira el status antes de apuntarlo.
+const esperado = { ingresos: 0, egresos: 0, movimientos: 0 };
+const saldoEsperado = () => esperado.ingresos - esperado.egresos;
+
+const mover = async (cuerpo, token = tokenAdmin) => {
+  const r = await crearMovimientoCaja(cuerpo, token);
+  if (r.status === 201 && cuerpo.cuenta_id === cuentaEfectivoId) {
+    // La API dice `ingreso`/`egreso` y el contador dice `ingresos`/`egresos`.
+    // No es el mismo nombre, y sin el `s` el saldo esperado se queda en cero
+    // para siempre: las comparaciones de abajo contrarian 0 contra la base y
+    // fallarian sin decir nada de porque.
+    esperado[`${cuerpo.tipo}s`] += Number(cuerpo.monto);
+    esperado.movimientos += 1;
+  }
+  return r;
+};
+
+const ingreso = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '1000.00',
+  descripcion: 'Venta del dia',
+});
+revisar('alta de movimiento -> 201', ingreso.status === 201, JSON.stringify(ingreso.cuerpo));
+revisar(
+  'y la respuesta trae el nombre de la cuenta, no el id',
+  ingreso.cuerpo?.cuenta === 'Caja de prueba',
+  JSON.stringify(ingreso.cuerpo),
+);
+const movimientoIngresoId = ingreso.cuerpo?.id;
+revisar(
+  'el saldo subio a 1000',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado(),
+  `${await saldoDe(cuentaEfectivoId)} != ${saldoEsperado()}`,
+);
+
+const egreso = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'egreso',
+  categoria: 'Flete',
+  monto: '250.00',
+});
+revisar('egreso -> 201', egreso.status === 201);
+revisar(
+  'y el saldo bajo',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado(),
+  `${await saldoDe(cuentaEfectivoId)} != ${saldoEsperado()}`,
+);
+
+// El saldo NEGATIVO es una decision y no un olvido, y por eso se prueba: una
+// transferencia se registra el dia que se emite y la cuenta queda corrida
+// hasta la compensacion. Bloquearlo empujaria al operador a meter el
+// movimiento en otra cuenta, que es peor.
+const sobregirado = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'egreso',
+  categoria: 'Pago proveedor',
+  monto: '1000.00',
+});
+revisar(
+  'un egreso mayor al saldo SI se captura (-> 201)',
+  sobregirado.status === 201,
+  JSON.stringify(sobregirado.cuerpo),
+);
+revisar(
+  'y la cuenta queda en negativo, que es lo que significa sobregirada',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado() && (await saldoDe(cuentaEfectivoId)) < 0,
+  `${await saldoDe(cuentaEfectivoId)} vs ${saldoEsperado()}`,
+);
+
+// Al banco, con los dos lados: un ingreso de un cliente y un egreso a un
+// proveedor. Es lo que se usa en el dia a dia. Los dos van al banco a
+// proposito: mezclarlos con los de la caja haria que el saldo esperado de
+// esta tuviera que distinguir por cuenta, y no vale la pena.
+const ventaCliente = await crearMovimientoCaja(
+  {
+    cuenta_id: cuentaBancoId,
+    tipo: 'ingreso',
+    categoria: 'Transferencia',
+    monto: '5000.00',
+    cliente_id: clienteNotaId,
+    tiene_factura: true,
+  },
+  tokenAdmin,
+);
+revisar(
+  'ingreso de un cliente -> 201',
+  ventaCliente.status === 201,
+  JSON.stringify(ventaCliente.cuerpo),
+);
+revisar(
+  'y trae el nombre del cliente, no el id',
+  ventaCliente.cuerpo?.cliente === 'Cliente de nota',
+  JSON.stringify(ventaCliente.cuerpo?.cliente),
+);
+revisar('el id del cliente tambien viene', ventaCliente.cuerpo?.cliente_id === clienteNotaId);
+revisar('y sale marcado con factura', ventaCliente.cuerpo?.tiene_factura === true);
+
+const pagoProveedor = await crearMovimientoCaja(
+  {
+    cuenta_id: cuentaBancoId,
+    tipo: 'egreso',
+    categoria: 'Pago proveedor',
+    monto: '1800.00',
+    proveedor_id: provUnoId,
+  },
+  tokenAdmin,
+);
+revisar(
+  'egreso a un proveedor -> 201',
+  pagoProveedor.status === 201,
+  JSON.stringify(pagoProveedor.cuerpo),
+);
+const nombreDelProveedor = (
+  await sqlDirecto(`SELECT nombre FROM pos.proveedores WHERE id = $1`, [
+    pagoProveedor.cuerpo?.proveedor_id,
+  ])
+).rows[0]?.nombre;
+revisar(
+  'y trae el nombre del proveedor, no el id',
+  pagoProveedor.cuerpo?.proveedor === nombreDelProveedor,
+  `${pagoProveedor.cuerpo?.proveedor} vs ${nombreDelProveedor}`,
+);
+
+// ------------------------------------------------------------- validacion
+// El `monto` es positivo y de dos decimales. El `CHECK (monto > 0)` de la
+// base lo frena igual, pero aqui se comprueba que el 400 llega con el nombre
+// del campo y no como un 23503.
+const montoCero = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '0',
+});
+revisar('monto en cero -> 400', montoCero.status === 400, JSON.stringify(montoCero.cuerpo));
+const montoNegativo = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '-50',
+});
+revisar('monto negativo -> 400', montoNegativo.status === 400);
+const montoCentimos = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '10.555',
+});
+revisar('monto con tres decimales -> 400', montoCentimos.status === 400);
+const montoTexto = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: 'mucho',
+});
+revisar('monto que no es numero -> 400', montoTexto.status === 400);
+revisar(
+  'y el saldo no se movio con ninguno de los cuatro rechazos',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado(),
+  `${await saldoDe(cuentaEfectivoId)} != ${saldoEsperado()}`,
+);
+
+const categoriaCorta = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'V',
+  monto: '10.00',
+});
+revisar('categoria de una letra -> 400', categoriaCorta.status === 400);
+
+const cuentaInexistente = await mover({
+  cuenta_id: 32000,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '10.00',
+});
+revisar(
+  'cuenta que no existe -> 400, no un 23503',
+  cuentaInexistente.status === 400,
+  JSON.stringify(cuentaInexistente.cuerpo),
+);
+revisar(
+  'y el error dice que campo es',
+  JSON.stringify(cuentaInexistente.cuerpo).includes('cuenta_id'),
+  JSON.stringify(cuentaInexistente.cuerpo),
+);
+
+const clienteInexistente = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '10.00',
+  cliente_id: 999999999,
+});
+revisar('cliente que no existe -> 400', clienteInexistente.status === 400);
+revisar(
+  'y tambien dice que campo',
+  JSON.stringify(clienteInexistente.cuerpo).includes('cliente_id'),
+  JSON.stringify(clienteInexistente.cuerpo),
+);
+
+// Cliente Y proveedor a la vez no significa nada. La base no lo prohibe
+// (ningun CHECK lo cubre) y por eso el 400 lo pone el esquema.
+const dosLados = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '10.00',
+  cliente_id: clienteNotaId,
+  proveedor_id: provUnoId,
+});
+revisar(
+  'cliente y proveedor a la vez -> 400',
+  dosLados.status === 400,
+  JSON.stringify(dosLados.cuerpo),
+);
+
+const losDosNull = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'egreso',
+  categoria: 'Renta local',
+  monto: '8000.00',
+  cliente_id: null,
+  proveedor_id: null,
+});
+revisar(
+  'sin cliente ni proveedor SI se captura: la renta es de nadie',
+  losDosNull.status === 201,
+  JSON.stringify(losDosNull.cuerpo),
+);
+const rentaId = losDosNull.cuerpo?.id;
+
+const desconocido = await mover({
+  cuenta_id: cuentaEfectivoId,
+  tipo: 'ingreso',
+  categoria: 'Venta',
+  monto: '10.00',
+  raro: 1,
+});
+revisar(
+  'campo que no existe -> 400 (el esquema es estricto)',
+  desconocido.status === 400,
+  JSON.stringify(desconocido.cuerpo),
+);
+
+// --------------------------------------------------------------- listado
+const listaMovs = await pedir(`/api/caja/movimientos?cuenta_id=${cuentaEfectivoId}`, tokenAdmin);
+revisar('listar por cuenta -> 200', listaMovs.status === 200, JSON.stringify(listaMovs.cuerpo));
+revisar(
+  'y trae SOLO los de esa cuenta',
+  listaMovs.cuerpo?.datos.every((m) => m.cuenta_id === cuentaEfectivoId),
+  JSON.stringify(listaMovs.cuerpo?.datos?.map((m) => [m.cuenta_id, m.monto])),
+);
+revisar(
+  'el total del encabezado es el de los movimientos, no el de la pagina',
+  listaMovs.cuerpo?.total === listaMovs.cuerpo?.datos.length,
+  `${listaMovs.cuerpo?.total} vs ${listaMovs.cuerpo?.datos.length}`,
+);
+
+// ESTE es el caso que rompia con `?buscar=`: el `total` se contaba con un
+// `FROM` mas pobre que el de las filas y, como `buscar` filtra por el nombre
+// de la cuenta (`cf.nombre`), la columna quedaba fuera del alcance y la
+// consulta reventaba. Se comprueba el TOTAL, no solo que responda 200: un 500
+// en el conteo se comeria la fila sin que se notara en el listado.
+const buscarMovs = await pedir(
+  `/api/caja/movimientos?cuenta_id=${cuentaEfectivoId}&buscar=Renta`,
+  tokenAdmin,
+);
+revisar(
+  'buscar por descripcion, CON total -> 200',
+  buscarMovs.status === 200,
+  JSON.stringify(buscarMovs.cuerpo),
+);
+revisar(
+  'y encuentra el de la renta',
+  buscarMovs.cuerpo?.datos?.some((m) => m.id === rentaId),
+  JSON.stringify(buscarMovs.cuerpo?.datos?.map((m) => [m.id, m.descripcion])),
+);
+revisar(
+  'y el total coincide con lo que trae',
+  buscarMovs.cuerpo?.total === buscarMovs.cuerpo?.datos.length,
+  `${buscarMovs.cuerpo?.total} vs ${buscarMovs.cuerpo?.datos.length}`,
+);
+
+// Y por el nombre de la CUENTA, que es el otro lado del mismo `buscar`.
+const buscarPorCuenta = await pedir('/api/caja/movimientos?buscar=prueba', tokenAdmin);
+revisar(
+  'buscar por nombre de cuenta -> 200 con total',
+  buscarPorCuenta.status === 200 && typeof buscarPorCuenta.cuerpo?.total === 'number',
+  JSON.stringify(buscarPorCuenta.cuerpo?.error),
+);
+
+const soloIngresos = await pedir(
+  `/api/caja/movimientos?cuenta_id=${cuentaEfectivoId}&tipo=ingreso`,
+  tokenAdmin,
+);
+revisar(
+  'filtrar por tipo',
+  soloIngresos.cuerpo?.datos.every((m) => m.tipo === 'ingreso') && soloIngresos.cuerpo?.total >= 1,
+  JSON.stringify(soloIngresos.cuerpo?.datos?.map((m) => m.tipo)),
+);
+
+const conFactura = await pedir('/api/caja/movimientos?con_factura=true', tokenAdmin);
+revisar(
+  'filtrar por con_factura',
+  conFactura.status === 200 && conFactura.cuerpo?.datos.every((m) => m.tiene_factura === true),
+  JSON.stringify(conFactura.cuerpo?.datos?.map((m) => [m.tiene_factura, m.categoria])),
+);
+const conFacturaMal = await pedir('/api/caja/movimientos?con_factura=quiza', tokenAdmin);
+revisar('con_factura que no es booleano -> 400', conFacturaMal.status === 400);
+
+// El rango se compara contra el listado SIN filtro de fechas. Si el `hasta`
+// fuera exclusivo, el listado traeria N-1 y el total no cuadraria.
+const rangoCaja = await pedir(
+  `/api/caja/movimientos?cuenta_id=${cuentaEfectivoId}&desde=2000-01-01&hasta=2099-12-31`,
+  tokenAdmin,
+);
+revisar(
+  'rango de fechas que cubre todo: el total no cambia',
+  rangoCaja.cuerpo?.total === listaMovs.cuerpo?.total,
+  `${rangoCaja.cuerpo?.total} vs ${listaMovs.cuerpo?.total}`,
+);
+const rangoInvertidoCaja = await pedir(
+  '/api/caja/movimientos?desde=2099-01-01&hasta=2000-01-01',
+  tokenAdmin,
+);
+revisar('rango invertido -> 400', rangoInvertidoCaja.status === 400);
+const paginaMovs = await pedir('/api/caja/movimientos?limite=1&offset=1', tokenAdmin);
+revisar(
+  'la paginacion recorta la pagina y NO el total',
+  paginaMovs.cuerpo?.datos.length === 1 && paginaMovs.cuerpo?.total > 1,
+  JSON.stringify({ datos: paginaMovs.cuerpo?.datos.length, total: paginaMovs.cuerpo?.total }),
+);
+const limiteCeroCaja = await pedir('/api/caja/movimientos?limite=0', tokenAdmin);
+revisar('limite 0 -> 400', limiteCeroCaja.status === 400);
+
+const verMovimiento = await pedir(`/api/caja/movimientos/${movimientoIngresoId}`, tokenAdmin);
+revisar('ver el movimiento -> 200', verMovimiento.status === 200);
+revisar(
+  'con el nombre de la cuenta y el tipo de la cuenta',
+  verMovimiento.cuerpo?.cuenta === 'Caja de prueba' &&
+    verMovimiento.cuerpo?.cuenta_tipo === 'efectivo',
+  JSON.stringify(verMovimiento.cuerpo),
+);
+revisar(
+  'y el monto es numero, no texto',
+  typeof verMovimiento.cuerpo?.monto === 'number',
+  JSON.stringify(verMovimiento.cuerpo?.monto),
+);
+const movimientoFantasma = await pedir('/api/caja/movimientos/999999', tokenAdmin);
+revisar('movimiento que no existe -> 404', movimientoFantasma.status === 404);
+
+// ---------------------------------------------------------------- resumen
+// El resumen existe porque las sumas no se pueden sacar del listado
+// paginado: sin el, "hoy entrare X" seria la suma de lo que se alcanzo a ver.
+// Y trae DOS saldos a proposito: el de la cuenta (arrastra todo) y el del
+// periodo (solo lo que paso en el rango). Son preguntas distintas.
+const resumen = await pedir('/api/caja/resumen?desde=2000-01-01&hasta=2099-12-31', tokenAdmin);
+revisar('resumen -> 200', resumen.status === 200, JSON.stringify(resumen.cuerpo?.error));
+const resumenEfectivo = resumen.cuerpo?.find((r) => r.cuenta_id === cuentaEfectivoId);
+revisar('y trae la cuenta de la suite', !!resumenEfectivo, JSON.stringify(resumen.cuerpo));
+revisar(
+  'ingresos y egresos del periodo son los que se movieron',
+  resumenEfectivo?.ingresos === esperado.ingresos && resumenEfectivo?.egresos === esperado.egresos,
+  `${JSON.stringify(resumenEfectivo)} vs ${JSON.stringify(esperado)}`,
+);
+revisar(
+  'el saldo del periodo es ingresos - egresos',
+  resumenEfectivo?.saldo_periodo === saldoEsperado(),
+  `${resumenEfectivo?.saldo_periodo} != ${saldoEsperado()}`,
+);
+revisar(
+  'y coincide con el saldo ACTUAL de la cuenta, porque el periodo es toda la historia',
+  resumenEfectivo?.saldo_actual === (await saldoDe(cuentaEfectivoId)),
+  `${resumenEfectivo?.saldo_actual} != ${await saldoDe(cuentaEfectivoId)}`,
+);
+revisar(
+  'y cuenta cuantos movimientos son',
+  resumenEfectivo?.movimientos === esperado.movimientos,
+  `${resumenEfectivo?.movimientos} != ${esperado.movimientos}`,
+);
+revisar(
+  'trae tambien la cuenta del seed, sin tocarla',
+  resumen.cuerpo?.some((r) => r.cuenta === 'Caja chica'),
+  JSON.stringify(resumen.cuerpo?.map((r) => [r.cuenta, r.ingresos, r.egresos])),
+);
+revisar(
+  'la del seed sigue con los numeros del seed',
+  resumen.cuerpo?.find((r) => r.cuenta === 'Caja chica')?.ingresos === 850 &&
+    resumen.cuerpo?.find((r) => r.cuenta === 'Caja chica')?.egresos === 250,
+  JSON.stringify(resumen.cuerpo?.find((r) => r.cuenta === 'Caja chica')),
+);
+revisar(
+  'y el banco de la suite: 5000 de entrada y 1800 de salida',
+  resumen.cuerpo?.find((r) => r.cuenta_id === cuentaBancoId)?.ingresos === 5000 &&
+    resumen.cuerpo?.find((r) => r.cuenta_id === cuentaBancoId)?.egresos === 1800,
+  JSON.stringify(resumen.cuerpo?.find((r) => r.cuenta_id === cuentaBancoId)),
+);
+
+// Un periodo que NO incluye los movimientos tiene que dar cero, no el total
+// de toda la historia. Es el caso de "el corte del mes".
+const resumenFuturo = await pedir(
+  '/api/caja/resumen?desde=2099-01-01&hasta=2099-12-31',
+  tokenAdmin,
+);
+revisar(
+  'un periodo sin movimientos da cero, no la suma de todo',
+  resumenFuturo.cuerpo?.every((r) => r.ingresos === 0 && r.egresos === 0),
+  JSON.stringify(resumenFuturo.cuerpo?.find((r) => r.cuenta_id === cuentaEfectivoId)),
+);
+const resumenInvertido = await pedir(
+  '/api/caja/resumen?desde=2099-01-01&hasta=2000-01-01',
+  tokenAdmin,
+);
+revisar('resumen con rango invertido -> 400', resumenInvertido.status === 400);
+const resumenSinFiltro = await pedir('/api/caja/resumen', tokenAdmin);
+revisar(
+  'sin fechas el resumen es de toda la historia',
+  resumenSinFiltro.cuerpo?.find((r) => r.cuenta_id === cuentaEfectivoId)?.ingresos ===
+    esperado.ingresos,
+  JSON.stringify(resumenSinFiltro.cuerpo?.find((r) => r.cuenta_id === cuentaEfectivoId)),
+);
+
+// ------------------------------------------------------------- categorias
+const categorias = await pedir(`/api/caja/categorias?cuenta_id=${cuentaEfectivoId}`, tokenAdmin);
+revisar('categorias -> 200', categorias.status === 200, JSON.stringify(categorias.cuerpo));
+revisar(
+  'y son las de los movimientos de esa cuenta',
+  categorias.cuerpo?.some((c) => c.categoria === 'Renta local') &&
+    categorias.cuerpo?.some((c) => c.categoria === 'Venta'),
+  JSON.stringify(categorias.cuerpo),
+);
+revisar(
+  'y traen cuantos movimientos hay de cada una',
+  categorias.cuerpo?.find((c) => c.categoria === 'Venta')?.movimientos === 1,
+  JSON.stringify(categorias.cuerpo?.find((c) => c.categoria === 'Venta')),
+);
+const categoriasSinFiltro = await pedir('/api/caja/categorias', tokenAdmin);
+revisar(
+  'sin filtro salen tambien las del seed',
+  categoriasSinFiltro.cuerpo?.some((c) => c.categoria === 'Flete'),
+  JSON.stringify(categoriasSinFiltro.cuerpo),
+);
+const categoriasCuentaFalsa = await pedir('/api/caja/categorias?cuenta_id=999', tokenAdmin);
+revisar(
+  'categorias de una cuenta que no existe -> lista vacia',
+  categoriasCuentaFalsa.status === 200 && categoriasCuentaFalsa.cuerpo?.length === 0,
+  JSON.stringify(categoriasCuentaFalsa.cuerpo),
+);
+
+// --------------------------------------------------------------- permisos
+// La Empleada tiene `caja.capturar` y `caja.ver` pero NO `caja.eliminar`
+// (0001, sin cambios en 0006). Ese es el unico permiso de este modulo que
+// esta repartido asi, asi que la prueba del DELETE la hace ella.
+const empleadaCaptura = await mover(
+  { cuenta_id: cuentaEfectivoId, tipo: 'ingreso', categoria: 'Propina', monto: '20.00' },
+  tokenEmpleada,
+);
+revisar(
+  'la empleada SI captura (caja.capturar es suyo)',
+  empleadaCaptura.status === 201,
+  JSON.stringify(empleadaCaptura.cuerpo),
+);
+const propinaId = empleadaCaptura.cuerpo?.id;
+
+const borradoPorEmpleada = await pedir(`/api/caja/movimientos/${propinaId}`, tokenEmpleada, {
+  method: 'DELETE',
+});
+revisar(
+  'pero NO borra (caja.eliminar no es suyo) -> 403',
+  borradoPorEmpleada.status === 403,
+  JSON.stringify(borradoPorEmpleada.cuerpo),
+);
+revisar(
+  'y el movimiento sigue ahi',
+  (await pedir(`/api/caja/movimientos/${propinaId}`, tokenAdmin)).status === 200,
+);
+revisar(
+  'y el saldo tampoco se movio',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado(),
+  `${await saldoDe(cuentaEfectivoId)} != ${saldoEsperado()}`,
+);
+
+const cajaSinToken = await pedir('/api/caja/cuentas');
+revisar('caja sin token -> 401', cajaSinToken.status === 401);
+const cajeraVeResumen = await pedir('/api/caja/resumen', tokenCajera);
+revisar(
+  'la cajera ve caja entera -> 200',
+  cajeraVeResumen.status === 200,
+  JSON.stringify(cajeraVeResumen.cuerpo?.error),
+);
+const cajeraBorra = await pedir(`/api/caja/movimientos/${propinaId}`, tokenCajera, {
+  method: 'DELETE',
+});
+revisar(
+  'y la cajera SI borra (caja.eliminar es suyo desde 0006)',
+  cajeraBorra.status === 204,
+  JSON.stringify(cajeraBorra.cuerpo),
+);
+// El ajuste va ANTES de comparar: `esperado` es el saldo que la caja deberia
+// tener si este movimiento ya no existiera. Comparar antes de restarlo
+// compararia el saldo de dos instantes distintos.
+esperado.ingresos -= 20;
+esperado.movimientos -= 1;
+revisar(
+  'y ese borrado tambien devuelve el saldo',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado(),
+  `${await saldoDe(cuentaEfectivoId)} != ${saldoEsperado()}`,
+);
+
+// ------------------------------------------------------------------ DELETE
+// El DELETE es lo unico de este modulo que no existe en los demas, y por eso
+// se prueba que el saldo vuelve a donde estaba y que el movimiento deja de
+// existir de verdad, no de aparecer tachado.
+const borrarRenta = await pedir(`/api/caja/movimientos/${rentaId}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar('borrar movimiento -> 204', borrarRenta.status === 204, JSON.stringify(borrarRenta.cuerpo));
+revisar(
+  'y el movimiento ya no existe -> 404',
+  (await pedir(`/api/caja/movimientos/${rentaId}`, tokenAdmin)).status === 404,
+);
+esperado.egresos -= 8000;
+esperado.movimientos -= 1;
+revisar(
+  'el saldo de la cuenta devuelve los 8000 de la renta',
+  (await saldoDe(cuentaEfectivoId)) === saldoEsperado(),
+  `${await saldoDe(cuentaEfectivoId)} != ${saldoEsperado()}`,
+);
+revisar(
+  'y el saldo que dice la API es el mismo que el de la base',
+  (await pedir(`/api/caja/cuentas/${cuentaEfectivoId}`, tokenAdmin)).cuerpo?.saldo_actual ===
+    (await saldoDe(cuentaEfectivoId)),
+  JSON.stringify(
+    (await pedir(`/api/caja/cuentas/${cuentaEfectivoId}`, tokenAdmin)).cuerpo?.saldo_actual,
+  ),
+);
+
+const borrarDoble = await pedir(`/api/caja/movimientos/${rentaId}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar('borrar dos veces -> 404', borrarDoble.status === 404, JSON.stringify(borrarDoble.cuerpo));
+const borrarFantasma = await pedir('/api/caja/movimientos/999999', tokenAdmin, {
+  method: 'DELETE',
+});
+revisar('borrar lo que no existe -> 404', borrarFantasma.status === 404);
+
+// Y que el listado ya no las cuente: el total baja en el numero borrado.
+const listaDespues = await pedir(`/api/caja/movimientos?cuenta_id=${cuentaEfectivoId}`, tokenAdmin);
+revisar(
+  'el listado ya no cuenta los dos borrados',
+  listaDespues.cuerpo?.total === esperado.movimientos,
+  `${listaDespues.cuerpo?.total} != ${esperado.movimientos}`,
+);
+revisar(
+  'y el resumen cuadra con lo que quedo vivo',
+  (await pedir('/api/caja/resumen?desde=2000-01-01&hasta=2099-12-31', tokenAdmin)).cuerpo?.find(
+    (r) => r.cuenta_id === cuentaEfectivoId,
+  )?.ingresos === esperado.ingresos,
+  JSON.stringify(esperado),
+);
+
+// -------------------------------------------------------------- limpieza
+const limpiarCaja = await limpiarCajaFacturasDePrueba();
+revisar(
+  'las cuentas de caja de prueba se borraron',
+  limpiarCaja.cuentas === 2 && limpiarCaja.movimientos > 0,
+  JSON.stringify(limpiarCaja),
+);
+revisar(
+  'y con ellas su rastro de auditoria_caja',
+  limpiarCaja.auditoriaCaja > 0,
+  JSON.stringify(limpiarCaja),
+);
+revisar(
+  'y no sobro ninguna cuenta de prueba',
+  (
+    await sqlDirecto(
+      `SELECT COUNT(*)::TEXT AS n FROM pos.cuentas_financieras
+        WHERE nombre IN ('Caja de prueba','Banco de prueba')`,
+    )
+  ).rows[0].n === '0',
+  'sobro una cuenta de caja de prueba',
+);
+revisar(
+  'la caja del seed sigue como estaba',
+  (await pedir('/api/caja/cuentas', tokenAdmin)).cuerpo?.find((c) => c.nombre === 'Caja chica')
+    ?.saldo_actual === 600,
+  'el modulo toco la caja del seed',
+);
+void ingreso;
+void egreso;
+void sobregirado;
+void ventaCliente;
+void pagoProveedor;
+void losDosNull;
+void movimientoIngresoId;
+
+// =======================================================================
+// FACTURACION
+// =======================================================================
+//
+// Aqui se prueba el modulo entero y no sus endpoints sueltos, porque lo
+// interesante no es que el POST guarde: es que la base NO prohibe tres
+// cosas que sí tienen que quedar prohibidas, y que son las tres que hacen
+// dinero equivocado:
+//
+//   1. Una nota de OTRO cliente. `factura_nota` no liga `facturas.cliente_id`
+//      con `notas_remision.cliente_id`, asi que el par entra sin mirar.
+//   2. Una nota CANCELADA. Facturar mercancia que no salio.
+//   3. Una nota que YA esta en otra factura viva. La misma venta facturada
+//      dos veces, que es el doble cobro que este modulo mas que ningun otro
+//      tiene que evitar.
+//
+// Las notas se crean de verdad, con su talonario y su producto, y no por SQL:
+// una nota hecha a mano no pasa por el servicio de notas y no prueba nada
+// sobre el estado en el que una nota real llega a facturacion.
+
+console.log('\n--- facturacion ---');
+
+const crearFactura = (cuerpo, token) =>
+  pedir('/api/facturas', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const cambiarEstatusFactura = (id, cuerpo, token) =>
+  pedir(`/api/facturas/${id}/estatus`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+// El talonario TST lo creo el bloque de notas con el rango 2001-2010, y para
+// entonces ya se lo gasto creando notas. Que esta seccion tenga folios
+// propios NO es un detalle: si dependiera de los que dejen las pruebas de
+// notas, el orden de los bloques seria la diferencia entre que corra o no, y
+// el error seria un "no queda ningun folio" que no dice de quien es la culpa.
+// Se pide un rango nuevo por la API (que es idempotente: en la segunda
+// corrida omite los que ya existen) y no por SQL, porque lo que se prueba es
+// que la venta se pueda hacer, no que se pueda meter una nota a mano.
+const talonarioFacturas = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'TST', desde: 2021, hasta: 2030 }),
+});
+revisar(
+  'y esta seccion carga sus propios folios -> 201',
+  talonarioFacturas.status === 201,
+  JSON.stringify(talonarioFacturas.cuerpo),
+);
+revisar(
+  'y son 10 los nuevos, o los que ya estaban',
+  talonarioFacturas.cuerpo?.creados + talonarioFacturas.cuerpo?.omitidos === 10,
+  JSON.stringify(talonarioFacturas.cuerpo),
+);
+
+const notaFacturar = async (cantidad = '2') =>
+  crearNota({
+    cliente_id: clienteNotaId,
+    serie: 'TST',
+    renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: cantidad }],
+  });
+
+const notaA = await notaFacturar();
+revisar('nota para facturar -> 201', notaA.status === 201, JSON.stringify(notaA.cuerpo));
+const notaAId = notaA.cuerpo?.id;
+const notaB = await notaFacturar('1');
+revisar('segunda nota -> 201', notaB.status === 201);
+const notaBId = notaB.cuerpo?.id;
+// Una nota de OTRO cliente, para la regla 1. El cliente de fechas ya existe
+// de las pruebas de notas y tiene producto con precio.
+const notaOtroCliente = await crearNota({
+  cliente_id: clienteFechasId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'nota de otro cliente -> 201',
+  notaOtroCliente.status === 201,
+  JSON.stringify(notaOtroCliente.cuerpo),
+);
+const notaOtroClienteId = notaOtroCliente.cuerpo?.id;
+
+// El precio de TST-NOTA lo fijo el bloque de notas, asi que el subtotal sale
+// de ahi. Se lee de la base y no se pega: si el bloque de notas cambia su
+// precio, esta seccion no se rompe.
+const subtotalDe = async (notaId) =>
+  Number(
+    (await sqlDirecto(`SELECT subtotal::TEXT AS s FROM pos.notas_remision WHERE id = $1`, [notaId]))
+      .rows[0].s,
+  );
+
+// ------------------------------------------------------------ alta y monto
+const facturaOk = await crearFactura(
+  { cliente_id: clienteNotaId, metodo_pago: 'Transferencia', notas: [notaAId, notaBId] },
+  tokenAdmin,
+);
+revisar('alta de factura -> 201', facturaOk.status === 201, JSON.stringify(facturaOk.cuerpo));
+revisar(
+  'y sale con el Location',
+  String(facturaOk.headers?.get?.('location') ?? '').includes(String(facturaOk.cuerpo?.id ?? 'x')),
+  String(facturaOk.headers?.get?.('location')),
+);
+const facturaOkId = facturaOk.cuerpo?.id;
+revisar(
+  'arranca en solicitada, sin pedir nada',
+  facturaOk.cuerpo?.estatus === 'solicitada',
+  JSON.stringify(facturaOk.cuerpo?.estatus),
+);
+revisar(
+  'el monto es la SUMA de los subtotales de las notas',
+  facturaOk.cuerpo?.monto_total === (await subtotalDe(notaAId)) + (await subtotalDe(notaBId)),
+  `${facturaOk.cuerpo?.monto_total} vs ${(await subtotalDe(notaAId)) + (await subtotalDe(notaBId))}`,
+);
+revisar(
+  'y trae las dos notas con su folio',
+  facturaOk.cuerpo?.notas?.length === 2 &&
+    facturaOk.cuerpo?.notas?.every((n) => typeof n.nota === 'string' && n.nota.length > 0),
+  JSON.stringify(facturaOk.cuerpo?.notas),
+);
+revisar(
+  'cada nota trae su subtotal, para que el total se pueda auditar renglón por renglón',
+  facturaOk.cuerpo?.notas?.reduce((s, n) => s + n.subtotal, 0) === facturaOk.cuerpo?.monto_total,
+  JSON.stringify(facturaOk.cuerpo?.notas?.map((n) => n.subtotal)),
+);
+revisar(
+  'y trae el nombre del cliente, no el id',
+  facturaOk.cuerpo?.cliente === 'Cliente de nota',
+  JSON.stringify(facturaOk.cuerpo?.cliente),
+);
+revisar(
+  'la fecha es la de hoy si no se manda otra',
+  facturaOk.cuerpo?.fecha === (await sqlDirecto(`SELECT CURRENT_DATE::TEXT AS h`)).rows[0].h,
+  JSON.stringify(facturaOk.cuerpo?.fecha),
+);
+
+// El `monto_total` NO se acepta. Aceptarlo abriria la puerta a facturar una
+// nota por una cantidad que no es la que se vendio, y la diferencia no
+// apareceria en ningun lado.
+const facturaConMonto = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaAId], monto_total: '0.01' },
+  tokenAdmin,
+);
+revisar(
+  'mandar el monto_total a mano -> 400',
+  facturaConMonto.status === 400,
+  JSON.stringify(facturaConMonto.cuerpo),
+);
+
+// Una factura de cero notas no es un documento, es un borrador. La base si lo
+// dejaria (el `monto_total` tiene DEFAULT 0 y ningun CHECK).
+const facturaVacia = await crearFactura({ cliente_id: clienteNotaId, notas: [] }, tokenAdmin);
+revisar(
+  'factura sin notas -> 400',
+  facturaVacia.status === 400,
+  JSON.stringify(facturaVacia.cuerpo),
+);
+revisar(
+  'y el error lo explica',
+  JSON.stringify(facturaVacia.cuerpo).toLowerCase().includes('nota'),
+  JSON.stringify(facturaVacia.cuerpo),
+);
+const facturaSinNotas = await crearFactura({ cliente_id: clienteNotaId }, tokenAdmin);
+revisar('factura sin el campo `notas` -> 400', facturaSinNotas.status === 400);
+
+// ------------------------------------------------------- las tres reglas
+// Regla 1: la nota es de otro cliente.
+const facturaAjena = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaOtroClienteId] },
+  tokenAdmin,
+);
+revisar(
+  'nota de otro cliente -> 409, no 422',
+  facturaAjena.status === 409,
+  JSON.stringify(facturaAjena.cuerpo),
+);
+revisar(
+  'y el codigo lo dice',
+  facturaAjena.cuerpo?.codigo === 'NOTA_DE_OTRO_CLIENTE',
+  JSON.stringify(facturaAjena.cuerpo),
+);
+revisar(
+  'y NO se creo la factura a medias',
+  (await sqlDirecto(`SELECT COUNT(*)::TEXT AS n FROM pos.facturas`)).rows[0].n === '1',
+  'quedo una factura huerfana del intento fallido',
+);
+
+// Regla 3: la nota ya esta en una factura viva.
+const facturaRepetida = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaAId] },
+  tokenAdmin,
+);
+revisar(
+  'nota ya facturada -> 409',
+  facturaRepetida.status === 409,
+  JSON.stringify(facturaRepetida.cuerpo),
+);
+revisar(
+  'y el codigo es NOTA_YA_FACTURADA',
+  facturaRepetida.cuerpo?.codigo === 'NOTA_YA_FACTURADA',
+  JSON.stringify(facturaRepetida.cuerpo),
+);
+revisar(
+  'y el error dice en cual factura estaba, para no tener que buscarla',
+  facturaRepetida.cuerpo?.detalles?.factura_id === facturaOkId,
+  JSON.stringify(facturaRepetida.cuerpo),
+);
+
+// La misma nota DOS VECES en el mismo POST es casi siempre un doble clic. Sin
+// el `Set`, el `monto_total` la contaria dos veces y la base no lo prohibe
+// porque (factura, nota) repetida si cae en el PRIMARY KEY.
+const facturaRepetidaMisma = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaOtroClienteId, notaOtroClienteId] },
+  tokenAdmin,
+);
+revisar(
+  'una nota de otro cliente repetida sigue siendo de otro cliente -> 409',
+  facturaRepetidaMisma.status === 409,
+  JSON.stringify(facturaRepetidaMisma.cuerpo),
+);
+
+// Y el caso del `Set` de verdad, que es el que no falla: dos notas nuevas con
+// una repetida. Se mira el monto, que es donde se notaria el doble conteo.
+const notaC = await notaFacturar('3');
+const notaD = await notaFacturar('1');
+revisar(
+  'dos notas mas -> 201',
+  notaC.status === 201 && notaD.status === 201,
+  JSON.stringify(notaC.cuerpo),
+);
+const facturaConRepetida = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaC.cuerpo?.id, notaD.cuerpo?.id, notaC.cuerpo?.id] },
+  tokenAdmin,
+);
+revisar(
+  'la misma nota dos veces en el mismo POST -> 201 (se ignora el repetido)',
+  facturaConRepetida.status === 201,
+  JSON.stringify(facturaConRepetida.cuerpo),
+);
+revisar(
+  'y el monto NO la cuenta dos veces',
+  facturaConRepetida.cuerpo?.monto_total ===
+    (await subtotalDe(notaC.cuerpo?.id)) + (await subtotalDe(notaD.cuerpo?.id)),
+  `${facturaConRepetida.cuerpo?.monto_total} vs ${(await subtotalDe(notaC.cuerpo?.id)) + (await subtotalDe(notaD.cuerpo?.id))}`,
+);
+revisar(
+  'y solo hay dos lineas en factura_nota',
+  facturaConRepetida.cuerpo?.notas?.length === 2,
+  JSON.stringify(facturaConRepetida.cuerpo?.notas?.length),
+);
+
+// Regla 2: la nota CANCELADA. Se cancela por la API de notas, que es la
+// via real, y luego se intenta facturar.
+const notaParaCancelar = await notaFacturar('1');
+const notaCanceladaId = notaParaCancelar.cuerpo?.id;
+await pedir(`/api/notas-remision/${notaCanceladaId}/cancelar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ motivo: 'prueba de facturacion' }),
+});
+const facturaDeCancelada = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaCanceladaId] },
+  tokenAdmin,
+);
+revisar(
+  'nota cancelada -> 409',
+  facturaDeCancelada.status === 409,
+  JSON.stringify(facturaDeCancelada.cuerpo),
+);
+revisar(
+  'y el codigo es NOTA_CANCELADA_NO_SE_FACTURA',
+  facturaDeCancelada.cuerpo?.codigo === 'NOTA_CANCELADA_NO_SE_FACTURA',
+  JSON.stringify(facturaDeCancelada.cuerpo),
+);
+
+const notaDePruebaFantasma = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [999999] },
+  tokenAdmin,
+);
+revisar(
+  'nota que no existe -> 400',
+  notaDePruebaFantasma.status === 400,
+  JSON.stringify(notaDePruebaFantasma.cuerpo),
+);
+const clienteFantasmaFactura = await crearFactura(
+  { cliente_id: 999999, notas: [notaOtroClienteId] },
+  tokenAdmin,
+);
+revisar(
+  'cliente que no existe -> 400, no un 23503',
+  clienteFantasmaFactura.status === 400,
+  JSON.stringify(clienteFantasmaFactura.cuerpo),
+);
+
+// ------------------------------------------------------------- estatus
+// La maquina de estados es solicitada -> emitida -> cancelada, y de ahi no
+// sale. La Empleada tiene `facturas.solicitar` pero NO `facturas.emitir`
+// (0001), y esa es la razon de que exista el segundo permiso.
+const emitidaPorEmpleada = await cambiarEstatusFactura(
+  facturaOkId,
+  { estatus: 'emitida' },
+  tokenEmpleada,
+);
+revisar(
+  'la empleada puede PEDIR la factura pero no EMITIRLA -> 403',
+  emitidaPorEmpleada.status === 403,
+  JSON.stringify(emitidaPorEmpleada.cuerpo),
+);
+revisar(
+  'y la factura sigue solicitada',
+  (await pedir(`/api/facturas/${facturaOkId}`, tokenAdmin)).cuerpo?.estatus === 'solicitada',
+);
+
+const emitida = await cambiarEstatusFactura(facturaOkId, { estatus: 'emitida' }, tokenAdmin);
+revisar('solicitada -> emitida -> 200', emitida.status === 200, JSON.stringify(emitida.cuerpo));
+revisar('y el estatus guardo', emitida.cuerpo?.estatus === 'emitida');
+revisar(
+  'y las notas siguen en la factura',
+  emitida.cuerpo?.notas?.length === 2,
+  JSON.stringify(emitida.cuerpo?.notas?.length),
+);
+
+const emitidaPorLaCajera = await cambiarEstatusFactura(
+  facturaConRepetida.cuerpo?.id,
+  { estatus: 'emitida' },
+  tokenCajera,
+);
+revisar(
+  'la cajera SI emite (facturas.emitir es suyo desde 0006)',
+  emitidaPorLaCajera.status === 200,
+  JSON.stringify(emitidaPorLaCajera.cuerpo?.error),
+);
+
+// Y las transiciones que NO existen.
+const volverASolicitada = await cambiarEstatusFactura(
+  facturaOkId,
+  { estatus: 'solicitada' },
+  tokenAdmin,
+);
+revisar(
+  'emitida -> solicitada -> 409',
+  volverASolicitada.status === 409,
+  JSON.stringify(volverASolicitada.cuerpo),
+);
+revisar(
+  'y el codigo es TRANSICION_NO_PERMITIDA',
+  volverASolicitada.cuerpo?.codigo === 'TRANSICION_NO_PERMITIDA',
+  JSON.stringify(volverASolicitada.cuerpo),
+);
+
+const mismaEstatus = await cambiarEstatusFactura(facturaOkId, { estatus: 'emitida' }, tokenAdmin);
+revisar(
+  'emitida -> emitida -> 409',
+  mismaEstatus.status === 409,
+  JSON.stringify(mismaEstatus.cuerpo),
+);
+
+const estatusFantasma = await cambiarEstatusFactura(facturaOkId, { estatus: 'pagada' }, tokenAdmin);
+revisar(
+  'estatus que no existe -> 400',
+  estatusFantasma.status === 400,
+  JSON.stringify(estatusFantasma.cuerpo),
+);
+
+// Cancelar pide motivo, y no por buena voluntad: es el mismo patron que
+// notas (0008) y compras (0009), y la base lo exige con un CHECK.
+const cancelarFacturaSinMotivo = await cambiarEstatusFactura(
+  facturaOkId,
+  { estatus: 'cancelada' },
+  tokenAdmin,
+);
+revisar(
+  'cancelar sin motivo -> 400',
+  cancelarFacturaSinMotivo.status === 400,
+  JSON.stringify(cancelarFacturaSinMotivo.cuerpo),
+);
+revisar(
+  'y sigue emitida',
+  (await pedir(`/api/facturas/${facturaOkId}`, tokenAdmin)).cuerpo?.estatus === 'emitida',
+);
+const cancelarPorEmpleada = await cambiarEstatusFactura(
+  facturaOkId,
+  { estatus: 'cancelada', motivo: 'la empleada intenta' },
+  tokenEmpleada,
+);
+revisar(
+  'y la empleada tampoco cancela -> 403',
+  cancelarPorEmpleada.status === 403,
+  JSON.stringify(cancelarPorEmpleada.cuerpo),
+);
+
+const cancelada = await cambiarEstatusFactura(
+  facturaOkId,
+  { estatus: 'cancelada', motivo: 'El cliente pidio otra factura con los datos correctos' },
+  tokenAdmin,
+);
+revisar(
+  'emitida -> cancelada con motivo -> 200',
+  cancelada.status === 200,
+  JSON.stringify(cancelada.cuerpo),
+);
+revisar(
+  'y el motivo queda guardado',
+  cancelada.cuerpo?.motivo_cancelacion === 'El cliente pidio otra factura con los datos correctos',
+  JSON.stringify(cancelada.cuerpo?.motivo_cancelacion),
+);
+
+const revivir = await cambiarEstatusFactura(facturaOkId, { estatus: 'emitida' }, tokenAdmin);
+revisar(
+  'cancelada -> emitida -> 409 (no hay resurreccion)',
+  revivir.status === 409,
+  JSON.stringify(revivir.cuerpo),
+);
+
+// Cancelar LIBERA las notas: una factura cancelada no es un CFDI, asi que
+// sus notas tienen que poder facturarse de nuevo. Si no se liberaran, la
+// venta quedaria sin facturar para siempre por un documento que ya no
+// existe.
+const notaLibre = await notaFacturar('1');
+const refacturada = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaLibre.cuerpo?.id] },
+  tokenAdmin,
+);
+revisar(
+  'una nota nueva si se puede facturar de nuevo',
+  refacturada.status === 201,
+  JSON.stringify(refacturada.cuerpo),
+);
+
+// Y la regla 3 mira solo facturas ACTIVAS: una nota de la factura cancelada
+// tiene que volver a entrar en una factura nueva.
+const reusarNotaCancelada = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaAId] },
+  tokenAdmin,
+);
+revisar(
+  'la nota de una factura CANCELADA si se puede volver a facturar',
+  reusarNotaCancelada.status === 201,
+  JSON.stringify(reusarNotaCancelada.cuerpo),
+);
+revisar(
+  'y la nueva factura es distinta',
+  reusarNotaCancelada.cuerpo?.id !== facturaOkId,
+  JSON.stringify(reusarNotaCancelada.cuerpo?.id),
+);
+revisar('con estatus solicitada, no emitida', reusarNotaCancelada.cuerpo?.estatus === 'solicitada');
+
+// ------------------------------------------------------------- la base
+// El motivo lo exige el CHECK de 0010, no solo el servicio. Un UPDATE escrito
+// a mano en psql tiene que rebotar con 23514, porque si no el motivo seria
+// opcional para quien no pase por la API.
+let canceladaAMano = null;
+try {
+  await sqlDirecto(`UPDATE pos.facturas SET estatus = 'cancelada' WHERE id = $1`, [
+    reusarNotaCancelada.cuerpo?.id,
+  ]);
+} catch (e) {
+  canceladaAMano = e.code;
+}
+revisar(
+  'cancelar por SQL sin motivo -> 23514 (lo frena el CHECK de 0010)',
+  canceladaAMano === '23514',
+  String(canceladaAMano),
+);
+revisar(
+  'y la factura sigue solicitada en la base',
+  (
+    await sqlDirecto(`SELECT estatus FROM pos.facturas WHERE id = $1`, [
+      reusarNotaCancelada.cuerpo?.id,
+    ])
+  ).rows[0].estatus === 'solicitada',
+);
+
+// Y el permiso, abajo de la API: `trg_permiso_facturas` exige
+// `facturas.solicitar` en INSERT y UPDATE. Por SQL no se puede probar sin
+// sesion (`fn_trg_permiso` salta cuando no hay usuario, que es lo que deja
+// trabajar a migraciones y seed), asi que la puerta de arriba ya esta
+// probada con la Empleada.
+
+// ------------------------------------------------------------ listado
+const listarFacturas = await pedir('/api/facturas?limite=200', tokenAdmin);
+revisar(
+  'listar -> 200',
+  listarFacturas.status === 200,
+  JSON.stringify(listarFacturas.cuerpo?.error),
+);
+revisar(
+  'el listado trae cuantos renglones, no los renglones',
+  typeof listarFacturas.cuerpo?.total === 'number' &&
+    listarFacturas.cuerpo?.datos.length <= listarFacturas.cuerpo?.total,
+  JSON.stringify({
+    datos: listarFacturas.cuerpo?.datos?.length,
+    total: listarFacturas.cuerpo?.total,
+  }),
+);
+revisar(
+  'cada renglon dice cuantas notas cubre, no las notas',
+  listarFacturas.cuerpo?.datos.every((f) => Number.isInteger(f.notas) && f.notas >= 1),
+  JSON.stringify(listarFacturas.cuerpo?.datos?.map((f) => [f.id, f.notas])),
+);
+revisar(
+  'y si esta cancelada, para no tener que mirar el estatus',
+  typeof listarFacturas.cuerpo?.datos.every((f) => typeof f.cancelada === 'boolean'),
+);
+
+const porClienteFacturas = await pedir(
+  `/api/facturas?cliente_id=${clienteNotaId}&limite=200`,
+  tokenAdmin,
+);
+revisar(
+  'filtrar por cliente',
+  porClienteFacturas.cuerpo?.datos.every((f) => f.cliente_id === clienteNotaId) &&
+    porClienteFacturas.cuerpo?.total > 0,
+  JSON.stringify(porClienteFacturas.cuerpo?.total),
+);
+const porEstatusFacturas = await pedir('/api/facturas?estatus=cancelada', tokenAdmin);
+revisar(
+  'filtrar por estatus',
+  porEstatusFacturas.cuerpo?.datos.every((f) => f.estatus === 'cancelada') &&
+    porEstatusFacturas.cuerpo?.total >= 1,
+  JSON.stringify(porEstatusFacturas.cuerpo?.total),
+);
+const estatusFacturaMal = await pedir('/api/facturas?estatus=pagada', tokenAdmin);
+revisar('estatus que no existe en el filtro -> 400', estatusFacturaMal.status === 400);
+
+// ESTE es el otro `buscar` que rompia por lo mismo que en caja: el `total` se
+// contaba con un `FROM` sin el JOIN a clientes y `buscar` filtra por
+// `c.nombre`.
+const buscarFacturas = await pedir('/api/facturas?buscar=Cliente%20de%20nota', tokenAdmin);
+revisar(
+  'buscar por nombre de cliente, CON total -> 200',
+  buscarFacturas.status === 200,
+  JSON.stringify(buscarFacturas.cuerpo),
+);
+revisar(
+  'y encuentra la factura del cliente',
+  buscarFacturas.cuerpo?.datos?.some((f) => f.id === facturaOkId),
+  JSON.stringify(buscarFacturas.cuerpo?.datos?.map((f) => [f.id, f.cliente])),
+);
+revisar(
+  'y el total coincide con lo que trae',
+  buscarFacturas.cuerpo?.total === buscarFacturas.cuerpo?.datos.length,
+  `${buscarFacturas.cuerpo?.total} vs ${buscarFacturas.cuerpo?.datos.length}`,
+);
+
+const rangoFacturas = await pedir(
+  '/api/facturas?desde=2000-01-01&hasta=2099-12-31&limite=200',
+  tokenAdmin,
+);
+revisar(
+  'rango que cubre todo: el total no cambia',
+  rangoFacturas.cuerpo?.total === listarFacturas.cuerpo?.total,
+  `${rangoFacturas.cuerpo?.total} vs ${listarFacturas.cuerpo?.total}`,
+);
+const rangoInvertidoFacturas = await pedir(
+  '/api/facturas?desde=2099-01-01&hasta=2000-01-01',
+  tokenAdmin,
+);
+revisar('rango invertido -> 400', rangoInvertidoFacturas.status === 400);
+const paginaFacturas = await pedir('/api/facturas?limite=1&offset=1', tokenAdmin);
+revisar(
+  'la paginacion recorta la pagina y NO el total',
+  paginaFacturas.cuerpo?.datos.length === 1 && paginaFacturas.cuerpo?.total > 1,
+  JSON.stringify({
+    datos: paginaFacturas.cuerpo?.datos?.length,
+    total: paginaFacturas.cuerpo?.total,
+  }),
+);
+const limiteCeroFacturas = await pedir('/api/facturas?limite=0', tokenAdmin);
+revisar('limite 0 -> 400', limiteCeroFacturas.status === 400);
+
+const verFactura = await pedir(`/api/facturas/${facturaOkId}`, tokenAdmin);
+revisar('ver el detalle -> 200', verFactura.status === 200);
+revisar(
+  'con sus notas',
+  verFactura.cuerpo?.notas?.length === 2,
+  JSON.stringify(verFactura.cuerpo?.notas?.length),
+);
+revisar(
+  'y el motivo de la cancelacion',
+  verFactura.cuerpo?.motivo_cancelacion?.includes('datos correctos'),
+  JSON.stringify(verFactura.cuerpo?.motivo_cancelacion),
+);
+const facturaFantasma = await pedir('/api/facturas/999999', tokenAdmin);
+revisar(
+  'factura que no existe -> 404',
+  facturaFantasma.status === 404,
+  JSON.stringify(facturaFantasma.cuerpo),
+);
+const facturaNoNumero = await pedir('/api/facturas/abc', tokenAdmin);
+revisar('id que no es numero -> 400', facturaNoNumero.status === 400);
+const cambiarFacturaFantasma = await cambiarEstatusFactura(
+  999999,
+  { estatus: 'emitida' },
+  tokenAdmin,
+);
+revisar('cambiar el estatus de una que no existe -> 404', cambiarFacturaFantasma.status === 404);
+
+// ------------------------------------------------------------ permisos
+// No hay DELETE, y no por estilo: `auditoria_log` tiene que conservar la
+// fila para que se vea que existo una factura y por que se cancelo. Un DELETE
+// de una factura emitida deja el mismo hueco que borrar una nota.
+const borrarFactura = await pedir(`/api/facturas/${facturaOkId}`, tokenAdmin, { method: 'DELETE' });
+revisar(
+  'no hay DELETE de factura -> 404',
+  borrarFactura.status === 404,
+  JSON.stringify(borrarFactura.cuerpo),
+);
+
+const facturaSinToken = await pedir('/api/facturas');
+revisar('facturas sin token -> 401', facturaSinToken.status === 401);
+const empleadaListaFacturas = await pedir('/api/facturas', tokenEmpleada);
+revisar(
+  'la empleado ve facturas (facturas.ver es suyo)',
+  empleadaListaFacturas.status === 200,
+  JSON.stringify(empleadaListaFacturas.cuerpo?.error),
+);
+
+// -------------------------------------------------------------- limpieza
+const limpiarFacturas = await limpiarCajaFacturasDePrueba();
+revisar(
+  'las facturas de prueba se borraron',
+  limpiarFacturas.facturas > 0,
+  JSON.stringify(limpiarFacturas),
+);
+revisar(
+  'y con ellas su rastro en auditoria_log (0010)',
+  limpiarFacturas.log > 0,
+  JSON.stringify(limpiarFacturas),
+);
+// La base de pruebas arranca en CERO facturas: el seed no crea ninguna, asi
+// que lo que quede despues de la limpieza es de esta seccion y solo de esta.
+revisar(
+  'no sobro ninguna factura de la suite',
+  (await sqlDirecto(`SELECT COUNT(*)::TEXT AS n FROM pos.facturas`)).rows[0].n === '0',
+  'sobro una factura',
+);
+revisar(
+  'y las lineas de factura_nota se fueron en cascada',
+  (await sqlDirecto(`SELECT COUNT(*)::TEXT AS n FROM pos.factura_nota`)).rows[0].n === '0',
+  'sobro una linea de factura_nota',
+);
+void notaA;
+void notaB;
+void notaOtroCliente;
+void notaParaCancelar;
+void notaLibre;
+
+// =======================================================================
+// AUDITORIA (SOLO LECTURA)
+// =======================================================================
+//
+// El unico modulo del proyecto sin una sola operacion de escritura, y lo que
+// se prueba aqui es justamente eso: que no haya puerta. Un `POST` a
+// `/api/auditoria/log` tiene que dar 404, no 405, porque no existe.
+//
+// Y se prueba que las cinco bitacoras DEVUELVEN lo que la base escribio por
+// trigger, con los nombres resueltos. Si el modulo devolviera ids, el
+// frontend tendria que hacer un JOIN por cada columna de cada renglon, y
+// para eso ya estan las vistas de 0001.
+
+console.log('\n--- auditoria ---');
+
+// ------------------------------------------------------------------- datos
+//
+// Esta seccion NO hereda datos del bloque de facturas: ese bloque limpia sus
+// facturas (y su rastro) al terminar, asi que si esta section dependiera de
+// el, el orden de los dos bloques seria la diferencia entre que las pruebas
+// corran o no. Se crea aqui una factura y se le cambia el estatus, que es
+// justo lo que 0010 vino a dejar con rastro, y se mide eso.
+//
+// Lo que no se crea y si se lee son las otras cuatro bitacoras: las del
+// inventario y los precios las dejaron los bloques de compras y de precios,
+// y las del seed. Esos datos no se tocan en ningun momento.
+const notaAuditoria = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'nota para la bitacora -> 201',
+  notaAuditoria.status === 201,
+  JSON.stringify(notaAuditoria.cuerpo),
+);
+const facturaAuditada = await crearFactura(
+  { cliente_id: clienteNotaId, notas: [notaAuditoria.cuerpo?.id] },
+  tokenAdmin,
+);
+revisar(
+  'factura para la bitacora -> 201',
+  facturaAuditada.status === 201,
+  JSON.stringify(facturaAuditada.cuerpo),
+);
+const facturaAuditadaId = facturaAuditada.cuerpo?.id;
+const emitidaAuditada = await cambiarEstatusFactura(
+  facturaAuditadaId,
+  { estatus: 'emitida' },
+  tokenAdmin,
+);
+revisar(
+  'y se emite -> 200',
+  emitidaAuditada.status === 200,
+  JSON.stringify(emitidaAuditada.cuerpo?.error),
+);
+
+// ------------------------------------------------------------------- log
+const logGeneral = await pedir('/api/auditoria/log?limite=200', tokenAdmin);
+revisar('log -> 200', logGeneral.status === 200, JSON.stringify(logGeneral.cuerpo?.error));
+revisar(
+  'trae la tabla, la operacion y el registro',
+  logGeneral.cuerpo?.datos.every(
+    (r) => typeof r.tabla === 'string' && ['INSERT', 'UPDATE', 'DELETE'].includes(r.operacion),
+  ),
+  JSON.stringify(logGeneral.cuerpo?.datos?.slice(0, 2)),
+);
+revisar(
+  'y el renglon trae el antes y el despues, sin transformar',
+  logGeneral.cuerpo?.datos.some(
+    (r) => r.datos_nuevos !== null && typeof r.datos_nuevos === 'object',
+  ),
+  'ningun renglon trae datos_nuevos',
+);
+revisar(
+  'con el nombre del usuario, no el id',
+  logGeneral.cuerpo?.datos.every((r) => r.usuario === null || typeof r.usuario === 'string'),
+  JSON.stringify(logGeneral.cuerpo?.datos?.map((r) => r.usuario)),
+);
+revisar(
+  'y sale del mas reciente al mas viejo',
+  logGeneral.cuerpo?.datos.length < 2 ||
+    new Date(logGeneral.cuerpo.datos[0].fecha) >= new Date(logGeneral.cuerpo.datos[1].fecha),
+  JSON.stringify(logGeneral.cuerpo?.datos?.slice(0, 3)?.map((r) => r.fecha)),
+);
+
+// El filtro por tabla es el que se usa para "¿quien toco esto?", y el de
+// facturas es el que 0010 vino a arreglar: antes de 0010 esas filas no
+// existian porque no habia trigger.
+const logFacturas = await pedir('/api/auditoria/log?tabla=facturas&limite=200', tokenAdmin);
+revisar(
+  'filtrar por tabla=facturas -> 200',
+  logFacturas.status === 200,
+  JSON.stringify(logFacturas.cuerpo?.error),
+);
+revisar(
+  'y encuentra lo que acaba de hacer esta seccion (0010)',
+  logFacturas.cuerpo?.total >= 2,
+  JSON.stringify(logFacturas.cuerpo?.total),
+);
+revisar(
+  'todo lo que trae es de facturas',
+  logFacturas.cuerpo?.datos.every((r) => r.tabla === 'facturas'),
+  JSON.stringify(logFacturas.cuerpo?.datos?.map((r) => r.tabla)),
+);
+revisar(
+  'con operacion de escritura, no de lectura',
+  logFacturas.cuerpo?.datos.every((r) => r.operacion !== 'SELECT'),
+  JSON.stringify(logFacturas.cuerpo?.datos?.map((r) => r.operacion)),
+);
+revisar(
+  'y el renglon de la factura trae su id, para poder abrirla',
+  logFacturas.cuerpo?.datos.every((r) => Number.isInteger(r.registro_id)),
+  JSON.stringify(logFacturas.cuerpo?.datos?.map((r) => r.registro_id)),
+);
+
+// El UPDATE de estatus es lo que mas importa: de ahi se ve que una factura
+// paso de solicitada a emitida sin que nadie pueda quitarlo despues.
+const cambiosEstatus = await pedir(
+  '/api/auditoria/log?tabla=facturas&operacion=UPDATE&limite=200',
+  tokenAdmin,
+);
+revisar(
+  'filtrar por operacion=UPDATE',
+  cambiosEstatus.status === 200 &&
+    cambiosEstatus.cuerpo?.datos.every((r) => r.operacion === 'UPDATE'),
+  JSON.stringify(cambiosEstatus.cuerpo?.total),
+);
+revisar(
+  'y se ve el estatus anterior y el nuevo en el JSON',
+  cambiosEstatus.cuerpo?.datos.some(
+    (r) =>
+      r.registro_id === facturaAuditadaId &&
+      r.datos_anteriores?.estatus === 'solicitada' &&
+      r.datos_nuevos?.estatus === 'emitida',
+  ),
+  JSON.stringify(
+    cambiosEstatus.cuerpo?.datos
+      ?.filter((r) => r.registro_id === facturaAuditadaId)
+      ?.map((r) => [r.datos_anteriores?.estatus, r.datos_nuevos?.estatus]),
+  ),
+);
+revisar(
+  'y el rastro lo escribio la sesion del admin, no el sistema',
+  cambiosEstatus.cuerpo?.datos
+    ?.filter((r) => r.registro_id === facturaAuditadaId)
+    ?.every((r) => r.usuario_id === 1),
+  JSON.stringify(cambiosEstatus.cuerpo?.datos?.map((r) => r.usuario_id)),
+);
+
+// `factura_nota` no tiene id, asi que su fila de bitacora queda con
+// `registro_id` en NULL y el par viaja dentro del JSON. Es la concesion que
+// la 0010 documenta, y se comprueba para que el que lea la bitacora no se
+// sorprenda.
+const logFacturaNota = await pedir('/api/auditoria/log?tabla=factura_nota&limite=200', tokenAdmin);
+revisar(
+  'las lineas de factura_nota tambien se auditan',
+  logFacturaNota.cuerpo?.total > 0,
+  JSON.stringify(logFacturaNota.cuerpo?.total),
+);
+revisar(
+  'con registro_id en NULL, que es la concesion de 0010',
+  logFacturaNota.cuerpo?.datos.every((r) => r.registro_id === null),
+  JSON.stringify(logFacturaNota.cuerpo?.datos?.map((r) => r.registro_id)),
+);
+revisar(
+  'y el par factura_id/nota_id viaja en el JSON',
+  logFacturaNota.cuerpo?.datos.every(
+    (r) => r.datos_nuevos?.factura_id !== undefined && r.datos_nuevos?.nota_id !== undefined,
+  ),
+  JSON.stringify(logFacturaNota.cuerpo?.datos?.slice(0, 1)),
+);
+
+const logPorRegistro = await pedir('/api/auditoria/log?registro_id=1&limite=10', tokenAdmin);
+revisar(
+  'filtrar por registro_id -> 200',
+  logPorRegistro.status === 200,
+  JSON.stringify(logPorRegistro.cuerpo?.error),
+);
+const logPorTablaLarga = await pedir(`/api/auditoria/log?tabla=${'x'.repeat(200)}`, tokenAdmin);
+revisar('tabla que no cabe -> 400', logPorTablaLarga.status === 400);
+const logOperacionMala = await pedir('/api/auditoria/log?operacion=TRUNCATE', tokenAdmin);
+revisar('operacion que no existe -> 400', logOperacionMala.status === 400);
+const logLimiteCero = await pedir('/api/auditoria/log?limite=0', tokenAdmin);
+revisar('limite 0 -> 400', logLimiteCero.status === 400);
+
+// El rango de fechas es la trampa de este modulo. `hasta` es EXCLUSIVO con
+// `+ 1 dia` porque las columnas son TIMESTAMP: un `<= 'AAAA-MM-DD'` sobre una
+// fila de las 14:30 no entraria y el dia final desapareceria del reporte. Se
+// compara el total con y sin filtro: si el `hasta` fuera exclusivo de
+// veras, el numero cambiaria.
+const logRango = await pedir(
+  '/api/auditoria/log?desde=2000-01-01&hasta=2099-12-31&limite=1',
+  tokenAdmin,
+);
+revisar(
+  'rango que cubre todo: el total NO cambia (hasta es inclusivo)',
+  logRango.cuerpo?.total === (await pedir('/api/auditoria/log?limite=1', tokenAdmin)).cuerpo?.total,
+  `${logRango.cuerpo?.total} vs`,
+);
+const logRangoInvertido = await pedir(
+  '/api/auditoria/log?desde=2099-01-01&hasta=2000-01-01',
+  tokenAdmin,
+);
+revisar('rango invertido -> 400', logRangoInvertido.status === 400);
+const logRangoVacio = await pedir(
+  '/api/auditoria/log?desde=2099-01-01&hasta=2099-12-31',
+  tokenAdmin,
+);
+revisar(
+  'un rango futuro no trae nada, y no es un 500',
+  logRangoVacio.status === 200 && logRangoVacio.cuerpo?.total === 0,
+  JSON.stringify(logRangoVacio.cuerpo),
+);
+
+// --------------------------------------------------------------- accesos
+// `auditoria_accesos` lleva un permiso PROPIO (`auditoria.accesos`) y no
+// cuelga de `auditoria.ver`, porque no dice que se movio un precio: dice a
+// que hora entra la gente al sistema, con IP y con el nombre de usuario que
+// se tecleo en los intentos fallidos.
+const accesos = await pedir('/api/auditoria/accesos?limite=200', tokenAdmin);
+revisar('accesos -> 200', accesos.status === 200, JSON.stringify(accesos.cuerpo?.error));
+revisar(
+  'y trae el evento, la IP y el momento',
+  accesos.cuerpo?.datos.every(
+    (r) => typeof r.evento === 'string' && typeof r.ip === 'string' && typeof r.fecha === 'string',
+  ),
+  JSON.stringify(accesos.cuerpo?.datos?.slice(0, 2)),
+);
+revisar(
+  'el LOGIN FALLIDO aparece, y con el nombre tecleado',
+  accesos.cuerpo?.datos.some((r) => r.evento === 'login_fallido' && r.usuario?.includes('@')),
+  JSON.stringify(accesos.cuerpo?.datos?.filter((r) => r.evento === 'login_fallido')?.slice(0, 2)),
+);
+const soloFallidos = await pedir('/api/auditoria/accesos?evento=login_fallido', tokenAdmin);
+revisar(
+  'filtrar por evento',
+  soloFallidos.cuerpo?.datos.every((r) => r.evento === 'login_fallido') &&
+    soloFallidos.cuerpo?.total >= 1,
+  JSON.stringify(soloFallidos.cuerpo?.total),
+);
+const eventoMalo = await pedir('/api/auditoria/accesos?evento=invasion', tokenAdmin);
+revisar('evento que no existe -> 400', eventoMalo.status === 400);
+const accesosRango = await pedir(
+  '/api/auditoria/accesos?desde=2000-01-01&hasta=2099-12-31&limite=1',
+  tokenAdmin,
+);
+revisar(
+  'el rango de accesos tambien es inclusivo',
+  accesosRango.cuerpo?.total ===
+    (await pedir('/api/auditoria/accesos?limite=1', tokenAdmin)).cuerpo?.total,
+  `${accesosRango.cuerpo?.total} vs`,
+);
+
+// ------------------------------------------------------------------- caja
+// La bitacora de caja es la UNICA que trae el saldo antes y el despues, y es
+// lo que hace insustituible: un cambio de precio de un producto se puede
+// leer del antes/despues del PRECIO, pero de un saldo de banco no hay otro
+// lado del que compararlo. Por eso la cuenta va en la fila y no en un JOIN.
+const audCaja = await pedir('/api/auditoria/caja?limite=200', tokenAdmin);
+revisar('caja -> 200', audCaja.status === 200, JSON.stringify(audCaja.cuerpo?.error));
+revisar(
+  'trae el saldo antes y el despues',
+  audCaja.cuerpo?.datos.some(
+    (r) => r.saldo_antes !== null && r.saldo_despues !== null && r.saldo_despues !== r.saldo_antes,
+  ),
+  'ningun renglon con saldo antes/despues distintos',
+);
+revisar(
+  'y el nombre de la cuenta, no el id',
+  audCaja.cuerpo?.datos.every((r) => typeof r.cuenta === 'string' && r.cuenta.length > 0),
+  JSON.stringify(audCaja.cuerpo?.datos?.slice(0, 1)),
+);
+revisar(
+  'con el tipo de la cuenta, para separar efectivo de banco',
+  audCaja.cuerpo?.datos.every((r) => ['efectivo', 'banco'].includes(r.cuenta_tipo)),
+  JSON.stringify(audCaja.cuerpo?.datos?.map((r) => r.cuenta_tipo)),
+);
+revisar(
+  'y el usuario que lo capturo',
+  audCaja.cuerpo?.datos.every((r) => typeof r.usuario === 'string' && r.usuario.length > 0),
+  JSON.stringify(audCaja.cuerpo?.datos?.map((r) => r.usuario)),
+);
+revisar(
+  'y la fecha es AAAA-MM-DD, no un ISO con hora',
+  audCaja.cuerpo?.datos.every((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.fecha)),
+  JSON.stringify(audCaja.cuerpo?.datos?.slice(0, 2)?.map((r) => r.fecha)),
+);
+
+// El filtro por cuenta es el de "el estado de cuenta del banco". Las cuentas
+// de la suite ya se borraron al terminar el bloque de caja (y con ellas su
+// rastro, que tiene FK a la cuenta), asi que lo que queda para consultar es
+// la del seed, con los saldos que el seed dejo.
+const cuentaSeed = (
+  await sqlDirecto(`SELECT id FROM pos.cuentas_financieras WHERE nombre = 'Caja chica'`)
+).rows[0].id;
+const audCajaSemilla = await pedir(
+  `/api/auditoria/caja?cuenta_id=${cuentaSeed}&limite=200`,
+  tokenAdmin,
+);
+revisar(
+  'la caja del seed se puede consultar por su cuenta',
+  audCajaSemilla.status === 200 && audCajaSemilla.cuerpo?.total > 0,
+  JSON.stringify(audCajaSemilla.cuerpo?.error),
+);
+revisar(
+  'y el saldo del seed se puede seguir el renglon por renglon: 0 -> 850 -> 600',
+  audCajaSemilla.cuerpo?.datos.some((r) => r.saldo_antes === 0 && r.saldo_despues === 850) &&
+    audCajaSemilla.cuerpo?.datos.some((r) => r.saldo_antes === 850 && r.saldo_despues === 600),
+  JSON.stringify(audCajaSemilla.cuerpo?.datos?.map((r) => [r.saldo_antes, r.saldo_despues])),
+);
+revisar(
+  'y las dos son del seed, asi que su usuario es (sistema)',
+  audCajaSemilla.cuerpo?.datos.every((r) => r.usuario === '(sistema)' && r.usuario_id === null),
+  JSON.stringify(audCajaSemilla.cuerpo?.datos?.map((r) => [r.usuario, r.usuario_id])),
+);
+revisar(
+  'y el movimiento sigue enlazado, porque el seed no borro nada',
+  audCajaSemilla.cuerpo?.datos.every((r) => Number.isInteger(r.movimiento_id)),
+  JSON.stringify(audCajaSemilla.cuerpo?.datos?.map((r) => r.movimiento_id)),
+);
+const audCajaPorTipo = await pedir('/api/auditoria/caja?tipo=egreso&limite=200', tokenAdmin);
+revisar(
+  'y por tipo de movimiento',
+  audCajaPorTipo.cuerpo?.datos.every((r) => r.tipo === 'egreso') &&
+    audCajaPorTipo.cuerpo?.total >= 1,
+  JSON.stringify(audCajaPorTipo.cuerpo?.total),
+);
+const audCajaPorUsuario = await pedir('/api/auditoria/caja?usuario_id=1&limite=5', tokenAdmin);
+revisar(
+  'y por usuario',
+  audCajaPorUsuario.status === 200,
+  JSON.stringify(audCajaPorUsuario.cuerpo?.error),
+);
+const audCajaRango = await pedir(
+  '/api/auditoria/caja?desde=2000-01-01&hasta=2099-12-31&limite=1',
+  tokenAdmin,
+);
+revisar(
+  'y el rango de caja es inclusivo en el dia final',
+  audCajaRango.cuerpo?.total ===
+    (await pedir('/api/auditoria/caja?limite=1', tokenAdmin)).cuerpo?.total,
+  `${audCajaRango.cuerpo?.total} vs`,
+);
+const audCajaRangoInvertido = await pedir(
+  '/api/auditoria/caja?desde=2099-01-01&hasta=2000-01-01',
+  tokenAdmin,
+);
+revisar('rango invertido -> 400', audCajaRangoInvertido.status === 400);
+const audCajaCuentaLarga = await pedir('/api/auditoria/caja?cuenta_id=99999999', tokenAdmin);
+revisar('cuenta_id fuera de rango -> 400', audCajaCuentaLarga.status === 400);
+
+// ------------------------------------------------------------ inventario
+const audInv = await pedir('/api/auditoria/inventario?limite=200', tokenAdmin);
+revisar('inventario -> 200', audInv.status === 200, JSON.stringify(audInv.cuerpo?.error));
+revisar(
+  'trae el producto con su codigo y el almacen, por nombre',
+  audInv.cuerpo?.datos.every(
+    (r) =>
+      typeof r.producto === 'string' &&
+      typeof r.producto_codigo === 'string' &&
+      typeof r.almacen === 'string',
+  ),
+  JSON.stringify(audInv.cuerpo?.datos?.slice(0, 1)),
+);
+revisar(
+  'y la existencia antes y la de despues, que es el karded',
+  audInv.cuerpo?.datos.some((r) => r.existencia_antes !== null && r.existencia_despues !== null),
+  'ningun renglon con existencia antes/despues',
+);
+revisar(
+  'y las existencias son numero, no texto',
+  audInv.cuerpo?.datos.every((r) => typeof r.cantidad_bultos === 'number'),
+  JSON.stringify(audInv.cuerpo?.datos?.slice(0, 1)),
+);
+const audInvProducto = await pedir('/api/auditoria/inventario?limite=1', tokenAdmin);
+const productoAuditado = audInvProducto.cuerpo?.datos?.[0]?.producto_id;
+revisar(
+  'y se puede filtrar por producto',
+  Number.isInteger(productoAuditado),
+  String(productoAuditado),
+);
+const audInvFiltrado = await pedir(
+  `/api/auditoria/inventario?producto_id=${productoAuditado}&limite=200`,
+  tokenAdmin,
+);
+revisar(
+  'y el filtro no trae filas de otros productos',
+  audInvFiltrado.cuerpo?.datos.every((r) => r.producto_id === productoAuditado) &&
+    audInvFiltrado.cuerpo?.total > 0,
+  JSON.stringify({ total: audInvFiltrado.cuerpo?.total }),
+);
+
+// --------------------------------------------------------------- precios
+const audPrecios = await pedir('/api/auditoria/precios?limite=200', tokenAdmin);
+revisar('precios -> 200', audPrecios.status === 200, JSON.stringify(audPrecios.cuerpo?.error));
+revisar(
+  'trae el precio anterior y el nuevo',
+  audPrecios.cuerpo?.datos.some((r) => r.precio_anterior !== null || r.precio_nuevo !== null),
+  'ningun renglon con precios',
+);
+revisar(
+  'y la variacion es la diferencia, no el precio',
+  audPrecios.cuerpo?.datos.some(
+    (r) =>
+      r.precio_anterior !== null &&
+      r.precio_nuevo !== null &&
+      Math.abs(r.variacion - (r.precio_nuevo - r.precio_anterior)) < 0.005,
+  ),
+  JSON.stringify(
+    audPrecios.cuerpo?.datos
+      ?.filter((r) => r.precio_anterior !== null && r.precio_nuevo !== null)
+      ?.slice(0, 2)
+      ?.map((r) => [r.precio_anterior, r.precio_nuevo, r.variacion]),
+  ),
+);
+revisar(
+  'y el tipo de precio es uno de los tres',
+  audPrecios.cuerpo?.datos.every((r) => ['cliente', 'publico', 'costo'].includes(r.tipo_precio)),
+  JSON.stringify(audPrecios.cuerpo?.datos?.map((r) => r.tipo_precio)),
+);
+const audPreciosTipo = await pedir('/api/auditoria/precios?tipo_precio=costo', tokenAdmin);
+revisar(
+  'y se filtra por tipo de precio',
+  audPreciosTipo.status === 200 &&
+    audPreciosTipo.cuerpo?.datos.every((r) => r.tipo_precio === 'costo'),
+  JSON.stringify(audPreciosTipo.cuerpo?.total),
+);
+const audPreciosRango = await pedir(
+  '/api/auditoria/precios?desde=2000-01-01&hasta=2099-12-31&limite=1',
+  tokenAdmin,
+);
+revisar(
+  'y el rango de precios es inclusivo en el dia final',
+  audPreciosRango.cuerpo?.total ===
+    (await pedir('/api/auditoria/precios?limite=1', tokenAdmin)).cuerpo?.total,
+  `${audPreciosRango.cuerpo?.total} vs`,
+);
+
+// -------------------------------------------------------- sin escritura
+// La prueba de que este modulo es de solo lectura NO es que no haya rutas de
+// escritura en el archivo: es que la API las rechaza. Un 405 significaria que
+// la ruta existe y le falta el metodo; el 404 es lo unico que dice "esta
+// puerta no existe".
+for (const metodo of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+  const intento = await pedir('/api/auditoria/log', tokenAdmin, {
+    method: metodo,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tabla: 'inventario_log', operacion: 'DELETE' }),
+  });
+  revisar(
+    `escribir en la bitacora con ${metodo} -> 404`,
+    intento.status === 404,
+    JSON.stringify(intento.cuerpo),
+  );
+}
+const facturaInventada = await pedir('/api/auditoria/facturas', tokenAdmin, { method: 'POST' });
+revisar(
+  'y no hay ni una ruta mas de escritura',
+  facturaInventada.status === 404,
+  JSON.stringify(facturaInventada.cuerpo),
+);
+
+// Que un GET no acepte filtros por cuerpo NO se puede probar desde aqui, y no
+// por un detalle del servidor: `fetch` lanza "Request with GET/HEAD method
+// cannot have body" antes de salir, o sea que ni existe el cliente que pueda
+// mandar esa peticion. Lo que si se comprueba es que los filtros viven en el
+// query y no en el cuerpo: mandar un filtro que NO existe es un 400 con el
+// nombre del campo, no un 200 que lo ignore en silencio.
+const filtroQueNoExiste = await pedir('/api/auditoria/log?inventado=1', tokenAdmin);
+revisar(
+  'filtro que no existe -> 400, no se ignora en silencio',
+  filtroQueNoExiste.status === 400,
+  JSON.stringify(filtroQueNoExiste.cuerpo),
+);
+
+// ------------------------------------------------------------ permisos
+// La Cajera tiene los cuatro permisos de lectura de cambios (0006 le
+// concede todo menos cinco cosas) pero NO `auditoria.accesos`, que es una
+// de las cinco exclusiones. La Empleada no tiene NINGUNO de los cinco. Con
+// las dos se prueba la separacion entera sin tocar la tabla de roles.
+const cajeraLog = await pedir('/api/auditoria/log?limite=1', tokenCajera);
+revisar(
+  'la cajera ve el log -> 200',
+  cajeraLog.status === 200,
+  JSON.stringify(cajeraLog.cuerpo?.error),
+);
+const cajeraCajaAud = await pedir('/api/auditoria/caja?limite=1', tokenCajera);
+revisar(
+  'y la bitacora de caja',
+  cajeraCajaAud.status === 200,
+  JSON.stringify(cajeraCajaAud.cuerpo?.error),
+);
+const cajeraAccesos = await pedir('/api/auditoria/accesos', tokenCajera);
+revisar(
+  'pero NO los accesos, que son de las cinco exclusiones de 0006 -> 403',
+  cajeraAccesos.status === 403,
+  JSON.stringify(cajeraAccesos.cuerpo),
+);
+
+const empleadaLog = await pedir('/api/auditoria/log', tokenEmpleada);
+revisar(
+  'la empleada NO ve el log -> 403',
+  empleadaLog.status === 403,
+  JSON.stringify(empleadaLog.cuerpo),
+);
+const empleadaCajaAud = await pedir('/api/auditoria/caja', tokenEmpleada);
+revisar('ni la de caja -> 403', empleadaCajaAud.status === 403);
+const empleadaAccesos = await pedir('/api/auditoria/accesos', tokenEmpleada);
+revisar('ni los accesos -> 403', empleadaAccesos.status === 403);
+const empleadaInvAud = await pedir('/api/auditoria/inventario', tokenEmpleada);
+revisar('ni la de inventario -> 403', empleadaInvAud.status === 403);
+const empleadaPreciosAud = await pedir('/api/auditoria/precios', tokenEmpleada);
+revisar('ni la de precios -> 403', empleadaPreciosAud.status === 403);
+
+const auditoriaSinToken = await pedir('/api/auditoria/log');
+revisar('auditoria sin token -> 401', auditoriaSinToken.status === 401);
+
+// El filtro por `usuario_id` es el que la vista no podia dar, y por eso el
+// repositorio lee la tabla y no la vista. Con el admin (usuario 1) tiene que
+// traer sus propias filas y no las de nadie mas.
+const logDelAdmin = await pedir('/api/auditoria/log?usuario_id=1&limite=200', tokenAdmin);
+revisar(
+  'filtrar por usuario_id -> 200',
+  logDelAdmin.status === 200,
+  JSON.stringify(logDelAdmin.cuerpo?.error),
+);
+revisar(
+  'y trae filas, o sea que el filtro SI se esta aplicando (no devuelve todo)',
+  logDelAdmin.cuerpo?.total > 0 && logDelAdmin.cuerpo?.total < logGeneral.cuerpo?.total,
+  `${logDelAdmin.cuerpo?.total} vs ${logGeneral.cuerpo?.total}`,
+);
+const logDeNadie = await pedir('/api/auditoria/log?usuario_id=999999', tokenAdmin);
+revisar(
+  'y un usuario que no existe sale vacio, no 404',
+  logDeNadie.status === 200 && logDeNadie.cuerpo?.total === 0,
+  JSON.stringify(logDeNadie.cuerpo),
+);
+
+// La factura de esta seccion se deja a proposito: la borra
+// `limpiarCajaFacturasDePrueba` al final del archivo, que corre antes de que
+// se borren las notas. Borrarla aqui dejaria la nota huerfana, que es
+// justo lo que el bloque de pagos intentaba evitar con su orden.
+void notaAuditoria;
+
 // -------------------------------------------------------------- limpieza
 //
 // El ORDEN importa y no es obvio, asi que va en la funcion de limpieza
 // compartida, que se corre al arrancar el archivo y otra vez aqui. Lo que
 // no se ve desde aqui esta todo comentado ahi.
+
+// Caja y facturacion van PRIMERO, y por el mismo motivo que al arrancar el
+// archivo: `factura_nota.nota_id` es FK DURA a la nota, asi que la factura
+// tiene que estar fuera antes de que corra la limpieza de notas. Ademas las
+// cuentas de caja tienen su rastro con FK a la cuenta, y ese rastro lo genera
+// el mismo borrado de los movimientos.
+const limpiezaCaja = await limpiarCajaFacturasDePrueba();
+revisar(
+  'las facturas de prueba se borraron, y con ellas su rastro',
+  limpiezaCaja.facturas > 0 && limpiezaCaja.log > 0,
+  JSON.stringify(limpiezaCaja),
+);
+// Aqui `cuentas` es 0 y tiene que serlo: el bloque de caja borro sus propias
+// cuentas al terminar y ya lo comprobo. Pedir > 0 seria pedir que quedara algo,
+// que es justo lo contrario de lo que se quiere.
+revisar(
+  'y de las cuentas de caja no queda ni una (las borro su propio bloque)',
+  limpiezaCaja.cuentas === 0 && limpiezaCaja.movimientos === 0,
+  JSON.stringify(limpiezaCaja),
+);
+revisar(
+  'no sobro ninguna factura de los clientes de prueba',
+  (
+    await sqlDirecto(
+      `SELECT COUNT(*)::TEXT AS n FROM pos.facturas
+        WHERE cliente_id IN (SELECT id FROM pos.clientes WHERE codigo_cliente IN ('CNOTA','CFECHA'))`,
+    )
+  ).rows[0].n === '0',
+  'sobro una factura de un cliente de prueba',
+);
 
 const limpiezaCompras = await limpiarPagosComprasProveedoresDePrueba();
 revisar(

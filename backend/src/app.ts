@@ -18,6 +18,9 @@ import { rutasPagos } from './modules/pagos/rutas.js';
 import { rutasCompras } from './modules/compras/rutas.js';
 import { rutasProveedores } from './modules/proveedores/rutas.js';
 import { rutasInventario } from './modules/inventario/rutas.js';
+import { rutasCaja } from './modules/caja/rutas.js';
+import { rutasFacturacion } from './modules/facturacion/rutas.js';
+import { rutasAuditoria } from './modules/auditoria/rutas.js';
 
 /**
  * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
@@ -74,6 +77,9 @@ export function crearApp(): Express {
   app.use('/api/compras', rutasCompras);
   app.use('/api/proveedores', rutasProveedores);
   app.use('/api/inventario', rutasInventario);
+  app.use('/api/caja', rutasCaja);
+  app.use('/api/facturas', rutasFacturacion);
+  app.use('/api/auditoria', rutasAuditoria);
   app.use('/api/usuarios', rutasUsuarios);
 
   // 9. Cualquier otra ruta de /api no existe

@@ -33,8 +33,10 @@ clientes y proveedores, y flujo de caja/bancos.
 **Pendiente**
 
 - [x] Corregir los 11 bugs de la Avance 1 (ver "Bugs de la Avance 1: estado")
-- [x] API REST en Express (8 módulos: `salud`, `auth`, `catalogo`, `clientes`,
-      `usuarios`, `productos`, `precios` y `notas-remision`)
+- [x] API REST en Express (15 módulos: `salud`, `auth`, `catalogo`,
+      `clientes`, `usuarios`, `productos`, `precios`, `notas-remision`,
+      `pagos`, `proveedores`, `compras`, `inventario`, `caja`,
+      `facturacion` y `auditoria`)
 - [x] Login + endpoint de permisos (usar `fn_tiene_permiso`)
 - [ ] Frontend en Angular
 - [ ] Generación de PDF de notas de remisión
@@ -69,7 +71,9 @@ nutricion-especializada-pos/
 │   │   ├── 0005_productos_codigo_ci.sql
 │   │   ├── 0006_permisos_cajera.sql
 │   │   ├── 0007_precios_sin_traslape.sql
-│   │   └── 0008_notas_bloqueo_estado.sql
+│   │   ├── 0008_notas_bloqueo_estado.sql
+│   │   ├── 0009_compras_motivo_cancelacion.sql
+│   │   └── 0010_facturas_auditoria_permisos.sql
 │   ├── seeds/
 │   │   └── seed_demo.sql                  # datos de prueba (no reales)
 │   └── tests/                             # pruebas en SQL puro
@@ -80,12 +84,15 @@ nutricion-especializada-pos/
 │   │   ├── middleware/                    # sesión, permisos, manejador de errores
 │   │   ├── modules/                       # salud, auth, catalogo, clientes,
 │   │   │                                  #   usuarios, productos, precios,
-│   │   │                                  #   notas-remision
+│   │   │                                  #   notas-remision, pagos,
+│   │   │                                  #   proveedores, compras,
+│   │   │                                  #   inventario, caja,
+│   │   │                                  #   facturacion, auditoria
 │   │   ├── config/                        # entorno validado con Zod
 │   │   ├── app.ts                         # composición: orden de middlewares
 │   │   └── index.ts                       # arranque y cierre del pool
 │   └── tests/
-│       ├── api.test.mjs                   # 452 pruebas contra la API real
+│       ├── api.test.mjs                   # 866 pruebas contra la API real
 │       └── unit/                          # pruebas de esquemas y servicios
 └── frontend/                              # Angular (vacío por ahora)
 ```
@@ -110,7 +117,7 @@ Con eso, desde `backend/`:
 
 ```bash
 pnpm install
-pnpm migrar        # aplica 0001..0008 en orden, cada una en su transacción
+pnpm migrar        # aplica 0001..0010 en orden, cada una en su transacción
 pnpm migrar:seed   # datos de demostración (opcional)
 ```
 
@@ -134,7 +141,7 @@ base no parece de pruebas.
 # en una terminal
 PGDATABASE=nutr_test pnpm dev
 # en otra
-pnpm test:api       # 452 pruebas contra la API de verdad
+pnpm test:api       # 866 pruebas contra la API de verdad
 ```
 
 `nutr_test` se arma sola: el migrador la crea si no existe.
@@ -148,6 +155,88 @@ La suite es reejecutable: limpia al empezar y al terminar, y usa una marca de
 agua por corrida en las tablas de auditoría para borrar solo lo que ella
 misma escribió, sin tocar los rastros del seed. Por eso se puede correr las
 veces que haga falta sin dejar basura detrás.
+
+## Caja, facturación y auditoría
+
+Los tres módulos del último lote, y lo que cada uno decide.
+
+### `caja` — cuentas, movimientos y saldos (`/api/caja`)
+
+| Endpoint                  | Qué hace                                       |
+| ------------------------- | ---------------------------------------------- |
+| `GET/POST /cuentas`       | Lista y abre cuentas de efectivo o banco       |
+| `GET /cuentas/:id`        | Una cuenta con su saldo                        |
+| `GET/POST /movimientos`   | Lista y captura ingresos y egresos             |
+| `GET /movimientos/:id`    | Un movimiento                                  |
+| `DELETE /movimientos/:id` | **El único DELETE de todo el proyecto**        |
+| `GET /resumen`            | Ingresos, egresos y saldo por cuenta y periodo |
+| `GET /categorias`         | Categorías usadas, para los desplegables       |
+
+- El saldo **no se manda nunca**: lo calcula el trigger
+  `trg_actualizar_saldo_cuenta` sumando el histórico de la cuenta.
+- El saldo **negativo se permite**. Una transferencia se registra el día que
+  se emite y la cuenta queda corrida hasta la compensación; bloquearlo
+  empujaría al operador a registrar el movimiento en otra cuenta.
+- **No hay PATCH**: un movimiento se corrige borrándolo y capturándolo de
+  nuevo, que es lo único que deja rastro real de las dos cosas.
+- El alta y el borrado se serializan con `SELECT ... FOR UPDATE` sobre la
+  cuenta, tomado **antes** de validar y hasta el `COMMIT`. Sin ese candado dos
+  altas simultáneas de la misma cuenta se pisan el saldo.
+- El `DELETE` es el único borrado del sistema y por eso tiene su propio
+  permiso (`caja.eliminar`, que la Cajera tiene y la Empleada no): en los
+  demás módulos el registro tiene nombre y aparece en documentos viejos; un
+  movimiento de caja solo existe en `auditoria_caja`.
+
+### `facturacion` — factura al cliente (`/api/facturas`)
+
+| Endpoint             | Qué hace                            |
+| -------------------- | ----------------------------------- |
+| `GET /` `GET /:id`   | Lista y consulta facturas           |
+| `POST /`             | Factura una o más notas de remisión |
+| `PATCH /:id/estatus` | `solicitada → emitida → cancelada`  |
+
+- El `monto_total` es **derivado**: la suma de los subtotales de las notas, y
+  no se acepta en el POST. Aceptarlo abriría la puerta a facturar una nota
+  por una cantidad que no es la que se vendió.
+- Las tres reglas que la base **no** prohibe y el servicio sí:
+  1. una nota de **otro** cliente (`factura_nota` no liga ambos ids);
+  2. una nota **cancelada** (mercancía que no salió);
+  3. una nota ya en **otra factura viva** (la misma venta cobrada dos veces).
+- Los estatus van en un solo sentido. Cancelar **exige motivo**, y no por
+  buena voluntad: es un `CHECK` de la base, el mismo patrón que notas
+  (0008) y compras (0009).
+- Cancelar **no devuelve** las notas a un talonario ni cambia su estatus: el
+  folio ya salió de la casa y la mercancia sí se entregó. Lo que hace falta es
+  una factura **nueva** con las mismas notas, y eso ya se puede, porque una
+  factura cancelada deja de contar como activa.
+- Una misma nota repetida en el mismo `POST` se ignora (es casi siempre un
+  doble clic); sin ese `Set` el `monto_total` la contaría dos veces.
+
+### `auditoria` — solo lectura (`/api/auditoria`)
+
+Cinco bitácoras, cinco `GET`, y **ninguna** forma de escribir: `POST`, `PUT`,
+`PATCH` y `DELETE` dan 404, que es la única respuesta aceptable para una
+bitácora.
+
+```
+GET /log          cualquier INSERT/UPDATE/DELETE, con el JSON antes y después
+GET /accesos      login exitoso/fallido, logout, con IP
+GET /caja         ingresos y egresos, con el saldo antes y después
+GET /inventario   ajustes y mermas, con la existencia antes y después
+GET /precios      cambios de precio, con la variación
+```
+
+- Se consultan las **tablas base**, no las vistas `vw_auditoria_*` de 0001:
+  las vistas no traen los ids, y sin ids no se puede filtrar por cuenta,
+  producto, cliente o usuario, que es como se usa esto ("muéstrame los
+  movimientos de la cuenta 3"). Cada renglón trae las dos cosas: el nombre
+  para la pantalla y el id para el filtro.
+- Los rangos de fecha son **inclusivos**: las columnas `DATE` se filtran con
+  `<= $::date` y las `TIMESTAMP` con `< $::date + 1`. Con `<= $::date` sobre
+  un timestamp, "hoy" no traía nada.
+- La Cajera ve las cuatro bitácoras de cambios pero no `accesos`; la Empleada
+  no ve ninguna. Son las separaciones que ya traían `0006`, ahora con rutas
+  donde se pueden probar.
 
 ## Usuarios, roles y permisos
 
@@ -299,11 +388,22 @@ migración y el seed aplicados (ver "Arranque" más arriba).
 
 ### 2. Backend
 
-Aún no generado
+```bash
+cd backend
+pnpm install
+pnpm dev           # tsx watch, en http://localhost:3000
+pnpm build         # tsc a dist/
+```
+
+La composición de la app vive en `src/app.ts`, no en `index.ts`: así se
+puede probar la app sin abrir un puerto. El orden de los middlewares está
+documentado ahí mismo, y el último de todos es el manejador de errores
+(Express solo reconoce uno de esos por tener 4 argumentos).
 
 ### 3. Frontend
 
-Aún no generado
+Aún no generado. `frontend/` está vacío a propósito: la API está completa y
+probada, pero no hay nada que clicar todavía.
 
 ## Convenciones del proyecto
 

@@ -36,6 +36,28 @@ export async function contar(
 }
 
 /**
+ * El dia de HOY segun la base, como `AAAA-MM-DD`.
+ *
+ * Vive aqui y no en el reloj de Node a proposito: la fecha que se guarda es
+ * la del servidor de la base, y entre las dos puede haber una diferencia de
+ * un dia (o de unas horas, si la maquina esta mal sincronizada). En un
+ * negocio que cierra caja por la noche, un pago de las 11 de la noche
+ * guardado con el dia de manana es un descuadre que aparece al cierre.
+ *
+ * Ademas devuelve texto y no `Date` a proposito: es lo que se manda a la
+ * base y lo que sale por la API, y convertirlo en un `Date` en el camino
+ * reintroduce el corrimiento de huso horario que `fechaComoTexto` existe
+ * para evitar.
+ */
+export async function hoyEnLaBase(cliente: PoolClient): Promise<string> {
+  const fila = await consultarUno<{ hoy: string }>(
+    cliente,
+    `SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS hoy`,
+  );
+  return fila?.hoy ?? '';
+}
+
+/**
  * Unidad de trabajo: todo lo que hay dentro es una sola transaccion.
  * Si la funcion lanza, ROLLBACK; si termina, COMMIT.
  *

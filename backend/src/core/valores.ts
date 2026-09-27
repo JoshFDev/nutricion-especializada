@@ -123,16 +123,27 @@ export const precioKg = (campo: string) =>
     .refine((valor) => Number(valor) >= 0, `${campo} no puede ser negativo`);
 
 /**
- * `almacenes.id` es SMALLINT, no BIGINT como las tablas de negocio: 32767 es
- * el tope. Sin el `max`, un 999999 pasa la validacion de Zod, llega a
- * Postgres y revienta con 22003, que el manejador traduce a un 400 generico
- * sin decir por que. Con el tope el 400 llega antes y explica el motivo.
+ * El id de una tabla cuya clave es SMALLINT y no BIGINT: 32767 es el tope.
+ *
+ * Sin el `max`, un 999999 pasa la validacion de Zod, llega a Postgres y
+ * revienta con 22003, que el manejador traduce a un 400 generico sin decir
+ * por que. Con el tope el 400 llega antes y explica el motivo.
+ *
+ * Hay dos en el esquema y por eso el nombre de la tabla va como parametro en
+ * vez de estar escrito dentro: el mensaje tiene que decir QUE tabla usa
+ * numeros chicos, y "las cuentas usan numeros chicos" es la mitad de la
+ * explicacion. `campo` por lo mismo: el mensaje se lee en la pantalla, junto
+ * al campo que el operador esta llenando.
  */
-export const idAlmacen = z.coerce
-  .number()
-  .int()
-  .positive('almacen_id debe ser un numero positivo')
-  .max(32767, 'almacen_id esta fuera de rango: los almacenes usan numeros chicos');
+export const idChico = (campo: string, tabla: string) =>
+  z.coerce
+    .number()
+    .int()
+    .positive(`${campo} debe ser un numero positivo`)
+    .max(32767, `${campo} esta fuera de rango: ${tabla} usan numeros chicos`);
+
+/** `almacenes.id` es SMALLINT. Ver `idChico`. */
+export const idAlmacen = idChico('almacen_id', 'los almacenes');
 
 /**
  * Una DATE de Postgres como texto `AAAA-MM-DD`.

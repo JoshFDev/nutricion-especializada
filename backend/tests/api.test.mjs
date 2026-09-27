@@ -3,10 +3,9 @@
 //   pnpm dev            (en otra terminal)
 //   pnpm test:api
 //
-// Ojo: /api/auth/login tiene un rate limit por IP (LOGIN_MAX_INTENTOS, que
-// en el .env local esta en 100). El contador vive en la memoria del
-// servidor, asi que corriendola varias veces seguidas sin reiniciar
-// termina en 429. La suite se detiene con un mensaje claro cuando pasa.
+// La API no lleva rate limit mientras no se exponga fuera de la maquina,
+// asi que se puede correr esta suite las veces que haga falta sin reiniciar
+// el servidor entre corrida y corrida.
 
 const BASE = process.env.API_URL ?? 'http://localhost:3000';
 
@@ -58,31 +57,6 @@ const login = async (correo, contrasena) => {
   return { status: r.status, body: await r.json() };
 };
 
-/**
- * El limite de login se agota sooner o later si se corre la suite varias
- * veces sin reiniciar el servidor. Cuando eso pasa, cada login posterior
- * responde NO_AUTENTICADO en vez de 429, y el resultado es una cascada de
- * fallas que apuntan al modulo de permisos y no al rate limit.
- *
- * Se avisa y se sale aqui en vez de desactiver la proteccion: mejor un
- * mensaje claro que bajar la seguridad para que las pruebas pasen.
- */
-const DETENER_POR_LIMIT = (r) => {
-  if (r.status === 429) {
-    console.log('');
-    console.log('=== LIMITE DE INTENTOS ALCANZADO (429) ===');
-    console.log('El rate limit de login ya se consumio. Esto NO es un fallo');
-    console.log('del modulo. El contador vive en la memoria del servidor, asi');
-    console.log('que se reinicia apagandolo y arrancandolo de nuevo:');
-    console.log('  Windows:  taskkill /F /IM node.exe');
-    console.log('  Linux:    pkill -f "tsx watch"');
-    console.log('O sube el limite solo en desarrollo, en backend/.env:');
-    console.log('  LOGIN_MAX_INTENTOS=100   (100 es el tope que acepta el esquema)');
-    console.log('============================================');
-    process.exit(2);
-  }
-};
-
 const pedir = async (ruta, token, opciones = {}) => {
   const r = await fetch(BASE + ruta, {
     ...opciones,
@@ -96,23 +70,6 @@ const pedir = async (ruta, token, opciones = {}) => {
     cuerpo = await r.json();
   } catch {
     cuerpo = '(sin cuerpo)';
-  }
-
-  // Un 429 a media corrida produce decenas de fallas que parecen bugs del
-  // modulo y no son: son el limite de peticiones. Se para aqui, con un
-  // mensaje que diga que subir.
-  if (r.status === 429) {
-    console.log('');
-    console.log('=== SE AGOTO EL LIMITE DE PETICIONES (429) ===');
-    console.log('Esto NO es un fallo del modulo. El servidor corta a las');
-    console.log('15 minutos o a las API_MAX_PETICIONES peticiones, lo que');
-    console.log('llegue primero, y la suite hace mas de 300.');
-    console.log('');
-    console.log('Para correrla, sube el limite en backend/.env:');
-    console.log('  API_MAX_PETICIONES=5000');
-    console.log('y reinicia el servidor (el limite vive en memoria).');
-    console.log('==================================================');
-    process.exit(3);
   }
 
   // Se devuelven las cabeceras y no solo el cuerpo porque el Location del
@@ -177,7 +134,7 @@ const cerrarPoolDirecto = async () => {
  *
  * La seccion de cambio de contrasena modifica la del administrador, y al
  * final del archivo se restauran. Pero si la corrida se muere antes (se
- * agota el rate limit, revienta un assert...), ese restore no se ejecuta
+ * muere a la mitad (un assert, un 500), ese restore no se ejecuta
  * y la base queda con una contrasena que nadie mas va a saber. Con esta
  * restauracion previa la suite se autorepara sola: da igual como termino
  * la corrida anterior.
@@ -207,10 +164,8 @@ revisar(
 
 // ---------------------------------------------------------------- login malo
 const malo = await login('admin@ejemplo.local', 'mala');
-DETENER_POR_LIMIT(malo);
 revisar('login con contrasena incorrecta -> 401', malo.status === 401);
 const inexistente = await login('nadie@ejemplo.local', 'x');
-DETENER_POR_LIMIT(inexistente);
 revisar('login de usuario inexistente -> 401', inexistente.status === 401);
 revisar(
   'el mensaje NO revela si el correo existe',
@@ -220,7 +175,6 @@ revisar(
 
 // ---------------------------------------------------------------- login bueno
 const ok = await login('admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
-DETENER_POR_LIMIT(ok);
 revisar('login correcto -> 200 con token', ok.status === 200 && !!ok.body.token);
 const token = ok.body.token;
 revisar('el token no es el hash de la base', !/^[a-f0-9]{64}$/.test(token));
@@ -319,7 +273,6 @@ revisar('DELETE borra', borrado.status === 204);
 // Los roles estan definidos en 0001_init.sql: la Empleada opera el mostrador
 // (puede dar de alta clientes) pero no toca lo sensible. La Cajera solo cobra.
 const empleada = await login('empleada@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
-DETENER_POR_LIMIT(empleada);
 revisar('login de la empleada -> 200', empleada.status === 200);
 
 if (empleada.body.token) {
@@ -378,7 +331,6 @@ console.log('--- cambio de contrasena ---');
 // El token de la seccion anterior ya se cerro con el logout, asi que hace
 // falta uno nuevo para probar este endpoint.
 const adminCambio = await login('admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
-DETENER_POR_LIMIT(adminCambio);
 revisar('login del admin para la prueba de cambio', adminCambio.status === 200);
 const tokenCambio = adminCambio.body?.token;
 
@@ -441,7 +393,6 @@ revisar('la contrasena vieja ya no sirve', loginViejo.status === 401);
 
 // 8) La nueva si entra
 const loginNuevo = await login('admin@ejemplo.local', nueva1);
-DETENER_POR_LIMIT(loginNuevo);
 revisar('la contrasena nueva si sirve', loginNuevo.status === 200 && !!loginNuevo.body.token);
 
 // 9) El hash guardado NO es la contrasena en texto plano
@@ -470,7 +421,6 @@ console.log('\n--- usuarios ---');
 // robado no sobreviva). La contrasena vigente en este punto es `nueva1`,
 // asi que se entra de nuevo.
 const loginAdminUsuarios = await login('admin@ejemplo.local', nueva1);
-DETENER_POR_LIMIT(loginAdminUsuarios);
 const tokenAdmin = loginAdminUsuarios.body?.token;
 revisar('el admin vuelve a entrar para gestionar usuarios', !!tokenAdmin);
 
@@ -509,7 +459,6 @@ if (sobrantes > 0) {
 
 // --- la cajera no puede administrar cuentas ---
 const loginEmpleada = await login('empleada@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
-DETENER_POR_LIMIT(loginEmpleada);
 const tokenEmpleada = loginEmpleada.body?.token;
 revisar('la cajera puede entrar', !!tokenEmpleada);
 
@@ -644,7 +593,6 @@ revisar(
 // --- la contrasena temporal sirve para entrar, pero hay que cambiarla ---
 if (claveTemporal) {
   const loginNuevoUsuario = await login('maria@ejemplo.local', claveTemporal);
-  DETENER_POR_LIMIT(loginNuevoUsuario);
   revisar('la contrasena temporal sirve para entrar', loginNuevoUsuario.status === 200);
   revisar(
     'el usuario nuevo entra marcado para cambiar la contrasena',
@@ -790,11 +738,9 @@ revisar(
 
 if (claveReseteada) {
   const conClaveVieja = await login('maria@ejemplo.local', claveTemporal ?? 'x');
-  DETENER_POR_LIMIT(conClaveVieja);
   revisar('tras el reseteo la contrasena anterior ya no entra', conClaveVieja.status === 401);
 
   const conClaveNueva = await login('maria@ejemplo.local', claveReseteada);
-  DETENER_POR_LIMIT(conClaveNueva);
   revisar('tras el reseteo la contrasena nueva si entra', conClaveNueva.status === 200);
 }
 
@@ -1064,6 +1010,92 @@ if (especieEnUso.cuerpo?.nombre) {
 // a la empleada porque en la base de pruebas no hay cuenta de cajera. Aqui
 // se dice "empleada" porque es lo que es.
 
+// Limpia lo que dejo una corrida anterior del bloque de notas.
+//
+// Va AQUI, antes que `limpiarProductosDePrueba` y no dentro del bloque de
+// notas, por el orden de las llamadas: la limpieza de productos se corre al
+// principio del bloque de productos, mucho antes. Y TST-NOTA puede quedar
+// con notas referenciandolo si una corrida se muere a la mitad, con lo cual
+// ese `DELETE FROM productos` revienta con 23503 y el error no dice nada
+// del modulo de notas. La funcion es idempotente y la usan las dos
+// limpiezas: esta al arrancar y la del bloque de notas al terminar.
+
+const limpiarNotasDePrueba = async () => {
+  const cuenta = { notas: 0, productos: 0, folios: 0, existencia: null };
+
+  // Los pagos van PRIMERO. `pagos_aplicacion.nota_id` es FK DURA a la nota
+  // (sin ON DELETE), asi que borrar la nota antes deja la limpieza colgada
+  // con un 23503. Y el cliente se busca por codigo, que no depende de si
+  // la nota sigue ahi.
+  const clientes = await sqlDirecto(
+    `SELECT id FROM pos.clientes WHERE codigo_cliente IN ('CNOTA', 'CFECHA')`,
+  );
+  const idsCliente = clientes.rows.map((c) => c.id);
+  if (idsCliente.length > 0) {
+    await sqlDirecto(
+      `DELETE FROM pos.pagos_aplicacion
+        WHERE pago_id IN (SELECT id FROM pos.pagos WHERE cliente_id = ANY($1::bigint[]))`,
+      [idsCliente],
+    );
+    await sqlDirecto(`DELETE FROM pos.pagos WHERE cliente_id = ANY($1::bigint[])`, [idsCliente]);
+  }
+
+  // Antes de borrar cada nota hay que desbloquearla. La migracion 0008
+  // congela los renglones de una nota pagada o cancelada, y el detalle
+  // tiene ON DELETE CASCADE: un DELETE de nota dispara ese trigger renglon
+  // por renglon y revienta con 23514 sobre las notas que la propia suite
+  // cancelo. Es el precio de que el congelamiento viva en la base.
+  for (const c of clientes.rows) {
+    await sqlDirecto(
+      `UPDATE pos.notas_remision SET estatus = 'pendiente'
+        WHERE cliente_id = $1 AND estatus IN ('parcial','pagada','cancelada')`,
+      [c.id],
+    );
+    const b = await sqlDirecto(`DELETE FROM pos.notas_remision WHERE cliente_id = $1`, [c.id]);
+    cuenta.notas += b.rowCount;
+  }
+
+  const prods = await sqlDirecto(
+    `SELECT id FROM pos.productos WHERE codigo IN ('TST-NOTA', 'TST-NOTA2')`,
+  );
+  for (const pr of prods.rows) {
+    // Aqui, y no antes: con las notas ya fuera, lo que queda del stock es
+    // justo lo que se metio a proposito (50 bultos de la entrada de
+    // apertura). Si no cuadra, la suite dejo el producto descuadrado.
+    const e = await sqlDirecto(
+      `SELECT COALESCE(SUM(CASE WHEN tipo IN ('entrada_compra','ajuste_positivo')
+                                THEN cantidad_bultos ELSE -cantidad_bultos END), 0)::TEXT AS e
+         FROM pos.inventario_movimientos WHERE producto_id = $1 AND almacen_id = 1`,
+      [pr.id],
+    );
+    if (cuenta.existencia === null) cuenta.existencia = Number(e.rows[0].e);
+    // Los movimientos primero: el trigger de inventario deja rastro de cada
+    // INSERT y de cada DELETE, y `auditoria_inventario.producto_id` es FK
+    // DURA. O sea: borrar los movimientos GENERA auditoria nueva, y el rastro
+    // se va despues, en este mismo orden que el de los precios.
+    await sqlDirecto(`DELETE FROM pos.inventario_movimientos WHERE producto_id = $1`, [pr.id]);
+    await sqlDirecto(`DELETE FROM pos.auditoria_inventario WHERE producto_id = $1`, [pr.id]);
+    // Los precios ANTES que su rastro, al reves de como parece: el trigger de
+    // auditoria_precios escribe una fila en cada borrado de precio, asi que
+    // borrando el rastro primero, el DELETE de productos revienta con 23503
+    // sobre auditoria_precios. Es el mismo orden y el mismo motivo que
+    // `limpiarProductosDePrueba`, aqui abajo.
+    await sqlDirecto(`DELETE FROM pos.precios_cliente WHERE producto_id = $1`, [pr.id]);
+    await sqlDirecto(`DELETE FROM pos.precios_publicos WHERE producto_id = $1`, [pr.id]);
+    await sqlDirecto(`DELETE FROM pos.auditoria_precios WHERE producto_id = $1`, [pr.id]);
+    const b = await sqlDirecto(`DELETE FROM pos.productos WHERE id = $1`, [pr.id]);
+    cuenta.productos += b.rowCount;
+  }
+
+  const f = await sqlDirecto(`DELETE FROM pos.folios WHERE serie = 'TST'`);
+  cuenta.folios = f.rowCount;
+  await sqlDirecto(`DELETE FROM pos.auditoria_log WHERE tabla = 'notas_remision'`);
+  await sqlDirecto(`DELETE FROM pos.clientes WHERE codigo_cliente IN ('CNOTA', 'CFECHA')`);
+  return cuenta;
+};
+
+await limpiarNotasDePrueba();
+
 const limpiarProductosDePrueba = async () => {
   const codigos = [
     'TST-ALTA',
@@ -1074,6 +1106,8 @@ const limpiarProductosDePrueba = async () => {
     'TST-CADE',
     'TST-CERO',
     'TST-SINP',
+    'TST-NOTA',
+    'TST-NOTA2',
   ];
 
   // ORDEN IMPORTANTE, y no es intuitivo. `auditoria_precios` tiene FK
@@ -1459,7 +1493,6 @@ const loginCajera = await login(
   'carla.prueba@ejemplo.local',
   altaCajeraRol.cuerpo?.contrasenaTemporal,
 );
-DETENER_POR_LIMIT(loginCajera);
 const tokenCajera = loginCajera.body?.token;
 revisar('la cajera de prueba entra', !!tokenCajera);
 
@@ -2386,6 +2419,1213 @@ revisar(
   sinTokenCierra.status === 401,
   JSON.stringify(sinTokenCierra.cuerpo),
 );
+
+// ======================================================================
+// NOTAS DE REMISION
+// ======================================================================
+//
+// El punto de venta. Es el modulo donde por fin se cruzan los otros tres:
+// el precio que se Autofillea es el del modulo de precios, en la FECHA de la
+// nota, y la nota le descuenta al cliente.
+//
+// Lo que mas se prueba aqui no es el alta (que es un INSERT y un POST mas),
+// sino las cuatro cosas que la base hace sola y que estan muertas si nadie
+// las mira:
+//   1. que la nota se deshaga SOLA cuando un renglon falla (el folio no
+//      puede quedar quemado),
+//   2. que la base no acepte renglones en una nota cancelada, que era el
+//      agujero silencioso que cerro la migracion 0008,
+//   3. que cancelar devuelva el inventario y NO libere el folio,
+//   4. que editar no revalua lo que ya se cobro.
+
+const DESPLAZAR = (dias) => {
+  const f = new Date();
+  f.setDate(f.getDate() + dias);
+  return f.toISOString().slice(0, 10);
+};
+
+const crearNota = (cuerpo, token = tokenAdmin) =>
+  pedir('/api/notas-remision', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const parcheNota = (id, cuerpo, token = tokenAdmin) =>
+  pedir(`/api/notas-remision/${id}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+
+const existeSql = async (texto, valores = []) => {
+  const r = await sqlDirecto(texto, valores);
+  return r.rowCount;
+};
+
+// Existencias de un producto en el almacen 1. Se lee SIEMPRE antes y
+// despues de la operacion que se esta probando, y el delta es lo que se
+// compara. Pegar el numero de salida en el assert es lo que hace fragile
+// a una suite: en cuanto se agrega o quita una nota, todos los numeros
+// pegados se rompen a la vez y no se sabe cual de los asserts mintio.
+const existenciaDe = async (productoId) => {
+  const r = await sqlDirecto(
+    `SELECT COALESCE(SUM(CASE WHEN tipo IN ('entrada_compra','ajuste_positivo')
+                              THEN cantidad_bultos ELSE -cantidad_bultos END), 0)::TEXT AS e
+     FROM pos.inventario_movimientos WHERE producto_id = $1 AND almacen_id = 1`,
+    [productoId],
+  );
+  return Number(r.rows[0].e);
+};
+
+// --- Preparacion: productos con existencias, clientes y talonario -------
+//
+// Existencias por SQL y no por la API a proposito. `inventario.ajustar` es
+// del Administrador y la API todavia no existe; el trigger
+// `trg_permiso_inventario` no estorba porque `sqlDirecto` no abre sesion, y
+// `fn_trg_permiso` salta la revision cuando no hay usuario. Asi el modulo
+// de notas se puede probar sin depender de un modulo que no existe.
+
+const crearProductoDeNota = async (codigo, nombre, presentacion) => {
+  const r = await crearProducto({ codigo, nombre, presentacion_kg: presentacion }, tokenAdmin);
+  return r.cuerpo?.id;
+};
+
+const prodNota = await crearProductoDeNota('TST-NOTA', 'Producto de nota', '25.000');
+revisar('producto de la nota -> 201', Number.isInteger(prodNota), String(prodNota));
+
+// Un segundo producto, con otro kg por bulto y otro precio, para probar que
+// cambiar el producto de un renglon NO se lleva el precio del anterior.
+const prodOtro = await crearProductoDeNota('TST-NOTA2', 'Otro producto de nota', '10.000');
+revisar('segundo producto de la nota -> 201', Number.isInteger(prodOtro), String(prodOtro));
+
+const clienteNota = await pedir('/api/clientes', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ codigo_cliente: 'cnota', nombre: 'Cliente de nota' }),
+});
+revisar(
+  'cliente de la nota -> 201',
+  clienteNota.status === 201,
+  JSON.stringify(clienteNota.cuerpo),
+);
+const clienteNotaId = clienteNota.cuerpo?.id;
+
+// Un cliente SIN precio especial, para que las pruebas de "el precio sigue
+// a la fecha" no se crucen con el especial del otro cliente.
+const clienteFechas = await pedir('/api/clientes', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ codigo_cliente: 'cfecha', nombre: 'Cliente de fechas' }),
+});
+revisar(
+  'cliente de fechas -> 201',
+  clienteFechas.status === 201,
+  JSON.stringify(clienteFechas.cuerpo),
+);
+const clienteFechasId = clienteFechas.cuerpo?.id;
+
+for (const pid of [prodNota, prodOtro]) {
+  await sqlDirecto(
+    `INSERT INTO pos.inventario_movimientos (producto_id, almacen_id, tipo, cantidad_bultos, referencia_tabla)
+     VALUES ($1, 1, 'entrada_compra', 50, 'seed')`,
+    [pid],
+  );
+}
+revisar(
+  'y arrancan con 50 bultos',
+  (await existenciaDe(prodNota)) === 50,
+  `${await existenciaDe(prodNota)}`,
+);
+revisar('ambos', (await existenciaDe(prodOtro)) === 50, `${await existenciaDe(prodOtro)}`);
+
+// El talonario lo carga el ADMIN. Es lo unico que hay que preparar para
+// poder vender, asi que va primero: todo lo demas depende de que exista un
+// folio disponible.
+const talonario = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'TST', desde: 2001, hasta: 2010 }),
+});
+revisar(
+  'el admin carga el talonario -> 201',
+  talonario.status === 201,
+  JSON.stringify(talonario.cuerpo),
+);
+revisar(
+  'y carga los 10 folios, contados uno por uno',
+  talonario.cuerpo?.creados === 10,
+  JSON.stringify(talonario.cuerpo),
+);
+revisar(
+  'sin reportar omitidos',
+  talonario.cuerpo?.omitidos === 0,
+  JSON.stringify(talonario.cuerpo),
+);
+revisar(
+  'con el primero y el ultimo del rango',
+  talonario.cuerpo?.primero === 2001 && talonario.cuerpo?.ultimo === 2010,
+);
+
+// Recargar un rango que pisa folios existentes tiene que ser inocuo: mete
+// los que faltan y dice cuantos dejo fuera. Antes reventaba con 23505.
+const recargarTalonario = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'TST', desde: 2006, hasta: 2012 }),
+});
+revisar(
+  'recargar un rango que se traslapa -> 201, no un 23505',
+  recargarTalonario.status === 201,
+  JSON.stringify(recargarTalonario.cuerpo),
+);
+revisar(
+  'mete solo los que faltaban, 2011 y 2012',
+  recargarTalonario.cuerpo?.creados === 2,
+  JSON.stringify(recargarTalonario.cuerpo),
+);
+revisar(
+  'y reporta los 5 que ya estaban',
+  recargarTalonario.cuerpo?.omitidos === 5,
+  JSON.stringify(recargarTalonario.cuerpo),
+);
+
+const recargarTodo = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'TST', desde: 2001, hasta: 2010 }),
+});
+revisar(
+  'un rango que ya esta COMPLETO -> 409',
+  recargarTodo.status === 409 && recargarTodo.cuerpo?.codigo === 'TALONARIO_YA_CARGADO',
+  JSON.stringify(recargarTodo.cuerpo),
+);
+
+const serieSinCargar = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: '', desde: 1, hasta: 5 }),
+});
+revisar('serie vacia -> 400', serieSinCargar.status === 400, JSON.stringify(serieSinCargar.cuerpo));
+
+// ------------------------------------------------------- alta y autofill
+
+// Sin precio vigente no hay nota: una venta no se puede capturar a ciegas.
+const sinPrecio = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '2' }],
+});
+revisar(
+  'sin precio vigente -> 422',
+  sinPrecio.status === 422 && sinPrecio.cuerpo?.codigo === 'SIN_PRECIO',
+  JSON.stringify(sinPrecio.cuerpo),
+);
+
+// Y el folio NO se quemo con el rechazo. Si se quemara, el talonario
+// perderia un numero por cada nota mal capturada y nadie lo notaria hasta
+// que faltara un folio.
+const foliosTrasFallo = await pedir('/api/notas-remision/folios?serie=TST&limite=200', tokenAdmin);
+revisar(
+  'y el folio NO se quemo con el rechazo',
+  foliosTrasFallo.cuerpo?.datos?.filter((f) => f.estatus === 'disponible').length === 12,
+  JSON.stringify(foliosTrasFallo.cuerpo?.datos?.filter((f) => f.estatus === 'disponible').length),
+);
+
+const pubDiez = await pedir('/api/precios/publicos', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    producto_id: prodNota,
+    precio_kg: '10.00',
+    vigente_desde: DESPLAZAR(-30),
+  }),
+});
+revisar('precio publico de lista -> 201', pubDiez.status === 201, JSON.stringify(pubDiez.cuerpo));
+await pedir('/api/precios/publicos', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ producto_id: prodOtro, precio_kg: '5.00', vigente_desde: DESPLAZAR(-30) }),
+});
+
+const stockAntesDelAlta = await existenciaDe(prodNota);
+const notaBase = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '2' }],
+});
+revisar('alta de nota -> 201', notaBase.status === 201, JSON.stringify(notaBase.cuerpo));
+revisar(
+  'toma el folio mas bajo disponible',
+  notaBase.cuerpo?.folio === 'TST-2001',
+  notaBase.cuerpo?.folio,
+);
+revisar('queda en pendiente', notaBase.cuerpo?.estatus === 'pendiente', notaBase.cuerpo?.estatus);
+revisar(
+  'el vendedor sale de la sesion, no del cuerpo',
+  notaBase.cuerpo?.vendedor === 'Administrador',
+  notaBase.cuerpo?.vendedor,
+);
+revisar(
+  'y la fecha sale de la base, no del reloj del servidor',
+  typeof notaBase.cuerpo?.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(notaBase.cuerpo?.fecha),
+  JSON.stringify(notaBase.cuerpo?.fecha),
+);
+
+const renglonBase = notaBase.cuerpo?.renglones?.[0];
+revisar('un solo renglon', notaBase.cuerpo?.renglones?.length === 1);
+revisar(
+  'el precio se Autofilleo del modulo de precios',
+  renglonBase?.precio_unit_kg === 10,
+  JSON.stringify(renglonBase),
+);
+revisar(
+  'el kg por bulto lo heredo del producto',
+  renglonBase?.kg_bulto === 25,
+  JSON.stringify(renglonBase),
+);
+revisar(
+  'el subtotal lo calcula la base',
+  notaBase.cuerpo?.subtotal === 500,
+  JSON.stringify(notaBase.cuerpo?.subtotal),
+);
+revisar(
+  'y el del renglon cuadra',
+  renglonBase?.subtotal === 500,
+  JSON.stringify(renglonBase?.subtotal),
+);
+revisar(
+  'el stock bajo lo que se vendio',
+  (await existenciaDe(prodNota)) === stockAntesDelAlta - 2,
+  `${stockAntesDelAlta} -> ${await existenciaDe(prodNota)}`,
+);
+const notaBaseId = notaBase.cuerpo?.id;
+
+// La siguiente toma el que sigue, y nunca repite.
+const notaLimpia = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'la siguiente toma el folio que sigue',
+  notaLimpia.cuerpo?.folio === 'TST-2002',
+  notaLimpia.cuerpo?.folio,
+);
+revisar('NUNCA repite folio', notaLimpia.cuerpo?.folio !== notaBase.cuerpo?.folio);
+const notaLimpiaId = notaLimpia.cuerpo?.id;
+
+// ------------------------------------------------------------ validaciones
+
+const sinRenglones = await crearNota({ cliente_id: clienteNotaId, serie: 'TST', renglones: [] });
+revisar(
+  'una nota sin renglones -> 400',
+  sinRenglones.status === 400,
+  JSON.stringify(sinRenglones.cuerpo),
+);
+
+const mandarSubtotal = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1', subtotal: 999 }],
+});
+revisar(
+  'mandar el subtotal del renglon -> 400, es GENERATED',
+  mandarSubtotal.status === 400,
+  JSON.stringify(mandarSubtotal.cuerpo),
+);
+
+const mandarVendedor = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  vendedor_id: 999,
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'mandar vendedor_id a mano -> 400',
+  mandarVendedor.status === 400,
+  JSON.stringify(mandarVendedor.cuerpo),
+);
+
+const cambiarEstatus = await parcheNota(notaBaseId, { estatus: 'pagada' });
+revisar(
+  'cambiar el estatus por la API -> 400, lo mueven los pagos',
+  cambiarEstatus.status === 400,
+  JSON.stringify(cambiarEstatus.cuerpo),
+);
+
+const fechaNotaImposible = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  fecha: '2026-02-30',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'una fecha que no existe -> 400',
+  fechaNotaImposible.status === 400,
+  JSON.stringify(fechaNotaImposible.cuerpo),
+);
+
+const clienteFantasma = await crearNota({
+  cliente_id: 999999,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'cliente que no existe -> 400, y lo dice',
+  clienteFantasma.status === 400 && clienteFantasma.cuerpo?.error === 'El cliente 999999 no existe',
+  JSON.stringify(clienteFantasma.cuerpo),
+);
+
+const almacenFantasma = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 2, cantidad_bultos: '1' }],
+});
+revisar(
+  'un almacen que no existe -> 400',
+  almacenFantasma.status === 400,
+  JSON.stringify(almacenFantasma.cuerpo),
+);
+
+const productoFantasma = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: 999999, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'un producto que no existe -> 400',
+  productoFantasma.status === 400,
+  JSON.stringify(productoFantasma.cuerpo),
+);
+
+const serieVacia = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'ZZZ',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'serie sin folios -> 422, y dice cual',
+  serieVacia.status === 422 && serieVacia.cuerpo?.codigo === 'SIN_FOLIOS',
+  JSON.stringify(serieVacia.cuerpo),
+);
+
+// Un producto dado de baja no se vende. El producto se da de baja por SQL
+// porque la API de productos no expone el campo `activo` al PATCH.
+await sqlDirecto(`UPDATE pos.productos SET activo = false WHERE id = $1`, [prodOtro]);
+const productoInactivo = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodOtro, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'vender un producto dado de baja -> 422',
+  productoInactivo.status === 422 && productoInactivo.cuerpo?.codigo === 'PRODUCTO_INACTIVO',
+  JSON.stringify(productoInactivo.cuerpo),
+);
+await sqlDirecto(`UPDATE pos.productos SET activo = true WHERE id = $1`, [prodOtro]);
+
+// ------------------------------------------------------------------ stock
+
+const stockAntesDePedirDeMas = await existenciaDe(prodNota);
+const sinStock = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '9999' }],
+});
+revisar(
+  'vender mas de lo que hay -> 422 STOCK_INSUFICIENTE',
+  sinStock.status === 422 && sinStock.cuerpo?.codigo === 'STOCK_INSUFICIENTE',
+  JSON.stringify(sinStock.cuerpo),
+);
+revisar(
+  'y el mensaje dice cuantos bultos faltan',
+  sinStock.cuerpo?.detalles?.faltan === 9999 - stockAntesDePedirDeMas,
+  JSON.stringify(sinStock.cuerpo?.detalles),
+);
+revisar(
+  'y no se movio el stock',
+  (await existenciaDe(prodNota)) === stockAntesDePedirDeMas,
+  `${await existenciaDe(prodNota)}`,
+);
+
+// El mismo producto dos veces en una nota: el chequeo tiene que SUMAR los
+// dos renglones, no mirar cada uno por su lado.
+const pedazoDeLoQueQueda = Math.floor(stockAntesDePedirDeMas / 2) + 1;
+const dobleRenglon = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [
+    { producto_id: prodNota, almacen_id: 1, cantidad_bultos: String(pedazoDeLoQueQueda) },
+    { producto_id: prodNota, almacen_id: 1, cantidad_bultos: String(pedazoDeLoQueQueda) },
+  ],
+});
+revisar(
+  'el mismo producto en dos renglones suma antes de comparar -> 422',
+  dobleRenglon.status === 422 && dobleRenglon.cuerpo?.codigo === 'STOCK_INSUFICIENTE',
+  JSON.stringify(dobleRenglon.cuerpo),
+);
+revisar(
+  'y reporta el doble de lo pedido, no una vez',
+  dobleRenglon.cuerpo?.detalles?.solicitado === pedazoDeLoQueQueda * 2,
+  JSON.stringify(dobleRenglon.cuerpo?.detalles),
+);
+revisar('y sigue sin mover el stock', (await existenciaDe(prodNota)) === stockAntesDePedirDeMas);
+
+// ------------------------------------------------- el precio de la FECHA
+//
+// Esta es la razon de que `resolverEfectivo` reciba una fecha. Un precio que
+// empieza manana no puede ser el de una nota de hoy, y una nota de la
+// semana pasada no se puede revaluar cuando meten un precio nuevo.
+//
+// El cliente de fechas no tiene precio especial, asi que aqui el unico
+// precio que puede salir es el publico de la fecha que toca.
+
+const cerrarDiez = await pedir(`/api/precios/publicos/${pubDiez.cuerpo?.id}/cerrar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ vigente_hasta: DESPLAZAR(9) }),
+});
+revisar(
+  'y se cierra el de 10 el dia 9',
+  cerrarDiez.status === 200,
+  JSON.stringify(cerrarDiez.cuerpo),
+);
+revisar(
+  'la ventana queda hasta el dia 9',
+  cerrarDiez.cuerpo?.vigente_hasta === DESPLAZAR(9),
+  JSON.stringify(cerrarDiez.cuerpo?.vigente_hasta),
+);
+
+const pubVeinte = await pedir('/api/precios/publicos', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ producto_id: prodNota, precio_kg: '20.00', vigente_desde: DESPLAZAR(10) }),
+});
+revisar(
+  'precio de 20 desde el dia 10 -> 201',
+  pubVeinte.status === 201,
+  JSON.stringify(pubVeinte.cuerpo),
+);
+
+const notaPasada = await crearNota({
+  cliente_id: clienteFechasId,
+  serie: 'TST',
+  fecha: DESPLAZAR(-5),
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar('nota de hace 5 dias -> 201', notaPasada.status === 201, JSON.stringify(notaPasada.cuerpo));
+revisar(
+  'y usa el precio que estaba vigente EN ESA FECHA, no el de hoy',
+  notaPasada.cuerpo?.renglones?.[0]?.precio_unit_kg === 10,
+  JSON.stringify(notaPasada.cuerpo?.renglones?.[0]),
+);
+
+const notaFutura = await crearNota({
+  cliente_id: clienteFechasId,
+  serie: 'TST',
+  fecha: DESPLAZAR(20),
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'y una nota de manana SI alcanza el precio de manana',
+  notaFutura.cuerpo?.renglones?.[0]?.precio_unit_kg === 20,
+  JSON.stringify(notaFutura.cuerpo?.renglones?.[0]),
+);
+
+// El precio escrito a mano manda sobre el de lista.
+const notaConTrato = await crearNota({
+  cliente_id: clienteFechasId,
+  serie: 'TST',
+  renglones: [
+    { producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1', precio_unit_kg: '7.77' },
+  ],
+});
+revisar('precio a mano -> 201', notaConTrato.status === 201, JSON.stringify(notaConTrato.cuerpo));
+revisar(
+  'y el trato del operador gana sobre la lista',
+  notaConTrato.cuerpo?.renglones?.[0]?.precio_unit_kg === 7.77,
+  JSON.stringify(notaConTrato.cuerpo?.renglones?.[0]),
+);
+revisar(
+  'el subtotal usa el precio a mano',
+  notaConTrato.cuerpo?.subtotal === 7.77 * 25,
+  JSON.stringify(notaConTrato.cuerpo?.subtotal),
+);
+const notaConTratoId = notaConTrato.cuerpo?.id;
+
+// El precio especial del cliente tiene precedencia sobre el publico.
+const precioEspecial = await pedir('/api/precios/clientes', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    cliente_id: clienteNotaId,
+    producto_id: prodNota,
+    precio_kg: '9.00',
+    vigente_desde: DESPLAZAR(-30),
+  }),
+});
+revisar(
+  'precio especial del cliente -> 201',
+  precioEspecial.status === 201,
+  JSON.stringify(precioEspecial.cuerpo),
+);
+const notaConEspecial = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'la nota del cliente usa su especial, no el publico',
+  notaConEspecial.cuerpo?.renglones?.[0]?.precio_unit_kg === 9,
+  JSON.stringify(notaConEspecial.cuerpo?.renglones?.[0]),
+);
+const notaConEspecialId = notaConEspecial.cuerpo?.id;
+
+// ---------------------------------------------------------------- edicion
+
+const editarDireccion = await parcheNota(notaBaseId, { direccion_entrega: 'Rancho La Esperanza' });
+revisar(
+  'editar la direccion -> 200',
+  editarDireccion.status === 200,
+  JSON.stringify(editarDireccion.cuerpo),
+);
+revisar(
+  'y guarda la direccion',
+  editarDireccion.cuerpo?.direccion_entrega === 'Rancho La Esperanza',
+);
+revisar(
+  'sin tocar el subtotal',
+  editarDireccion.cuerpo?.subtotal === notaBase.cuerpo?.subtotal,
+  JSON.stringify(editarDireccion.cuerpo?.subtotal),
+);
+revisar('ni los renglones', editarDireccion.cuerpo?.renglones?.length === 1);
+
+const stockAntesDeCantidad = await existenciaDe(prodNota);
+const precioDelRenglon = editarDireccion.cuerpo?.renglones?.[0]?.precio_unit_kg;
+const cambiarCantidad = await parcheNota(notaBaseId, {
+  renglones: [{ id: renglonBase.id, producto_id: prodNota, almacen_id: 1, cantidad_bultos: '3' }],
+});
+revisar(
+  'cambiar la cantidad -> 200',
+  cambiarCantidad.status === 200,
+  JSON.stringify(cambiarCantidad.cuerpo),
+);
+revisar(
+  'el subtotal se recalcula con el precio del renglon',
+  cambiarCantidad.cuerpo?.subtotal === 3 * 25 * precioDelRenglon,
+  `${cambiarCantidad.cuerpo?.subtotal} vs ${3 * 25 * precioDelRenglon}`,
+);
+revisar(
+  'y el stock baja solo el bulto que se sumo',
+  (await existenciaDe(prodNota)) === stockAntesDeCantidad - 1,
+  `${stockAntesDeCantidad} -> ${await existenciaDe(prodNota)}`,
+);
+revisar('sin dejar renglones de mas', cambiarCantidad.cuerpo?.renglones?.length === 1);
+
+const parcheNotaVacio = await parcheNota(notaBaseId, {});
+revisar(
+  'un PATCH vacio -> 400',
+  parcheNotaVacio.status === 400,
+  JSON.stringify(parcheNotaVacio.cuerpo),
+);
+
+// Este va antes de la nota al borde, no despues: prodOtro es el unico
+// producto con precio propio de 5.00, y la nota al borde se lo lleva
+// entero. Despues de esa no habria existencias con las que cambiar de
+// producto.
+// Un renglon que cambia de PRODUCTO tiene que releer el precio del nuevo.
+// Antes se quedaba con el del anterior, porque el mapa de "precios a
+// conservar" no guardaba de que producto eran.
+const cambiarProducto = await parcheNota(notaConTratoId, {
+  renglones: [
+    {
+      id: notaConTrato.cuerpo?.renglones?.[0]?.id,
+      producto_id: prodOtro,
+      almacen_id: 1,
+      cantidad_bultos: '1',
+    },
+  ],
+});
+revisar(
+  'cambiar el producto del renglon -> 200',
+  cambiarProducto.status === 200,
+  JSON.stringify(cambiarProducto.cuerpo),
+);
+revisar(
+  'y toma el precio del PRODUCTO NUEVO, no el del que estaba',
+  cambiarProducto.cuerpo?.renglones?.[0]?.precio_unit_kg === 5,
+  JSON.stringify(cambiarProducto.cuerpo?.renglones?.[0]),
+);
+revisar(
+  'con el kg del producto nuevo',
+  cambiarProducto.cuerpo?.renglones?.[0]?.kg_bulto === 10,
+  JSON.stringify(cambiarProducto.cuerpo?.renglones?.[0]),
+);
+revisar(
+  'y el subtotal con ese precio y ese kg',
+  cambiarProducto.cuerpo?.subtotal === 1 * 10 * 5,
+  JSON.stringify(cambiarProducto.cuerpo?.subtotal),
+);
+
+// Editar una nota y dejar un renglon COMO ESTABA no puede rebotar por
+// falta de stock. La existencia que se compara ya viene descontada por esta
+// misma nota, asi que sin el credito del consumo propio, "no hay producto
+// suficiente" salia con 45 bultos en bodega y 45 en la nota.
+//
+// La cantidad es la que HAY, no un 50 pegado: si antes se vendio de este
+// producto, con 50 fijos esta nota reventaba por stock y la pruebaeria estar
+// midiendo otra cosa.
+const todoLoQueQueda = await existenciaDe(prodOtro);
+const notaAlBorde = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [{ producto_id: prodOtro, almacen_id: 1, cantidad_bultos: String(todoLoQueQueda) }],
+});
+revisar(
+  'nota que se lleva TODO lo que hay -> 201',
+  notaAlBorde.status === 201,
+  JSON.stringify(notaAlBorde.cuerpo),
+);
+revisar(
+  'y deja el almacen en cero',
+  (await existenciaDe(prodOtro)) === 0,
+  `${await existenciaDe(prodOtro)}`,
+);
+const notaAlBordeId = notaAlBorde.cuerpo?.id;
+const renglonEnBorde = notaAlBorde.cuerpo?.renglones?.[0];
+const editarSinMoverStock = await parcheNota(notaAlBordeId, {
+  direccion_entrega: 'misma mercancia, otra direccion',
+  renglones: [
+    {
+      id: renglonEnBorde.id,
+      producto_id: prodOtro,
+      almacen_id: 1,
+      cantidad_bultos: String(todoLoQueQueda),
+      precio_unit_kg: renglonEnBorde.precio_unit_kg,
+    },
+  ],
+});
+revisar(
+  'dejar el renglon igual y cambiar otra cosa -> 200, NO es falta de stock',
+  editarSinMoverStock.status === 200,
+  JSON.stringify(editarSinMoverStock.cuerpo),
+);
+revisar(
+  'y sigue pendiente',
+  editarSinMoverStock.cuerpo?.estatus === 'pendiente',
+  JSON.stringify(editarSinMoverStock.cuerpo?.estatus),
+);
+revisar(
+  'con el stock igual',
+  (await existenciaDe(prodOtro)) === 0,
+  `${await existenciaDe(prodOtro)}`,
+);
+
+// Quitar un renglon: el stock de ese renglon regresa solo. Los dos
+// renglones son del MISMO producto a proposito: asi el unico producto del
+// bloque con existencias (prodOtro) queda reservado para la nota al borde,
+// que necesita llevarselo todo.
+const conDos = await crearNota({
+  cliente_id: clienteNotaId,
+  serie: 'TST',
+  renglones: [
+    { producto_id: prodNota, almacen_id: 1, cantidad_bultos: '3' },
+    { producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' },
+  ],
+});
+revisar('nota con dos renglones -> 201', conDos.status === 201, JSON.stringify(conDos.cuerpo));
+revisar(
+  'y dos renglones',
+  conDos.cuerpo?.renglones?.length === 2,
+  JSON.stringify(conDos.cuerpo?.renglones?.length),
+);
+const precioConDos = conDos.cuerpo?.renglones?.[0]?.precio_unit_kg;
+const quitarUno = await parcheNota(conDos.cuerpo?.id, {
+  renglones: [
+    {
+      id: conDos.cuerpo?.renglones?.[0]?.id,
+      producto_id: prodNota,
+      almacen_id: 1,
+      cantidad_bultos: '3',
+    },
+  ],
+});
+revisar('quitar un renglon -> 200', quitarUno.status === 200, JSON.stringify(quitarUno.cuerpo));
+revisar(
+  'queda solo el que se quedo',
+  quitarUno.cuerpo?.renglones?.length === 1,
+  JSON.stringify(quitarUno.cuerpo?.renglones?.length),
+);
+revisar(
+  'y el subtotal se recalcula con lo que queda',
+  quitarUno.cuerpo?.subtotal === 3 * 25 * precioConDos,
+  `${quitarUno.cuerpo?.subtotal} vs ${3 * 25 * precioConDos}`,
+);
+
+// --- el precio NO se revalua solo, y cuando si, es a proposito ---------
+//
+// Tres reglas distintas, y por lo que se prueban con el cliente de fechas
+// (sin precio especial) para que no se cruzen con el otro cliente.
+
+const renglonPasada = notaPasada.cuerpo?.renglones?.[0];
+const editarFechaYRenglones = await parcheNota(notaPasada.cuerpo?.id, {
+  fecha: DESPLAZAR(20),
+  renglones: [{ id: renglonPasada.id, producto_id: prodNota, almacen_id: 1, cantidad_bultos: '2' }],
+});
+revisar(
+  'cambiar la fecha CON renglones -> 200',
+  editarFechaYRenglones.status === 200,
+  JSON.stringify(editarFechaYRenglones.cuerpo),
+);
+revisar(
+  'guarda la fecha nueva',
+  editarFechaYRenglones.cuerpo?.fecha === DESPLAZAR(20),
+  editarFechaYRenglones.cuerpo?.fecha,
+);
+revisar(
+  'y ahi si revalua al precio de ESA fecha, que es lo que pide el operador que se equivoco al capturar el dia',
+  editarFechaYRenglones.cuerpo?.renglones?.[0]?.precio_unit_kg === 20,
+  JSON.stringify(editarFechaYRenglones.cuerpo?.renglones?.[0]),
+);
+revisar(
+  'y el subtotal se recalcula con el precio nuevo',
+  editarFechaYRenglones.cuerpo?.subtotal === 2 * 25 * 20,
+  JSON.stringify(editarFechaYRenglones.cuerpo?.subtotal),
+);
+
+const soloLaFecha = await parcheNota(notaFutura.cuerpo?.id, { fecha: DESPLAZAR(2) });
+revisar(
+  'cambiar la fecha SOLA -> 200',
+  soloLaFecha.status === 200,
+  JSON.stringify(soloLaFecha.cuerpo),
+);
+revisar(
+  'pero no revalua nada: la cabecera no trae renglones que revaluar',
+  soloLaFecha.cuerpo?.renglones?.[0]?.precio_unit_kg === 20,
+  JSON.stringify(soloLaFecha.cuerpo?.renglones?.[0]),
+);
+
+const renglonEditado = editarFechaYRenglones.cuerpo?.renglones?.[0];
+const soloLaCantidad = await parcheNota(notaPasada.cuerpo?.id, {
+  renglones: [
+    { id: renglonEditado.id, producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' },
+  ],
+});
+revisar(
+  'y cambiar la cantidad tampoco revalua, aunque hoy el precio sea otro',
+  soloLaCantidad.cuerpo?.renglones?.[0]?.precio_unit_kg === 20,
+  JSON.stringify(soloLaCantidad.cuerpo?.renglones?.[0]),
+);
+
+// ---------------------------------------------------------- nota pagada
+//
+// Para llegar a 'pagada' hay que pagar de verdad, porque eso es lo unico
+// que la pone asi: `fn_actualizar_estatus_por_aplicaciones` lee
+// `pagos_aplicacion`. Se escribe a proposito, porque las pruebas de este
+// bloque tienen que poder dejar la nota en cualquier estado.
+
+const notaParaPagar = await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin);
+const aPagar = notaParaPagar.cuerpo?.subtotal;
+revisar(
+  'la nota a pagar sigue pendiente',
+  notaParaPagar.cuerpo?.estatus === 'pendiente',
+  JSON.stringify(notaParaPagar.cuerpo?.estatus),
+);
+revisar('y su subtotal es el de ahora', typeof aPagar === 'number' && aPagar > 0, String(aPagar));
+
+const pago = await sqlDirecto(
+  `INSERT INTO pos.pagos (cliente_id, fecha, metodo, monto) VALUES ($1, CURRENT_DATE, 'Efectivo', 99999) RETURNING id`,
+  [clienteNotaId],
+);
+const pagoId = Number(pago.rows[0].id);
+await sqlDirecto(
+  `INSERT INTO pos.pagos_aplicacion (pago_id, nota_id, monto_aplicado) VALUES ($1, $2, $3)`,
+  [pagoId, notaBaseId, aPagar],
+);
+const estatusTrasPago = await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin);
+revisar(
+  'aplicar un pago la deja PAGADA sola',
+  estatusTrasPago.cuerpo?.estatus === 'pagada',
+  JSON.stringify(estatusTrasPago.cuerpo?.estatus),
+);
+
+const editarPagada = await parcheNota(notaBaseId, {
+  renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'editar una nota pagada -> 409',
+  editarPagada.status === 409 && editarPagada.cuerpo?.codigo === 'NOTA_CONGELADA',
+  JSON.stringify(editarPagada.cuerpo),
+);
+revisar(
+  'y el mensaje dice que hacer',
+  /cancelala/.test(editarPagada.cuerpo?.error ?? ''),
+  editarPagada.cuerpo?.error,
+);
+
+// Y por debajo del API, para probar que la BASE tambien la frena: un
+// UPDATE directo a la cabecera. Si este pasara, el bloqueo viviria solo en
+// el servicio y un script de psql podria rebalar una venta cobrada.
+const sqlPagadaCabecera = await intentaSql(
+  `UPDATE pos.notas_remision SET direccion_entrega = 'cambiada a mano' WHERE id = $1`,
+  [notaBaseId],
+);
+revisar(
+  'y la BASE frena editar la cabecera de una pagada (23514)',
+  sqlPagadaCabecera.filas === 0 &&
+    String(sqlPagadaCabecera.fallo?.message ?? '').includes('no se puede modificar'),
+  sqlPagadaCabecera.fallo?.message ?? `paso, rowCount ${sqlPagadaCabecera.filas}`,
+);
+
+const sqlPagadaRenglon = await intentaSql(
+  `INSERT INTO pos.nota_remision_detalle (nota_id, producto_id, almacen_id, cantidad_bultos, precio_unit_kg)
+   VALUES ($1, $2, 1, 1, 5)`,
+  [notaBaseId, prodNota],
+);
+revisar(
+  'y la BASE frena meter renglones en una pagada (23514)',
+  sqlPagadaRenglon.filas === 0 &&
+    String(sqlPagadaRenglon.fallo?.message ?? '').includes('renglones no se pueden tocar'),
+  sqlPagadaRenglon.fallo?.message ?? `paso, rowCount ${sqlPagadaRenglon.filas}`,
+);
+
+// El estatus SI se puede seguir tocando en una pagada, porque ahi lo mueven
+// los pagos. Si este UPDATE rebentara, el modulo de pagos dejaria de
+// funcionar contra notas ya pagadas.
+const sqlTocaEstatus = await intentaSql(
+  `UPDATE pos.notas_remision SET estatus = estatus WHERE id = $1`,
+  [notaBaseId],
+);
+revisar(
+  'pero tocar solo el estatus SI se deja (lo hacen los pagos)',
+  sqlTocaEstatus.filas === 1,
+  sqlTocaEstatus.fallo?.message ?? `rowCount ${sqlTocaEstatus.filas}`,
+);
+
+// -------------------------------------------------------------- cancelar
+
+const cancelarSinMotivo = await pedir(`/api/notas-remision/${notaAlBordeId}/cancelar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+});
+revisar(
+  'cancelar sin motivo -> 400',
+  cancelarSinMotivo.status === 400,
+  JSON.stringify(cancelarSinMotivo.cuerpo),
+);
+
+const stockAntesDeCancelar = await existenciaDe(prodOtro);
+const cancelar = await pedir(`/api/notas-remision/${notaAlBordeId}/cancelar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ motivo: 'Se equivoc\u00f3 la mercancia' }),
+});
+revisar('cancelar -> 200', cancelar.status === 200, JSON.stringify(cancelar.cuerpo));
+revisar('queda cancelada', cancelar.cuerpo?.estatus === 'cancelada', cancelar.cuerpo?.estatus);
+revisar(
+  'guarda el motivo',
+  cancelar.cuerpo?.motivo_cancelacion === 'Se equivoc\u00f3 la mercancia',
+  cancelar.cuerpo?.motivo_cancelacion,
+);
+revisar(
+  'y el inventario REGRESA solo, sin que nadie lo ajuste',
+  (await existenciaDe(prodOtro)) === stockAntesDeCancelar + todoLoQueQueda,
+  `${stockAntesDeCancelar} + ${todoLoQueQueda} vs ${await existenciaDe(prodOtro)}`,
+);
+
+const folioCancelada = await pedir('/api/notas-remision/folios?serie=TST&limite=200', tokenAdmin);
+const folioDeLaCancelada = folioCancelada.cuerpo?.datos?.find(
+  (f) => f.completo === notaAlBorde.cuerpo?.folio,
+);
+revisar(
+  'pero el folio NO se libera: ese numero ya salio de la casa',
+  folioDeLaCancelada?.estatus === 'usado',
+  JSON.stringify(folioDeLaCancelada),
+);
+
+const cancelarDosVeces = await pedir(`/api/notas-remision/${notaAlBordeId}/cancelar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ motivo: 'otra vez' }),
+});
+revisar(
+  'cancelar dos veces -> 409',
+  cancelarDosVeces.status === 409 && cancelarDosVeces.cuerpo?.codigo === 'NOTA_YA_CANCELADA',
+  JSON.stringify(cancelarDosVeces.cuerpo),
+);
+
+const editarCancelada = await parcheNota(notaAlBordeId, {
+  renglones: [{ producto_id: prodOtro, almacen_id: 1, cantidad_bultos: '1' }],
+});
+revisar(
+  'editar una cancelada -> 409',
+  editarCancelada.status === 409 && editarCancelada.cuerpo?.codigo === 'NOTA_CONGELADA',
+  JSON.stringify(editarCancelada.cuerpo),
+);
+
+// El agujero que cerro 0008: renglones en una nota cancelada. Con el trigger
+// de inventario de 0001 esto PASABA en silencio, porque ese trigger dice
+// "si la nota esta cancelada, no muevo el stock" y se iba sin avisar. El
+// renglon se guardaba, el subtotal subia y la nota debia producto que
+// nadie habia entregado.
+const stockTrasCancelar = await existenciaDe(prodOtro);
+const sqlCanceladaRenglon = await intentaSql(
+  `INSERT INTO pos.nota_remision_detalle (nota_id, producto_id, almacen_id, cantidad_bultos, precio_unit_kg)
+   VALUES ($1, $2, 1, 5, 5)`,
+  [notaAlBordeId, prodOtro],
+);
+revisar(
+  'y la BASE ya no acepta renglones en una cancelada (23514)',
+  sqlCanceladaRenglon.filas === 0 &&
+    String(sqlCanceladaRenglon.fallo?.message ?? '').includes('renglones no se pueden tocar'),
+  sqlCanceladaRenglon.fallo?.message ?? `paso, rowCount ${sqlCanceladaRenglon.filas}`,
+);
+revisar(
+  'y por eso el inventario no se movio',
+  (await existenciaDe(prodOtro)) === stockTrasCancelar,
+  `${await existenciaDe(prodOtro)}`,
+);
+
+// Una pagada SI se puede cancelar: el usuario lo pidio, y el trigger de
+// 0008 lo permite justamente porque deja pasar los cambios de estatus.
+const cancelarPagada = await pedir(`/api/notas-remision/${notaBaseId}/cancelar`, tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ motivo: 'Se cobro mal, se anula la venta' }),
+});
+revisar(
+  'cancelar una PAGADA -> 200',
+  cancelarPagada.status === 200,
+  JSON.stringify(cancelarPagada.cuerpo?.error),
+);
+revisar(
+  'queda cancelada',
+  cancelarPagada.cuerpo?.estatus === 'cancelada',
+  cancelarPagada.cuerpo?.estatus,
+);
+
+// No hay DELETE de nota, y por una razon que se nota en el folio.
+const borrarNota = await pedir(`/api/notas-remision/${notaLimpiaId}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar(
+  'no hay DELETE de nota -> 404',
+  borrarNota.status === 404,
+  JSON.stringify(borrarNota.cuerpo),
+);
+
+// -------------------------------------------------------------- listado
+
+const listadoNotas = await pedir('/api/notas-remision?limite=200', tokenAdmin);
+revisar('listar -> 200', listadoNotas.status === 200, JSON.stringify(listadoNotas.cuerpo?.error));
+revisar(
+  'trae el folio armado, no el numero suelto',
+  listadoNotas.cuerpo?.datos?.every((n) => /^[A-Z]+-\d+$/.test(n.folio)),
+  JSON.stringify(listadoNotas.cuerpo?.datos?.slice(0, 2)),
+);
+revisar(
+  'y el nombre del cliente, no el id',
+  listadoNotas.cuerpo?.datos?.every((n) => typeof n.cliente === 'string' && n.cliente.length > 0),
+);
+revisar(
+  'el listado trae CUANTOS renglones, no los renglones',
+  listadoNotas.cuerpo?.datos?.every((x) => Number.isInteger(x.renglones) && x.renglones >= 1),
+  JSON.stringify(listadoNotas.cuerpo?.datos?.slice(0, 2)?.map((x) => x.renglones)),
+);
+revisar(
+  'y la nota que tenia dos renglones, ya sin uno, cuenta 1',
+  listadoNotas.cuerpo?.datos?.find((x) => x.folio === conDos.cuerpo?.folio)?.renglones === 1,
+  JSON.stringify(listadoNotas.cuerpo?.datos?.find((x) => x.folio === conDos.cuerpo?.folio)),
+);
+
+const porCliente = await pedir(
+  `/api/notas-remision?cliente_id=${clienteNotaId}&limite=200`,
+  tokenAdmin,
+);
+revisar(
+  'filtrar por cliente',
+  porCliente.cuerpo?.total === porCliente.cuerpo?.datos?.length,
+  `${porCliente.cuerpo?.total} vs ${porCliente.cuerpo?.datos?.length}`,
+);
+revisar(
+  'y son todas suyas',
+  porCliente.cuerpo?.datos?.every((n) => n.cliente === 'Cliente de nota'),
+);
+
+const porEstatus = await pedir('/api/notas-remision?estatus=cancelada', tokenAdmin);
+revisar(
+  'filtrar por estatus',
+  porEstatus.cuerpo?.datos?.every((n) => n.estatus === 'cancelada') &&
+    porEstatus.cuerpo?.total >= 1,
+  JSON.stringify(porEstatus.cuerpo?.total),
+);
+
+const buscarPorFolio = await pedir('/api/notas-remision?buscar=TST-2001', tokenAdmin);
+revisar(
+  'buscar por folio -> 1',
+  buscarPorFolio.cuerpo?.total === 1,
+  JSON.stringify(buscarPorFolio.cuerpo?.total),
+);
+revisar('y es la correcta', buscarPorFolio.cuerpo?.datos?.[0]?.folio === 'TST-2001');
+
+const buscarPorNombre = await pedir('/api/notas-remision?buscar=Cliente%20de%20nota', tokenAdmin);
+revisar(
+  'buscar por nombre de cliente',
+  buscarPorNombre.cuerpo?.total > 0,
+  JSON.stringify(buscarPorNombre.cuerpo?.total),
+);
+
+const paginado = await pedir('/api/notas-remision?limite=2&offset=1', tokenAdmin);
+revisar(
+  'paginar devuelve la ventana pedida',
+  paginado.cuerpo?.datos?.length <= 2,
+  JSON.stringify(paginado.cuerpo?.datos?.length),
+);
+revisar(
+  'y el total completo, no el de la pagina',
+  paginado.cuerpo?.total > 2,
+  JSON.stringify(paginado.cuerpo?.total),
+);
+
+const limiteCero = await pedir('/api/notas-remision?limite=0', tokenAdmin);
+revisar('limite 0 -> 400', limiteCero.status === 400, JSON.stringify(limiteCero.cuerpo));
+
+const rangoInvertido = await pedir(
+  '/api/notas-remision?desde=2026-12-01&hasta=2026-01-01',
+  tokenAdmin,
+);
+revisar(
+  'desde posterior a hasta -> 400',
+  rangoInvertido.status === 400,
+  JSON.stringify(rangoInvertido.cuerpo),
+);
+
+const verNota = await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin);
+revisar('ver el detalle -> 200', verNota.status === 200);
+revisar('trae los renglones', verNota.cuerpo?.renglones?.length >= 1);
+revisar(
+  'y el nombre del almacen',
+  verNota.cuerpo?.renglones?.[0]?.almacen === 'Bodega principal',
+  JSON.stringify(verNota.cuerpo?.renglones?.[0]?.almacen),
+);
+
+const notaFantasma = await pedir('/api/notas-remision/999999', tokenAdmin);
+revisar(
+  'nota que no existe -> 404',
+  notaFantasma.status === 404,
+  JSON.stringify(notaFantasma.cuerpo),
+);
+
+// -------------------------------------------------------------- permisos
+
+const sinTokenNota = await pedir('/api/notas-remision');
+revisar(
+  'listar sin token -> 401',
+  sinTokenNota.status === 401,
+  JSON.stringify(sinTokenNota.cuerpo),
+);
+
+// `notas.folios` es solo del Administrador, y esa es la diferencia con
+// `notas.crear`: ampliar el talonario decide que numeros de documento
+// existen, y no es tarea de quien captura notas.
+const empleadaTalonario = await pedir('/api/notas-remision/folios', tokenEmpleada, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'TST', desde: 2050, hasta: 2055 }),
+});
+revisar(
+  'la empleada NO carga talonario -> 403',
+  empleadaTalonario.status === 403,
+  JSON.stringify(empleadaTalonario.cuerpo),
+);
+
+const cajeraTalonario = await pedir('/api/notas-remision/folios', tokenCajera, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: 'TST', desde: 2050, hasta: 2055 }),
+});
+revisar(
+  'la cajera tampoco -> 403',
+  cajeraTalonario.status === 403,
+  JSON.stringify(cajeraTalonario.cuerpo),
+);
+
+const cajeraCreaNota = await crearNota(
+  {
+    cliente_id: clienteNotaId,
+    serie: 'TST',
+    renglones: [{ producto_id: prodNota, almacen_id: 1, cantidad_bultos: '1' }],
+  },
+  tokenCajera,
+);
+revisar(
+  'pero la cajera SI cobra -> 201',
+  cajeraCreaNota.status === 201,
+  JSON.stringify(cajeraCreaNota.cuerpo?.error),
+);
+revisar(
+  'y sale SU nombre en el vendedor, no el del admin',
+  cajeraCreaNota.cuerpo?.vendedor === 'Carla',
+  JSON.stringify(cajeraCreaNota.cuerpo?.vendedor),
+);
+const cajeraNotaId = cajeraCreaNota.cuerpo?.id;
+const cajeraRelee = await pedir(`/api/notas-remision/${cajeraNotaId}`, tokenCajera);
+revisar(
+  'y despues la puede releer, con su vendedor ya guardado',
+  cajeraRelee.status === 200 && cajeraRelee.cuerpo?.vendedor === 'Carla',
+  JSON.stringify(cajeraRelee.cuerpo?.error ?? cajeraRelee.cuerpo?.vendedor),
+);
+
+const empleadaCancela = await pedir(`/api/notas-remision/${notaLimpiaId}/cancelar`, tokenEmpleada, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ motivo: 'la empleada tambien intenta cancelar' }),
+});
+revisar(
+  'pero la empleada NO cancela -> 403 (notas.cancelar no es suyo)',
+  empleadaCancela.status === 403,
+  JSON.stringify(empleadaCancela.cuerpo),
+);
+
+const cajeraCancela = await pedir(`/api/notas-remision/${notaLimpiaId}/cancelar`, tokenCajera, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ motivo: 'La cajera deshace una venta mal capturada' }),
+});
+revisar(
+  'la cajera SI cancela -> 200',
+  cajeraCancela.status === 200,
+  JSON.stringify(cajeraCancela.cuerpo?.error),
+);
+
+// -------------------------------------------------------------- limpieza
+//
+// El ORDEN importa y no es obvio, asi que va en la funcion de limpieza
+// compartida, que se corre al arrancar el archivo y otra vez aqui. Lo que
+// no se ve desde aqui esta todo comentado ahi.
+
+const limpieza = await limpiarNotasDePrueba();
+revisar('las notas de prueba se borraron', limpieza.notas > 0, `${limpieza.notas} notas`);
+revisar(
+  'y con las notas fuera, el stock de cada producto vuelve a los 50 de apertura',
+  limpieza.existencia === 50,
+  JSON.stringify(limpieza),
+);
+revisar(
+  'y tambien el producto con sus precios, y el talonario',
+  limpieza.productos > 1 && limpieza.folios > 0,
+  JSON.stringify(limpieza),
+);
+void pagoId;
+void notaConEspecialId;
+void notaFutura;
+void notaPasada;
+void notaConTrato;
+void notaLimpia;
+void notaAlBorde;
+void existeSql;
 
 // Limpia lo de esta seccion. Los productos van tambien en la limpieza
 // general por codigo, pero los precios no tienen codigo y se van por

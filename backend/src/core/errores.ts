@@ -62,11 +62,4 @@ export class ReglaNegocio extends AppError {
   }
 }
 
-/** 429: se supero el limite de peticiones. */
-export class DemasiadasPeticiones extends AppError {
-  constructor(mensaje = 'Demasiadas peticiones, espera unos minutos') {
-    super(429, 'DEMASIADAS_PETICIONES', mensaje);
-  }
-}
-
 export const esAppError = (error: unknown): error is AppError => error instanceof AppError;

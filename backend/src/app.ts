@@ -5,7 +5,6 @@ import morgan from 'morgan';
 import { env, origenesCORS } from './config/entorno.js';
 import { prepararSesion } from './middleware/sesion.js';
 import { manejadorErrores } from './middleware/errores.js';
-import { limiteGeneral, limiteLogin } from './middleware/limites.js';
 import { NoEncontrado } from './core/errores.js';
 import { rutasSalud } from './modules/salud/rutas.js';
 import { rutasAuth } from './modules/auth/rutas.js';
@@ -14,6 +13,7 @@ import { rutasPrecios } from './modules/precios/rutas.js';
 import { rutasProductos } from './modules/productos/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
 import { rutasUsuarios } from './modules/usuarios/rutas.js';
+import { rutasNotasRemision } from './modules/notas-remision/rutas.js';
 
 /**
  * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
@@ -26,11 +26,10 @@ import { rutasUsuarios } from './modules/usuarios/rutas.js';
  *   3. CORS
  *   4. cuerpo JSON
  *   5. logs
- *   6. limites de peticiones
- *   7. sesion (abre la conexion a la base)
- *   8. rutas
- *   9. 404
- *  10. manejador de errores (siempre al final)
+ *   6. sesion (abre la conexion a la base)
+ *   7. rutas
+ *   8. 404
+ *   9. manejador de errores (siempre al final)
  */
 export function crearApp(): Express {
   const app = express();
@@ -53,11 +52,7 @@ export function crearApp(): Express {
   // 5. Logs de acceso
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-  // 6. Limites de peticiones
-  app.use(limiteGeneral);
-  app.use('/api/auth/login', limiteLogin);
-
-  // 7. Sesion: abre la conexion dedicada del request y la devuelve al pool
+  // 6. Sesion: abre la conexion dedicada del request y la devuelve al pool
   //    al terminar. Se monta en /api para que las rutas de salud no
   //    dependan de la base.
   app.use('/api', prepararSesion);
@@ -70,6 +65,7 @@ export function crearApp(): Express {
   app.use('/api/categorias-producto', rutasCatalogo.categorias);
   app.use('/api/precios', rutasPrecios);
   app.use('/api/productos', rutasProductos);
+  app.use('/api/notas-remision', rutasNotasRemision);
   app.use('/api/usuarios', rutasUsuarios);
 
   // 9. Cualquier otra ruta de /api no existe

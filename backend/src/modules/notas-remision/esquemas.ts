@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { idAlmacen } from '../../core/valores.js';
 
 /**
  * Esquemas de notas de remision.
@@ -110,11 +111,7 @@ export const renglonNotaEsquema = z
   .object({
     id: idPositivo.optional(),
     producto_id: idPositivo,
-    almacen_id: z.coerce
-      .number()
-      .int()
-      .positive('almacen_id debe ser un numero positivo')
-      .max(32767, 'almacen_id esta fuera de rango'),
+    almacen_id: idAlmacen,
     cantidad_bultos: decimal(8, 2, 'cantidad_bultos'),
     kg_bulto: decimal(7, 3, 'kg_bulto').optional(),
     precio_unit_kg: precio.optional(),

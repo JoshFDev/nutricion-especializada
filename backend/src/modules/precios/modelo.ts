@@ -1,3 +1,5 @@
+import { fechaComoTexto } from '../../core/valores.js';
+
 /**
  * Formas de los precios.
  *
@@ -7,12 +9,9 @@
  * - `precio_kg` es NUMERIC y el driver lo entrega como string para no
  *   perder decimales. La API lo manda como number.
  * - `id`, `producto_id` y `cliente_id` son BIGINT y llegan como string.
- * - `vigente_desde` y `vigente_hasta` son DATE. El driver entrega un `Date`
- *   en hora local, y por eso el mapeo usa el año/mes/día locales en vez
- *   de `toISOString()`: un `toISOString()` sobre una fecha que Postgres
- *   guardo como 2026-06-01 puede devolver 2026-05-31T24:00 si la maquina
- *   esta en un huso negativo. Para una vigencia, un dia corrido es un dia
- *   de diferencia.
+ * - `vigente_desde` y `vigente_hasta` son DATE y el mapeo pasa por
+ *   `fechaComoTexto` de `core/valores.ts`, que explica por que se leen las
+ *   partes locales del `Date` en vez de usar `toISOString()`.
  */
 
 /** `vigente_hasta` en NULL es "abierto": la fila sigue vigente. */
@@ -59,21 +58,6 @@ export interface PrecioCliente {
   vigente_desde: string;
   vigente_hasta: string | null;
 }
-
-/**
- * La fecha como texto AAAA-MM-DD, taken de las partes LOCALES del Date.
- *
- * Ver la nota de la cabecera: un `toISOString()` aqui puede correr un dia.
- * Se escribe a mano en vez de usar `toLocaleDateString('en-CA')` porque
- * ese depende de los datos de ICU del runtime y en una imagen de Node
- * minimalista cambia el formato.
- */
-const fechaComoTexto = (valor: Date): string => {
-  const anio = valor.getFullYear();
-  const mes = String(valor.getMonth() + 1).padStart(2, '0');
-  const dia = String(valor.getDate()).padStart(2, '0');
-  return `${anio}-${mes}-${dia}`;
-};
 
 export const mapeoPrecioPublico = (fila: FilaPrecioPublico): PrecioPublico => ({
   id: Number(fila.id),

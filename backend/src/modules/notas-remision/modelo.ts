@@ -1,3 +1,5 @@
+import { fechaComoTexto } from '../../core/valores.js';
+
 /**
  * Tipos de notas de remision: lo que devuelve Postgres y lo que sale por
  * la API.
@@ -126,15 +128,6 @@ export interface Folio {
  */
 export const componerFolio = (serie: string, numero: number): string => `${serie}-${numero}`;
 
-/** Una fecha de Postgres puede venir como Date o como string segun la columna. */
-export const formatearFecha = (valor: Date | string): string => {
-  if (typeof valor === 'string') return valor.slice(0, 10);
-  const anio = valor.getFullYear();
-  const mes = String(valor.getMonth() + 1).padStart(2, '0');
-  const dia = String(valor.getDate()).padStart(2, '0');
-  return `${anio}-${mes}-${dia}`;
-};
-
 export const mapearRenglon = (f: FilaRenglon): Renglon => ({
   id: Number(f.id),
   producto_id: Number(f.producto_id),
@@ -163,7 +156,7 @@ export const mapearNota = (f: FilaNota, renglones: Renglon[] = []): Nota => ({
   cliente: f.cliente_nombre,
   vendedor_id: f.vendedor_id === null ? null : Number(f.vendedor_id),
   vendedor: f.vendedor_nombre,
-  fecha: formatearFecha(f.fecha),
+  fecha: fechaComoTexto(f.fecha),
   direccion_entrega: f.direccion_entrega,
   subtotal: Number(f.subtotal),
   estatus: f.estatus,

@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { contar, consultar, consultarUno } from '../../db/transaccion.js';
+import { fechaComoTexto } from '../../core/valores.js';
 import type { CrearTalonario, ListarFolios, ListarNotas } from './esquemas.js';
 import type { EstatusNota, FilaNota, FilaRenglon, Folio, Listado, NotaListada } from './modelo.js';
 
@@ -159,7 +160,7 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
       cliente_id: Number(f.cliente_id),
       cliente: f.cliente_nombre,
       vendedor: f.vendedor_nombre,
-      fecha: f.fecha,
+      fecha: fechaComoTexto(f.fecha),
       subtotal: Number(f.subtotal),
       estatus: f.estatus,
       renglones: Number(f.renglones),

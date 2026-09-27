@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { contar, consultar, consultarUno } from '../../db/transaccion.js';
+import { fechaComoTexto } from '../../core/valores.js';
 import type { FilaPrecioCliente, FilaPrecioPublico } from './modelo.js';
 import type { ListarPreciosCliente, ListarPreciosPublicos, PrecioEfectivo } from './esquemas.js';
 
@@ -414,7 +415,7 @@ export async function resolverEfectivo(
   const hayPublico = r.publico_id !== null;
 
   return {
-    fecha: r.fecha,
+    fecha: fechaComoTexto(r.fecha),
     producto_id: Number(r.producto_id),
     producto_codigo: r.producto_codigo,
     producto_nombre: r.producto_nombre,
@@ -427,26 +428,17 @@ export async function resolverEfectivo(
         ? Number(r.publico_precio)
         : null,
     vigente_desde: r.especial_desde
-      ? formatearFecha(r.especial_desde)
+      ? fechaComoTexto(r.especial_desde)
       : r.publico_desde
-        ? formatearFecha(r.publico_desde)
+        ? fechaComoTexto(r.publico_desde)
         : null,
     vigente_hasta: r.especial_hasta
-      ? formatearFecha(r.especial_hasta)
+      ? fechaComoTexto(r.especial_hasta)
       : r.publico_hasta
-        ? formatearFecha(r.publico_hasta)
+        ? fechaComoTexto(r.publico_hasta)
         : null,
   };
 }
-
-/** `vigente_desde` sale de Postgres como DATE (un string ya), no como Date. */
-const formatearFecha = (valor: Date | string): string => {
-  if (typeof valor === 'string') return valor.slice(0, 10);
-  const anio = valor.getFullYear();
-  const mes = String(valor.getMonth() + 1).padStart(2, '0');
-  const dia = String(valor.getDate()).padStart(2, '0');
-  return `${anio}-${mes}-${dia}`;
-};
 
 /**
  * ¿Existe el producto y el cliente a los que se quiere apuntar?

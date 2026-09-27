@@ -130,6 +130,51 @@ const cerrarPoolDirecto = async () => {
 };
 
 /**
+ * Marca de agua de las tablas de rastro, y su limpieza.
+ *
+ * La suite dispara los mismos triggers de auditoria que cualquier operacion
+ * real, asi que sin esto sus rastros se acumulan corrida tras corrida: la
+ * base de pruebas llego a tener 3801 renglones de bitacora, de los cuales 14
+ * eran del seed y los demas de corridas viejas. Lo mismo con `sesiones` (656)
+ * y `auditoria_accesos` (1347), que el seed no toca y que nadie limpiaba.
+ *
+ * No se pueden truncar enteras, y no es prudencia sino un hecho: el seed
+ * dispara ESOS MISMOS triggers al insertar sus clientes, productos y precios.
+ * Sus 14 renglones de bitacora son tan legítimos como los de la suite, y
+ * borrarlos dejaria la base menos parecida a como estaba, no mas.
+ *
+ * Por eso se guarda el `id` mas alto de cada tabla ANTES de la primera
+ * escritura (que es el `restaurarSemilla` de abajo, no la primera peticion:
+ * ese UPDATE tambien deja rastro) y al final se borra unicamente lo que tenga
+ * `id` mayor. Se usa el `id` y no una fecha para no depender del reloj, y las
+ * dos mitades se dejan juntas aqui a proposito: estan a tres mil lineas de
+ * distancia y es facil cambiar una y olvidar la otra.
+ *
+ * Si un bloque nuevo empieza a auditar otra tabla, es una palabra en RASTROS.
+ */
+const RASTROS = [
+  'auditoria_log',
+  'auditoria_accesos',
+  'auditoria_precios',
+  'auditoria_inventario',
+  'sesiones',
+];
+const marcasDeRastro = {};
+for (const tabla of RASTROS) {
+  const r = await sqlDirecto(`SELECT COALESCE(max(id), 0)::TEXT AS id FROM pos.${tabla}`);
+  marcasDeRastro[tabla] = Number(r.rows[0].id);
+}
+
+const limpiarRastrosDeLaCorrida = async () => {
+  const cuenta = {};
+  for (const tabla of RASTROS) {
+    const r = await sqlDirecto(`DELETE FROM pos.${tabla} WHERE id > $1`, [marcasDeRastro[tabla]]);
+    if (r.rowCount > 0) cuenta[tabla] = r.rowCount;
+  }
+  return cuenta;
+};
+
+/**
  * Deja las contrasenas del seed como estaban, ANTES de probar nada.
  *
  * La seccion de cambio de contrasena modifica la del administrador, y al
@@ -3683,6 +3728,16 @@ try {
     ['CAMBIAR-ESTA-CLAVE'],
   );
   revisar('las contrasenas del seed se restauraron', r.rowCount > 0, `${r.rowCount} usuarios`);
+
+  // Lo ULTIMO de todo, y por una razon concreta: el restore de arriba es un
+  // UPDATE sobre `usuarios` y por lo tanto deja dos renglones de bitacora
+  // nuevos. Si esta limpieza corriera antes, esos dos se quedarian.
+  const rastros = await limpiarRastrosDeLaCorrida();
+  revisar(
+    'los rastros de la corrida se borraron',
+    Object.keys(rastros).length > 0,
+    Object.keys(rastros).length > 0 ? JSON.stringify(rastros) : 'la corrida no audito nada',
+  );
 } finally {
   await pool.end();
   await cerrarPoolDirecto();

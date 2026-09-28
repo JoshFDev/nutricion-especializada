@@ -31,6 +31,8 @@ export class ErrorApi extends Error {
     readonly codigo: string,
     mensaje: string,
     readonly detalles: DetalleCampo[] = [],
+    /** El `detalles` crudo del backend, sin interpretar. Ver `ErrorLegible`. */
+    readonly datos: unknown = null,
   ) {
     super(mensaje);
     this.name = 'ErrorApi';
@@ -59,6 +61,22 @@ export interface ErrorLegible {
   /** Ya con el `codigo` resuelto a algo que la app sepa que hacer. */
   codigo: string;
   detalles: DetalleCampo[];
+  /**
+   * El `detalles` CRUDO del backend, sin interpretar.
+   *
+   * Va aparte de `detalles` porque los dos niveles no significan lo mismo.
+   * `detalles` es la lista de `{campo, problema}` de los 422 de
+   * validacion, que es lo que se pinta junto a un input. En las reglas de
+   * negocio el backend manda un objeto con lo que el error sabe de verdad
+   * (`STOCK_INSUFICIENTE` trae `existencia`, `solicitado` y `faltan`), y
+   * tirarlo obliga a pintar "no hay producto suficiente" cuando se puede
+   * decir "faltan 8 bultos".
+   *
+   * Va como `unknown` y no como una forma: cada codigo trae su propio
+   * objeto y hacer una union de todos seria inventar una forma comun que
+   * no existe. Quien lo use castea lo que su codigo le promise.
+   */
+  datos: unknown;
 }
 
 /**
@@ -88,6 +106,7 @@ export function errorLegible(error: unknown): ErrorLegible {
           'No se pudo contactar al servidor. Revisa que este encendido el backend ' +
           'y que este permitido este origen.',
         detalles: [],
+        datos: null,
       };
     }
 
@@ -98,6 +117,9 @@ export function errorLegible(error: unknown): ErrorLegible {
         codigo: cuerpo.codigo,
         mensaje: cuerpo.error ?? 'La operacion no se pudo completar',
         detalles: detallesDe(cuerpo.detalles),
+        // Se pasa crudo: el codigo ya lo eligio el backend y cada uno trae
+        // su propio objeto. Ver `datos` en `ErrorLegible`.
+        datos: cuerpo.detalles ?? null,
       };
     }
 
@@ -108,6 +130,7 @@ export function errorLegible(error: unknown): ErrorLegible {
         codigo: 'ERROR_SERVIDOR',
         mensaje: 'El servidor fallo. Intenta de nuevo en un momento.',
         detalles: [],
+        datos: null,
       };
     }
   }
@@ -116,6 +139,7 @@ export function errorLegible(error: unknown): ErrorLegible {
     codigo: 'ERROR_INESPERADO',
     mensaje: 'Ocurrio un error inesperado.',
     detalles: [],
+    datos: null,
   };
 }
 

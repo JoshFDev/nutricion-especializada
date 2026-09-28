@@ -13,10 +13,12 @@ import type { ClienteFila, NotaResumenFila } from './modelo.js';
 
 const CAMPOS = `c.id, c.codigo_cliente, c.nombre, c.establo, c.especie_id,
                 e.nombre AS especie, c.estatus, c.telefono, c.direccion,
-                c.saldo_actual, c.creado_en, c.actualizado_en`;
+                c.saldo_actual, c.creado_en, c.actualizado_en,
+                f.rfc, f.razon_social`;
 
 const FROM_CLIENTES = `FROM clientes c
-                       LEFT JOIN especies e ON e.id = c.especie_id`;
+                       LEFT JOIN especies e ON e.id = c.especie_id
+                       LEFT JOIN datos_fiscales_cliente f ON f.cliente_id = c.id`;
 
 /**
  * Arma el WHERE de la lista y sus valores.
@@ -32,7 +34,7 @@ function construirFiltro(q: ListarClientes): { donde: string; valores: unknown[]
   if (q.buscar) {
     valores.push(`%${q.buscar}%`);
     condiciones.push(
-      `(c.nombre ILIKE $${valores.length} OR c.codigo_cliente ILIKE $${valores.length})`,
+      `(c.nombre ILIKE $${valores.length} OR c.codigo_cliente ILIKE $${valores.length} OR f.rfc ILIKE $${valores.length})`,
     );
   }
   if (q.estatus) {
@@ -62,7 +64,10 @@ export async function listar(
 
   const total = await contar(
     cliente,
-    `SELECT count(*)::int AS total FROM clientes c ${donde}`,
+    `SELECT count(*)::int AS total
+       FROM clientes c
+       LEFT JOIN datos_fiscales_cliente f ON f.cliente_id = c.id
+       ${donde}`,
     valores,
   );
 

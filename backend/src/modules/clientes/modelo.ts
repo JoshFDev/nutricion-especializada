@@ -17,6 +17,8 @@ export interface ClienteFila {
   estatus: 'Activo' | 'Inactivo';
   telefono: string | null;
   direccion: string | null;
+  rfc: string | null;
+  razon_social: string | null;
   saldo_actual: string;
   creado_en: Date;
   actualizado_en: Date;
@@ -43,6 +45,8 @@ export interface Cliente {
   estatus: 'Activo' | 'Inactivo';
   telefono: string | null;
   direccion: string | null;
+  rfc: string | null;
+  razon_social: string | null;
   saldo_actual: number;
   creado_en: string;
   actualizado_en: string;
@@ -81,6 +85,8 @@ export function mapeoCliente(fila: ClienteFila): Cliente {
     estatus: fila.estatus,
     telefono: fila.telefono,
     direccion: fila.direccion,
+    rfc: fila.rfc ?? null,
+    razon_social: fila.razon_social ?? null,
     saldo_actual: Number(fila.saldo_actual),
     creado_en: fila.creado_en.toISOString(),
     actualizado_en: fila.actualizado_en.toISOString(),

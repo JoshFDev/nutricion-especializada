@@ -100,6 +100,18 @@ rutasNotasRemision.get(
   ctrl.pdf,
 );
 
+// El Excel va con `notas.ver` por la misma razon que el PDF: descargar la
+// nota en Excel no es una operacion distinta de verla. A diferencia del
+// PDF no lo abre el navegador: va `attachment`, que es como se manda un
+// archivo para otro programa (Excel), y el `Content-Disposition` del
+// controlador lo dice.
+rutasNotasRemision.get(
+  '/:id/excel',
+  requierePermiso('notas.ver'),
+  validarParams(idNotaEsquema),
+  ctrl.excel,
+);
+
 rutasNotasRemision.patch(
   '/:id',
   requierePermiso('notas.editar'),

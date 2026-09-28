@@ -1,0 +1,250 @@
+<!--
+  El mostrador.
+
+  Dos paginas en una: la captura y, despues de guardar, el comprobante. Se
+  decide con `@if (guardada())` y no con el router porque el comprobante es
+  el FINAL de la captura, no otro lugar: si fuera una ruta, el operador
+  podria recargar y quedarse en una pantalla de una nota que ya se guardo,
+  sin forma de volver.
+-->
+@if (guardada(); as nota) {
+  <section class="comprobante">
+    <h1>Nota guardada</h1>
+    <p class="folio">{{ nota.folio }}</p>
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    <dl>
+      <dt>Cliente</dt>
+      <dd>{{ nota.cliente }}</dd>
+      <dt>Fecha</dt>
+      <dd>{{ nota.fecha }}</dd>
+      <dt>Total</dt>
+      <dd class="total">{{ totalComoTexto() }}</dd>
+    </dl>
+
+    <table class="detalle">
+      <thead>
+        <tr>
+          <th scope="col">Producto</th>
+          <th scope="col">Bultos</th>
+          <th scope="col">Kilos</th>
+          <th scope="col">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (renglon of nota.renglones; track renglon.id) {
+          <tr>
+            <td>{{ renglon.producto_nombre }}</td>
+            <td class="num">{{ bultosComoTexto(renglon.cantidad_bultos) }}</td>
+            <td class="num">{{ kilosComoTexto(renglon.kg_bulto * renglon.cantidad_bultos) }}</td>
+            <td class="num">{{ montoComoTexto(renglon.subtotal) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <p class="nota">
+      El total de arriba es el que calculo la base, no el que se iba viendo mientras se capturaba.
+    </p>
+
+    <div class="acciones">
+      <button type="button" class="primario" (click)="imprimir()">Imprimir el PDF</button>
+      <button type="button" (click)="excel()">Excel</button>
+      <button type="button" (click)="otraNota()">Otra nota</button>
+    </div>
+  </section>
+} @else {
+  <section class="pos">
+    <h1>Nota de remision</h1>
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    <!--
+      El cliente va PRIMERO y bloquea el producto. El precio depende del
+      cliente (el suyo le gana al de lista), asi que agregar renglones antes
+      de saber a quien se le cobra es agregar renglones con el precio
+      equivocado.
+    -->
+    <div class="bloque">
+      @if (cliente(); as elegido) {
+        <div class="elegido">
+          <span>
+            <strong>{{ elegido.nombre }}</strong>
+            @if (elegido.establo) {
+              <span class="tenue"> · {{ elegido.establo }}</span>
+            }
+          </span>
+          <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
+        </div>
+      } @else {
+        <label for="buscar-cliente">Cliente</label>
+        <input
+          id="buscar-cliente"
+          type="search"
+          autocomplete="off"
+          placeholder="Nombre, clave o RFC del cliente"
+          (input)="buscarCliente($any($event.target).value)"
+        />
+        @if (buscandoCliente() && resultadosCliente().length === 0) {
+          <p class="buscando">Buscando...</p>
+        }
+        @if (resultadosCliente().length > 0) {
+          <ul class="resultados">
+            @for (opcion of resultadosCliente(); track opcion.id) {
+              <li>
+                <button type="button" (click)="elegirCliente(opcion)">
+                  <span>{{ opcion.nombre }}</span>
+                  @if (opcion.codigo_cliente) {
+                    <span class="tenue">{{ opcion.codigo_cliente }}</span>
+                  }
+                  @if (opcion.rfc) {
+                    <span class="tenue" aria-hidden="true">·</span>
+                    <span class="tenue">{{ opcion.rfc }}</span>
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      }
+    </div>
+
+    <div class="bloque" [class.apagado]="cliente() === null">
+      <label for="buscar-producto">Producto</label>
+      <input
+        id="buscar-producto"
+        type="search"
+        autocomplete="off"
+        placeholder="Codigo o nombre del producto"
+        [disabled]="cliente() === null"
+        (input)="buscarProducto($any($event.target).value)"
+      />
+      @if (buscandoProducto() && resultadosProducto().length === 0) {
+        <p class="buscando">Buscando...</p>
+      }
+      @if (resultadosProducto().length > 0) {
+        <ul class="resultados">
+          @for (opcion of resultadosProducto(); track opcion.id) {
+            <li>
+              <button
+                type="button"
+                [disabled]="preguntando() === opcion.id"
+                (click)="agregarProducto(opcion)"
+              >
+                <span>{{ opcion.nombre }}</span>
+                <span class="tenue">{{ opcion.codigo }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    @if (hayLineas()) {
+      <table class="renglones">
+        <thead>
+          <tr>
+            <th scope="col">Producto</th>
+            <th scope="col">Bultos</th>
+            <th scope="col">Kg por bulto</th>
+            <th scope="col">Precio por kg</th>
+            <th scope="col">Total</th>
+            <th scope="col"><span class="oculto">Quitar</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (linea of lineas(); track linea.uid) {
+            <tr>
+              <td>
+                {{ linea.producto_nombre }}
+                <span class="tenue">{{ linea.producto_codigo }}</span>
+                <span class="origen">{{ origenComoTexto(linea) }}</span>
+              </td>
+              <td>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputmode="decimal"
+                  [value]="linea.cantidad_bultos"
+                  (change)="ponerCantidad(linea.uid, $any($event.target).value)"
+                  [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  inputmode="decimal"
+                  [value]="linea.kg_bulto"
+                  (change)="ponerKilos(linea.uid, $any($event.target).value)"
+                  [attr.aria-label]="'Kilos por bulto de ' + linea.producto_nombre"
+                />
+              </td>
+              <td class="num">
+                {{ linea.precio_unit_kg === null ? '—' : montoComoTexto(linea.precio_unit_kg) }}
+              </td>
+              <td class="num">{{ montoDeLinea(linea) }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="peligro chico"
+                  (click)="quitarLinea(linea.uid)"
+                  [attr.aria-label]="'Quitar ' + linea.producto_nombre"
+                >
+                  Quitar
+                </button>
+              </td>
+            </tr>
+            @if (problemasDeLinea(linea)['cantidad_bultos']; as problema) {
+              <tr class="con-problema">
+                <td colspan="6">{{ problema }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+
+      <div class="cierre">
+        <p class="kilos">
+          {{ kilosComoTexto(kilos()) }} kg en total
+          @if (cliente(); as elegido) {
+            <span class="tenue">para {{ elegido.nombre }}</span>
+          }
+        </p>
+        <p class="total">{{ totalComoTexto() }}</p>
+        <p class="aviso">
+          Este total es un preview. El que vale es el que calcula la base al guardar.
+        </p>
+      </div>
+    }
+
+    <div class="direccion">
+      <label for="direccion">Direccion de entrega (opcional)</label>
+      <input
+        id="direccion"
+        type="text"
+        maxlength="300"
+        [value]="direccion()"
+        (input)="direccion.set($any($event.target).value)"
+      />
+    </div>
+
+    <div class="acciones">
+      <button
+        type="button"
+        class="primario grande"
+        [disabled]="!puedeGuardar()"
+        (click)="guardar()"
+      >
+        {{ guardando() ? 'Guardando...' : 'Guardar la nota' }}
+      </button>
+    </div>
+  </section>
+}

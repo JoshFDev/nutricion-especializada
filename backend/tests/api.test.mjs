@@ -269,6 +269,46 @@ revisar(
   `${filtrada.cuerpo.datos?.length} resultados`,
 );
 
+// -------------------------------------------------------------------- rfc en la busqueda
+// El RFC NO vive en `clientes`, vive en `datos_fiscales_cliente` (una fila
+// por cliente). El POS tiene que poder buscar "LMR-040101-..." y que el
+// cliente salga, asi que el listado hace LEFT JOIN con esa tabla. La prueba
+// inserta un dato fiscal para el cliente del seed, busca por su RFC y lo
+// borra; sin esto el RFC estaria en la respuesta solo si alguien lo capturo.
+const idClienteDelSeed = await sqlDirecto(
+  `SELECT id::TEXT AS id FROM pos.clientes WHERE codigo_cliente = 'CL01' LIMIT 1`,
+);
+const conRfc = await pedir(`/api/clientes/${Number(idClienteDelSeed.rows[0].id)}`, token);
+revisar('el cliente del seed existe', conRfc.status === 200, String(conRfc.status));
+
+try {
+  await sqlDirecto(
+    `INSERT INTO pos.datos_fiscales_cliente (cliente_id, rfc, razon_social)
+     VALUES ($1, 'LMR040101X87', 'Cliente de prueba SPR')`,
+    [Number(idClienteDelSeed.rows[0].id)],
+  );
+
+  const porRfc = await pedir('/api/clientes?buscar=LMR040101X87', token);
+  revisar(
+    'el filtro buscar tambien encuentra por RFC',
+    porRfc.status === 200 &&
+      porRfc.cuerpo.datos?.length === 1 &&
+      porRfc.cuerpo.datos?.[0]?.rfc === 'LMR040101X87',
+    JSON.stringify(porRfc.cuerpo),
+  );
+
+  const fichaConRfc = await pedir(`/api/clientes/${Number(idClienteDelSeed.rows[0].id)}`, token);
+  revisar(
+    'la ficha del cliente trae su rfc',
+    fichaConRfc.cuerpo?.rfc === 'LMR040101X87',
+    JSON.stringify(fichaConRfc.cuerpo).slice(0, 120),
+  );
+} finally {
+  await sqlDirecto(`DELETE FROM pos.datos_fiscales_cliente WHERE cliente_id = $1`, [
+    Number(idClienteDelSeed.rows[0].id),
+  ]);
+}
+
 const inexistenteId = await pedir('/api/clientes/999999', token);
 revisar(
   'GET /api/clientes/999999 -> 404',
@@ -3397,6 +3437,58 @@ revisar('sin sesion no hay PDF', pdfSinToken.status === 401, String(pdfSinToken.
 // imprimir: el PDF no es un permiso aparte del de ver.
 const pdfCajera = await pedirBytes(`/api/notas-remision/${notaBaseId}/pdf`, tokenCajera);
 revisar('la cajera tambien puede imprimir', pdfCajera.status === 200, String(pdfCajera.status));
+
+// ------------------------------------------------------------------ excel
+
+/**
+ * El Excel de la nota.
+ *
+ * Igual que el PDF, lo que importa aqui es el CONTRATO de la respuesta: que
+ * salga un `.xlsx` de verdad (un ZIP, que empieza con "PK"), con su tipo y
+ * su nombre, y que un error siga siendo JSON. Que las celdas digan lo que
+ * tienen que decir es cosa del test unitario `notas.excel.test.ts`; aqui la
+ * nota ya se probo que guarda los datos, y si la celda mala fuera de organizar
+ * la nota, este archivo no lo veria con un HTTP 200.
+ *
+ * Ademas se comprueba la cabecera `X-Renglones-Fuera`: la hoja trae 9
+ * bloques fijos y el frontend necesita saber, antes de abrir la descarga,
+ * si la nota no cabe entera para avisar.
+ */
+const excelDeLaNota = await pedirBytes(`/api/notas-remision/${notaBaseId}/excel`, tokenAdmin);
+revisar('el excel de la nota -> 200', excelDeLaNota.status === 200, String(excelDeLaNota.status));
+revisar(
+  'es un xlsx de verdad (ZIP)',
+  excelDeLaNota.bytes.subarray(0, 2).toString('latin1') === 'PK',
+  JSON.stringify(excelDeLaNota.bytes.subarray(0, 8).toString('latin1')),
+);
+revisar(
+  'sale como hoja de calculo OOXML',
+  excelDeLaNota.headers.get('content-type') ===
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  excelDeLaNota.headers.get('content-type'),
+);
+revisar(
+  'con el folio en el nombre del archivo',
+  (excelDeLaNota.headers.get('content-disposition') ?? '').includes(
+    `nota-remision-${notaBase.cuerpo?.folio}-`,
+  ),
+  excelDeLaNota.headers.get('content-disposition'),
+);
+revisar(
+  'avisando cuantos renglones se quedaron fuera',
+  excelDeLaNota.headers.get('x-renglones-fuera') === '0',
+  String(excelDeLaNota.headers.get('x-renglones-fuera')),
+);
+
+const excelSinNota = await pedirBytes('/api/notas-remision/99999999/excel', tokenAdmin);
+revisar(
+  'una nota que no existe sigue dando JSON, no un xlsx roto',
+  excelSinNota.status === 404 && excelSinNota.bytes.toString('utf8').includes('NO_ENCONTRADO'),
+  `${excelSinNota.status} ${excelSinNota.bytes.toString('utf8').slice(0, 80)}`,
+);
+
+const excelSinToken = await pedirBytes(`/api/notas-remision/${notaBaseId}/excel`, null);
+revisar('sin sesion no hay Excel', excelSinToken.status === 401, String(excelSinToken.status));
 
 const stockAntesDeCantidad = await existenciaDe(prodNota);
 const precioDelRenglon = editarDireccion.cuerpo?.renglones?.[0]?.precio_unit_kg;

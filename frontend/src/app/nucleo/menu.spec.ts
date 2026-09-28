@@ -27,6 +27,25 @@ describe('el catalogo de modulos', () => {
     expect(new Set(permisos).size).toBe(permisos.length);
   });
 
+  it('la pantalla que declara el modulo existe de verdad', async () => {
+    // `carga` es un import dinamico escrito a mano en la tabla. Un typo en
+    // la ruta no da error de compilacion: la pantalla esta lazy, y el
+    // modulo revienta AL HACER CLIC en el menu, con la persona parada en el
+    // mostrador. Esto lo truena aqui.
+    for (const modulo of MODULOS) {
+      if (modulo.carga === undefined) continue;
+      const cargado = await modulo.carga();
+      expect(cargado, modulo.ruta).toBeDefined();
+    }
+  });
+
+  it('notas ya no es una pantalla pendiente', () => {
+    // El primer modulo de verdad. Si esto falla, el menu volvio a ofrecer
+    // el aviso de "pantalla pendiente" en el mostrador.
+    const notas = MODULOS.find((m) => m.ruta === 'notas');
+    expect(notas?.carga).toBeDefined();
+  });
+
   it('todo permiso del menu es de ver, no de escribir', () => {
     // El menu es la lista de lo que se ABRE. Que el permiso sea de ver
     // hace que el boton de una pantalla y su entrada en el menu se estables

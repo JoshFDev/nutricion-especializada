@@ -3,6 +3,7 @@ import { consultarUno, enTransaccionDe } from '../../db/transaccion.js';
 import { env } from '../../config/entorno.js';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { resolverEfectivo } from '../precios/repositorio.js';
+import { excelNotaRemision } from './excel.js';
 import { pdfNotaRemision } from './pdf.js';
 import * as repo from './repositorio.js';
 import type {
@@ -16,6 +17,7 @@ import type {
 import {
   mapearNota,
   mapearRenglon,
+  type ClienteImprimible,
   type EstatusNota,
   type Folio,
   type Listado,
@@ -73,9 +75,7 @@ export async function consultar(cliente: PoolClient, id: number): Promise<Nota> 
  * armar el PDF con una consulta propia "para imprimir" es como empiezan los
  * descuadres entre lo que se ve y lo que se cobra.
  *
- * El cliente se pide aparte porque el PDF necesita su telefono, establo,
- * especie y datos fiscales, y `consultarNota` solo trae el nombre (ver
- * `repo.consultarClienteImprimible`). El membrete sale del entorno.
+ * El membrete sale del entorno.
  */
 export async function pdf(
   cliente: PoolClient,
@@ -83,14 +83,7 @@ export async function pdf(
 ): Promise<{ bytes: Buffer; nombreArchivo: string }> {
   const nota = await leer(cliente, id);
 
-  const datosCliente = await repo.consultarClienteImprimible(cliente, nota.cliente_id);
-  if (!datosCliente) {
-    // La FK lo hace imposible mientras el cliente exista, y las notas
-    // bloquean el borrado del cliente. Se avisa igual: si esta fila se
-    // pierde es un bug del borrado, y un 404 de "nota inexistente" lleva a
-    // revisar el lado equivocado.
-    throw new NoEncontrado('La nota existe pero su cliente ya no: revisa el borrado de clientes');
-  }
+  const datosCliente = await clienteImprimible(cliente, nota);
 
   const bytes = await pdfNotaRemision(nota, datosCliente, {
     nombre: env.EMPRESA_NOMBRE,
@@ -99,7 +92,44 @@ export async function pdf(
     telefono: env.EMPRESA_TELEFONO,
   });
 
-  return { bytes, nombreArchivo: nombreDelArchivo(nota) };
+  return { bytes, nombreArchivo: nombreDelArchivo(nota, 'pdf') };
+}
+
+/**
+ * El Excel.
+ *
+ * Misma nota y mismo cliente que el PDF y que la pantalla: comparten `leer`
+ * y `clienteImprimible`, asi que los tres muestran exactamente lo que hay
+ * en la base. A diferencia de `pdf`, el Excel devuelve tambien cuantos
+ * renglones se quedaron fuera del papel (la plantilla solo trae 9 bloques),
+ * para que el frente avise si la nota no cabe entera.
+ */
+export async function excel(
+  cliente: PoolClient,
+  id: number,
+): Promise<{ bytes: Buffer; nombreArchivo: string; renglonesFuera: number }> {
+  const nota = await leer(cliente, id);
+  const datosCliente = await clienteImprimible(cliente, nota);
+  const { bytes, renglonesFuera } = await excelNotaRemision(nota, datosCliente);
+  return { bytes, nombreArchivo: nombreDelArchivo(nota, 'xlsx'), renglonesFuera };
+}
+
+/**
+ * La ficha del cliente para un impreso.
+ *
+ * `consultarNota` solo trae el nombre del cliente (ver
+ * `repo.consultarClienteImprimible`), y PDF y Excel necesitan la direccion
+ * de entrega con la que se arma el papel. La FK hace imposible que el
+ * cliente no exista mientras la nota viva, y las notas bloquean su borrado:
+ * si la fila se pierde es un bug del borrado, y un 404 de "nota inexistente"
+ * llevaria a revisar el lado equivocado.
+ */
+async function clienteImprimible(cliente: PoolClient, nota: Nota): Promise<ClienteImprimible> {
+  const datosCliente = await repo.consultarClienteImprimible(cliente, nota.cliente_id);
+  if (!datosCliente) {
+    throw new NoEncontrado('La nota existe pero su cliente ya no: revisa el borrado de clientes');
+  }
+  return datosCliente;
 }
 
 /**
@@ -110,8 +140,8 @@ export async function pdf(
  * maquina compartida de la oficina. Y sin acentos ni espacios, que hay
  * navegadores viejos que no saben que existen.
  */
-function nombreDelArchivo(nota: Nota): string {
-  return `nota-remision-${nota.folio}-${nota.fecha}.pdf`;
+function nombreDelArchivo(nota: Nota, extension: string): string {
+  return `nota-remision-${nota.folio}-${nota.fecha}.${extension}`;
 }
 
 export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number): Promise<Nota> {

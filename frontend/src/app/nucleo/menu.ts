@@ -14,6 +14,8 @@
  * en un archivo de un solo proposito y no escondida en el router.
  */
 
+import type { Type } from '@angular/core';
+
 /** Un modulo al que se puede entrar. */
 export interface Modulo {
   /** La ruta de la app. Sin barra inicial. */
@@ -23,6 +25,20 @@ export interface Modulo {
   permiso: string;
   /** Que se va a hacer aqui. Lo lee el aviso de "pantalla pendiente". */
   pendiente: string;
+  /**
+   * La pantalla del modulo, si ya existe.
+   *
+   * Opcional a proposito: sin esto sale la pantalla de "pendiente", y con
+   * esto sale la de verdad. La tabla sigue siendo la unica que decide que
+   * hay en el menu y que ruta hay, y ahora ADEMAS dice que pantalla es la
+   * de cada uno, sin abrir una lista aparte que se pueda olvidar.
+   *
+   * El import es dinamico y va dentro de la funcion, asi que el codigo del
+   * modulo se baja solo cuando se entra a el: poner aqui un
+   * `import { Notas }` de arriba haria que la pantalla del mostrador
+   * viajara en el bundle de la auditoria.
+   */
+  carga?: () => Promise<Type<unknown>>;
 }
 
 /** Un grupo del menu lateral. El titulo no se puede filtrar. */
@@ -39,7 +55,8 @@ export const MENU: Grupo[] = [
         ruta: 'notas',
         etiqueta: 'Notas de remision',
         permiso: 'notas.ver',
-        pendiente: 'Capturar la venta: cliente, renglones, precios e imprimir el PDF.',
+        pendiente: 'Editar una nota ya capturada y reimprimir su PDF.',
+        carga: () => import('../notas/notas').then((m) => m.Notas),
       },
     ],
   },

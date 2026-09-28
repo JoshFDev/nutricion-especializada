@@ -1,0 +1,326 @@
+/*
+ * El mostrador.
+ *
+ * Pensado para una pantalla tactil de mostrador, no para una pantalla de
+ * escritorio con mouse: los botones de la tabla son altos, los numeros van
+ * alineados a la derecha (es dinero y se compara de columna), y el renglon
+ * se quita con un boton de texto y no con un iconito de 12 pixeles.
+ *
+ * Los colores son los de `styles.scss`, no valores sueltos: son los mismos
+ * que el menu y el login, y por eso esta pantalla no define ninguno.
+ */
+
+:host {
+  display: block;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- los bloques */
+
+.bloque {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+/* Sin cliente no se puede agregar producto, y el campo se apaga en vez de
+   dejar que se escriba y luego no sirva de nada. */
+.bloque.apagado {
+  opacity: 0.5;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+input[type='search'],
+input[type='text'] {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+input[type='number'] {
+  width: 6.5rem;
+  padding: 0.375rem 0.5rem;
+  font: inherit;
+  text-align: right;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.tenue {
+  color: var(--texto-tenue);
+  font-size: 0.8125rem;
+}
+
+/* El cliente ya elegido se ve como un dato, no como un campo vacio. */
+.elegido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------- los resultados */
+
+.resultados {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+}
+
+.resultados button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.resultados button:hover:not(:disabled) {
+  background: var(--acento-suave);
+}
+
+/* -------------------------------------------------------------- la tabla */
+
+.renglones,
+.detalle {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+/* El dinero y las cantidades a la derecha: se comparan de columna. */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.origen {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--texto-tenue);
+}
+
+.con-problema td {
+  padding-top: 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-bottom: 1px solid var(--borde);
+}
+
+/* ---------------------------------------------------------------- el cierre */
+
+.cierre {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  margin-bottom: 1.25rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.kilos {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.total {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El aviso del preview. Se ve DESPUES del numero, no antes: la regla de
+   este proyecto es que el backend decide, y el preview se explica sin
+   quitarle importancia al total. */
+.aviso {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.direccion {
+  margin-bottom: 1.25rem;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+}
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button.grande {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+button.peligro {
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* ---------------------------------------------------------- el comprobante */
+
+.comprobante {
+  max-width: 44rem;
+}
+
+.folio {
+  margin: 0 0 1rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+dt {
+  color: var(--texto-suave);
+}
+
+dd {
+  margin: 0;
+}
+
+dd.total {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nota {
+  margin: 0 0 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.buscando {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.sin-permiso {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.sin-permiso code {
+  padding: 0.0625rem 0.25rem;
+  font-size: 0.8125rem;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

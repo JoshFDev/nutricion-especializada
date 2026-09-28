@@ -66,6 +66,12 @@ export const routes: Routes = [
  *
  * El `data` tambien lleva el texto de "pantalla pendiente", que es lo que
  * lee `Pendiente` para no tener el modulo hardcodeado en la pantalla.
+ *
+ * Y la pantalla sale de la MISMA entrada del menu: si el modulo trae
+ * `carga`, esa es la que se usa, y si no, la de "pendiente". La condicion
+ * va con `??` y no con un `if`: las dos ramas devuelven un
+ * `loadComponent` y la de pendiente es la que se alcanza cuando el modulo
+ * todavia no tiene pantalla.
  */
 function rutasDeModulos(): Routes {
   return MODULOS.map((modulo) => ({
@@ -76,6 +82,6 @@ function rutasDeModulos(): Routes {
       etiqueta: modulo.etiqueta,
       pendiente: modulo.pendiente,
     },
-    loadComponent: () => import('./shell/pendiente').then((m) => m.Pendiente),
+    loadComponent: modulo.carga ?? (() => import('./shell/pendiente').then((m) => m.Pendiente)),
   }));
 }

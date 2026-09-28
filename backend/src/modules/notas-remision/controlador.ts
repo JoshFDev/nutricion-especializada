@@ -72,6 +72,36 @@ export const controladorNotas = {
       .send(bytes);
   },
 
+  /**
+   * La nota en Excel.
+   *
+   * Mismo molde que `pdf`: el `Buffer` se arma completo y se manda de un
+   * solo `send`, asi el manejador de errores puede seguir devolviendo su
+   * JSON si algo falla. `attachment` en vez de `inline`: el Excel no se
+   * abre en el navegador como el PDF, se descarga (y en la oficina se
+   * imprime desde Excel si quieren).
+   *
+   * El `renglonesFuera` va en una cabecera, no en el cuerpo: la respuesta
+   * es un archivo y no JSON, y el navegador/`fetch` no leeria un JSON
+   * pegado al final. Con `X-Renglones-Fuera` el frontend sabe cuantos
+   * renglones no cupieron antes de abrir la descarga.
+   */
+  excel: async (req: Request, res: Response): Promise<void> => {
+    const { bytes, nombreArchivo, renglonesFuera } = await servicio.excel(
+      req.db,
+      parametros<{ id: number }>(req).id,
+    );
+    res
+      .setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`)
+      .setHeader('Cache-Control', 'no-store')
+      .setHeader('X-Renglones-Fuera', String(renglonesFuera))
+      .send(bytes);
+  },
+
   crear: async (req: Request, res: Response): Promise<void> => {
     res
       .status(201)

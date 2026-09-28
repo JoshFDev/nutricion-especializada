@@ -1,0 +1,86 @@
+<!--
+  El catalogo compartido de Especies y Categorias.
+
+  Igual que el backend construye las dos rutas con la misma fabrica, esta
+  pantalla sirve para las dos tablas: el `recurso` y el `titulo` llegan por
+  Input desde el wrapper de cada ruta. Es una lista pequena (una docena de
+  filas) y por eso no hay filtros ni paginacion: se trae entera y se pinta.
+-->
+<section class="catalogo">
+  @if (editorAbierto()) {
+    <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
+      <h1>{{ esAlta() ? 'Nueva ' + titulo() : 'Renombrar ' + titulo() }}</h1>
+
+      @if (errorEditor(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="nombre">Nombre</label>
+          <input
+            id="nombre"
+            type="text"
+            formControlName="nombre"
+            maxlength="100"
+            autocomplete="off"
+          />
+        </div>
+      </div>
+
+      <div class="acciones">
+        <button type="submit" class="primario" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando...' : 'Guardar' }}
+        </button>
+        <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
+      </div>
+    </form>
+  } @else {
+    <div class="cabecera">
+      <h1>{{ titulo() }}</h1>
+      @if (puedeCrear()) {
+        <button type="button" class="primario" (click)="abrirNuevo()">Nueva {{ titulo() }}</button>
+      }
+    </div>
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (cargando() && filas().length === 0) {
+      <p class="vacio">Cargando...</p>
+    }
+
+    @if (filas().length === 0 && !cargando()) {
+      <p class="vacio">No hay {{ titulo() }} que mostrar.</p>
+    }
+
+    @if (filas().length > 0) {
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Nombre</th>
+            <th scope="col">Usada en</th>
+            <th scope="col"><span class="oculto">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of filas(); track fila.id) {
+            <tr>
+              <td>{{ fila.nombre }}</td>
+              <td class="tenue">—</td>
+              <td class="acciones-celda">
+                <button type="button" class="chico" (click)="renombrar(fila)">Renombrar</button>
+                @if (puedeEliminar()) {
+                  <button type="button" class="chico peligro" (click)="eliminar(fila)">
+                    Eliminar
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</section>

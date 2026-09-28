@@ -75,12 +75,14 @@ export const MENU: Grupo[] = [
         etiqueta: 'Categorias',
         permiso: 'categorias.ver',
         pendiente: 'Categorias de producto y sus multipliers de rendimiento.',
+        carga: () => import('../categorias/categorias').then((m) => m.Categorias),
       },
       {
         ruta: 'especies',
         etiqueta: 'Especies',
         permiso: 'especies.ver',
         pendiente: 'Especies de cliente (bovino, porcino, etc.) y su rendimiento.',
+        carga: () => import('../especies/especies').then((m) => m.Especies),
       },
       {
         ruta: 'precios',

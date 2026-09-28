@@ -1,0 +1,19 @@
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { Catalogo } from '../catalogo/catalogo';
+
+/**
+ * La pantalla de Categorias.
+ *
+ * Un wrapper sobre `Catalogo` con el recurso ya cerrado. Igual que el
+ * backend construye las dos rutas del catalogo con la misma fabrica
+ * (`construir(clave)` en `catalogo/rutas.ts`), las dos pantallas del menu
+ * cargan este wrapper o el de especies, y lo que de verdad hace falta
+ * (listado, editor, borrado) vive en `catalogo/`.
+ */
+@Component({
+  selector: 'app-categorias',
+  imports: [Catalogo],
+  template: `<app-catalogo recurso="categorias" titulo="Categorias" />`,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class Categorias {}

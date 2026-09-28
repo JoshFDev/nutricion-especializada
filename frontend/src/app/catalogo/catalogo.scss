@@ -1,0 +1,163 @@
+/*
+ * La pantalla del catalogo: especies y categorias juntas.
+ *
+ * Es la misma familia que clientes.scss y productos.scss, pero sin la
+ * columna de estatus: la unica columna a la izquierda es el nombre, y en
+ * la derecha van las acciones. El "Usada en" se queda en un guion a
+ * proposito: cuantos productos la usan lo dice el backend SOLO al intentar
+ * borrar y mandar un 409 EN_USO, y traer ese conteo haria una consulta por
+ * fila que aqui no aporta.
+ */
+
+:host {
+  display: block;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+.tabla {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tenue {
+  color: var(--texto-tenue);
+}
+
+.acciones-celda {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.vacio {
+  margin: 0;
+  color: var(--texto-tenue);
+}
+
+/* -------------------------------------------------------------- el editor */
+
+.editor {
+  max-width: 46rem;
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+}
+
+.campo.ancho {
+  grid-column: 1 / -1;
+}
+
+.campo label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.campo input,
+.campo select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+button.peligro {
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

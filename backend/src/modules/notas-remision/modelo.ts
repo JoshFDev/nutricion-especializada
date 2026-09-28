@@ -120,6 +120,31 @@ export interface Folio {
 }
 
 /**
+ * Lo que el PDF necesita del cliente, y `consultarNota` NO trae.
+ *
+ * `consultarNota` solo junta el nombre, y con eso alcanza para una tabla en
+ * pantalla. Un documento impreso necesita mas: quien recibe el papel no
+ * tiene la pantalla delante, asi que el telefono, el establo, la especie y
+ * los datos fiscales tienen que estar ahi.
+ *
+ * Los cuatro ultimos pueden venir en NULL y no son un error: un cliente sin
+ * establo es normal, y los datos fiscales solo existen si pidio factura
+ * alguna vez (`datos_fiscales_cliente` entra por LEFT JOIN). Quien imprima
+ * decide que hacer con lo que falta; en el papel, simplemente no sale la
+ * linea.
+ */
+export interface ClienteImprimible {
+  nombre: string;
+  codigo: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  establo: string | null;
+  especie: string | null;
+  rfc: string | null;
+  razon_social: string | null;
+}
+
+/**
  * `serie + folio_numero` en un solo texto: "A-1001".
  *
  * Es lo que se muestra y lo que se busca, no algo que el frontend tenga

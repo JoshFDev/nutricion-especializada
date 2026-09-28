@@ -45,6 +45,33 @@ export const controladorNotas = {
     res.json(await servicio.consultar(req.db, parametros<{ id: number }>(req).id));
   },
 
+  /**
+   * La nota en PDF.
+   *
+   * Es la unica respuesta del proyecto que NO es JSON, asi que se arma el
+   * `Buffer` completo y se manda entero con `send`. Al mandar bytes ya
+   * hechos, cualquier error de armado ya ocurrio antes de tocar la
+   * respuesta, asi que el manejador de errores de `app.ts` sigue pudiendo
+   * devolver su JSON. Con `doc.pipe(res)` eso ya no seria cierto.
+   *
+   * `inline` y no `attachment`: asi el navegador lo abre en su visor de PDF
+   * y el operador lo imprime con un ctrl+P sin guardarlo antes en
+   * `Descargas`, que es lo que pasa en el mostrador. El nombre del archivo
+   * va en `filename` de todos modos, asi que guardarlo a mano tambien sale
+   * con el nombre correcto.
+   *
+   * El cache va apagado: un PDF con el mismo nombre y contenido distinto
+   * (misma nota, impresa otra vez) tiene que salir el de ahora.
+   */
+  pdf: async (req: Request, res: Response): Promise<void> => {
+    const { bytes, nombreArchivo } = await servicio.pdf(req.db, parametros<{ id: number }>(req).id);
+    res
+      .setHeader('Content-Type', 'application/pdf')
+      .setHeader('Content-Disposition', `inline; filename="${nombreArchivo}"`)
+      .setHeader('Cache-Control', 'no-store')
+      .send(bytes);
+  },
+
   crear: async (req: Request, res: Response): Promise<void> => {
     res
       .status(201)

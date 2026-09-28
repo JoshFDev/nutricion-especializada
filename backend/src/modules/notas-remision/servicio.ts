@@ -1,7 +1,9 @@
 import type { PoolClient } from 'pg';
 import { consultarUno, enTransaccionDe } from '../../db/transaccion.js';
+import { env } from '../../config/entorno.js';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { resolverEfectivo } from '../precios/repositorio.js';
+import { pdfNotaRemision } from './pdf.js';
 import * as repo from './repositorio.js';
 import type {
   CrearNota,
@@ -61,6 +63,55 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
 
 export async function consultar(cliente: PoolClient, id: number): Promise<Nota> {
   return leer(cliente, id);
+}
+
+/**
+ * El PDF.
+ *
+ * Reusa `leer`, o sea la MISMA consulta que `GET /:id`: el papel y la
+ * pantalla no pueden mostrar dos versiones distintas de la misma nota, y
+ * armar el PDF con una consulta propia "para imprimir" es como empiezan los
+ * descuadres entre lo que se ve y lo que se cobra.
+ *
+ * El cliente se pide aparte porque el PDF necesita su telefono, establo,
+ * especie y datos fiscales, y `consultarNota` solo trae el nombre (ver
+ * `repo.consultarClienteImprimible`). El membrete sale del entorno.
+ */
+export async function pdf(
+  cliente: PoolClient,
+  id: number,
+): Promise<{ bytes: Buffer; nombreArchivo: string }> {
+  const nota = await leer(cliente, id);
+
+  const datosCliente = await repo.consultarClienteImprimible(cliente, nota.cliente_id);
+  if (!datosCliente) {
+    // La FK lo hace imposible mientras el cliente exista, y las notas
+    // bloquean el borrado del cliente. Se avisa igual: si esta fila se
+    // pierde es un bug del borrado, y un 404 de "nota inexistente" lleva a
+    // revisar el lado equivocado.
+    throw new NoEncontrado('La nota existe pero su cliente ya no: revisa el borrado de clientes');
+  }
+
+  const bytes = await pdfNotaRemision(nota, datosCliente, {
+    nombre: env.EMPRESA_NOMBRE,
+    rfc: env.EMPRESA_RFC,
+    direccion: env.EMPRESA_DIRECCION,
+    telefono: env.EMPRESA_TELEFONO,
+  });
+
+  return { bytes, nombreArchivo: nombreDelArchivo(nota) };
+}
+
+/**
+ * Como se llama el archivo que descarga el navegador.
+ *
+ * Solo el folio y la fecha: el nombre no lleva el nombre del cliente, que
+ * queda colgando en la descarga y en el historial del navegador de cualquier
+ * maquina compartida de la oficina. Y sin acentos ni espacios, que hay
+ * navegadores viejos que no saben que existen.
+ */
+function nombreDelArchivo(nota: Nota): string {
+  return `nota-remision-${nota.folio}-${nota.fecha}.pdf`;
 }
 
 export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number): Promise<Nota> {

@@ -76,6 +76,24 @@ export function manejadorErrores(
     usuario: req.sesion?.usuarioId ?? null,
   };
 
+  /**
+   * Si la respuesta ya empezo a salir, aqui no se puede hacer nada.
+   *
+   * Todas las rutas arman el cuerpo antes de mandarlo, asi que hoy no
+   * deberia pasar: no hay ninguna que haga `pipe` de un stream. Se deja la
+   * guarda porque el dia que haya una (el PDF lo hace en memoria justamente
+   * para no depender de esto) el `res.status().json()` de abajo reventaria
+   * con "Cannot set headers after they are sent", tiraria abajo la peticion
+   * y el error real se perderia detras de ese. Lo que si se puede hacer es
+   * dejar registro de que se rompio la respuesta, que es lo unico que
+   *todavia sirve.
+   */
+  if (res.headersSent) {
+    console.error('Error con la respuesta ya empezada:', contexto, error);
+    res.end();
+    return;
+  }
+
   if (esAppError(error)) {
     if (error.estado >= 500) {
       console.error('Error de la aplicacion:', error.codigo, contexto, error.message);

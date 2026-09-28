@@ -84,6 +84,22 @@ rutasNotasRemision.get(
   ctrl.consultar,
 );
 
+// El PDF va con `notas.ver` y no con un permiso propio: imprimir no es una
+// operacion distinta de ver, y un permiso aparte solo serviria para que
+// alguien se quede sin poder imprimir su propia nota. Lo que SI protege el
+// modulo (editar, cancelar, folios) sigue igual que antes.
+//
+// Va DESPUES de `/:id` a proposito, aunque Express lo resolveria igual:
+// `/:id` y `/:id/pdf` no se pisan porque tienen distinto numero de
+// segmentos. Este archivo pone las rutas literales primero por si manana
+// aparece una, y esta se queda donde esta.
+rutasNotasRemision.get(
+  '/:id/pdf',
+  requierePermiso('notas.ver'),
+  validarParams(idNotaEsquema),
+  ctrl.pdf,
+);
+
 rutasNotasRemision.patch(
   '/:id',
   requierePermiso('notas.editar'),

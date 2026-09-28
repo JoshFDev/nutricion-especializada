@@ -38,8 +38,8 @@ clientes y proveedores, y flujo de caja/bancos.
       `pagos`, `proveedores`, `compras`, `inventario`, `caja`,
       `facturacion` y `auditoria`)
 - [x] Login + endpoint de permisos (usar `fn_tiene_permiso`)
+- [x] Generación de PDF de notas de remisión
 - [ ] Frontend en Angular
-- [ ] Generación de PDF de notas de remisión
 - [ ] Deploy (base de datos + backend + frontend)
 
 > **La API no tiene rate limit**, ni general ni en el login: mientras la
@@ -92,7 +92,7 @@ nutricion-especializada-pos/
 │   │   ├── app.ts                         # composición: orden de middlewares
 │   │   └── index.ts                       # arranque y cierre del pool
 │   └── tests/
-│       ├── api.test.mjs                   # 866 pruebas contra la API real
+│       ├── api.test.mjs                   # 834 pruebas contra la API real
 │       └── unit/                          # pruebas de esquemas y servicios
 └── frontend/                              # Angular (vacío por ahora)
 ```
@@ -141,7 +141,7 @@ base no parece de pruebas.
 # en una terminal
 PGDATABASE=nutr_test pnpm dev
 # en otra
-pnpm test:api       # 866 pruebas contra la API de verdad
+pnpm test:api       # 834 pruebas contra la API de verdad
 ```
 
 `nutr_test` se arma sola: el migrador la crea si no existe.
@@ -399,6 +399,62 @@ La composición de la app vive en `src/app.ts`, no en `index.ts`: así se
 puede probar la app sin abrir un puerto. El orden de los middlewares está
 documentado ahí mismo, y el último de todos es el manejador de errores
 (Express solo reconoce uno de esos por tener 4 argumentos).
+
+### El PDF de la nota de remisión
+
+```
+GET /api/notas-remision/:id/pdf   →   application/pdf
+```
+
+Sale con el mismo permiso que `GET /:id` (`notas.ver`): imprimir no es una
+operación distinta de ver, y un permiso aparte solo serviría para que
+alguien se quede sin poder imprimir su propia nota.
+
+| Variable            | Para qué                                              |
+| ------------------- | ----------------------------------------------------- |
+| `EMPRESA_NOMBRE`    | Título del membrete. Es la única obligatoria         |
+| `EMPRESA_RFC`       | Sale bajo el nombre; vacío = no se imprime            |
+| `EMPRESA_DIRECCION` | Ídem                                                 |
+| `EMPRESA_TELEFONO`  | Ídem                                                 |
+
+El membrete va en el entorno y no en una tabla porque no es dato del
+negocio: es el membrete, y cambia cuando cambias de domicilio, no cuando
+llega una venta. Meterlo en el código obliga a tocar y redesplegar la app
+para corregir un teléfono mal escrito; meterlo en la base obliga a migrar
+datos que no cambian.
+
+Tres cosas del render que no son obvias y que están comentadas en
+`src/modules/notas-remision/pdf.ts`:
+
+- **Se arma entero en memoria, no con `doc.pipe(res)`.** `pipe` manda las
+  cabeceras antes de saber si el documento se pudo dibujar, y a partir de
+  ahí un error ya no se puede convertir en un 404: el manejador de errores
+  intentaría poner un JSON encima de una respuesta que ya empezó a salir
+  como PDF. Armando el buffer primero, un fallo es un fallo de verdad y el
+  cliente recibe el mismo JSON que en cualquier otra ruta. Una nota son
+  decenas de renglones: el buffer pesa unos cuantos kilobytes.
+- **Los saltos de página son a mano.** `doc.text` con coordenadas
+  absolutas no pagina solo (eso solo pasa con el flujo normal), así que
+  cada bloque pregunta si cabe, y al saltar se redibujan los títulos de
+  la tabla. El pie va con `margins.bottom = 0`, porque si no pdfkit le
+  agrega una página por debajo a cada hoja real.
+- **El texto se normaliza a NFC antes de imprimirse.** Un nombre tecleado
+  en macOS llega descompuesto (la vocal y el acento por separado) y
+  sin eso el acento se pierde en el papel. Lo que no existe en WinAnsi
+  se cambia por `?` a propósito: un `?` en el papel se ve y se pregunta.
+
+El importe que sale es el `subtotal` de la nota, **no** la suma de los
+renglones: es el que mantiene `fn_recalcular_subtotal_nota` y el que usa
+la base para el saldo del cliente. Bultos y kilos sí se suman, porque no
+hay ninguna columna que los traiga.
+
+`tests/unit/notas.pdf.test.ts` comprueba el render sin base de datos: que
+salga un PDF válido, que el folio, el cliente y los importes estén en el
+papel, que una nota larga salte de página repitiendo los títulos, y que
+una nota cancelada avise con su motivo. Para leer el texto de un PDF hay
+que descomprimir sus flujos: el helper del test va por el `/Length` de
+cada objeto porque los datos comprimidos pueden contener literalmente los
+bytes `stream` y `endstream` dentro.
 
 ### 3. Frontend
 

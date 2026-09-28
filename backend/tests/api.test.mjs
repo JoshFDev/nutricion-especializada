@@ -84,6 +84,21 @@ const revisar = (nombre, ok, detalle = '') => {
   if (!ok) fallos++;
 };
 
+/**
+ * Igual que `pedir`, pero devuelve los BYTES.
+ *
+ * `pedir` siempre intenta `r.json()`, asi que con el PDF se queda en
+ * '(sin cuerpo)' y la prueba no podria distinguir un PDF de un cuerpo vacio.
+ * Se lee como `arrayBuffer` y se deja el teto en el lado del cliente, que
+ * aqui es el unico que hay.
+ */
+const pedirBytes = async (ruta, token) => {
+  const r = await fetch(BASE + ruta, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  return { status: r.status, headers: r.headers, bytes: Buffer.from(await r.arrayBuffer()) };
+};
+
 // ---------------------------------------------------------------- salud
 const baseEnUso = await verificarBaseDePruebas();
 console.log(`Base en uso: ${baseEnUso}`);
@@ -3279,6 +3294,58 @@ revisar(
   JSON.stringify(editarDireccion.cuerpo?.subtotal),
 );
 revisar('ni los renglones', editarDireccion.cuerpo?.renglones?.length === 1);
+
+// ------------------------------------------------------------------ pdf
+
+/**
+ * El PDF de la nota.
+ *
+ * Lo que se comprueba aqui es el CONTRATO de la respuesta, no el papel: que
+ * salga un PDF de verdad, con el tipo y el nombre correctos, y sobre todo que
+ * un error siga siendo JSON. Ese ultimo punto es el que se paga caro si se
+ * rompe: si el PDF se empieza a mandar antes de saber si se pudo armar, un
+ * 404 llega como un PDF corrupto y el navegador dice "el archivo esta
+ * danado" en vez de "esa nota no existe".
+ */
+const pdfDeLaNota = await pedirBytes(`/api/notas-remision/${notaBaseId}/pdf`, tokenAdmin);
+revisar('el pdf de la nota -> 200', pdfDeLaNota.status === 200, String(pdfDeLaNota.status));
+revisar(
+  'es un PDF de verdad',
+  pdfDeLaNota.bytes.subarray(0, 5).toString('latin1') === '%PDF-',
+  JSON.stringify(pdfDeLaNota.bytes.subarray(0, 8).toString('latin1')),
+);
+revisar(
+  'sale como application/pdf',
+  pdfDeLaNota.headers.get('content-type') === 'application/pdf',
+  pdfDeLaNota.headers.get('content-type'),
+);
+revisar(
+  'con el folio en el nombre del archivo',
+  (pdfDeLaNota.headers.get('content-disposition') ?? '').includes(
+    `nota-remision-${notaBase.cuerpo?.folio}-`,
+  ),
+  pdfDeLaNota.headers.get('content-disposition'),
+);
+revisar(
+  'y sin cache: el mismo folio puede reimprimirse con otro contenido',
+  pdfDeLaNota.headers.get('cache-control') === 'no-store',
+  pdfDeLaNota.headers.get('cache-control'),
+);
+
+const pdfSinNota = await pedirBytes('/api/notas-remision/99999999/pdf', tokenAdmin);
+revisar(
+  'una nota que no existe sigue dando JSON, no un PDF roto',
+  pdfSinNota.status === 404 && pdfSinNota.bytes.toString('utf8').includes('NO_ENCONTRADO'),
+  `${pdfSinNota.status} ${pdfSinNota.bytes.toString('utf8').slice(0, 80)}`,
+);
+
+const pdfSinToken = await pedirBytes(`/api/notas-remision/${notaBaseId}/pdf`, null);
+revisar('sin sesion no hay PDF', pdfSinToken.status === 401, String(pdfSinToken.status));
+
+// La cajera y la empleada si tienen `notas.ver`, asi que las dos pueden
+// imprimir: el PDF no es un permiso aparte del de ver.
+const pdfCajera = await pedirBytes(`/api/notas-remision/${notaBaseId}/pdf`, tokenCajera);
+revisar('la cajera tambien puede imprimir', pdfCajera.status === 200, String(pdfCajera.status));
 
 const stockAntesDeCantidad = await existenciaDe(prodNota);
 const precioDelRenglon = editarDireccion.cuerpo?.renglones?.[0]?.precio_unit_kg;

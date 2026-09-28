@@ -174,3 +174,41 @@ export const paginacion = {
   limite: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 };
+
+/**
+ * Un numero como texto, con separador de miles y decimales fijos.
+ *
+ * A mano y no con `toLocaleString`, por el mismo motivo que
+ * `fechaComoTexto` no usa `toLocaleDateString`: esos metodos dependen de los
+ * datos de ICU del runtime, y en una imagen de Node minimalista el formato
+ * cambia (o sale `NaN`) sin avisar. Un PDF con los miles donde no van es un
+ * documento que no sirve para cobrar.
+ *
+ * El separador de miles es la coma y el decimal el punto porque es como se
+ * escribe una cantidad en un documento de remision en Mexico.
+ *
+ * Solo para MOSTRAR. El double no sirve para calcular dinero (ver `decimal`),
+ * asi que el `toFixed` aqui redondea lo que llega ya convertido desde el
+ * NUMERIC de Postgres. Si alguna vez hay que calcular con esto, no: el
+ * redondeo de `toFixed` va sobre el valor binario, y `1.005` sale `1.00`.
+ */
+export const numeroComoTexto = (valor: number, decimales: number): string => {
+  // `Number.isFinite` y no un `if (valor)` suelto: NaN e Infinity se
+  // imprimen como "NaN" y "Infinity" con un separador de miles en medio.
+  if (!Number.isFinite(valor)) return '0';
+
+  const signo = valor < 0 ? '-' : '';
+  // `toFixed` siempre devuelve un punto, pero el tipo lo ve como opcional:
+  // se comprueba en vez de asumirlo.
+  const [enteros = '0', decimalesTexto] = Math.abs(valor).toFixed(decimales).split('.');
+  const conMiles = enteros.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return decimalesTexto === undefined
+    ? `${signo}${conMiles}`
+    : `${signo}${conMiles}.${decimalesTexto}`;
+};
+
+/** Dinero: los `NUMERIC(12,2)` de la base, siempre con dos decimales. */
+export const montoComoTexto = (valor: number): string => numeroComoTexto(valor, 2);
+
+/** Cantidades de producto: bultos a 2 decimales, kilos a 3. Ver `kg_bulto`. */
+export const kilosComoTexto = (valor: number): string => numeroComoTexto(valor, 3);

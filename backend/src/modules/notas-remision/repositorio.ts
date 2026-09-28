@@ -2,7 +2,15 @@ import type { PoolClient } from 'pg';
 import { contar, consultar, consultarUno } from '../../db/transaccion.js';
 import { fechaComoTexto } from '../../core/valores.js';
 import type { CrearTalonario, ListarFolios, ListarNotas } from './esquemas.js';
-import type { EstatusNota, FilaNota, FilaRenglon, Folio, Listado, NotaListada } from './modelo.js';
+import type {
+  ClienteImprimible,
+  EstatusNota,
+  FilaNota,
+  FilaRenglon,
+  Folio,
+  Listado,
+  NotaListada,
+} from './modelo.js';
 
 /**
  * SQL de notas de remision.
@@ -175,6 +183,59 @@ export async function consultarNota(cliente: PoolClient, id: number): Promise<Fi
   return consultarUno<FilaNota>(cliente, `SELECT ${COLUMNAS_NOTA} ${FROM_NOTA} WHERE n.id = $1`, [
     id,
   ]);
+}
+
+/**
+ * Los datos del cliente que salen impresos en el PDF.
+ *
+ * Consulta aparte y no una columna mas de `COLUMNAS_NOTA` a proposito: el
+ * nombre del cliente viaja ya en la cabecera, y unir tambien su telefono,
+ * establo y datos fiscales a las consultas de pantalla cargaria tres tablas
+ * mas (especies y datos_fiscales_cliente) en cada listado de notas para
+ * datos que el listado no usa. Esto solo se ejecuta cuando alguien pide
+ * el PDF.
+ *
+ * `datos_fiscales_cliente` entra por LEFT JOIN porque es opcional: un
+ * cliente que nunca ha pedido factura no tiene fila, y una remision sin RFC
+ * es una remision valida, no un error.
+ */
+export async function consultarClienteImprimible(
+  cliente: PoolClient,
+  clienteId: number,
+): Promise<ClienteImprimible | null> {
+  const fila = await consultarUno<{
+    nombre: string;
+    codigo_cliente: string | null;
+    telefono: string | null;
+    direccion: string | null;
+    establo: string | null;
+    especie: string | null;
+    rfc: string | null;
+    razon_social: string | null;
+  }>(
+    cliente,
+    `SELECT c.nombre,
+            c.codigo_cliente, c.telefono, c.direccion, c.establo,
+            e.nombre AS especie,
+            f.rfc, f.razon_social
+       FROM clientes c
+       LEFT JOIN especies e               ON e.id = c.especie_id
+       LEFT JOIN datos_fiscales_cliente f ON f.cliente_id = c.id
+      WHERE c.id = $1`,
+    [clienteId],
+  );
+  if (!fila) return null;
+
+  return {
+    nombre: fila.nombre,
+    codigo: fila.codigo_cliente,
+    telefono: fila.telefono,
+    direccion: fila.direccion,
+    establo: fila.establo,
+    especie: fila.especie,
+    rfc: fila.rfc,
+    razon_social: fila.razon_social,
+  };
 }
 
 /**

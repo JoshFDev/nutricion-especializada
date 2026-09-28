@@ -29,6 +29,23 @@ const esquema = z.object({
   // Despite the old name, this is the session DURATION, not a JWT: the token
   // is opaque (random bytes) and what gets stored is its sha256.
   JWT_EXPIRES_IN: z.string().default('8h'),
+
+  /**
+   * Datos del emisor, que salen impresos en el PDF de la nota de remision.
+   *
+   * Van en el entorno y no en una tabla porque no son datos del negocio:
+   * son el membrete, que cambia cuando cambias de domicilio o de regimen
+   * fiscal, y no cuando llega una venta. Meterlos en el codigo obligaria a
+   * tocar y redesplegar la app para corregir un telefono mal escrito, y a
+   * meterlos en la base obligaria a migrar datos que no cambian.
+   *
+   * Solo el nombre es obligatorio: es el titulo del documento. Los demas se
+   * omiten y el PDF no imprime la linea, en vez de imprimir un "-".
+   */
+  EMPRESA_NOMBRE: z.string().default('Nutricion Especializada'),
+  EMPRESA_RFC: z.string().default(''),
+  EMPRESA_DIRECCION: z.string().default(''),
+  EMPRESA_TELEFONO: z.string().default(''),
 });
 
 const parseado = esquema.safeParse(process.env);

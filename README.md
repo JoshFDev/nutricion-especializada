@@ -39,7 +39,11 @@ clientes y proveedores, y flujo de caja/bancos.
       `facturacion` y `auditoria`)
 - [x] Login + endpoint de permisos (usar `fn_tiene_permiso`)
 - [x] Generación de PDF de notas de remisión
-- [ ] Frontend en Angular
+- [x] Frontend en Angular: sesion, login, cambio de contrasena, marco con
+      menu por permisos y los 14 modulos enrutados (las pantallas todavia
+      no estan)
+- [ ] Pantallas del negocio (el POS es el primero)
+- [ ] Modulo de reportes (las vistas ya existen, no hay endpoints)
 - [ ] Deploy (base de datos + backend + frontend)
 
 > **La API no tiene rate limit**, ni general ni en el login: mientras la
@@ -92,13 +96,15 @@ nutricion-especializada-pos/
 │   │   ├── app.ts                         # composición: orden de middlewares
 │   │   └── index.ts                       # arranque y cierre del pool
 │   └── tests/
-│       ├── api.test.mjs                   # 834 pruebas contra la API real
+│       ├── api.test.mjs                   # 841 pruebas contra la API real
 │       └── unit/                          # pruebas de esquemas y servicios
-└── frontend/                              # Angular (vacío por ahora)
+└── frontend/                              # Angular 22: sesion, login y marco
 ```
 
-> `frontend/` sigue vacío: la API está completa pero no hay nada que
-> clicar todavía.
+> `frontend/` ya tiene la base (sesión, login, marco con menú y rutas de los
+> 14 módulos) pero ninguna pantalla de negocio. Abriendo un módulo sale un
+> aviso de "pantalla pendiente": las rutas existen de verdad para que el menú
+> no ofrezca nada que dé 404.
 
 ## Cómo levantar lo que ya existe
 
@@ -141,7 +147,7 @@ base no parece de pruebas.
 # en una terminal
 PGDATABASE=nutr_test pnpm dev
 # en otra
-pnpm test:api       # 834 pruebas contra la API de verdad
+pnpm test:api       # 841 pruebas contra la API de verdad
 ```
 
 `nutr_test` se arma sola: el migrador la crea si no existe.
@@ -458,8 +464,24 @@ bytes `stream` y `endstream` dentro.
 
 ### 3. Frontend
 
-Aún no generado. `frontend/` está vacío a propósito: la API está completa y
-probada, pero no hay nada que clicar todavía.
+```bash
+cd frontend
+pnpm install
+pnpm start       # ng serve, en http://localhost:4200
+```
+
+Ver `frontend/README.md` para lo que ya esta y lo que no. Lo importante de
+esa base: el menu lateral y las rutas salen de la MISMA tabla
+(`src/app/nucleo/menu.ts`), filtrada por los permisos que devuelve
+`/api/auth/yo`, asi que es imposible que el menu ofrezca un modulo cuya ruta
+no exista.
+
+Y el acceso directo de desarrollo: hay un boton "Entrar como administrador"
+en el login que se dibuja solo con `ng serve`. El candado NO esta en el
+boton (su texto si queda en el bundle de produccion) sino en que `app.ts`
+monta esa ruta unicamente cuando `NODE_ENV === 'development'`; en
+produccion la peticion cae en el 404 del final. Para quitarlo: borrar
+`auth/rutas-dev.ts` y el `if` de `app.ts`.
 
 ## Convenciones del proyecto
 

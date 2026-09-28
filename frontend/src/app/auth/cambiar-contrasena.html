@@ -1,0 +1,79 @@
+<main class="pantalla">
+  <section class="tarjeta">
+    <h1>Cambia tu contrasena</h1>
+    <p class="sub">
+      El administrador dejo esta cuenta con la contrasena anterior. Hay que cambiarla antes de
+      seguir.
+    </p>
+
+    <form [formGroup]="form" (ngSubmit)="cambiar()">
+      <label for="actual">Contrasena actual</label>
+      <input
+        id="actual"
+        type="password"
+        formControlName="actual"
+        autocomplete="current-password"
+        [class.invalido]="form.controls.actual.touched && form.controls.actual.invalid"
+      />
+      @if (errorActual()) {
+        <p class="campo-error">{{ errorActual() }}</p>
+      } @else if (form.controls.actual.touched && form.controls.actual.invalid) {
+        <p class="campo-error">Escribe tu contrasena actual.</p>
+      }
+
+      <label for="nueva">Contrasena nueva</label>
+      <input
+        id="nueva"
+        type="password"
+        formControlName="nueva"
+        autocomplete="new-password"
+        [class.invalido]="form.controls.nueva.touched && form.controls.nueva.invalid"
+      />
+
+      <!--
+        Las reglas se muestran mientras se escribe y no solo al salir del
+        campo. En un formulario obligatorio ver lo que falta mientras se
+        teclea es la diferencia entre "ya casi" y "algo esta mal".
+      -->
+      <ul class="reglas">
+        <li [class.ok]="reglas.largo()">Al menos 12 caracteres</li>
+        <li [class.ok]="reglas.minuscula()">Una letra minuscula</li>
+        <li [class.ok]="reglas.mayuscula()">Una letra mayuscula</li>
+        <li [class.ok]="reglas.numero()">Un numero</li>
+        <li [class.ok]="reglas.distinta()">Distinta de la actual</li>
+      </ul>
+
+      <label for="repetir">Repite la nueva</label>
+      <input
+        id="repetir"
+        type="password"
+        formControlName="repetir"
+        autocomplete="new-password"
+        [class.invalido]="repetirNoCoincide"
+      />
+      @if (repetirNoCoincide) {
+        <p class="campo-error">Las dos no coinciden.</p>
+      }
+
+      @if (error()) {
+        <p class="aviso aviso-error" role="alert">{{ error() }}</p>
+      }
+      @if (exito()) {
+        <p class="aviso aviso-ok" role="status">{{ exito() }}</p>
+      }
+
+      <button type="submit" [disabled]="enviando() || exito() !== null">
+        {{ enviando() ? 'Cambiando...' : 'Cambiar contrasena' }}
+      </button>
+    </form>
+
+    <!--
+      Salir esta disponible a proposito. El backend obliga a cambiar la
+      contrasena, y si alguien no puede (no la recuerda, no puede ganarse una
+      nueva ahora) tiene que poder salirse: la cuenta se resuelve por
+      fuera. Sin este boton esa persona se queda en esta pantalla para
+      siempre.
+    -->
+    <button type="button" class="secundario" (click)="salir()">Salir de la app</button>
+  </section>
+</main>

@@ -1,0 +1,72 @@
+<div class="app">
+  <header class="barra">
+    <button
+      type="button"
+      class="hamburguesa"
+      (click)="menuAbierto.set(!menuAbierto())"
+      [attr.aria-expanded]="menuAbierto()"
+      aria-label="Menu"
+    >
+      <span></span><span></span><span></span>
+    </button>
+
+    <span class="marca">Nutricion Especializada</span>
+
+    <div class="usuario">
+      <span class="nombre">
+        {{ nombre() }}
+        @if (puesto()) {
+          <span class="puesto">{{ puesto() }}</span>
+        }
+      </span>
+      <button type="button" class="salir" (click)="salir()">Salir</button>
+    </div>
+  </header>
+
+  <div class="cuerpo">
+    <!--
+      El fondo del menu en celular. No es adorno: sin el, al tocar fuera no
+      pasa nada y el menu se queda pegado encima del contenido sin forma de
+      quitarlo.
+
+      Es un `button` y no un `div` con click por una razon concreta: con el
+      teclado, un `div` con click no se puede activar (no recibe el foco) y
+      quien navega con teclado se queda con el menu abierto encima de la
+      pantalla y sin salida. Como `button` ya es enfocable, se cierra con
+      Enter o Espacio y ademas lo anuncia el lector de pantalla.
+    -->
+    @if (menuAbierto()) {
+      <button
+        type="button"
+        class="velo"
+        (click)="cerrarMenu()"
+        aria-label="Cerrar el menu"
+      ></button>
+    }
+
+    <nav class="lateral" [class.abierto]="menuAbierto()">
+      @for (grupo of menu(); track grupo.titulo) {
+        <div class="grupo">
+          <h2>{{ grupo.titulo }}</h2>
+          <ul>
+            @for (modulo of grupo.modulos; track modulo.ruta) {
+              <li>
+                <a
+                  [routerLink]="'/' + modulo.ruta"
+                  routerLinkActive="activo"
+                  (click)="cerrarMenu()"
+                >
+                  {{ modulo.etiqueta }}
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </nav>
+
+    <main class="contenido">
+      <router-outlet />
+    </main>
+  </div>
+</div>

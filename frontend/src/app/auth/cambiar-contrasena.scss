@@ -1,0 +1,134 @@
+/*
+ * Igual que la del login: la misma tarjeta, un poco mas alta porque hay
+ * tres campos y la lista de reglas. Las variables de color son globales
+ * (`styles.scss`), no de aqui.
+ */
+.pantalla {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: var(--fondo);
+}
+
+.tarjeta {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.75rem;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+
+  h1 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .sub {
+    margin: 0.25rem 0 1.5rem;
+    color: var(--texto-suave);
+    font-size: 0.875rem;
+  }
+}
+
+label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 1rem;
+  font: inherit;
+  color: inherit;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+
+  &:focus {
+    outline: 2px solid var(--acento);
+    outline-offset: 1px;
+    border-color: var(--acento);
+  }
+
+  &.invalido {
+    border-color: var(--peligro);
+  }
+}
+
+.reglas {
+  margin: -0.5rem 0 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+
+  li::before {
+    content: '\2022 ';
+  }
+
+  .ok {
+    color: var(--exito-texto);
+
+    &::before {
+      content: '\2713 ';
+    }
+  }
+}
+
+.campo-error {
+  margin: -0.75rem 0 0.875rem;
+  color: var(--peligro);
+  font-size: 0.8125rem;
+}
+
+.aviso {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+
+  &-error {
+    background: var(--peligro-suave);
+    color: var(--peligro-texto);
+  }
+
+  &-ok {
+    background: var(--exito-suave);
+    color: var(--exito-texto);
+  }
+}
+
+button {
+  width: 100%;
+  padding: 0.6875rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  &.secundario {
+    margin-top: 0.5rem;
+    color: var(--texto-suave);
+    background: transparent;
+    border: 1px solid var(--borde);
+    font-weight: 500;
+
+    &:hover {
+      color: var(--texto);
+      background: var(--fondo);
+    }
+  }
+}

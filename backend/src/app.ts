@@ -8,6 +8,7 @@ import { manejadorErrores } from './middleware/errores.js';
 import { NoEncontrado } from './core/errores.js';
 import { rutasSalud } from './modules/salud/rutas.js';
 import { rutasAuth } from './modules/auth/rutas.js';
+import { rutasAuthDev } from './modules/auth/rutas-dev.js';
 import { rutasCatalogo } from './modules/catalogo/rutas.js';
 import { rutasPrecios } from './modules/precios/rutas.js';
 import { rutasProductos } from './modules/productos/rutas.js';
@@ -81,6 +82,23 @@ export function crearApp(): Express {
   app.use('/api/facturas', rutasFacturacion);
   app.use('/api/auditoria', rutasAuditoria);
   app.use('/api/usuarios', rutasUsuarios);
+
+  /**
+   * 8 bis. El acceso directo de desarrollo: entrar como administrador sin
+   * contrasena, para no teclear la clave de prueba cuarenta veces al dia.
+   *
+   * ESTE `if` ES LA GARANTIA. El router no se monta en produccion, asi que
+   * no hay ruta, y la peticion que llegue cae en el 404 de abajo. No es que
+   * la ruta compruebe el modo: es que la ruta no existe.
+   *
+   * Va despues de `rutasAuth` a proposito. `rutasAuth` no tiene un
+   * comodin que se lo coma, asi que el orden no importa hoy, pero si
+   * alguien le pone uno a las de auth, que este acceso directo se quede
+   * FUERA de ese router es justo lo que se quiere.
+   */
+  if (env.NODE_ENV === 'development') {
+    app.use('/api/auth/dev', rutasAuthDev);
+  }
 
   // 9. Cualquier otra ruta de /api no existe
   app.use('/api', (_req, _res, next) => {

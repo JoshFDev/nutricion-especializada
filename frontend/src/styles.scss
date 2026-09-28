@@ -1,0 +1,79 @@
+/*
+ * Estilos globales.
+ *
+ * Pocos y solo los que son de verdad globales: la tipografia, el fondo y las
+ * variables de color. Los colores estan como variables y no como valores
+ * sueltos porque el menu, el login y cada pantalla los usan todos, y cambiar
+ * el color de acento tiene que ser cambiar una linea.
+ *
+ * Los valores son provisionales. Es la primera vez que se ve la app junta y
+ * lo que se ve todavia no es una decision de diseno, es lo que salio para
+ * que se pueda leer en una pantalla de mostrador con luz de tubo.
+ */
+
+:root {
+  color-scheme: light;
+
+  --fondo: #f4f5f7;
+  --superficie: #ffffff;
+  --borde: #d7dae0;
+
+  --texto: #1b1f24;
+  --texto-suave: #5a6169;
+  --texto-tenue: #868d95;
+
+  /* El verde del alimento. Oscuro a proposito: es el fondo de la barra y
+     de los botones, y un acento claro ahi no tendria contraste con el
+     texto blanco. */
+  --acento: #2f6b3f;
+  --acento-suave: #e6f0e8;
+  --acento-texto: #245430;
+  --sobre-acento: #ffffff;
+
+  --peligro: #b3261e;
+  --peligro-suave: #fbeae9;
+  --peligro-texto: #8c1d18;
+
+  --exito-texto: #245430;
+  --exito-suave: #e6f0e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--texto);
+  background: var(--fondo);
+  /* Los forms de Chrome y Safari tienen su propio tamano de letra, que no
+     es el 16px del body y hace que un input se vea mas chico que su
+     etiqueta. `font: inherit` lo arregla; sin esto, la app se ve despareja
+     entre navegadores. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * El foco se ve en todo lo que se puede tabular.
+ *
+ * No se quita el `outline` de la regla del navegador: quitarlo deja la app
+ * completamente unusable con el teclado, que en un mostrador conlector de
+ * codigos es justo como se usa.
+ */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}

@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { ErrorValidacion, NoAutenticado } from '../../core/errores.js';
+import { ErrorValidacion, NoAutenticado, NoEncontrado } from '../../core/errores.js';
 import { env } from '../../config/entorno.js';
 import { generarToken, hashToken } from '../../middleware/sesion.js';
 import { enTransaccionDe } from '../../db/transaccion.js';
@@ -125,4 +125,51 @@ export async function cambiarContrasena(
   });
 
   return { sesionesCerradas };
+}
+
+/**
+ * Entra como el primer usuario del rol, sin preguntar la contrasena.
+ *
+ * SOLO para desarrollo, y solo mientras la ruta este montada (ver
+ * `rutas-dev.ts` y el `if` de `app.ts`). La garantia de que esto no existe
+ * en produccion no es que la ruta compruebe el modo y niegue: es que el
+ * router NO SE MONTA, y la peticion cae en el 404 del final de `app.ts`.
+ * Depende de un `if` en un solo lugar y no de acordarse de esconder un
+ * boton.
+ *
+ * Lo que crea es una sesion de verdad para una persona de verdad: mismo
+ * token, misma fila en `sesiones`, mismos permisos, misma auditoria. Por
+ * eso sirve para probar todo lo que viene despues (los 45 permisos, el PDF,
+ * los 403) sin que este camino se comporte distinto al de verdad. Un atajo
+ * que fabricase una sesion de mentira arreglaria justo las cosas que hay
+ * que probar.
+ */
+export async function entrarComo(
+  cliente: PoolClient,
+  rol: string,
+  ctx: ContextoPeticion,
+): Promise<RespuestaLogin> {
+  const usuario = await repo.buscarPorRol(cliente, rol);
+  if (!usuario) {
+    throw new NoEncontrado(
+      `No hay ningun usuario activo con el rol ${rol}. Carga el seed (db/seeds/seed_demo.sql)`,
+    );
+  }
+
+  await repo.limpiarPendientesDeContrasena(cliente, Number(usuario.id));
+
+  const token = generarToken();
+  await repo.crearSesion(cliente, {
+    usuarioId: Number(usuario.id),
+    correo: usuario.email ?? `(sin correo: ${usuario.nombre})`,
+    tokenHash: hashToken(token),
+    ip: ctx.ip,
+    userAgent: ctx.userAgent,
+    duracion: env.JWT_EXPIRES_IN,
+    // Queda escrito en la bitacora que esta sesion no vino de teclear una
+    // contrasena. Ver la nota de `detalle` en `repo.crearSesion`.
+    detalle: `acceso directo de desarrollo como ${rol}, sin contrasena`,
+  });
+
+  return { token, usuario: mapearUsuario(usuario) };
 }

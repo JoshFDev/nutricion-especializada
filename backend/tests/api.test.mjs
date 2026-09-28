@@ -383,6 +383,57 @@ revisar('el token deja de servir tras logout -> 401', despues.status === 401);
 const rutaMala = await pedir('/api/no-existe', token);
 revisar('ruta inexistente -> 404', rutaMala.status === 404);
 
+// ------------------------------------------------- acceso directo (desarrollo)
+//
+// El boton de "entrar como administrador" del login. Lo que se comprueba es
+// LO IMPORTANTE, que no es que entre: es que da una sesion de verdad (mismos
+// permisos que un login normal) y que un rol que no existe no abre nada.
+console.log('');
+console.log('--- acceso directo de desarrollo ---');
+
+const accesoDirecto = await pedir('/api/auth/dev/entrar-como', null, {
+  method: 'POST',
+  body: { rol: 'Administrador' },
+});
+revisar('acceso directo -> 200', accesoDirecto.status === 200, String(accesoDirecto.status));
+revisar(
+  'y trae token y usuario',
+  typeof accesoDirecto.cuerpo?.token === 'string' &&
+    accesoDirecto.cuerpo?.usuario?.nombre !== undefined,
+  JSON.stringify(accesoDirecto.cuerpo).slice(0, 80),
+);
+
+const tokenDirecto = accesoDirecto.cuerpo?.token;
+const perfilDirecto = await pedir('/api/auth/yo', tokenDirecto);
+revisar('el token del acceso directo sirve', perfilDirecto.status === 200);
+revisar(
+  'con los mismos permisos que un login normal',
+  Array.isArray(perfilDirecto.cuerpo?.permisos) &&
+    perfilDirecto.cuerpo.permisos.includes('notas.crear'),
+  JSON.stringify(perfilDirecto.cuerpo?.permisos?.slice(0, 3)),
+);
+
+// La razon de ser del candado: la sesion tiene que quedar registrada como
+// lo que es. Si aqui saliera un `login_exitoso` indistinguible, la bitacora
+// de accesos estaria mintiendo sobre como entro la gente.
+const conAccesoDirecto = await pedir('/api/clientes', tokenDirecto);
+revisar('y alcanza para operar de verdad', conAccesoDirecto.status === 200);
+
+const accesoRolInexistente = await pedir('/api/auth/dev/entrar-como', null, {
+  method: 'POST',
+  body: { rol: 'Emperor' },
+});
+revisar(
+  'un rol que no existe no entra a nada -> 404',
+  accesoRolInexistente.status === 404,
+  String(accesoRolInexistente.status),
+);
+
+const accesoSinBody = await pedir('/api/auth/dev/entrar-como', null, { method: 'POST' });
+revisar('sin cuerpo entra como administrador', accesoSinBody.status === 200);
+
+if (tokenDirecto) await pedir('/api/auth/logout', tokenDirecto, { method: 'POST' });
+
 // ---------------------------------------------------------------- cambio de contrasena
 // Se prueba al final y se restauran las contrasenas del seed, porque si
 // fallara el archivo dejaria al usuario sin poder entrar a la app.

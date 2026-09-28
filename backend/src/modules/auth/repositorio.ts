@@ -57,6 +57,16 @@ export async function crearSesion(
     ip: string | null;
     userAgent: string | null;
     duracion: string;
+    /**
+     * Lo que se escribe en `auditoria_accesos.detalle`.
+     *
+     * Es parametro y no texto fijo porque hay una entrada que NO viene de
+     * teclear una contrasena (el acceso directo de desarrollo, ver
+     * `rutas-dev.ts`), y en la bitacora tiene que quedar escrito de donde
+     * salio la sesion. Un `login_exitoso` indistinguible del otro seria una
+     * pista falsa dentro de la propia bitacora que existe para saber eso.
+     */
+    detalle?: string;
   },
 ): Promise<void> {
   await cliente.query(
@@ -66,8 +76,8 @@ export async function crearSesion(
   );
   await cliente.query(
     `INSERT INTO auditoria_accesos (usuario_id, usuario_intento, evento, ip, detalle)
-     VALUES ($1, $2, 'login_exitoso', $3, 'sesion iniciada')`,
-    [datos.usuarioId, datos.correo, datos.ip],
+     VALUES ($1, $2, 'login_exitoso', $3, $4)`,
+    [datos.usuarioId, datos.correo, datos.ip, datos.detalle ?? 'sesion iniciada'],
   );
 }
 
@@ -183,4 +193,64 @@ export async function cerrarOtrasSesiones(
     [usuarioId, sesionActualId],
   );
   return resultado.rowCount ?? 0;
+}
+
+/**
+ * El primer usuario activo que tiene el rol pedido.
+ *
+ * Es del acceso directo de desarrollo (ver `rutas-dev.ts`) y por eso el
+ * `ORDER BY u.id`: si la base de desarrollo tiene mas de un administrador
+ * (y la tiene: el seed trae un administrador y quien lo creo), se entra
+ * siempre al mismo, y las capturas de pantalla de un dia y otro son
+ * comparables.
+ */
+export async function buscarPorRol(cliente: PoolClient, rol: string): Promise<UsuarioFila | null> {
+  return consultarUno<UsuarioFila>(
+    cliente,
+    `SELECT u.id, u.nombre, u.email, u.activo, u.debe_cambiar_contrasena, u.puesto,
+            TRUE AS contrasena_ok,
+            COALESCE((SELECT json_agg(p.codigo ORDER BY p.codigo)
+                        FROM permisos p
+                        JOIN roles_permisos rp ON rp.permiso_id = p.id
+                        JOIN usuarios_roles ur ON ur.rol_id = rp.rol_id
+                       WHERE ur.usuario_id = u.id), '[]'::json) AS permisos,
+            (SELECT json_agg(r.nombre ORDER BY r.nombre)
+               FROM roles r
+               JOIN usuarios_roles ur ON ur.rol_id = r.id
+              WHERE ur.usuario_id = u.id) AS roles
+       FROM usuarios u
+       JOIN usuarios_roles ur ON ur.usuario_id = u.id
+       JOIN roles r           ON r.id = ur.rol_id
+      WHERE r.nombre = $1 AND u.activo
+      ORDER BY u.id
+      LIMIT 1`,
+    [rol],
+  );
+}
+
+/**
+ * Deja la cuenta sin pendiente de cambiar la contrasena.
+ *
+ * Lo usa solo el acceso directo de desarrollo. El seed siembra a todos con
+ * `debe_cambiar_contrasena` en TRUE (es lo correcto: nadie entra con una
+ * contrasena que esta escrita en un archivo), asi que sin esto el boton de
+ * entrar como administrador caeria de inmediato en la pantalla de cambiar
+ * la contrasena, que es justo lo que se esta queriendo evitar.
+ *
+ * De paso limpia el bloqueo por intentos fallidos: si alguien quedo
+ * bloqueado por teclear mal la clave de prueba, el boton de desarrollo
+ * tambien se queda sin poder entrar, y eso no lo entiende nadie.
+ */
+export async function limpiarPendientesDeContrasena(
+  cliente: PoolClient,
+  usuarioId: number,
+): Promise<void> {
+  await cliente.query(
+    `UPDATE usuarios
+        SET debe_cambiar_contrasena = false,
+            intentos_fallidos = 0,
+            bloqueado_hasta = NULL
+      WHERE id = $1`,
+    [usuarioId],
+  );
 }

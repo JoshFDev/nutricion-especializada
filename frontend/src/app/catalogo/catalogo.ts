@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  signal,
+  type OnInit,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
@@ -33,7 +41,7 @@ import {
   imports: [ReactiveFormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class Catalogo {
+export class Catalogo implements OnInit {
   /** `'especies'` o `'categorias'`. Lo decide el wrapper de cada ruta. */
   readonly recurso = input.required<ClaveRecurso>();
   readonly titulo = input.required<string>();
@@ -65,7 +73,16 @@ export class Catalogo {
     nombre: ['', [Validators.required, Validators.maxLength(100)]],
   });
 
-  constructor() {
+  /**
+   * Carga al empezar.
+   *
+   * En el constructor `this.recurso()` todavia no tiene valor —los inputs
+   * se asignan despues de construirse la instancia— y leer un `required()`
+   * ahi lanza el error de la app y deja la pantalla en blanco hasta que una
+   * accion (agregar un registro) dispara otro `recargar()`. Por eso el
+   * primer listado se pide en `ngOnInit`, que ya corre con los inputs.
+   */
+  ngOnInit(): void {
     void this.recargar();
   }
 

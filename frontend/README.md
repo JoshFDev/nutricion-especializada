@@ -19,12 +19,13 @@ Para que funcione hace falta el backend arriba (`pnpm dev` dentro de
 
 Lo que hay es la **base de la que cuelga todo lo demas**: sesion, login,
 cambio de contrasena, el marco con el menu y un aviso de "pantalla
-pendiente" en cada modulo. Los catorce modulos del negocio todavia no
-tienen pantalla; se ven en el menu porque las rutas se generan, pero abrir
-uno muestra lo que falta.
+pendiente" en cada modulo. Los once modulos del negocio que faltan todavia
+no tienen pantalla; se ven en el menu porque las rutas se generan, pero
+abrir uno muestra lo que falta.
 
-Lo siguiente es el POS (`/notas`): cliente, renglones, totales e imprimir
-el PDF.
+Ya tienen pantalla el POS (`/notas`: cliente, renglones, totales e imprimir
+el PDF), los clientes (`/clientes`: alta y edicion con codigo, especie y
+filtros) y los productos (`/productos`: alta, edicion y baja).
 
 ## Donde esta lo que importa
 
@@ -67,8 +68,8 @@ del final. Si el build de desarrollo acabara en un servidor, el boton no
 haria nada. Para quitarlo del proyecto: borrar `auth/rutas-dev.ts` y el
 `if` de `app.ts`.
 
-**Sin tests de componentes.** Hay 30 pruebas y ninguna levanta un
-componente: cubren el menu, el mapeo de errores y la sesion, que es donde
-esta la logica que se rompe en silencio. Probar que un boton se dibuja
-sale mas caro que lo que aporta; cuando las pantallas tengan estado
-propio, ahi si.
+**Sin tests de componentes.** Hay 96 pruebas y ninguna levanta un
+componente: cubren el menu, el mapeo de errores, la sesion, las cifras y
+el mapeo del cuerpo de las peticiones, que es donde esta la logica que se
+rompe en silencio. Probar que un boton se dibuja sale mas caro que lo que
+aporta; cuando las pantallas tengan estado propio, ahi si.

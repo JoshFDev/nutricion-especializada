@@ -1,0 +1,172 @@
+<!--
+  Clientes: listado + editor.
+
+  El listado y el editor son dos secciones excluyentes: cuando `editando()`
+  deja de ser null (cliente vacio para alta, o un cliente de la fila) se
+  muestra el editor. La busqueda filtra por nombre, codigo o RFC, como el
+  buscador del POS.
+-->
+<section class="clientes">
+  @if (editorAbierto()) {
+    <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
+      <h1>{{ esAlta() ? 'Nuevo cliente' : 'Editar cliente' }}</h1>
+
+      @if (errorEditor(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="codigo">Codigo</label>
+          <input
+            id="codigo"
+            type="text"
+            formControlName="codigo_cliente"
+            maxlength="40"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="campo">
+          <label for="nombre">Nombre</label>
+          <input
+            id="nombre"
+            type="text"
+            formControlName="nombre"
+            maxlength="200"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="campo">
+          <label for="establo">Establo</label>
+          <input id="establo" type="text" formControlName="establo" maxlength="200" />
+        </div>
+
+        <div class="campo">
+          <label for="especie">Especie</label>
+          <select id="especie" formControlName="especie_id">
+            <option value="">Sin especie</option>
+            @for (especie of especies(); track especie.id) {
+              <option [value]="especie.id">{{ especie.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="estatus">Estatus</label>
+          <select id="estatus" formControlName="estatus">
+            <option value="Activo">Activo</option>
+            <option value="Inactivo">Inactivo</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="telefono">Telefono</label>
+          <input id="telefono" type="text" formControlName="telefono" maxlength="40" />
+        </div>
+
+        <div class="campo ancho">
+          <label for="direccion">Direccion</label>
+          <input id="direccion" type="text" formControlName="direccion" maxlength="400" />
+        </div>
+      </div>
+
+      <div class="acciones">
+        <button type="submit" class="primario" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando...' : 'Guardar' }}
+        </button>
+        <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
+      </div>
+    </form>
+  } @else {
+    <div class="cabecera">
+      <h1>Clientes</h1>
+      @if (puedeCrear()) {
+        <button type="button" class="primario" (click)="nuevo()">Nuevo cliente</button>
+      }
+    </div>
+
+    <div class="filtros">
+      <input
+        type="search"
+        autocomplete="off"
+        placeholder="Buscar por nombre, codigo o RFC"
+        (input)="buscar($any($event.target).value)"
+      />
+      <select
+        class="filtro"
+        [value]="estatusFiltro()"
+        (change)="filtrar($any($event.target).value)"
+        aria-label="Filtrar por estatus"
+      >
+        <option value="todos">Todos</option>
+        <option value="Activo">Activos</option>
+        <option value="Inactivo">Inactivos</option>
+      </select>
+    </div>
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (buscando() && filas().length === 0) {
+      <p class="vacio">Buscando...</p>
+    }
+
+    @if (filas().length === 0 && !buscando()) {
+      <p class="vacio">No hay clientes que mostrar.</p>
+    }
+
+    @if (filas().length > 0) {
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Codigo</th>
+            <th scope="col">Nombre</th>
+            <th scope="col">Especie</th>
+            <th scope="col">RFC</th>
+            <th scope="col">Telefono</th>
+            <th scope="col">Saldo</th>
+            <th scope="col">Estatus</th>
+            <th scope="col"><span class="oculto">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (cliente of filas(); track cliente.id) {
+            <tr>
+              <td>{{ cliente.codigo_cliente ?? '—' }}</td>
+              <td>{{ cliente.nombre }}</td>
+              <td>{{ cliente.especie ?? '—' }}</td>
+              <td class="rfc">{{ cliente.rfc ?? '—' }}</td>
+              <td>{{ cliente.telefono ?? '—' }}</td>
+              <td class="num">{{ montoComoTexto(cliente.saldo_actual) }}</td>
+              <td>
+                <span [class.inactivo]="cliente.estatus === 'Inactivo'">{{ cliente.estatus }}</span>
+              </td>
+              <td class="acciones-celda">
+                @if (puedeEditar()) {
+                  <button type="button" class="chico" (click)="editar(cliente)">Editar</button>
+                }
+                @if (puedeEliminar()) {
+                  <button type="button" class="chico peligro" (click)="eliminar(cliente)">
+                    Eliminar
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (hayMas()) {
+        <div class="paginacion">
+          <button type="button" class="chico" [disabled]="buscando()" (click)="cargarMas()">
+            Cargar mas
+          </button>
+          <span class="cuenta">{{ filas().length }} de {{ total() }}</span>
+        </div>
+      }
+    }
+  }
+</section>

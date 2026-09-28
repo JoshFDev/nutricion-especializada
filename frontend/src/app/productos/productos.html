@@ -1,0 +1,173 @@
+<!--
+  Productos: listado + editor.
+
+  El listado trae por omision los productos ACTIVOS (el filtro decide), y el
+  boton del estado en la fila alterna `activo` con un PATCH que no abre el
+  editor (ver `alternaActivo`). La casilla de "Activo" del editor solos aparece
+  en la EDICION, porque el esquema de alta no la acepta.
+-->
+<section class="productos">
+  @if (editorAbierto()) {
+    <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
+      <h1>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h1>
+
+      @if (errorEditor(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="codigo">Codigo</label>
+          <input
+            id="codigo"
+            type="text"
+            formControlName="codigo"
+            maxlength="40"
+            autocomplete="off"
+            placeholder="clave"
+          />
+        </div>
+
+        <div class="campo">
+          <label for="nombre">Nombre</label>
+          <input
+            id="nombre"
+            type="text"
+            formControlName="nombre"
+            maxlength="100"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="campo">
+          <label for="presentacion_kg">Presentacion (kg)</label>
+          <input
+            id="presentacion_kg"
+            type="text"
+            formControlName="presentacion_kg"
+            inputmode="decimal"
+            maxlength="10"
+            placeholder="25.000"
+          />
+        </div>
+
+        <div class="campo">
+          <label for="categoria_id">Categoria</label>
+          <select id="categoria_id" formControlName="categoria_id">
+            <option value="">Sin categoria</option>
+            @for (categoria of categorias(); track categoria.id) {
+              <option [value]="categoria.id">{{ categoria.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="especie_id">Especie</label>
+          <select id="especie_id" formControlName="especie_id">
+            <option value="">Sin especie</option>
+            @for (especie of especies(); track especie.id) {
+              <option [value]="especie.id">{{ especie.nombre }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="acciones">
+        <button type="submit" class="primario" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando...' : 'Guardar' }}
+        </button>
+        <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
+      </div>
+    </form>
+  } @else {
+    <div class="cabecera">
+      <h1>Productos</h1>
+      @if (puedeEditar()) {
+        <button type="button" class="primario" (click)="nuevo()">Nuevo producto</button>
+      }
+    </div>
+
+    <div class="filtros">
+      <input
+        type="search"
+        autocomplete="off"
+        placeholder="Buscar por codigo o nombre"
+        (input)="buscar($any($event.target).value)"
+      />
+      <select
+        class="filtro"
+        [value]="filtroActivo()"
+        (change)="filtrar($any($event.target).value)"
+        aria-label="Filtrar por estado"
+      >
+        <option value="activos">Activos</option>
+        <option value="inactivos">De baja</option>
+        <option value="todos">Todos</option>
+      </select>
+    </div>
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (buscando() && filas().length === 0) {
+      <p class="vacio">Buscando...</p>
+    }
+
+    @if (filas().length === 0 && !buscando()) {
+      <p class="vacio">No hay productos que mostrar.</p>
+    }
+
+    @if (filas().length > 0) {
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Codigo</th>
+            <th scope="col">Nombre</th>
+            <th scope="col">Presentacion</th>
+            <th scope="col">Categoria</th>
+            <th scope="col">Especie</th>
+            <th scope="col">Estado</th>
+            <th scope="col"><span class="oculto">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (producto of filas(); track producto.id) {
+            <tr>
+              <td>{{ producto.codigo }}</td>
+              <td>{{ producto.nombre }}</td>
+              <td class="num">{{ kilosComoTexto(producto.presentacion_kg) }}</td>
+              <td>{{ producto.categoria ?? '—' }}</td>
+              <td>{{ producto.especie ?? '—' }}</td>
+              <td>
+                <span [class.inactivo]="!producto.activo">{{
+                  producto.activo ? 'Activo' : 'De baja'
+                }}</span>
+              </td>
+              <td class="acciones-celda">
+                @if (puedeEditar()) {
+                  <button type="button" class="chico" (click)="editar(producto)">Editar</button>
+                  <button type="button" class="chico" (click)="alternaActivo(producto)">
+                    {{ producto.activo ? 'Dar de baja' : 'Activar' }}
+                  </button>
+                  <button type="button" class="chico peligro" (click)="eliminar(producto)">
+                    Eliminar
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (hayMas()) {
+        <div class="paginacion">
+          <button type="button" class="chico" [disabled]="buscando()" (click)="cargarMas()">
+            Cargar mas
+          </button>
+          <span class="cuenta">{{ filas().length }} de {{ total() }}</span>
+        </div>
+      }
+    }
+  }
+</section>

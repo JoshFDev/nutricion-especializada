@@ -68,6 +68,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Productos',
         permiso: 'productos.ver',
         pendiente: 'Alta y edicion de productos con su clave y unidad.',
+        carga: () => import('../productos/productos').then((m) => m.Productos),
       },
       {
         ruta: 'categorias',
@@ -97,6 +98,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Clientes',
         permiso: 'clientes.ver',
         pendiente: 'Alta de clientes con su codigo, especie y datos fiscales.',
+        carga: () => import('../clientes/clientes').then((m) => m.Clientes),
       },
     ],
   },

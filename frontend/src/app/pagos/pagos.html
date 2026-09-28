@@ -1,0 +1,315 @@
+<h1>Pagos</h1>
+
+@if (!editorAbierto()) {
+  <!-- ----------------------------------------------------- el listado -->
+  <div class="cabecera">
+    <div class="filtros">
+      <input
+        type="search"
+        placeholder="Buscar por cliente o referencia…"
+        [attr.value]="buscar()"
+        (input)="aBuscar($any($event.target).value)"
+      />
+      <select class="filtro" [attr.value]="metodo()" (change)="aMetodo($any($event.target).value)">
+        <option value="">Método</option>
+        @for (metodo of METODOS_PAGO; track metodo) {
+          <option [value]="metodo">{{ metodo }}</option>
+        }
+      </select>
+      <input
+        type="date"
+        class="filtro"
+        [attr.value]="desde()"
+        (change)="aDesde($any($event.target).value)"
+      />
+      <input
+        type="date"
+        class="filtro"
+        [attr.value]="hasta()"
+        (change)="aHasta($any($event.target).value)"
+      />
+    </div>
+
+    @if (puedeCrear()) {
+      <button class="primario" (click)="abrirEditor()">Nuevo pago</button>
+    }
+  </div>
+
+  @if (errorLista(); as error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+
+  @if (cargandoLista()) {
+    <p class="vacio">Buscando pagos…</p>
+  } @else if (listado().length === 0) {
+    <p class="vacio">No hay pagos que mostrar.</p>
+  } @else {
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Pago</th>
+          <th>Cliente</th>
+          <th>Fecha</th>
+          <th>Método</th>
+          <th class="num">Monto</th>
+          <th class="num">Aplicado</th>
+          <th class="num">Saldo</th>
+          <th>Ref.</th>
+          <th class="acciones-celda"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (pago of listado(); track pago.id) {
+          <tr>
+            <td class="folio">{{ pago.id }}</td>
+            <td>{{ pago.cliente }}</td>
+            <td>{{ pago.fecha }}</td>
+            <td>{{ pago.metodo ?? '—' }}</td>
+            <td class="num">{{ montoComoTexto(pago.monto) }}</td>
+            <td class="num">{{ montoComoTexto(pago.monto_aplicado) }}</td>
+            <td class="num">{{ montoComoTexto(pago.saldo) }}</td>
+            <td>{{ pago.referencia ?? '—' }}</td>
+            <td class="acciones-celda">
+              <button class="chico" (click)="ver(pago)" [disabled]="cargandoDetalle()">Ver</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="paginacion">
+      <button (click)="cargarMas()" [disabled]="!hayMas() || buscandoMas()">
+        {{ buscandoMas() ? 'Buscando…' : 'Cargar más' }}
+      </button>
+      <span class="cuenta">{{ listado().length }} de {{ total() }} pagos</span>
+    </div>
+  }
+
+  <!-- --------------------------------------------------- el detalle -->
+  @if (detalle(); as pago) {
+    <div class="detalle">
+      <div class="detalle-cabecera">
+        <h2>Pago {{ pago.id }}</h2>
+        <button class="chico" (click)="cerrarDetalle()">Cerrar</button>
+      </div>
+      <dl class="detalle-campos">
+        <dt>Cliente</dt>
+        <dd>{{ pago.cliente }}</dd>
+        <dt>Fecha</dt>
+        <dd>{{ pago.fecha }}</dd>
+        <dt>Método</dt>
+        <dd>{{ pago.metodo ?? '—' }}</dd>
+        <dt>Monto</dt>
+        <dd class="num">{{ montoComoTexto(pago.monto) }}</dd>
+        <dt>Aplicado</dt>
+        <dd class="num">{{ montoComoTexto(pago.monto_aplicado) }}</dd>
+        <dt>Saldo</dt>
+        <dd class="num">{{ montoComoTexto(pago.saldo) }}</dd>
+        @if (pago.referencia) {
+          <dt>Referencia</dt>
+          <dd>{{ pago.referencia }}</dd>
+        }
+        @if (pago.requiere_factura) {
+          <dt>Factura</dt>
+          <dd>Sí requiere factura</dd>
+        }
+      </dl>
+      <h3 class="detalle-titulo">Aplicado a las notas</h3>
+      @if (pago.aplicaciones.length === 0) {
+        <p class="vacio">Este pago quedó como abono a cuenta, sin nota señalada.</p>
+      } @else {
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Nota</th>
+              <th class="num">Monto</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (aplicacion of pago.aplicaciones; track aplicacion.id) {
+              <tr>
+                <td>{{ aplicacion.nota }}</td>
+                <td class="num">{{ montoComoTexto(aplicacion.monto) }}</td>
+                <td>
+                  @switch (aplicacion.nota_estatus) {
+                    @case ('pendiente') {
+                      <span>pendiente</span>
+                    }
+                    @case ('parcial') {
+                      <span>parcial</span>
+                    }
+                    @case ('pagada') {
+                      <span>pagada</span>
+                    }
+                    @case ('cancelada') {
+                      <span class="inactivo">cancelada</span>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  }
+} @else {
+  <!-- ------------------------------------------------------ el editor -->
+  <div class="editor">
+    <div class="cabecera">
+      <h2>Nuevo pago</h2>
+      <button (click)="cerrarEditor()">Cancelar</button>
+    </div>
+
+    @if (error(); as error) {
+      <p class="error" role="alert">{{ error }}</p>
+    }
+
+    <div class="campos">
+      <div class="campo ancho">
+        <label for="cliente">Cliente</label>
+        @if (cliente(); as cliente) {
+          <div class="cliente-elegido">
+            <button class="cambiar" (click)="cambiarCliente()">{{ cliente.nombre }}</button>
+          </div>
+        } @else {
+          <input
+            id="cliente"
+            type="search"
+            placeholder="Busca por nombre…"
+            (input)="buscarCliente($any($event.target).value)"
+          />
+          @if (cargandoNotas()) {
+            <p class="vacio">Buscando notas abiertas…</p>
+          }
+          @if (resultadosCliente().length > 0) {
+            <ul class="resultados">
+              @for (cliente of resultadosCliente(); track cliente.id) {
+                <li>
+                  <button (click)="elegirCliente(cliente)">{{ cliente.nombre }}</button>
+                </li>
+              }
+            </ul>
+          }
+        }
+      </div>
+
+      <div class="campo">
+        <label for="fecha">Fecha</label>
+        <input
+          id="fecha"
+          type="date"
+          [attr.value]="fecha()"
+          (change)="fecha.set($any($event.target).value)"
+        />
+      </div>
+
+      <div class="campo">
+        <label for="metodo">Método</label>
+        <select
+          id="metodo"
+          [attr.value]="metodoPago()"
+          (change)="metodoPago.set($any($event.target).value)"
+        >
+          <option value="">(sin método)</option>
+          @for (metodo of METODOS_PAGO; track metodo) {
+            <option [value]="metodo">{{ metodo }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="campo">
+        <label for="monto">Monto del pago</label>
+        <input
+          id="monto"
+          type="text"
+          inputmode="decimal"
+          [attr.value]="monto()"
+          (input)="monto.set($any($event.target).value)"
+        />
+      </div>
+
+      <div class="campo">
+        <label for="referencia">Referencia</label>
+        <input
+          id="referencia"
+          type="text"
+          [attr.value]="referencia()"
+          (input)="referencia.set($any($event.target).value)"
+        />
+      </div>
+
+      <div class="campo">
+        <label class="marca">
+          <input
+            type="checkbox"
+            [checked]="requiereFactura()"
+            (change)="requiereFactura.set($any($event.target).checked)"
+          />
+          Requiere factura
+        </label>
+      </div>
+    </div>
+
+    <h3 class="detalle-titulo">Aplicar a las notas abiertas</h3>
+
+    @if (aplicaciones().length === 0) {
+      <p class="vacio">El cliente no tiene notas abiertas: el pago quedará como abono a cuenta.</p>
+    } @else {
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Nota</th>
+            <th>Fecha</th>
+            <th class="num">Subtotal</th>
+            <th>Estado</th>
+            <th class="num">Aplicar</th>
+            <th class="acciones-celda"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (nota of aplicaciones(); track nota.nota_id) {
+            <tr>
+              <td>{{ nota.folio }}</td>
+              <td>{{ nota.fecha }}</td>
+              <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
+              <td>{{ nota.estatus === 'parcial' ? 'parcial' : 'pendiente' }}</td>
+              <td class="num">
+                <input
+                  class="aplicar"
+                  type="text"
+                  inputmode="decimal"
+                  [attr.value]="nota.monto"
+                  (change)="ponerDeNota(nota.nota_id, $any($event.target).value)"
+                />
+              </td>
+              <td class="acciones-celda">
+                <button class="chico" (click)="aplicarToda(nota.nota_id)">Toda</button>
+              </td>
+            </tr>
+            @if (problemaDeAplicacion(nota); as problema) {
+              <tr class="nota-error">
+                <td colspan="6">{{ problema }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+
+      <div class="resumen">
+        <span>Total a aplicar: {{ montoComoTexto(aplicado()) }}</span>
+        <span>Saldo del pago: {{ montoComoTexto(saldo()) }}</span>
+        @if (!alcanza()) {
+          <span class="no-alcanza">El pago no alcanza las aplicaciones.</span>
+        }
+      </div>
+    }
+
+    <div class="acciones">
+      <button class="primario" (click)="guardar()" [disabled]="!puedeGuardar()">
+        {{ guardando() ? 'Guardando…' : 'Guardar pago' }}
+      </button>
+    </div>
+  </div>
+}

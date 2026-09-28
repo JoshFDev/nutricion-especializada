@@ -1,0 +1,300 @@
+/*
+ * La pantalla de pagos.
+ *
+ * Misma familia que productos.scss (filtros, tabla, editor), con lo que el
+ * pago agrega a la cobranza: el metodo en los filtros y en el editor, el
+ * detalle de un pago (sus aplicaciones) y las notas abiertas del cliente
+ * con su caja de "aplicar".
+ */
+
+:host {
+  display: block;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.filtros {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.filtros input[type='search'] {
+  flex: 1;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.filtro {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+.tabla {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.inactivo {
+  color: var(--texto-tenue);
+}
+
+.acciones-celda {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.folio {
+  font-variant-numeric: tabular-nums;
+}
+
+.paginacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.cuenta {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.vacio {
+  margin: 0 0 1rem;
+  color: var(--texto-tenue);
+}
+
+/* ------------------------------------------------------- el pago por notas */
+
+.aplicar {
+  width: 6rem;
+  padding: 0.375rem 0.5rem;
+  font: inherit;
+  text-align: right;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.nota-error td {
+  padding-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+}
+
+.resumen {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.no-alcanza {
+  color: var(--peligro-texto);
+}
+
+/* --------------------------------------------------------------- el editor */
+
+.editor {
+  max-width: 58rem;
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.campo.ancho {
+  grid-column: 1 / -1;
+}
+
+.campo label,
+.marca {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.campo input:not([type='checkbox']),
+.campo select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.cliente-elegido .cambiar {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.resultados {
+  margin: 0.375rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.resultados button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.resultados button:hover {
+  background: var(--fondo);
+}
+
+/* ------------------------------------------------------------- el detalle */
+
+.detalle {
+  margin-top: 1.25rem;
+}
+
+.detalle-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+
+.detalle-titulo {
+  margin: 1.25rem 0 0.625rem;
+  font-size: 1rem;
+}
+
+.detalle-campos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.375rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.detalle-campos dt {
+  color: var(--texto-suave);
+}
+
+.detalle-campos dd {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

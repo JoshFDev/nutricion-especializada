@@ -135,6 +135,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Pagos',
         permiso: 'pagos.ver',
         pendiente: 'Registrar pagos y aplicarlos a las notas abiertas.',
+        carga: () => import('../pagos/pagos').then((m) => m.Pagos),
       },
       {
         ruta: 'facturacion',

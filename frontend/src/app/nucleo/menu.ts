@@ -89,6 +89,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Precios',
         permiso: 'precios.ver',
         pendiente: 'Listas de precios por especie y las vigorencias.',
+        carga: () => import('../precios/precios').then((m) => m.Precios),
       },
     ],
   },

@@ -1,0 +1,287 @@
+/*
+ * La pantalla de precios.
+ *
+ * Dos recursos en pestanas (precio de lista y precio de cliente), con la
+ * misma familia de listado que productos y pagos, más lo que el cierre de
+ * precio agrega: los filtros con selectores propios (producto y cliente),
+ * el editor con buscadores, y una vista de cierre en vez de una de borrado.
+ */
+
+:host {
+  display: block;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.pestanas {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.pestana {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto-suave);
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pestana.activa {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+.controles {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+/* ---------------------------------------------------------- los filtros */
+
+.filtro {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.controles input[type='search'] {
+  min-width: 12rem;
+}
+
+.filtro-elegido {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------- los resultados */
+
+.resultados {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  min-width: 18rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  overflow: hidden;
+}
+
+.resultados button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.resultados button:hover {
+  background: var(--fondo);
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+.tabla {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.codigo {
+  color: var(--texto-tenue);
+}
+
+.acciones-celda {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.paginacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.cuenta {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.vacio {
+  margin: 0 0 1rem;
+  color: var(--texto-tenue);
+}
+
+/* --------------------------------------------------------------- el editor */
+
+.editor {
+  max-width: 46rem;
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+  max-width: 46rem;
+}
+
+.campo.ancho {
+  grid-column: 1 / -1;
+}
+
+.campo label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.campo input:not([type='checkbox']),
+.campo select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.elegido {
+  padding: 0.5rem 0.625rem;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.campo .cambiar {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ayuda {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+.cierre-nota {
+  max-width: 46rem;
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+}
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

@@ -80,6 +80,24 @@ const recargar = async (bytes: Buffer): Promise<ExcelJS.Worksheet> => {
   return hoja;
 };
 
+/** Que dice la celda, como texto; cadena vacia si esta en blanco. */
+const queDice = (celda: ExcelJS.Cell): string => {
+  const valor = celda.value;
+  if (valor === null || valor === undefined) return '';
+  if (typeof valor === 'string') return valor.trim();
+  // ExcelJS devuelve OBJETOS para texto enriquecido, formulas e
+  // hipervinculos, y ahi `String` daria "[object Object]". No hace falta
+  // descifrarlos: con que se note que algo hay escrito basta.
+  if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+  return 'objeto';
+};
+
+/** La celda tiene la raya de tachado del renglon vacio. */
+const estaTachada = (celda: ExcelJS.Cell): boolean => {
+  const borde = celda.border;
+  return borde?.diagonal?.up === true || borde?.diagonal?.down === true;
+};
+
 describe('excel de la nota de remision', () => {
   it('arma un xlsx de verdad', async () => {
     const { bytes } = await excelNotaRemision(nota(), cliente());
@@ -137,5 +155,53 @@ describe('excel de la nota de remision', () => {
 
     const bloqueTachado = hoja.getCell('A16');
     expect(bloqueTachado.value).toBeNull();
+  });
+
+  it('pone la diagonal EXACTAMENTE en los renglones vacios', async () => {
+    // Este es el que se llevo el papel con la raya atravesando "VIMILAC".
+    // No basta con preguntar si un renglon vacio quedo tachado: hay que
+    // preguntar que NO hay ninguna celda con diagonal que tenga algo
+    // escrito, y que las que si la tienen estan todas en renglones vacios.
+    const { bytes } = await excelNotaRemision(
+      nota({ renglones: [renglon(), renglon({ id: 2, producto_nombre: 'BARNY LECHE' })] }),
+      cliente(),
+    );
+    const hoja = await recargar(bytes);
+
+    const conDiagonal: string[] = [];
+    hoja.eachRow({ includeEmpty: true }, (fila) => {
+      fila.eachCell({ includeEmpty: true }, (celda) => {
+        if (estaTachada(celda)) conDiagonal.push(celda.address);
+      });
+    });
+
+    // 9 bloques de detalle, 2 con datos: los 7 que sobran van tachados,
+    // 5 celdas cada uno (A, B, D, E, F), en las filas 19, 22, ... 37.
+    const esperadas = [19, 22, 25, 28, 31, 34, 37].flatMap((fila) =>
+      ['A', 'B', 'D', 'E', 'F'].map((col) => `${col}${fila}`),
+    );
+    expect(conDiagonal.sort()).toEqual(esperadas.sort());
+  });
+
+  it('no deja ninguna celda con texto tachada', async () => {
+    const { bytes } = await excelNotaRemision(
+      nota({ renglones: [renglon(), renglon({ id: 2, producto_nombre: 'BARNY LECHE' })] }),
+      cliente(),
+    );
+    const hoja = await recargar(bytes);
+
+    // La version explicita del anterior, celda por celda: recorre TODO lo
+    // que tenga algo escrito y ninguna puede traer la diagonal. Asi el
+    // fallo se ve con el dato al lado, y no solo como un conteo.
+    const tachadasConTexto: string[] = [];
+    hoja.eachRow({ includeEmpty: false }, (fila) => {
+      fila.eachCell({ includeEmpty: false }, (celda) => {
+        const escrito = queDice(celda);
+        if (escrito !== '' && estaTachada(celda))
+          tachadasConTexto.push(`${celda.address}="${escrito}"`);
+      });
+    });
+
+    expect(tachadasConTexto).toEqual([]);
   });
 });

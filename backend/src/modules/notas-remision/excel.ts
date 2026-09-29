@@ -116,14 +116,67 @@ const fechaCorta = (fecha: string): string => {
  * PRINCIPAL de cada bloque (la de arriba), y la diagonal se dibuja a lo
  * largo de todo el rango combinado: es como lo dibuja Excel cuando se le
  * pone un borde a una celda combinada.
+ *
+ * ## Por que se clona el `style` y no se asigna el `border` directo
+ *
+ * `celda.border = {...}` FUNCIONA, y ademas es lo que dice la documentacion.
+ * El problema es que muta el objeto de estilo que ExcelJS tiene en un
+ * registro compartido, asi que el cambio se sale de la celda:
+ *
+ *     tachando SOLO la fila 19 con `celda.border = ...`  ->  30 celdas
+ *     tachando SOLO la fila 19 con `celda.style = {...}`   ->   5 celdas
+ *
+ * Las 30 son las 5 columnas de SEIS renglones, y el renglon 1 lleva ya lo
+ * que se le puso: "VIMILAC" con una raya atravesada. Como el objeto de
+ * estilo es el mismo en varias celdas (ExcelJS deduplica los estilos
+ * identicos), al mutarlo se llevan el cambio las que lo comparten.
+ *
+ * Reemplazar `celda.style` por un objeto NUEVO deja de mutar el compartido,
+ * y el borde va dentro del objeto nuevo. El `...celda.style` es para no
+ * perder el relleno, la fuente y la alineacion que ya tenia la celda.
  */
 const tacharRenglon = (hoja: ExcelJS.Worksheet, fila: number): void => {
   for (const bloque of BLOQUES_DETALLE) {
     const celda = hoja.getCell(`${bloque.celda}${fila}`);
-    celda.border = {
-      ...celda.border,
-      diagonal: { up: true, down: true, style: 'thin', color: { argb: 'FF000000' } },
+    celda.style = {
+      ...celda.style,
+      border: {
+        ...celda.border,
+        diagonal: { up: true, down: true, style: 'thin', color: { argb: 'FF000000' } },
+      },
     };
+  }
+};
+
+/**
+ * Quita la diagonal de un renglon que SI lleva datos.
+ *
+ * Con el clonado de arriba ya no hace falta, y aun asi esta, por dos
+ * razones que si existen aqui.
+ *
+ * La primera es la plantilla REAL (`nota-remision.xlsx`), que NO se
+ * versiona: lleva la caratula del negocio y cada quien tiene la suya. Si
+ * alguien tiene una plantilla suya con las diagonales ya puestas, el
+ * archivo saldria con la raya atravesando lo que se acaba de escribir, que
+ * es justo el papel que no se quiere entregar. Borrarla aqui hace que el
+ * resultado no dependa de como vine la plantilla.
+ *
+ * La segunda es que el tachado es una decision de ESTA funcion, no un
+ * adorno heredado: si un dia se deja de tachar, estas cuatro lineas
+ * sobran y se notan, y si se empieza a tachar otro renglon, este es el
+ * sitio donde se declara que los que tienen datos nunca se tachos.
+ */
+const destacharRenglon = (hoja: ExcelJS.Worksheet, fila: number): void => {
+  for (const bloque of BLOQUES_DETALLE) {
+    const celda = hoja.getCell(`${bloque.celda}${fila}`);
+    const borde = celda.border;
+    // La guarda va sobre el borde ORIGINAL: despues de desestructurar,
+    // `resto.diagonal` no puede existir, y preguntar ahi daria "siempre
+    // falso" y esta funcion no haria NUNCA nada.
+    const tachado = borde?.diagonal?.up === true || borde?.diagonal?.down === true;
+    if (!tachado) continue;
+    const { diagonal: _fuera, ...resto } = borde;
+    celda.style = { ...celda.style, border: resto };
   }
 };
 
@@ -190,6 +243,12 @@ export async function excelNotaRemision(
     poner(hoja, `D${fila}`, kilosComoTexto(renglon.kg_bulto));
     poner(hoja, `E${fila}`, montoComoTexto(renglon.precio_unit_kg));
     poner(hoja, `F${fila}`, montoComoTexto(renglon.subtotal));
+    // Este renglon va lleno, asi que no puede quedar con la raya encima.
+    // `poner` solo cambia el valor de la celda y `destacharRenglon` solo le
+    // cambia el estilo, asi que los dos no se estorban; se deja la limpieza
+    // al final para que se lea como lo que es: el renglon ya esta escrito y
+    // ahora se le quita el tachado que le haya dejado la plantilla.
+    destacharRenglon(hoja, fila);
   }
 
   // El total de la nota, el de la base, no el de sumar la hoja.

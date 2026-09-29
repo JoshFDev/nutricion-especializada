@@ -1,0 +1,484 @@
+<!--
+  Auditoria: cinco bitacoras en pestanas.
+
+  Las pestanas que se ven son las que la persona puede ver, y eso lo decide
+  `pestanas` en el componente, no esta plantilla. Con `auditoria.ver` y sin
+  los permisos de las otras cuatro se ve una pestana: no es un error, es
+  alguien con el acceso minimo.
+
+  Cada `@case` trae sus propias columnas porque cada bitacora cuenta otra
+  cosa: en la de caja lo que se lee es el saldo antes y despues, y en la de
+  inventario la existencia. Lo comun (cuando, quien, que) se ve en todas.
+
+  Y las filas salen de `filas.log`, `filas.accesos`, etc., no de una lista
+  comun: cada senal tiene el tipo de su renglon, asi que una columna mal
+  escrita es un error de compilacion y no un `undefined` en pantalla.
+-->
+@if (pestanas().length > 1) {
+  <nav class="pestanas" aria-label="Bitácora">
+    @for (pestana of pestanas(); track pestana.id) {
+      <button
+        type="button"
+        [class.activa]="pestana.id === abierta()"
+        [attr.aria-current]="pestana.id === abierta() ? 'page' : null"
+        (click)="cambiarDePestana(pestana.id)"
+      >
+        {{ pestana.etiqueta }}
+      </button>
+    }
+  </nav>
+}
+
+<div class="cabecera">
+  <div>
+    <h1>Auditoría</h1>
+    <p class="tenue">
+      Solo lectura. Lo que aparece aquí lo escribieron los triggers de la base, no las pantallas.
+    </p>
+  </div>
+</div>
+
+<div class="filtros">
+  <label class="campo">
+    <span>Del</span>
+    <input type="date" [value]="desde() ?? ''" (change)="ponerDesde($any($event.target).value)" />
+  </label>
+
+  <label class="campo">
+    <span>Al</span>
+    <input type="date" [value]="hasta() ?? ''" (change)="ponerHasta($any($event.target).value)" />
+  </label>
+
+  <div class="atajos">
+    <button type="button" class="chico" (click)="filtroDelMes()">Este mes</button>
+    <button type="button" class="chico" (click)="quitarFechas()">Todo</button>
+  </div>
+
+  @if (conBusqueda()) {
+    <input
+      type="search"
+      class="buscador"
+      placeholder="Buscar en el renglón"
+      [value]="buscador()"
+      (input)="buscar($any($event.target).value)"
+    />
+  }
+
+  @switch (abierta()) {
+    @case ('log') {
+      <select
+        class="filtro"
+        [value]="filtroOperacion()"
+        (change)="filtrarOperacion($any($event.target).value)"
+      >
+        <option value="">Altas, cambios y bajas</option>
+        <option value="INSERT">Solo altas</option>
+        <option value="UPDATE">Solo cambios</option>
+        <option value="DELETE">Solo bajas</option>
+      </select>
+    }
+    @case ('accesos') {
+      <select
+        class="filtro"
+        [value]="filtroEvento()"
+        (change)="filtrarEvento($any($event.target).value)"
+      >
+        <option value="">Todos los eventos</option>
+        @for (evento of eventos; track evento) {
+          <option [value]="evento">{{ ETIQUETA_EVENTO[evento] }}</option>
+        }
+      </select>
+    }
+    @case ('caja') {
+      <select
+        class="filtro"
+        [value]="filtroTipo()"
+        (change)="filtrarTipo($any($event.target).value)"
+      >
+        <option value="">Ingresos y egresos</option>
+        <option value="ingreso">Solo ingresos</option>
+        <option value="egreso">Solo egresos</option>
+      </select>
+    }
+    @case ('precios') {
+      <select
+        class="filtro"
+        [value]="filtroTipo()"
+        (change)="filtrarTipo($any($event.target).value)"
+      >
+        <option value="">Los tres precios</option>
+        <option value="cliente">Precio de cliente</option>
+        <option value="publico">Precio de lista</option>
+        <option value="costo">Costo</option>
+      </select>
+    }
+  }
+</div>
+
+@if (rangoMalo()) {
+  <p class="error" role="alert">La fecha «Del» no puede ser posterior a la de «Al».</p>
+}
+
+<div class="acciones">
+  <button type="button" class="primario" (click)="recargar()" [disabled]="!botonActivo()">
+    {{ cargando() ? 'Buscando…' : 'Aplicar filtros' }}
+  </button>
+  @if (total() > 0) {
+    <span class="tenue">{{ total() }} renglones</span>
+  }
+</div>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+@switch (abierta()) {
+  @case ('log') {
+    @if (filas.log().length === 0) {
+      <p class="vacio">Nada cambió en este rango.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Cuándo</th>
+            <th>Quién</th>
+            <th>Qué</th>
+            <th>Operación</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (renglon of filas.log(); track renglon.id) {
+            <tr>
+              <td>{{ fechaLegible(renglon.fecha) }}</td>
+              <td>
+                {{ renglon.usuario ?? '—' }}
+                @if (renglon.usuario_ip) {
+                  <span class="tenue">{{ renglon.usuario_ip }}</span>
+                }
+              </td>
+              <td>
+                <code>{{ renglon.tabla }}</code>
+                @if (renglon.registro_id !== null) {
+                  <span class="tenue">#{{ renglon.registro_id }}</span>
+                }
+              </td>
+              <td>
+                <span class="operacion operacion-{{ renglon.operacion }}">
+                  {{ ETIQUETA_OPERACION[renglon.operacion] }}
+                </span>
+              </td>
+              <td class="acciones-celda">
+                <button type="button" class="chico" (click)="ver(renglon)">Ver cambios</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (masPara(filas.log().length)) {
+        <div class="acciones">
+          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
+            Cargar más ({{ total() - filas.log().length }})
+          </button>
+        </div>
+      }
+    }
+  }
+
+  @case ('accesos') {
+    @if (filas.accesos().length === 0) {
+      <p class="vacio">Nadie entró ni salió en este rango.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Cuándo</th>
+            <th>Evento</th>
+            <th>Quién</th>
+            <th>Desde</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (renglon of filas.accesos(); track renglon.id) {
+            <tr [class.sospechoso]="eventoSospechoso(renglon.evento)">
+              <td>{{ fechaLegible(renglon.fecha) }}</td>
+              <td>
+                <span class="evento" [class.evento-malo]="eventoSospechoso(renglon.evento)">
+                  {{ ETIQUETA_EVENTO[renglon.evento] }}
+                </span>
+              </td>
+              <td>
+                @if (renglon.usuario) {
+                  {{ renglon.usuario }}
+                } @else if (renglon.usuario_intento) {
+                  {{ renglon.usuario_intento }}
+                  <span class="tenue">la cuenta no existe</span>
+                } @else {
+                  —
+                }
+              </td>
+              <td>{{ renglon.ip ?? '—' }}</td>
+              <td class="detalle">{{ renglon.detalle ?? renglon.user_agent ?? '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (masPara(filas.accesos().length)) {
+        <div class="acciones">
+          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
+            Cargar más ({{ total() - filas.accesos().length }})
+          </button>
+        </div>
+      }
+    }
+  }
+
+  @case ('caja') {
+    @if (filas.caja().length === 0) {
+      <p class="vacio">No se movió caja en este rango.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Cuándo</th>
+            <th>Cuenta</th>
+            <th>Concepto</th>
+            <th>Monto</th>
+            <th>Saldo</th>
+            <th>Quién</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (renglon of filas.caja(); track renglon.id) {
+            <tr>
+              <td>{{ fechaLegible(renglon.fecha) }}</td>
+              <td>
+                {{ renglon.cuenta }}
+                <span class="tenue">{{ renglon.cuenta_tipo }}</span>
+              </td>
+              <td>
+                {{ renglon.categoria }}
+                @if (renglon.descripcion) {
+                  <span class="tenue">{{ renglon.descripcion }}</span>
+                }
+              </td>
+              <td
+                class="num"
+                [class.ingreso]="renglon.tipo === 'ingreso'"
+                [class.egreso]="renglon.tipo === 'egreso'"
+              >
+                {{ renglon.tipo === 'ingreso' ? '+' : '−' }}{{ montoComoTexto(renglon.monto) }}
+              </td>
+              <td class="num tenue">
+                {{ renglon.saldo_despues !== null ? montoComoTexto(renglon.saldo_despues) : '—' }}
+              </td>
+              <td>{{ renglon.usuario }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (masPara(filas.caja().length)) {
+        <div class="acciones">
+          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
+            Cargar más ({{ total() - filas.caja().length }})
+          </button>
+        </div>
+      }
+    }
+  }
+
+  @case ('inventario') {
+    @if (filas.inventario().length === 0) {
+      <p class="vacio">No se movió inventario en este rango.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Cuándo</th>
+            <th>Producto</th>
+            <th>Almacén</th>
+            <th>Tipo</th>
+            <th>Cantidad</th>
+            <th>Existencia</th>
+            <th>Quién</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (renglon of filas.inventario(); track renglon.id) {
+            <tr>
+              <td>{{ fechaLegible(renglon.fecha) }}</td>
+              <td>
+                {{ renglon.producto }}
+                <span class="tenue">{{ renglon.producto_codigo }}</span>
+              </td>
+              <td>{{ renglon.almacen }}</td>
+              <td>
+                {{ renglon.tipo }}
+                @if (renglon.motivo) {
+                  <span class="tenue">{{ renglon.motivo }}</span>
+                }
+              </td>
+              <td class="num">{{ renglon.cantidad_bultos }}</td>
+              <td class="num tenue">
+                @if (renglon.existencia_antes !== null && renglon.existencia_despues !== null) {
+                  {{ renglon.existencia_antes }} → {{ renglon.existencia_despues }}
+                } @else {
+                  —
+                }
+              </td>
+              <td>{{ renglon.usuario }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (masPara(filas.inventario().length)) {
+        <div class="acciones">
+          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
+            Cargar más ({{ total() - filas.inventario().length }})
+          </button>
+        </div>
+      }
+    }
+  }
+
+  @case ('precios') {
+    @if (filas.precios().length === 0) {
+      <p class="vacio">No cambiaron precios en este rango.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Cuándo</th>
+            <th>Producto</th>
+            <th>Cliente</th>
+            <th>Tipo</th>
+            <th>Antes</th>
+            <th>Después</th>
+            <th>Quién</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (renglon of filas.precios(); track renglon.id) {
+            <tr>
+              <td>{{ fechaLegible(renglon.fecha) }}</td>
+              <td>
+                {{ renglon.producto }}
+                <span class="tenue">{{ renglon.producto_codigo }}</span>
+              </td>
+              <td>{{ renglon.cliente ?? renglon.proveedor ?? '—' }}</td>
+              <td>{{ renglon.tipo_precio }}</td>
+              <td class="num tenue">
+                {{
+                  renglon.precio_anterior !== null ? montoComoTexto(renglon.precio_anterior) : '—'
+                }}
+              </td>
+              <td class="num">
+                {{ renglon.precio_nuevo !== null ? montoComoTexto(renglon.precio_nuevo) : '—' }}
+                @if (renglon.motivo) {
+                  <span class="tenue">{{ renglon.motivo }}</span>
+                }
+              </td>
+              <td>{{ renglon.usuario }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (masPara(filas.precios().length)) {
+        <div class="acciones">
+          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
+            Cargar más ({{ total() - filas.precios().length }})
+          </button>
+        </div>
+      }
+    }
+  }
+}
+
+<!--
+  El detalle del renglon del log: que campos se movieron.
+
+  El backend manda el `jsonb` de antes y el de despues, tal cual, y quien
+  arma la comparacion es la pantalla. Solo salen los campos que CAMBIARON,
+  que es lo unico util de una tabla con cien columnas: se entra a ver por
+  que cambio un precio, no a leer el registro entero.
+
+  El fondo del velo es un BOTON, no el `<div>` que lo envuelve. Es lo que
+  hace que el clic de afuera cierre y el de adentro no sin preguntar en el
+  manejador si el clic cae dentro, y sale gratis del teclado (Enter y
+  Espacio) y se puede enfocar. Un `<div>` con `(click)` cierra con el raton
+  y no se puede cerrar con el teclado, y un modal que solo se cierra de una
+  forma no es un modal.
+-->
+@if (abiertoLog(); as renglon) {
+  <div class="velo">
+    <button type="button" class="velo-fondo" aria-label="Cerrar" (click)="cerrar()"></button>
+    <section
+      class="hoja"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Cambios del renglón"
+      (keydown.escape)="cerrar()"
+    >
+      <div class="cabecera">
+        <h2>
+          {{ renglon.tabla }}
+          @if (renglon.registro_id !== null) {
+            #{{ renglon.registro_id }}
+          }
+        </h2>
+        <button type="button" (click)="cerrar()">Cerrar</button>
+      </div>
+
+      <p class="tenue">
+        {{ fechaLegible(renglon.fecha) }} · {{ renglon.usuario ?? 'sin usuario' }}
+        @if (renglon.usuario_rfc) {
+          ({{ renglon.usuario_rfc }})
+        }
+      </p>
+
+      @if (cambios().length === 0) {
+        <p class="nota">
+          Este renglón no trae los datos de antes ni los de después, así que no hay nada que
+          comparar. Pasa con los <code>DELETE</code>: la fila ya no existe y solo queda el id.
+        </p>
+      } @else {
+        <table>
+          <thead>
+            <tr>
+              <th>Campo</th>
+              <th>Antes</th>
+              <th>Después</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cambio of cambios(); track cambio.campo) {
+              <tr>
+                <td>
+                  <code>{{ cambio.campo }}</code>
+                  @if (cambio.lado === 'antes') {
+                    <span class="tenue">nuevo</span>
+                  } @else if (cambio.lado === 'despues') {
+                    <span class="tenue">ya no está</span>
+                  }
+                </td>
+                <td class="valor">{{ cambio.antes }}</td>
+                <td class="valor">{{ cambio.nuevo }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      <p class="nota">
+        Estos datos los guardó el trigger de la base cuando alguien modificó el registro. La
+        pantalla solo los compara: no los puede cambiar.
+      </p>
+    </section>
+  </div>
+}

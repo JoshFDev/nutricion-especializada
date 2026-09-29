@@ -172,6 +172,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Auditoria',
         permiso: 'auditoria.ver',
         pendiente: 'Las cinco bitacoras en solo lectura.',
+        carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },
     ],
   },

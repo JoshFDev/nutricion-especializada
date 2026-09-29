@@ -1,0 +1,468 @@
+/*
+ * La pantalla de caja y bancos.
+ *
+ * Es la union de las dos familias que ya existen: la LISTA es la de compras
+ * (cabecera, filtros, tabla, paginacion) y la CAPTURA y el COMPROBANTE son
+ * las de notas (bloques con buscador, cierre con la cifra). Los colores salen
+ * de `styles.scss`, no de valores sueltos.
+ *
+ * Lo propio de esta pantalla son tres cosas:
+ *
+ *   - `.resumen` y `.cifras`: la tarjeta del periodo, que va arriba porque
+ *     "cuanto entro y cuanto salio" es la primera pregunta, y que tiene sus
+ *     propias cifras grandes y su tabla por cuenta.
+ *   - `.ingreso`, `.egreso` y `.negativo`: el color del dinero. Entra en
+ *     verde, sale en rojo, y un saldo negativo tambien en rojo aunque sea un
+ *     egreso, porque lo que se marca es que la cuenta esta en menos.
+ *   - `.borrar`: el aviso del unico DELETE del proyecto, con el campo para
+ *     escribir el monto. Va en una caja propia para que se lea como lo que es.
+ */
+
+:host {
+  display: block;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+h2 {
+  font-size: 1rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cabecera-botones {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.subtitulo {
+  max-width: 46rem;
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+}
+
+/* ------------------------------------------------------- la tarjeta del periodo */
+
+.resumen {
+  max-width: 52rem;
+  margin-bottom: 1.5rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.resumen-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.fechas {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.fecha {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.cifra {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+/* La cifra grande del periodo: se compara de un vistazo. */
+.cifra strong {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * El color del dinero.
+ *
+ * `.negativo` va aparte del tipo porque un saldo en menos es un `.negativo`,
+ * no un egreso: la cuenta esta en rojo aunque el ultimo movimiento haya sido
+ * un ingreso. `.ingreso` y `.egreso` se usan con `font-weight`, no con el
+ * color solo, para que se distingan tambien en una pantalla en escala de
+ * grises.
+ */
+.ingreso {
+  color: var(--exito-texto);
+  font-weight: 600;
+}
+
+.egreso,
+.negativo {
+  color: var(--peligro-texto);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+table {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* La tabla del resumen va sobre el fondo de la tarjeta, no con borde propio. */
+.por-cuenta {
+  margin-bottom: 0;
+  background: none;
+  border: 0;
+}
+
+.por-cuenta th {
+  background: none;
+}
+
+.vacio {
+  margin: 0 0 1rem;
+  color: var(--texto-tenue);
+}
+
+.tenue {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* -------------------------------------------------------------- los filtros */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.filtros input[type='search'] {
+  flex: 1;
+  min-width: 10rem;
+}
+
+/* --------------------------------------------------------------- la captura */
+
+.bloque {
+  position: relative;
+  max-width: 46rem;
+  margin-bottom: 1rem;
+}
+
+.datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+input[type='search'],
+input[type='text'],
+input[type='date'],
+select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.casilla {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.casilla input {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.casilla span {
+  font-size: 0.9375rem;
+  color: var(--texto);
+}
+
+.elegido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+}
+
+.resultados {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+}
+
+.resultados button {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.resultados button:hover {
+  background: var(--acento-suave);
+}
+
+.ayuda {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.problema {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+/* Lo que falta para poder guardar, junto en vez de campo por campo. */
+.problemas {
+  max-width: 46rem;
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--peligro-texto);
+}
+
+.aviso {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.aviso-ok {
+  padding: 0.625rem 0.75rem;
+  color: var(--exito-texto);
+  background: var(--exito-suave);
+  border: 1px solid var(--exito-texto);
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------- el detalle y el borrado */
+
+.comprobante {
+  max-width: 46rem;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+dt {
+  color: var(--texto-suave);
+}
+
+dd {
+  margin: 0;
+}
+
+dd.total {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.nota {
+  margin: 0 0 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+/*
+ * El borrado va en una caja, y no es estetica: es lo unico de la app que no se
+ * puede deshacer, y por eso se separa del resto del comprobante y obliga a
+ * escribir el monto antes de habilitarse el boton.
+ */
+.borrar {
+  max-width: 34rem;
+  margin-top: 1.5rem;
+  padding: 0.875rem 1rem;
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}
+
+.borrar h2 {
+  margin-bottom: 0.5rem;
+  color: var(--peligro-texto);
+}
+
+.borrar .aviso {
+  margin: 0 0 0.75rem;
+  color: var(--peligro-texto);
+}
+
+.borrar label {
+  color: var(--peligro-texto);
+}
+
+/* ------------------------------------------------------------- las cuentas */
+
+.alta {
+  max-width: 46rem;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--borde);
+}
+
+.alta h2 {
+  margin-bottom: 0.75rem;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button.peligro {
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+button.grande {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

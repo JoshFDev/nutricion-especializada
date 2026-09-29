@@ -153,6 +153,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Caja y bancos',
         permiso: 'caja.ver',
         pendiente: 'Cuentas, movimientos de ingreso y egreso, y su resumen.',
+        carga: () => import('../caja/caja').then((m) => m.Caja),
       },
     ],
   },

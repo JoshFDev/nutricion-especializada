@@ -127,6 +127,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Inventario',
         permiso: 'inventario.ver',
         pendiente: 'Existencia por producto y los ajustes y mermas.',
+        carga: () => import('../inventario/inventario').then((m) => m.Inventario),
       },
     ],
   },

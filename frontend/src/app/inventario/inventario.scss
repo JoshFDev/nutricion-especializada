@@ -1,0 +1,146 @@
+/*
+ * La pantalla de inventario.
+ *
+ * Misma familia que las demas: los colores son las variables de
+ * `styles.scss` y la tabla y los botones son los de productos y proveedores.
+ * Como es de SOLO LECTURA no hay editor, y por eso no aparece nada de
+ * `.campos` ni `.acciones`.
+ *
+ * Lo unico propio es `.sin-existencia` y `.tenue`: lo primero pinta en rojo
+ * el cero y el negativo (el modelo permite vender sin existencia, asi que un
+ * negativo es una deuda que hay que ver), y `.tenue` baja el codigo del
+ * producto a segundo plano debajo del nombre.
+ */
+
+:host {
+  display: block;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.subtitulo {
+  max-width: 46rem;
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+}
+
+.filtros {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.filtros input[type='search'] {
+  flex: 1;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.filtro {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+.tabla {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tenue {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.inactivo {
+  color: var(--texto-tenue);
+}
+
+/* Cero o negativo: lo que no alcanza para surtir. */
+.sin-existencia {
+  font-weight: 600;
+  color: var(--peligro-texto);
+}
+
+.paginacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.cuenta {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.vacio {
+  margin: 0 0 1rem;
+  color: var(--texto-tenue);
+}
+
+/* ------------------------------------------------------------- los botones */
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

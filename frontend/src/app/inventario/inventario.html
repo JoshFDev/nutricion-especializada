@@ -1,0 +1,84 @@
+<!--
+  Inventario: la existencia por producto y almacen, en solo lectura.
+
+  No hay boton de guardar porque no hay nada que capturar: la existencia es la
+  suma de los movimientos, y los movimientos los escriben las notas de venta y
+  las compras por trigger. Ajustar y registrar merma son otra pantalla.
+
+  El cero y el negativo se pintan en rojo: el modelo permite vender sin
+  existencia (avisa, no bloquea), asi que un negativo es una deuda que hay que
+  ver.
+-->
+<h1>Inventario</h1>
+
+<p class="subtitulo">
+  La existencia por producto y almacén, en bultos. Es la suma de lo que ha entrado y salido: las
+  notas de remisión la bajan y las compras la suben, sin capturar nada aquí.
+</p>
+
+<div class="filtros">
+  <input
+    type="search"
+    autocomplete="off"
+    placeholder="Código o nombre del producto"
+    [value]="buscador()"
+    (input)="buscar($any($event.target).value)"
+  />
+  <select
+    class="filtro"
+    [value]="filtro()"
+    (change)="cambiarFiltro($any($event.target).value)"
+    aria-label="Filtrar por existencia"
+  >
+    <option value="todas">Toda la existencia</option>
+    <option value="con">Con existencia</option>
+    <option value="vacios">En cero o negativo</option>
+  </select>
+</div>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+@if (cargando() && filas().length === 0) {
+  <p class="vacio">Buscando en el inventario…</p>
+} @else if (filas().length === 0) {
+  <p class="vacio">No hay existencia que mostrar.</p>
+} @else {
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th scope="col">Producto</th>
+        <th scope="col">Almacén</th>
+        <th scope="col" class="num">Existencia (bultos)</th>
+        <th scope="col">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (fila of filas(); track fila.producto_id + '-' + fila.almacen_id) {
+        <tr>
+          <td>
+            {{ fila.producto }}
+            <span class="tenue">{{ fila.producto_codigo }}</span>
+          </td>
+          <td>{{ fila.almacen }}</td>
+          <td class="num" [class.sin-existencia]="sinExistencia(fila)">
+            {{ bultosComoTexto(fila.existencia_bultos) }}
+          </td>
+          <td>
+            <span [class.inactivo]="!fila.producto_activo">{{
+              fila.producto_activo ? 'Activo' : 'De baja'
+            }}</span>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <div class="paginacion">
+    <button type="button" [disabled]="!hayMas() || cargandoMas()" (click)="cargarMas()">
+      {{ cargandoMas() ? 'Buscando…' : 'Cargar más' }}
+    </button>
+    <span class="cuenta">{{ filas().length }} de {{ totalEncontrado() }} renglones</span>
+  </div>
+}

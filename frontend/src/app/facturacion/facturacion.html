@@ -102,6 +102,18 @@
           canceladas no se pueden facturar.
         </p>
       } @else {
+        <!--
+          El tope de 200. Cuando el cliente tiene mas notas de las que una
+          factura puede cubrir, se ofrecen las mas antiguas y se dice cuantas
+          se quedaron fuera: sin este aviso, marcar todo y guardar parece
+          haber facturado el mes entero.
+        -->
+        @if (hayMasCandidatas()) {
+          <p class="aviso" role="status">
+            Se muestran {{ notas().length }} de {{ totalCandidatas() }} notas: una factura no puede
+            cubrir más de 200. Se ofrecen primero las más antiguas.
+          </p>
+        }
         <table class="notas">
           <thead>
             <tr>

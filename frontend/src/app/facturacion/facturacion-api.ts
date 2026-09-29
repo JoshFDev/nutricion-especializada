@@ -92,7 +92,26 @@ export interface NotaPorFacturar {
   elegida: boolean;
 }
 
-/** El cuerpo de `POST /api/facturacion`. Sin `monto_total`, a proposito. */
+/**
+ * Cuantas notas puede cubrir UNA factura. Es el `.max(200)` del
+ * `crearFacturaEsquema`, y la pantalla se queda en el mismo numero.
+ */
+export const MAX_NOTAS_POR_FACTURA = 200;
+
+/**
+ * Lo que devuelve `notasFacturables`: las que se ofrecen y cuantas hay.
+ *
+ * `total` es el numero REAL de notas facturables del cliente, que puede ser
+ * mayor que las ofrecidas. Va aparte para que la pantalla pueda decir "se
+ * muestran 200 de 340" en vez de dejar que alguien marque 200, guarde, y
+ * descubra que faltaban las demas.
+ */
+export interface Candidatas {
+  notas: NotaPorFacturar[];
+  total: number;
+}
+
+/** El cuerpo de `POST /api/facturas`. Sin `monto_total`, a proposito. */
 export interface CuerpoFactura {
   cliente_id: number;
   /** `undefined` se omite al serializar: el esquema la toma opcional. */
@@ -237,7 +256,7 @@ export class FacturacionApi {
   }
 
   /**
-   * Las notas del cliente que se PUEDEN facturar.
+   * Las notas del cliente que se PUEDEN facturar, y cuantas hay en total.
    *
    * Se piden los tres estatus vivos (pendiente, parcial y pagada) porque el
    * listado filtra por uno solo, y se juntan. Una nota pagada tambien se
@@ -251,32 +270,35 @@ export class FacturacionApi {
    * activa: el listado de notas no lo dice, y no hay endpoint que lo diga
    * (`factura_nota` es del lado del servidor). Por eso la pantalla explica el
    * 409 `NOTA_YA_FACTURADA` con el numero de factura en vez de fingir que no
-   * puede pasar. El rango es acotado: 200 notas es el maximo que acepta una
-   * factura, asi que es tambien el tope de lo que se ofrece.
+   * puede pasar.
    *
    * Ojo con el permiso: este listado es el de notas (`notas.ver`), no uno de
    * facturacion. Quien tenga `facturas.solicitar` sin `notas.ver` no podra
    * armar la factura; es un permiso de mas que hace falta para facturar.
    */
-  async notasFacturables(clienteId: number): Promise<NotaPorFacturar[]> {
+  async notasFacturables(clienteId: number): Promise<Candidatas> {
     const pedidos = (['pendiente', 'parcial', 'pagada'] as const).map((estatus) =>
       firstValueFrom(
         this.http.get<Listado<NotaListada>>(`${API}/notas-remision`, {
-          params: { cliente_id: clienteId, estatus, limite: 200 },
+          params: { cliente_id: clienteId, estatus, limite: MAX_NOTAS_POR_FACTURA },
         }),
       ),
     );
     const [pendientes, parciales, pagadas] = await Promise.all(pedidos);
-    return [...pendientes.datos, ...parciales.datos, ...pagadas.datos]
-      .sort((a, b) => a.folio.localeCompare(b.folio))
-      .map((n) => ({
+    const todas = [...pendientes.datos, ...parciales.datos, ...pagadas.datos].sort(
+      (a, b) => a.fecha.localeCompare(b.fecha) || a.folio.localeCompare(b.folio),
+    );
+    return {
+      notas: todas.slice(0, MAX_NOTAS_POR_FACTURA).map((n) => ({
         nota_id: n.id,
         folio: n.folio,
         fecha: n.fecha,
         subtotal: n.subtotal,
         estatus: n.estatus,
         elegida: false,
-      }));
+      })),
+      total: todas.length,
+    };
   }
 
   /** El listado de la tabla, con los filtros de la pantalla. */
@@ -296,22 +318,22 @@ export class FacturacionApi {
     if (opciones.estatus) params['estatus'] = opciones.estatus;
     if (opciones.desde) params['desde'] = opciones.desde;
     if (opciones.hasta) params['hasta'] = opciones.hasta;
-    return firstValueFrom(this.http.get<Listado<FacturaListada>>(`${API}/facturacion`, { params }));
+    return firstValueFrom(this.http.get<Listado<FacturaListada>>(`${API}/facturas`, { params }));
   }
 
   /** El detalle con las notas que cubre. La usa "Ver" en la tabla. */
   async obtener(id: number): Promise<Factura> {
-    return firstValueFrom(this.http.get<Factura>(`${API}/facturacion/${id}`));
+    return firstValueFrom(this.http.get<Factura>(`${API}/facturas/${id}`));
   }
 
   /** Crea la factura y devuelve el detalle como lo armo el servidor. */
   async crear(cuerpo: CuerpoFactura): Promise<Factura> {
-    return firstValueFrom(this.http.post<Factura>(`${API}/facturacion`, cuerpo));
+    return firstValueFrom(this.http.post<Factura>(`${API}/facturas`, cuerpo));
   }
 
   /** El unico cambio que existe: mover el estatus. */
   async cambiarEstatus(id: number, cuerpo: CuerpoEstatus): Promise<Factura> {
-    return firstValueFrom(this.http.patch<Factura>(`${API}/facturacion/${id}/estatus`, cuerpo));
+    return firstValueFrom(this.http.patch<Factura>(`${API}/facturas/${id}/estatus`, cuerpo));
   }
 }
 

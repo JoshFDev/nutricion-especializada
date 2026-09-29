@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_NOTAS_POR_FACTURA,
   cuerpoDeEstatus,
   cuerpoDeFactura,
   cuantasElegidas,
@@ -110,6 +111,19 @@ describe('el motivo de la cancelacion', () => {
   it('viaja recortado, y vacio es null', () => {
     expect(cuerpoDeEstatus('cancelada', '  error en el RFC  ').motivo).toBe('error en el RFC');
     expect(cuerpoDeEstatus('emitida', '').motivo).toBeNull();
+  });
+});
+
+describe('el tope de notas por factura', () => {
+  it('es el mismo 200 que pone el esquema, para no ofrecer mas de lo que se puede', () => {
+    expect(MAX_NOTAS_POR_FACTURA).toBe(200);
+  });
+
+  it('una factura con el tope completo se puede mandar', () => {
+    const notas = Array.from({ length: MAX_NOTAS_POR_FACTURA }, (_, i) =>
+      nota({ nota_id: i + 1, elegida: true }),
+    );
+    expect(cuerpoDeFactura(7, '', '', notas).notas).toHaveLength(MAX_NOTAS_POR_FACTURA);
   });
 });
 

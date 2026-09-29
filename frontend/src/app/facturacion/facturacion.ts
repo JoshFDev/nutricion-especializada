@@ -95,6 +95,17 @@ export class Facturacion {
   readonly total = computed(() => montoDeNotas(this.notas()));
   readonly elegidas = computed(() => cuantasElegidas(this.notas()));
   readonly hayNotas = computed(() => this.notas().length > 0);
+
+  /**
+   * Cuantas notas facturables tiene el cliente, todas.
+   *
+   * Puede ser mas que las que se ofrecen: una factura no cubre mas de
+   * `MAX_NOTAS_POR_FACTURA` y la pantalla se queda en ese tope, asi que con un
+   * cliente que tiene mas se ve el aviso de "se muestran N de M" en vez de
+   * dejar que se marque lo que se ve y se piense que es todo.
+   */
+  readonly totalCandidatas = signal(0);
+  readonly hayMasCandidatas = computed(() => this.totalCandidatas() > this.notas().length);
   readonly puedeGuardar = computed(
     () =>
       this.puedeSolicitar() &&
@@ -252,15 +263,19 @@ export class Facturacion {
   cambiarCliente(): void {
     this.cliente.set(null);
     this.notas.set([]);
+    this.totalCandidatas.set(0);
     this.buscadorCliente.limpiar();
   }
 
   private async cargarNotas(clienteId: number): Promise<void> {
     this.cargandoNotas.set(true);
     try {
-      this.notas.set(await this.api.notasFacturables(clienteId));
+      const candidatas = await this.api.notasFacturables(clienteId);
+      this.notas.set(candidatas.notas);
+      this.totalCandidatas.set(candidatas.total);
     } catch (falla) {
       this.notas.set([]);
+      this.totalCandidatas.set(0);
       this.errorCaptura.set(errorLegible(falla).mensaje);
     } finally {
       this.cargandoNotas.set(false);

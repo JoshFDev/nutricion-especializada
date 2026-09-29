@@ -120,6 +120,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Compras',
         permiso: 'compras.ver',
         pendiente: 'Registrar compras, entradas de mercancia y sus folios.',
+        carga: () => import('../compras/compras').then((m) => m.Compras),
       },
       {
         ruta: 'inventario',

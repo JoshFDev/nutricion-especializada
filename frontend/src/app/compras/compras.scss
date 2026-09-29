@@ -1,0 +1,406 @@
+/*
+ * La pantalla de compras.
+ *
+ * Es la union de dos familias que ya existen: la LISTA es la de proveedores
+ * (cabecera, filtros, tabla, paginacion) y la CAPTURA/COMPROBANTE son las de
+ * notas (bloques con buscador, renglones con inputs, cierre con el total).
+ * Los colores salen de `styles.scss`, no de valores sueltos.
+ *
+ * Lo propio son `.fecha` (los dos filtros de fecha con su etiqueta) y
+ * `.cancelar` (el motivo, que se pide dentro de la pantalla y no en un
+ * `prompt`).
+ */
+
+:host {
+  display: block;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.subtitulo {
+  max-width: 46rem;
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+}
+
+/* -------------------------------------------------------------- los filtros */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.filtros input[type='search'] {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.campo-buscador {
+  position: relative;
+}
+
+.filtro,
+.fecha input {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.fecha {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+.tabla,
+.renglones,
+.detalle {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+/* El dinero y las cantidades a la derecha: se comparan de columna. */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.inactivo {
+  color: var(--texto-tenue);
+}
+
+.acciones-celda {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.paginacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.cuenta {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.vacio {
+  margin: 0 0 1rem;
+  color: var(--texto-tenue);
+}
+
+.tenue {
+  color: var(--texto-tenue);
+  font-size: 0.8125rem;
+}
+
+/* ------------------------------------------------------------- la captura */
+
+.bloque {
+  position: relative;
+  max-width: 46rem;
+  margin-bottom: 1rem;
+}
+
+.bloque.apagado {
+  opacity: 0.5;
+}
+
+.datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+input[type='search'],
+input[type='text'],
+input[type='date'],
+textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input[type='number'] {
+  width: 6.5rem;
+  padding: 0.375rem 0.5rem;
+  font: inherit;
+  text-align: right;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.elegido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+}
+
+.resultados {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+}
+
+.resultados button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.resultados button:hover:not(:disabled) {
+  background: var(--acento-suave);
+}
+
+.ayuda {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+/* El aviso del buscador y el de "sin costo": en tenue, no en rojo. */
+.aviso {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.con-problema td {
+  padding-top: 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-bottom: 1px solid var(--borde);
+}
+
+/* ---------------------------------------------------------------- el cierre */
+
+.cierre {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  max-width: 46rem;
+  margin-bottom: 1.25rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.kilos {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.total {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cierre .aviso {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------- el comprobante */
+
+.comprobante {
+  max-width: 46rem;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+dt {
+  color: var(--texto-suave);
+}
+
+dd {
+  margin: 0;
+}
+
+dd.total {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cancelada {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}
+
+.nota {
+  margin: 0 0 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.cancelar {
+  max-width: 34rem;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button.grande {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+button.peligro {
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}

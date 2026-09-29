@@ -1,19 +1,57 @@
 /*
  * El marco.
  *
- * La idea es que el contenido mande: el menu es lo que se aparta. En una
+ * La idea es que el contenido mande: el menu es lo que se apaga. En una
  * pantalla de mostrador importa mas la tabla de renglones que el menu, asi
  * que el menu fijo se queda angosto y en pantallas chicas se vuelve un
  * cajon que se abre encima.
  *
  * `dvh` y no `vh`: en un celular la barra del navegador entra y sale, y con
  * `vh` el fondo se ve cortado cuando esta abierta.
+ *
+ * `height` y no `min-height`, y eso es lo que hace que el menu no se mueva.
+ *
+ * Con `min-height` el marco crece hasta donde le pida el contenido y el
+ * que baja es el DOCUMENTO: la barra y el menu suben con el, y el
+ * `overflow-y: auto` del menu no hace nada porque nunca le sobra alto a
+ * nada. Con `height: 100dvh` el marco mide lo que la pantalla y no un pelo
+ * mas, el documento no tiene nada que bajar, y el unico que baja es
+ * `.contenido`. El menu se queda quieto, que es lo que se busca.
+ *
+ * El `overflow: hidden` va con el `height` y no es decorativo: sin el, un
+ * hijo que se pase de alto (una tabla larga, el menu cuando son muchos
+ * modulos) estira el marco y vuelve a aparecer el scroll de la pagina.
+ * Los dos overflow se escriben a proposito: uno aqui y el otro en
+ * `.contenido`.
  */
 
+/*
+ * `display: block` porque `app-shell` es un elemento desconocido y eso es
+ * `display: inline`. Un inline que envuelve el `.app` de abajo lo parte en
+ * cajas de bloque anonimas y deja pegado el espacio de la linea al final:
+ * el documento queda unos 4px mas alto que la pantalla y el scroll de la
+ * pagina vuelve a aparecer. Todas las pantallas de negocio llevan esta
+ * misma regla, y el shell era el unico que se habia quedado sin ella.
+ */
+:host {
+  display: block;
+  /* Sin esto el `.app` de 100dvh mide bien, pero el host queda en su alto
+     automatico y en una pagina corta el fondo no llega al final. */
+  height: 100%;
+}
+
 .app {
-  min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+
+  /*
+   * Que el(scroll) del contenido no se siga en el documento al llegar al
+   * tope o al fondo. Sin esto, en celular el scroll de la tabla arrastra la
+   * pagina entera y el menu se va con ella.
+   */
+  overscroll-behavior: none;
 }
 
 .barra {
@@ -25,6 +63,14 @@
   color: var(--sobre-acento);
   background: var(--acento);
   flex: 0 0 auto;
+
+  /*
+   * Una sombra finita y no un borde: la barra va a quedar pegada arriba de
+   * un contenido que ahora baja debajo de ella, y sin nada que los separe
+   * la tabla pasa rozando el azul. Con la sombra se lee que la barra esta
+   * ENCIMA. Es de 1px de alto y muy clara, para no hacer una linea.
+   */
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
 
   /*
    * El nombre se recorta con puntos suspensivos en vez de partirse en dos
@@ -118,6 +164,8 @@
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+  /* La mitad del sistema de scroll: acota los hijos a la altura de la fila. */
+  overflow: hidden;
 }
 
 .lateral {
@@ -126,10 +174,21 @@
   padding: 1rem 0.625rem;
   background: var(--superficie);
   border-right: 1px solid var(--borde);
+
+  /*
+   * Este `overflow-y` estaba antes y no hacia nada: como el marco media lo
+   * que el contenido, el menu crecia con el y nunca le sobraba alto. Con el
+   * marco medido, este es el que hace que el menu baje solo cuando son
+   * muchos modulos, en vez de empujar a la tabla fuera de la pantalla.
+   *
+   * El `contain` evita que al llegar al final del menu el scroll se siga de
+   * largo en el documento.
+   */
   overflow-y: auto;
+  overscroll-behavior: contain;
 
   .grupo + .grupo {
-    margin-top: 1.25rem;
+    margin-top: 1.375rem;
   }
 
   h2 {
@@ -139,6 +198,13 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    /*
+     * `--texto-suave` y no `--texto-tenue`, aunque el mas claro se vea mas
+     * limpio. Este texto son 11px y pesa 4.36:1 el tono tenue sobre blanco
+     * (6.27:1 el suave), y por debajo de 4.5:1 un textochito en mayusculas
+     * deja de leerse en una pantalla de mostrador con luz de tubo, que es
+     * justo donde se usa. Aqui la limpieza no vale la perdida de contraste.
+     */
     color: var(--texto-suave);
   }
 
@@ -149,12 +215,24 @@
   }
 
   a {
+    position: relative;
     display: block;
     padding: 0.4375rem 0.625rem;
     border-radius: 0.375rem;
     color: var(--texto);
     font-size: 0.875rem;
     text-decoration: none;
+
+    /*
+     * El color de fondo y el del texto, y nada mas. Con el menu lleno, el
+     * renglon activo cambia de golpe cuando se navega y el salto se nota
+     * como un parpadeo; el color de fondo se apaga en 120ms, que se ve
+     * seguida y no distrae. No hay transicion de `transform` ni de nada que
+     * se mueva: eso es lo que estorba.
+     */
+    transition:
+      background-color 0.12s ease-out,
+      color 0.12s ease-out;
 
     &:hover {
       background: var(--fondo);
@@ -167,6 +245,27 @@
       background: var(--acento-suave);
       color: var(--acento-texto);
       font-weight: 600;
+
+      /*
+       * La barrita a la izquierda del renglon activo. El fondo solo no
+       * bastaba: junto a una tabla de veinte filas, el ojo se pierde y hay
+       * que volver a leer el menu para saber donde Estas. Asi el renglon
+       * activo se reconoce de reojo, sin tener que leer los cinco.
+       *
+       * Va con `top`/`bottom` en vez de `inset: 0` para no pelearse con las
+       * esquinas redondeadas del fondo, y con `z-index` para que quede
+       * encima del propio fondo del enlace.
+       */
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0.375rem;
+        bottom: 0.375rem;
+        left: 0;
+        width: 3px;
+        background: var(--acento);
+        border-radius: 0 2px 2px 0;
+      }
     }
   }
 }
@@ -175,7 +274,63 @@
   flex: 1 1 auto;
   min-width: 0;
   padding: 1.25rem;
+  overflow-y: auto;
   overflow-x: auto;
+  /* La otra mitad: este es el unico que baja, y baja solo. */
+  overscroll-behavior: contain;
+
+  /*
+   * Un poco mas de aire arriba del contenido. Antes el padding de 1.25rem
+   * quedaba pegado al borde de la barra y la pantalla parecia un bloque
+   * pegado al techo; con 1.5rem el titulo respira y se lee como el
+   * principio de una pagina y no como el continuacion de la barra.
+   */
+  scroll-padding-block-start: 0.5rem;
+}
+
+/*
+ * Las barras de scroll de los dos unicos que bajan.
+ *
+ * Con la barra del navegador no se ve casi nada, y aqui los scrolls estan
+ * siempre a la vista, asi que se vuelven parte del diseno. El pulgar va en
+ * `--texto-tenue` y no en `--borde` aunque el borde sea lo mas discreto de
+ * la paleta: sobre el fondo de la pagina el borde queda en 1.28:1, y un
+ * pulgar que no se ve no es discreto, es un scroll que nadie sabe que
+ * existe. El tono tenue da 3.08:1, que es lo que pide la norma (3:1) para
+ * los elementos que no son texto, y sigue siendo mas callado que el texto.
+ *
+ * El borde transparente del pulgar (3px) es lo que lo hace verse delgado
+ * sin ENGROSAR la barra: el pulgar se dibuja en la ranura y el borde se
+ * come el sobrante.
+ */
+.lateral,
+.contenido {
+  scrollbar-width: thin;
+  scrollbar-color: var(--texto-tenue) transparent;
+}
+
+.lateral::-webkit-scrollbar,
+.contenido::-webkit-scrollbar {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.lateral::-webkit-scrollbar-thumb,
+.contenido::-webkit-scrollbar-thumb {
+  background: var(--texto-tenue);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+.lateral::-webkit-scrollbar-thumb {
+  /* El pulgar del menu lleva el borde del color de FONDO del menu, que es
+     la superficie; el del contenido, el fondo de la pagina. */
+  border-color: var(--superficie);
+}
+
+.contenido::-webkit-scrollbar-thumb {
+  border-color: var(--fondo);
 }
 
 .velo {
@@ -228,5 +383,19 @@
 
   .contenido {
     padding: 0.875rem;
+  }
+}
+
+/*
+ * Quien pidio menos movimiento se lo quita.
+ *
+ * La transicion que de verdad molesta es la del cajon, que se desplaza de
+ * lado. Sin esto, a quien tiene el sistema en "reducir movimiento" el menu le
+ * vuela de la izquierda. Los cambios de color se dejan: no son movimiento y
+ * son los que hacen legible el renglon activo.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .lateral {
+    transition: none;
   }
 }

@@ -1,0 +1,167 @@
+<!--
+  Proveedores: listado + editor.
+
+  Dos secciones excluyentes: con el editor abierto se ven los campos, y
+  cerrada se ve la tabla. El listado trae por omision los proveedores
+  ACTIVOS, y el boton de la fila alterna `activo` con un PATCH de un solo
+  campo (ver `alternarActivo`): no hay borrar, porque un proveedor con
+  compras tiene su nombre en documentos viejos.
+
+  El editor NO tiene casilla de "activo": el esquema de alta no acepta el
+  campo (`crearProveedorEsquema` es `strict` y no lo tiene) y la baja se
+  decide desde la fila.
+-->
+<h1>Proveedores</h1>
+
+@if (editorAbierto()) {
+  <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
+    <div class="cabecera">
+      <h2>{{ esAlta() ? 'Nuevo proveedor' : 'Editar proveedor' }}</h2>
+      <button type="button" (click)="cancelar()">Cancelar</button>
+    </div>
+
+    @if (errorEditor(); as error) {
+      <p class="error" role="alert">{{ error }}</p>
+    }
+
+    <div class="campos">
+      <div class="campo ancho">
+        <label for="nombre">Nombre</label>
+        <input
+          id="nombre"
+          type="text"
+          formControlName="nombre"
+          maxlength="120"
+          autocomplete="off"
+        />
+        @if (problemaDe('nombre'); as problema) {
+          <p class="ayuda">{{ problema }}</p>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="contacto">Contacto</label>
+        <input
+          id="contacto"
+          type="text"
+          formControlName="contacto"
+          maxlength="120"
+          autocomplete="off"
+        />
+        @if (problemaDe('contacto'); as problema) {
+          <p class="ayuda">{{ problema }}</p>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="telefono">Teléfono</label>
+        <input
+          id="telefono"
+          type="text"
+          formControlName="telefono"
+          maxlength="40"
+          autocomplete="off"
+        />
+        @if (problemaDe('telefono'); as problema) {
+          <p class="ayuda">{{ problema }}</p>
+        }
+      </div>
+    </div>
+
+    <p class="nota">
+      El nombre no se puede repetir: es como aparece al elegir al proveedor al capturar una compra.
+      El contacto y el teléfono son opcionales, y el saldo lo calcula el sistema con las compras y
+      los pagos.
+    </p>
+
+    <div class="acciones">
+      <button type="submit" class="primario" [disabled]="guardando() || forma.invalid">
+        {{ guardando() ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </form>
+} @else {
+  <div class="cabecera">
+    <p class="subtitulo">
+      Los proveedores de donde viene la mercancía. Al capturar una compra se elige uno de aquí.
+    </p>
+    @if (puedeEditar()) {
+      <button type="button" class="primario" (click)="nuevo()">Nuevo proveedor</button>
+    }
+  </div>
+
+  <div class="filtros">
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Buscar por nombre, contacto o teléfono"
+      [value]="buscador()"
+      (input)="buscar($any($event.target).value)"
+    />
+    <select
+      class="filtro"
+      [value]="filtroActivo()"
+      (change)="filtrar($any($event.target).value)"
+      aria-label="Filtrar por estado"
+    >
+      <option value="activos">Activos</option>
+      <option value="inactivos">De baja</option>
+      <option value="todos">Todos</option>
+    </select>
+  </div>
+
+  @if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (buscando() && filas().length === 0) {
+    <p class="vacio">Buscando proveedores…</p>
+  } @else if (filas().length === 0) {
+    <p class="vacio">No hay proveedores que mostrar.</p>
+  } @else {
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th scope="col">Nombre</th>
+          <th scope="col">Contacto</th>
+          <th scope="col">Teléfono</th>
+          <th scope="col" class="num">Saldo</th>
+          <th scope="col" class="num">Compras</th>
+          <th scope="col">Estado</th>
+          <th scope="col"><span class="oculto">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (proveedor of filas(); track proveedor.id) {
+          <tr>
+            <td>{{ proveedor.nombre }}</td>
+            <td>{{ proveedor.contacto ?? '—' }}</td>
+            <td>{{ proveedor.telefono ?? '—' }}</td>
+            <td class="num">{{ montoComoTexto(proveedor.saldo_actual) }}</td>
+            <td class="num">{{ proveedor.compras }}</td>
+            <td>
+              <span [class.inactivo]="!proveedor.activo">{{
+                proveedor.activo ? 'Activo' : 'De baja'
+              }}</span>
+            </td>
+            <td class="acciones-celda">
+              @if (puedeEditar()) {
+                <button type="button" class="chico" (click)="editar(proveedor)">Editar</button>
+                <button type="button" class="chico" (click)="alternarActivo(proveedor)">
+                  {{ proveedor.activo ? 'Dar de baja' : 'Activar' }}
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="paginacion">
+      <button type="button" [disabled]="!hayMas() || buscando()" (click)="cargarMas()">
+        {{ buscando() ? 'Buscando…' : 'Cargar más' }}
+      </button>
+      <span class="cuenta">{{ filas().length }} de {{ total() }} proveedores</span>
+    </div>
+  }
+}

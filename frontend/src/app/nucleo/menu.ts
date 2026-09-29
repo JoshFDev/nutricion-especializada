@@ -113,6 +113,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Proveedores',
         permiso: 'proveedores.ver',
         pendiente: 'Proveedores y sus folios de compra.',
+        carga: () => import('../proveedores/proveedores').then((m) => m.Proveedores),
       },
       {
         ruta: 'compras',

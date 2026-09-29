@@ -21,6 +21,10 @@ dump/
 backups/
 db/data/
 
+# La plantilla real de la nota de remision: trae la direccion y el telefono
+# del negocio. Lo que se versiona es `nota-remision.example.xlsx`.
+backend/plantillas/nota-remision.xlsx
+
 # Logs y temporales
 *.log
 npm-debug.log*

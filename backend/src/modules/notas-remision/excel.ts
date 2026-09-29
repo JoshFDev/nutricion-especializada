@@ -13,13 +13,19 @@ import type { ClienteImprimible, Nota } from './modelo.js';
  * disco, asi que se puede probar sin levantar nada (ver
  * `tests/unit/notas.excel.test.ts`).
  *
- * La plantilla vive en `backend/plantillas/nota-remision.xlsx` y NO se
- * versiona dentro de `src/`: `tsc` emite `.js` y nada mas, asi que un
- * `.xlsx` dentro de `src/` existiria en desarrollo y desapareceria en
- * `dist/`, y el fallo apareceria solo en produccion. La ruta se calcula
- * desde la posicion de ESTE archivo y no desde `process.cwd()`, por el mismo
- * motivo que `scripts/migrar.ts`: si el servidor se lanza desde otra
- * carpeta, `cwd` no apunta a `backend/`.
+ * La plantilla vive en `backend/plantillas/nota-remision.xlsx`, y esa NO se
+ * versiona: trae la direccion y el telefono del negocio, que no tienen por
+ * que estar en un repositorio. Lo que si se versiona es
+ * `nota-remision.example.xlsx`, la misma hoja con la caratula en blanco, que
+ * es la que usan un clon limpio y las pruebas. `leerPlantilla` prefiere la
+ * real y cae al ejemplo cuando no esta.
+ *
+ * El `.xlsx` no puede vivir dentro de `src/`: `tsc` emite `.js` y nada mas,
+ * asi que existiria en desarrollo y desapareceria en `dist/`, y el fallo
+ * apareceria solo en produccion. La ruta se calcula desde la posicion de ESTE
+ * archivo y no desde `process.cwd()`, por el mismo motivo que
+ * `scripts/migrar.ts`: si el servidor se lanza desde otra carpeta, `cwd` no
+ * apunta a `backend/`.
  *
  * Los datos que se imprimen son los de la base, nunca un recalculo. El
  * total es el `subtotal` de `notas_remision` y los precios los del renglon,
@@ -51,6 +57,24 @@ const BLOQUES_DETALLE = [
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const RUTA_PLANTILLA = join(RAIZ, 'plantillas', 'nota-remision.xlsx');
+const RUTA_PLANTILLA_EJEMPLO = join(RAIZ, 'plantillas', 'nota-remision.example.xlsx');
+
+/**
+ * La plantilla real y, si no esta, el ejemplo.
+ *
+ * La real no se versiona (trae la caratula con los datos del negocio), asi que
+ * en un clon limpio solo existe el ejemplo, con la caratula en blanco. Un
+ * error que no sea "no existe" si se propaga: un archivo corrupto o sin
+ * permiso tiene que doler, no esconderse detras del ejemplo.
+ */
+async function leerPlantilla(): Promise<Buffer> {
+  try {
+    return await readFile(RUTA_PLANTILLA);
+  } catch (falla) {
+    if ((falla as NodeJS.ErrnoException).code !== 'ENOENT') throw falla;
+    return readFile(RUTA_PLANTILLA_EJEMPLO);
+  }
+}
 
 /**
  * La fecha como se lee en el papel: "27-sep-26".
@@ -123,7 +147,7 @@ export async function excelNotaRemision(
   nota: Nota,
   cliente: ClienteImprimible,
 ): Promise<{ bytes: Buffer; renglonesFuera: number }> {
-  const plantilla = await readFile(RUTA_PLANTILLA);
+  const plantilla = await leerPlantilla();
   const libro = new ExcelJS.Workbook();
   // `load` espera el `Buffer` que el propio exceljs declara (un ArrayBuffer
   // extendido), no el de Node; en runtime son el mismo objeto, asi que el

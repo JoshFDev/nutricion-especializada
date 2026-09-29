@@ -17,9 +17,10 @@ import type { ClienteImprimible, Nota } from '../../src/modules/notas-remision/m
  * exceljs, el archivo esta roto, y ademas permite preguntarle a la hoja por
  * sus celdas sin parsear el XML de un ZIP a mano.
  *
- * Que la plantilla exista y este limpia es un supuesto de la funcion: si el
- * archivo `plantillas/nota-remision.xlsx` no esta, `readFile` falla y el
- * test falla con el error de sistema, que es lo que se quiere.
+ * Que la plantilla este limpia es un supuesto de la funcion. La real
+ * (`plantillas/nota-remision.xlsx`) no se versiona; si no esta,
+ * `leerPlantilla` cae al ejemplo versionado, asi que la prueba corre en un
+ * clon limpio.
  */
 
 const renglon = (over: Partial<Nota['renglones'][number]> = {}) => ({

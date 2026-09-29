@@ -1,9 +1,9 @@
 /*
  * La pantalla de login.
  *
- * Sin logo ni color de marca todavia: es lo unico de la app que se ve sin
- * sesion, y lo primero que hay que decidir bien es el logo. Los estilos se
- * quedan en lo que hace falta para que se lea bien y no mas.
+ * Es lo unico de la app que se ve sin sesion, asi que el logo va aqui
+ * primero: es la pantalla donde se decide de que sistema es esto. Los estilos
+ * se quedan en lo que hace falta para que se lea bien y no mas.
  */
 
 .pantalla {
@@ -22,6 +22,16 @@
   border-radius: 0.75rem;
   padding: 2rem 1.75rem;
   box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+
+  /* El logo va centrado arriba del titulo. Sin el `margin` de los lados en
+     `auto` se queda pegado a la izquierda de la tarjeta, que es donde estarian
+     los campos, y parece un campo mas. */
+  .logo {
+    display: block;
+    width: 4.5rem;
+    height: 4.5rem;
+    margin: 0 auto 1rem;
+  }
 
   h1 {
     margin: 0;

@@ -26,9 +26,38 @@
   background: var(--acento);
   flex: 0 0 auto;
 
+  /*
+   * El nombre se recorta con puntos suspensivos en vez de partirse en dos
+   * lineas dentro de una barra de 3.25rem. Con el logo al lado, en un celular
+   * angosto ya no cabe "Nutricion Especializada" entero, y lo que se parte a la
+   * mitad queda mas feo que lo que no cabe. El `min-width: 0` es lo que
+   * permite el recorte: sin el, un flex item no se deja encoger.
+   */
   .marca {
+    min-width: 0;
     font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+}
+
+/*
+ * El logo en la barra: una placa blanca cuadrada con el dibujo dentro.
+ *
+ * El tamano del `img` es el del DIBUJO, y la placa es la que se ve: por eso
+ * el padding y el `box-sizing` (global) van juntos. Sin la placa, el logo
+ * desaparece a medias sobre el azul de la barra (ver el HTML).
+ */
+.logo {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0.1875rem;
+  background: var(--superficie);
+  border-radius: 0.375rem;
+  /* La placa no se encoge: si el espacio falta, lo que se recorta es el
+     nombre de al lado, no el logo. */
+  flex: 0 0 auto;
 }
 
 .hamburguesa {

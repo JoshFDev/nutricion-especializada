@@ -22,12 +22,13 @@
   --texto-suave: #5a6169;
   --texto-tenue: #868d95;
 
-  /* El verde del alimento. Oscuro a proposito: es el fondo de la barra y
-     de los botones, y un acento claro ahi no tendria contraste con el
-     texto blanco. */
-  --acento: #2f6b3f;
-  --acento-suave: #e6f0e8;
-  --acento-texto: #245430;
+  /* El azul de marca. Oscuro a proposito: es el fondo de la barra y de los
+     botones, y un acento claro ahi no tendria contraste con el texto
+     blanco. Sobre el blanco el menu activo se marca con el tono suave, que
+     es lo bastante claro para no competir con la tabla de la derecha. */
+  --acento: #1e40af;
+  --acento-suave: #e3ebfb;
+  --acento-texto: #1e3a8a;
   --sobre-acento: #ffffff;
 
   --peligro: #b3261e;

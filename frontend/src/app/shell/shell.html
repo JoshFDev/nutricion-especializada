@@ -10,6 +10,15 @@
       <span></span><span></span><span></span>
     </button>
 
+    <!--
+      El logo va en una placa blanca y no suelto sobre el azul de la barra:
+      el archivo tiene partes en azul marino (rgb 0,32,128) que sobre
+      `--acento` (#1e40af) se perderian, y partes blancas que sobre el azul
+      si se verian. Con la placa, las dos se leen siempre. El `alt` va vacio
+      a proposito: el nombre lo dice el texto que va al lado, y ponerlo dos
+      veces hace que el lector de pantalla lo lea dos veces.
+    -->
+    <img class="logo" src="logo-nutricion.png" alt="" />
     <span class="marca">Nutricion Especializada</span>
 
     <div class="usuario">

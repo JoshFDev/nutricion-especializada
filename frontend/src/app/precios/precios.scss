@@ -83,20 +83,44 @@ h2 {
 
 /* ------------------------------------------------------- los resultados */
 
-.resultados {
+/*
+ * La lista se pega a SU campo, y eso lo da el `position` del contenedor: en
+ * los filtros es `.controles`, y en el editor es `.campo` (mas abajo). Sin
+ * uno de los dos, el `top: 100%` se mide contra la pagina entera y la lista
+ * sale por debajo del borde de la pantalla, donde no se ve: el buscador
+ * parece no existir.
+ */
+.resultados,
+.aviso {
   position: absolute;
   z-index: 10;
   top: calc(100% + 0.25rem);
   left: 0;
   min-width: 18rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
   overflow: hidden;
+}
+
+.resultados {
+  /* Con veinte opciones la lista es mas alta que la pantalla de mostrador:
+     mejor que se recorra a que tape los campos que estan debajo. */
+  max-height: 15rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* "No hay nada con ese nombre": sin esto, una busqueda sin resultados deja
+   el campo igual que uno que no se ha tocado. */
+.aviso {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
 }
 
 .resultados button {
@@ -189,6 +213,11 @@ tbody tr:last-child td {
 
 .campo.ancho {
   grid-column: 1 / -1;
+}
+
+/* El buscador del editor se abre pegado a su campo (ver `.resultados`). */
+.campo {
+  position: relative;
 }
 
 .campo label {

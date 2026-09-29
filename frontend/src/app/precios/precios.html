@@ -24,17 +24,25 @@
             <input
               id="cliente"
               type="search"
+              autocomplete="off"
               placeholder="Busca al cliente por nombre…"
-              (input)="buscarClienteEditor($any($event.target).value)"
+              [value]="buscadorCliente.texto()"
+              (input)="buscadorCliente.escribir($any($event.target).value)"
+              (focus)="buscadorCliente.alEntrar()"
+              (focusout)="buscadorCliente.alSalir($event)"
+              (keydown.escape)="buscadorCliente.cerrar()"
             />
-            @if (resultadoEditorCliente().length > 0) {
+            @if (buscadorCliente.lista()) {
               <ul class="resultados">
-                @for (opcion of resultadoEditorCliente(); track opcion.id) {
+                @for (opcion of buscadorCliente.opciones(); track opcion.id) {
                   <li>
-                    <button (click)="elegirClienteEditor(opcion)">{{ opcion.nombre }}</button>
+                    <button (click)="buscadorCliente.elegir(opcion)">{{ opcion.nombre }}</button>
                   </li>
                 }
               </ul>
+            }
+            @if (buscadorCliente.sinNada(); as aviso) {
+              <p class="aviso">{{ aviso }}</p>
             }
           }
         </div>
@@ -52,19 +60,27 @@
           <input
             id="producto"
             type="search"
+            autocomplete="off"
             placeholder="Busca el producto por codigo o nombre…"
-            (input)="buscarProductoEditor($any($event.target).value)"
+            [value]="buscadorProducto.texto()"
+            (input)="buscadorProducto.escribir($any($event.target).value)"
+            (focus)="buscadorProducto.alEntrar()"
+            (focusout)="buscadorProducto.alSalir($event)"
+            (keydown.escape)="buscadorProducto.cerrar()"
           />
-          @if (resultadoEditorProducto().length > 0) {
+          @if (buscadorProducto.lista()) {
             <ul class="resultados">
-              @for (opcion of resultadoEditorProducto(); track opcion.id) {
+              @for (opcion of buscadorProducto.opciones(); track opcion.id) {
                 <li>
-                  <button (click)="elegirProductoEditor(opcion)">
+                  <button (click)="buscadorProducto.elegir(opcion)">
                     {{ opcion.codigo }} · {{ opcion.nombre }}
                   </button>
                 </li>
               }
             </ul>
+          }
+          @if (buscadorProducto.sinNada(); as aviso) {
+            <p class="aviso">{{ aviso }}</p>
           }
         }
       </div>
@@ -194,12 +210,17 @@
         <input
           class="filtro"
           type="search"
+          autocomplete="off"
           placeholder="Producto…"
-          (input)="buscarFiltroProducto($any($event.target).value)"
+          [value]="buscadorFiltroProducto.texto()"
+          (input)="buscadorFiltroProducto.escribir($any($event.target).value)"
+          (focus)="buscadorFiltroProducto.alEntrar()"
+          (focusout)="buscadorFiltroProducto.alSalir($event)"
+          (keydown.escape)="buscadorFiltroProducto.cerrar()"
         />
-        @if (resultadoFiltroProducto().length > 0) {
+        @if (buscadorFiltroProducto.lista()) {
           <ul class="resultados">
-            @for (opcion of resultadoFiltroProducto(); track opcion.id) {
+            @for (opcion of buscadorFiltroProducto.opciones(); track opcion.id) {
               <li>
                 <button (click)="elegirFiltroProducto(opcion)">
                   {{ opcion.codigo }} · {{ opcion.nombre }}
@@ -207,6 +228,9 @@
               </li>
             }
           </ul>
+        }
+        @if (buscadorFiltroProducto.sinNada(); as aviso) {
+          <p class="aviso">{{ aviso }}</p>
         }
       }
 
@@ -219,17 +243,25 @@
           <input
             class="filtro"
             type="search"
+            autocomplete="off"
             placeholder="Cliente…"
-            (input)="buscarFiltroCliente($any($event.target).value)"
+            [value]="buscadorFiltroCliente.texto()"
+            (input)="buscadorFiltroCliente.escribir($any($event.target).value)"
+            (focus)="buscadorFiltroCliente.alEntrar()"
+            (focusout)="buscadorFiltroCliente.alSalir($event)"
+            (keydown.escape)="buscadorFiltroCliente.cerrar()"
           />
-          @if (resultadoFiltroCliente().length > 0) {
+          @if (buscadorFiltroCliente.lista()) {
             <ul class="resultados">
-              @for (opcion of resultadoFiltroCliente(); track opcion.id) {
+              @for (opcion of buscadorFiltroCliente.opciones(); track opcion.id) {
                 <li>
                   <button (click)="elegirFiltroCliente(opcion)">{{ opcion.nombre }}</button>
                 </li>
               }
             </ul>
+          }
+          @if (buscadorFiltroCliente.sinNada(); as aviso) {
+            <p class="aviso">{{ aviso }}</p>
           }
         }
       }

@@ -19,17 +19,26 @@ Para que funcione hace falta el backend arriba (`pnpm dev` dentro de
 
 Lo que hay es la **base de la que cuelga todo lo demas**: sesion, login,
 cambio de contrasena, el marco con el menu y un aviso de "pantalla
-pendiente" en cada modulo. Los siete modulos del negocio que faltan
-todavia no tienen pantalla; se ven en el menu porque las rutas se generan,
-pero abrir uno muestra lo que falta.
+pendiente" en cada modulo. Los dos modulos de Sistema que faltan todavia no
+tienen pantalla; se ven en el menu porque las rutas se generan, pero abrir
+uno muestra lo que falta.
 
 Ya tienen pantalla el POS (`/notas`: cliente, renglones, totales e imprimir
 el PDF), los clientes (`/clientes`: alta y edicion con codigo, especie y
 filtros), los productos (`/productos`: alta, edicion y baja), el catalogo
 (`/categorias` y `/especies`: alta, renombrado y borrado), los precios
 (`/precios`: el de lista y el de cliente, con edicion de vigencia y cierre
-en vez de borrado) y los pagos (`/pagos`: listado filtrable, registro con
-detalle y aplicacion a las notas abiertas del cliente).
+en vez de borrado), los pagos (`/pagos`: listado filtrable, registro con
+detalle y aplicacion a las notas abiertas del cliente), los proveedores
+(`/proveedores`: alta y edicion, con la baja logica alternada desde la fila
+y sin boton de borrar, porque un proveedor con compras tiene su nombre en
+documentos viejos), las compras (`/compras`: captura con renglones, sin
+editar y sin borrar, porque una compra se deshace cancelandola con motivo),
+el inventario (`/inventario`: existencia en solo lectura, con busqueda y
+filtro de lo que se esta acabando), la facturacion (`/facturacion`: la nota
+no se edita nunca y la factura tampoco, lo unico que admite es el cambio de
+estatus) y caja y bancos (`/caja`: el periodo por cuenta, el alta de cuentas
+y los movimientos de ingreso y egreso, con el unico borrado de la app).
 
 ## Donde esta lo que importa
 
@@ -41,6 +50,8 @@ detalle y aplicacion a las notas abiertas del cliente).
 | `src/app/nucleo/guarda-sesion.ts`      | Quien entra a donde                                                                                                                             |
 | `src/app/nucleo/api.ts`                | Que se le muestra a la persona cuando algo sale mal                                                                                             |
 | `src/environments/`                    | Donde vive la API: absoluta en desarrollo, relativa en produccion                                                                               |
+| `src/app/nucleo/buscador.ts`           | El campo de busqueda con lista: espera 250 ms, una respuesta vieja no pisa una nueva, y el clic no se pierde por el `focusout`                  |
+| `public/logo-nutricion.png`            | El logo que se ve en la barra, el login y la pestana. El original esta en `src/images/` (ver "El logo")                                         |
 
 ## Decisiones que no se ven en el codigo
 
@@ -72,8 +83,30 @@ del final. Si el build de desarrollo acabara en un servidor, el boton no
 haria nada. Para quitarlo del proyecto: borrar `auth/rutas-dev.ts` y el
 `if` de `app.ts`.
 
-**Sin tests de componentes.** Hay 123 pruebas y ninguna levanta un
-componente: cubren el menu, el mapeo de errores, la sesion, las cifras y
-el mapeo del cuerpo de las peticiones, que es donde esta la logica que se
-rompe en silencio. Probar que un boton se dibuja sale mas caro que lo que
-aporta; cuando las pantallas tengan estado propio, ahi si.
+**Sin tests de componentes.** Hay 214 pruebas y ninguna levanta un
+componente: cubren el menu, el mapeo de errores, la sesion, las cifras, el
+buscador y el cuerpo de las peticiones de cada pantalla, que es donde esta la
+logica que se rompe en silencio. Probar que un boton se dibuja sale mas caro
+que lo que aporta; cuando las pantallas tengan estado propio, ahi si.
+
+## El logo
+
+| Archivo                        | Que es                                                         |
+| ------------------------------ | -------------------------------------------------------------- |
+| `src/images/LogoNutricion.png` | El original, 1254x1254 y 1.2 MB. No lo usa nadie: es el master |
+| `public/logo-nutricion.png`    | El que carga la app: 256x256 y 75 KB, en `public/`             |
+
+Son dos archivos a proposito. El original pesa 1.2 MB porque es el archivo
+de trabajo del diseño, y-meterlo al bundle costaria eso en cada carga de la
+app por un dibujo que se ve a 28 pixeles en la barra y a 72 en el login. A
+256 se ve igual de bien (es mas que el doble de esos dos tamanos, que es lo
+que hace falta en una pantalla de retina) y pesa dieciseis veces menos.
+
+El de `public/` se reescribio a mano (re-escalado con promediado de caja y
+alfa premultiplicado, para que los bordes transparentes no dejen halo) y se
+regenera cuando cambie el original, no a mano cada vez.
+
+Y en la barra el logo va sobre una **placa blanca**, no suelto: el dibujo
+tiene partes en azul marino (`rgb(0,32,128)`) que sobre el azul de la barra
+(`--acento`, `#1e40af`) se perderian, y partes blancas que sobre el azul si
+se verian. En el login no hace falta placa: la tarjeta ya es blanca.

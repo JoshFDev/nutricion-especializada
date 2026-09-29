@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
+import { crearBuscador } from '../nucleo/buscador';
 import { montoComoTexto } from '../nucleo/cifras';
 import {
   cuerpoDePrecio,
@@ -80,6 +81,11 @@ export class Precios {
   readonly hayMas = computed(() => this.filas().length < this.total());
   readonly esClientes = computed(() => this.vista() === 'clientes');
 
+  /** El listado se pide al entrar: sin esto la tabla sale en vacio. */
+  constructor() {
+    void this.recargar();
+  }
+
   // ---------------------------------------------------------- el editor
   /** `null` con `editorAbierto` es "nuevo"; con fila es "editar". */
   readonly editando = signal<FilaPrecio | null>(null);
@@ -87,12 +93,27 @@ export class Precios {
 
   readonly producto = signal<OpcionFiltro | null>(null);
   readonly cliente = signal<OpcionFiltro | null>(null);
-  readonly resultadoEditorProducto = signal<OpcionFiltro[]>([]);
-  readonly resultadoEditorCliente = signal<OpcionFiltro[]>([]);
-  readonly buscandoProducto = signal(false);
-  readonly buscandoCliente = signal(false);
-  private temporizadorEditorProducto: ReturnType<typeof setTimeout> | undefined;
-  private temporizadorEditorCliente: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Los buscadores del editor.
+   *
+   * El producto se busca desde una letra porque su codigo son tres (`LAC`) y
+   * en un mostrador se teclea el codigo, no el nombre; el cliente pide dos
+   * porque con una sola letra el listado devuelve cientos y no dice nada.
+   */
+  readonly buscadorProducto = crearBuscador({
+    cargar: (texto) => this.api.productos(texto),
+    minimo: 1,
+    nada: (texto) => `Ningún producto coincide con «${texto}».`,
+    alElegir: (opcion) => this.elegirProductoEditor(opcion),
+  });
+
+  readonly buscadorCliente = crearBuscador({
+    cargar: (texto) => this.api.clientes(texto),
+    minimo: 2,
+    nada: (texto) => `Ningún cliente coincide con «${texto}».`,
+    alElegir: (opcion) => this.elegirClienteEditor(opcion),
+  });
 
   readonly precioKg = signal('');
   readonly vigenteDesde = signal(hoyComoTexto());
@@ -121,65 +142,40 @@ export class Precios {
   });
 
   // ------------------------------------------------------------- filtros
-  readonly resultadoFiltroProducto = signal<OpcionFiltro[]>([]);
-  readonly resultadoFiltroCliente = signal<OpcionFiltro[]>([]);
-  private temporizadorFiltroProducto: ReturnType<typeof setTimeout> | undefined;
-  private temporizadorFiltroCliente: ReturnType<typeof setTimeout> | undefined;
+  /** Los buscadores del listado: eligen un producto o cliente a filtrar. */
+  readonly buscadorFiltroProducto = crearBuscador({
+    cargar: (texto) => this.api.productos(texto),
+    minimo: 1,
+    nada: (texto) => `Ningún producto coincide con «${texto}».`,
+    alElegir: (opcion) => this.elegirFiltroProducto(opcion),
+  });
 
-  /** Busca productos para ELEGIR UNO como filtro del listado. */
-  buscarFiltroProducto(texto: string): void {
-    clearTimeout(this.temporizadorFiltroProducto);
-    const limpio = texto.trim();
-    if (limpio.length < 1) {
-      this.resultadoFiltroProducto.set([]);
-      return;
-    }
-    this.temporizadorFiltroProducto = setTimeout(async () => {
-      try {
-        this.resultadoFiltroProducto.set(await this.api.productos(limpio));
-      } catch {
-        this.resultadoFiltroProducto.set([]);
-      }
-    }, 250);
-  }
-
-  buscarFiltroCliente(texto: string): void {
-    clearTimeout(this.temporizadorFiltroCliente);
-    const limpio = texto.trim();
-    if (limpio.length < 2) {
-      this.resultadoFiltroCliente.set([]);
-      return;
-    }
-    this.temporizadorFiltroCliente = setTimeout(async () => {
-      try {
-        this.resultadoFiltroCliente.set(await this.api.clientes(limpio));
-      } catch {
-        this.resultadoFiltroCliente.set([]);
-      }
-    }, 250);
-  }
+  readonly buscadorFiltroCliente = crearBuscador({
+    cargar: (texto) => this.api.clientes(texto),
+    minimo: 2,
+    nada: (texto) => `Ningún cliente coincide con «${texto}».`,
+    alElegir: (opcion) => this.elegirFiltroCliente(opcion),
+  });
 
   elegirFiltroProducto(opcion: OpcionFiltro): void {
     this.filtroProducto.set(opcion);
-    this.resultadoFiltroProducto.set([]);
     this.recargar();
   }
 
   elegirFiltroCliente(opcion: OpcionFiltro): void {
     this.filtroCliente.set(opcion);
-    this.resultadoFiltroCliente.set([]);
     this.recargar();
   }
 
   quitarFiltroProducto(): void {
     this.filtroProducto.set(null);
-    this.resultadoFiltroProducto.set([]);
+    this.buscadorFiltroProducto.limpiar();
     this.recargar();
   }
 
   quitarFiltroCliente(): void {
     this.filtroCliente.set(null);
-    this.resultadoFiltroCliente.set([]);
+    this.buscadorFiltroCliente.limpiar();
     this.recargar();
   }
 
@@ -257,8 +253,8 @@ export class Precios {
     this.precioKg.set(fila === null ? '' : String(fila.precio_kg));
     this.vigenteDesde.set(fila === null ? hoyComoTexto() : fila.vigente_desde);
     this.vigenteHasta.set(fila?.vigente_hasta ?? '');
-    this.resultadoEditorProducto.set([]);
-    this.resultadoEditorCliente.set([]);
+    this.buscadorProducto.limpiar();
+    this.buscadorCliente.limpiar();
     this.cancelarCierre();
     this.errorEditor.set(null);
   }
@@ -270,60 +266,24 @@ export class Precios {
     this.errorEditor.set(null);
   }
 
-  buscarProductoEditor(texto: string): void {
-    clearTimeout(this.temporizadorEditorProducto);
-    const limpio = texto.trim();
-    this.resultadoEditorProducto.set([]);
-    if (limpio.length < 1) return;
-    this.temporizadorEditorProducto = setTimeout(async () => {
-      this.buscandoProducto.set(true);
-      try {
-        this.resultadoEditorProducto.set(await this.api.productos(limpio));
-      } catch {
-        this.resultadoEditorProducto.set([]);
-      } finally {
-        this.buscandoProducto.set(false);
-      }
-    }, 250);
-  }
-
-  buscarClienteEditor(texto: string): void {
-    clearTimeout(this.temporizadorEditorCliente);
-    const limpio = texto.trim();
-    this.resultadoEditorCliente.set([]);
-    if (limpio.length < 2) return;
-    this.temporizadorEditorCliente = setTimeout(async () => {
-      this.buscandoCliente.set(true);
-      try {
-        this.resultadoEditorCliente.set(await this.api.clientes(limpio));
-      } catch {
-        this.resultadoEditorCliente.set([]);
-      } finally {
-        this.buscandoCliente.set(false);
-      }
-    }, 250);
-  }
-
   elegirProductoEditor(opcion: OpcionFiltro): void {
     this.producto.set(opcion);
-    this.resultadoEditorProducto.set([]);
     this.errorEditor.set(null);
   }
 
   elegirClienteEditor(opcion: OpcionFiltro): void {
     this.cliente.set(opcion);
-    this.resultadoEditorCliente.set([]);
     this.errorEditor.set(null);
   }
 
   quitarProductoEditor(): void {
     this.producto.set(null);
-    this.resultadoEditorProducto.set([]);
+    this.buscadorProducto.limpiar();
   }
 
   quitarClienteEditor(): void {
     this.cliente.set(null);
-    this.resultadoEditorCliente.set([]);
+    this.buscadorCliente.limpiar();
   }
 
   private async guardarCuerpo(cuerpo: CuerpoPrecio): Promise<void> {

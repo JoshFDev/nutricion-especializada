@@ -17,11 +17,11 @@ Para que funcione hace falta el backend arriba (`pnpm dev` dentro de
 
 ## Que hay y que no
 
-Lo que hay es la **base de la que cuelga todo lo demas**: sesion, login,
-cambio de contrasena, el marco con el menu y un aviso de "pantalla
-pendiente" en cada modulo. Los dos modulos de Sistema que faltan todavia no
-tienen pantalla; se ven en el menu porque las rutas se generan, pero abrir
-uno muestra lo que falta.
+Lo que hay es **todo**: sesion, login, cambio de contrasena, el marco con el
+menu, las doce pantallas del negocio y las dos de Sistema. No queda ningun
+modulo con el aviso de "pantalla pendiente", y las rutas se siguen generando
+desde la misma tabla que arma el menu, asi que no puede salir un enlace a una
+pantalla que no exista.
 
 Ya tienen pantalla el POS (`/notas`: cliente, renglones, totales e imprimir
 el PDF), los clientes (`/clientes`: alta y edicion con codigo, especie y
@@ -39,6 +39,14 @@ filtro de lo que se esta acabando), la facturacion (`/facturacion`: la nota
 no se edita nunca y la factura tampoco, lo unico que admite es el cambio de
 estatus) y caja y bancos (`/caja`: el periodo por cuenta, el alta de cuentas
 y los movimientos de ingreso y egreso, con el unico borrado de la app).
+
+Las dos de Sistema son de otra familia. En `/usuarios` casi todo lo que se
+ve es inmutable: el RFC y el correo no se editan porque el `PATCH` no los
+acepta, y los roles van aparte porque cambiarlos cierra las sesiones
+abiertas de esa persona. La contrasena temporal se muestra una vez y sin
+aviso que se vaya, porque en la base solo queda su huella. En `/auditoria`
+hay cinco bitacoras en pestanas, cada una con su permiso, y ninguna se
+puede editar: lo que aparece lo escribieron los triggers de la base.
 
 ## Donde esta lo que importa
 
@@ -83,7 +91,7 @@ del final. Si el build de desarrollo acabara en un servidor, el boton no
 haria nada. Para quitarlo del proyecto: borrar `auth/rutas-dev.ts` y el
 `if` de `app.ts`.
 
-**Sin tests de componentes.** Hay 214 pruebas y ninguna levanta un
+**Sin tests de componentes.** Hay 272 pruebas y ninguna levanta un
 componente: cubren el menu, el mapeo de errores, la sesion, las cifras, el
 buscador y el cuerpo de las peticiones de cada pantalla, que es donde esta la
 logica que se rompe en silencio. Probar que un boton se dibuja sale mas caro

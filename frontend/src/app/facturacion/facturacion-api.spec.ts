@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_NOTAS_POR_FACTURA,
+  candidatasDe,
   cuerpoDeEstatus,
   cuerpoDeFactura,
   cuantasElegidas,
@@ -9,6 +10,9 @@ import {
   montoDeNotas,
   puedePasarA,
   problemaDeMotivo,
+  type EstatusNota,
+  type Listado,
+  type NotaListada,
   type NotaPorFacturar,
 } from './facturacion-api';
 
@@ -31,6 +35,30 @@ function nota(over: Partial<NotaPorFacturar> = {}): NotaPorFacturar {
     estatus: 'pendiente',
     elegida: true,
     ...over,
+  };
+}
+
+/**
+ * Una respuesta de `GET /api/notas-remision`: `datos` son las que llegaron y
+ * `total` las que hay. Se pueden separar a proposito, que es lo que pasa en
+ * cuanto un cliente pasa de 200 notas de un mismo estatus.
+ */
+function respuesta(estatus: EstatusNota, fechas: string[], total: number): Listado<NotaListada> {
+  return {
+    datos: fechas.map((fecha, i) => ({
+      id: i + 1,
+      folio: `A-10${i + 1}`,
+      cliente_id: 7,
+      cliente: 'Refaccionaria',
+      vendedor: null,
+      fecha,
+      subtotal: 1000,
+      estatus,
+      renglones: 1,
+    })),
+    total,
+    limite: 200,
+    offset: 0,
   };
 }
 
@@ -124,6 +152,59 @@ describe('el tope de notas por factura', () => {
       nota({ nota_id: i + 1, elegida: true }),
     );
     expect(cuerpoDeFactura(7, '', '', notas).notas).toHaveLength(MAX_NOTAS_POR_FACTURA);
+  });
+});
+
+describe('las notas que se ofrecen para facturar', () => {
+  it('junta los tres estatus en orden de fecha, y el folio desempata', () => {
+    const r = candidatasDe([
+      respuesta('pendiente', ['2026-09-20', '2026-09-28'], 2),
+      respuesta('parcial', ['2026-09-15'], 1),
+      respuesta('pagada', ['2026-09-28'], 1),
+    ]);
+    expect(r.total).toBe(4);
+    expect(r.notas.map((n) => n.fecha)).toEqual([
+      '2026-09-15',
+      '2026-09-20',
+      '2026-09-28',
+      '2026-09-28',
+    ]);
+    expect(r.notas.every((n) => n.elegida === false)).toBe(true);
+  });
+
+  it('el total es la suma de los tres, no el numero que llego', () => {
+    /**
+     * Un cliente con 900 notas: cada consulta se topa en 200 y llegan 600
+     * filas. Contar las que llegaron daria 600, y la pantalla avisaria "se
+     * muestran 200 de 600" de un cliente que tiene 900. El aviso de que
+     * faltan notas es lo unico que impide marcar 200 a ciegas.
+     */
+    const r = candidatasDe([
+      respuesta('pendiente', ['2026-09-01'], 500),
+      respuesta('parcial', ['2026-09-02'], 300),
+      respuesta('pagada', ['2026-09-03'], 100),
+    ]);
+    expect(r.total).toBe(900);
+  });
+
+  it('nunca ofrece mas de 200, aunque el total diga que hay mas', () => {
+    const muchas = Array.from(
+      { length: MAX_NOTAS_POR_FACTURA },
+      (_, i) => `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+    );
+    const r = candidatasDe([respuesta('pendiente', muchas, 5000)]);
+    expect(r.notas).toHaveLength(MAX_NOTAS_POR_FACTURA);
+    expect(r.total).toBe(5000);
+  });
+
+  it('lo que no se puede facturar no se ofrece: la cancelada no llega aqui', () => {
+    /**
+     * La CANCELADA se filtra en la consulta, no despues. Si se filtrara
+     * aqui, el `total` de esa respuesta ya traeria la cancelada y el aviso
+     * "de N" contaria mercancia que salio.
+     */
+    const r = candidatasDe([respuesta('pendiente', ['2026-09-01'], 1)]);
+    expect(r.notas.map((n) => n.estatus)).toEqual(['pendiente']);
   });
 });
 

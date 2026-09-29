@@ -126,6 +126,39 @@ export interface CuerpoEstatus {
   motivo: string | null;
 }
 
+// ------------------------------------------------------------- las candidatas
+
+/**
+ * Junta las tres respuestas de `notasFacturables` en la lista que se ofrece.
+ *
+ * Vive fuera de la clase para poder probarla sin levantar `HttpClient`: es
+ * el unico calculo de la pantalla que no es una regla de negocio, y por eso
+ * es el unico que se puede equivocar en silencio.
+ *
+ * El `total` sale de la SUMA de los tres `total`, no de `cuantas` vinieron.
+ * Cada consulta pide `limite: 200`, asi que los datos juntos se topan en 600
+ * y contar los que llegaron daria 600 con un cliente que tiene 900. La
+ * pantalla avisaria "se muestran 200 de 600" y el numero seguiria mintiendo.
+ * El `total` de cada respuesta es el `count(*)` del backend con los mismos
+ * filtros, asi que ahi si esta el conteo real.
+ */
+export function candidatasDe(tres: readonly Listado<NotaListada>[]): Candidatas {
+  const todas = tres
+    .flatMap((respuesta) => respuesta.datos)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.folio.localeCompare(b.folio));
+  return {
+    notas: todas.slice(0, MAX_NOTAS_POR_FACTURA).map((n) => ({
+      nota_id: n.id,
+      folio: n.folio,
+      fecha: n.fecha,
+      subtotal: n.subtotal,
+      estatus: n.estatus,
+      elegida: false,
+    })),
+    total: tres.reduce((suma, respuesta) => suma + respuesta.total, 0),
+  };
+}
+
 // ------------------------------------------------------------------ el cuerpo
 
 /**
@@ -285,20 +318,7 @@ export class FacturacionApi {
       ),
     );
     const [pendientes, parciales, pagadas] = await Promise.all(pedidos);
-    const todas = [...pendientes.datos, ...parciales.datos, ...pagadas.datos].sort(
-      (a, b) => a.fecha.localeCompare(b.fecha) || a.folio.localeCompare(b.folio),
-    );
-    return {
-      notas: todas.slice(0, MAX_NOTAS_POR_FACTURA).map((n) => ({
-        nota_id: n.id,
-        folio: n.folio,
-        fecha: n.fecha,
-        subtotal: n.subtotal,
-        estatus: n.estatus,
-        elegida: false,
-      })),
-      total: todas.length,
-    };
+    return candidatasDe([pendientes, parciales, pagadas]);
   }
 
   /** El listado de la tabla, con los filtros de la pantalla. */
@@ -337,8 +357,13 @@ export class FacturacionApi {
   }
 }
 
-/** `notas-remision/modelo.ts` -> `NotaListada`, lo que devuelve el listado. */
-interface NotaListada {
+/**
+ * `notas-remision/modelo.ts` -> `NotaListada`, lo que devuelve el listado.
+ *
+ * Se exporta por `candidatasDe`, que es su unico consumidor fuera de este
+ * archivo, y para que la prueba del merge pueda armar una respuesta.
+ */
+export interface NotaListada {
   id: number;
   folio: string;
   cliente_id: number;

@@ -1,0 +1,387 @@
+<!--
+  Usuarios: la lista, la ficha y el editor.
+
+  Los tres bloques son el mismo componente y se eligen con `if`, sin router
+  entre ellos: volver es un boton. Una ruta por vista haria que abrir la ficha
+  de alguien que no esta en la pagina actual se viera como una pantalla de
+  error nueva, y el menu ya marca cuando un modulo no existe.
+
+  El panel de la clave temporal esta FUERA de los tres, al principio, a
+  proposito: se ve encima de cualquiera de ellos y no se va solo. Si el
+  operador la pierde, tiene que resetear de nuevo, y ahi ya nadie sabe si la
+  anterior llego a entregarse.
+-->
+@if (clave(); as datosClave) {
+  <section class="bloque clave" role="alert">
+    <h2>{{ datosClave.titulo }}</h2>
+    <p class="aviso">
+      Esta clave se muestra <strong>una sola vez</strong>: en la base solo queda su huella, así que
+      no hay forma de volver a leerla. Cópiala y entrégasela a la persona; en su primer ingreso la
+      app le va a pedir que la cambie.
+    </p>
+
+    <div class="linea-clave">
+      <code>{{ datosClave.contrasena }}</code>
+      <button type="button" (click)="copiarClave()">{{ copiada() ? 'Copiada' : 'Copiar' }}</button>
+    </div>
+
+    @if (datosClave.sesionesCerradas !== null) {
+      <p class="nota">
+        Se cerraron {{ datosClave.sesionesCerradas }}
+        {{ datosClave.sesionesCerradas === 1 ? 'sesión abierta' : 'sesiones abiertas' }}. La tuya
+        sigue viva, no te saques de la que estás usando.
+      </p>
+    } @else {
+      <p class="nota">La app le va a pedir el cambio de clave la primera vez que entre.</p>
+    }
+
+    <div class="acciones">
+      <button type="button" (click)="cerrarClave()">Cerrar</button>
+    </div>
+  </section>
+}
+
+@if (editorAbierto()) {
+  <!-- El editor reemplaza la vista de donde se abrio. Cancelar devuelve ahi. -->
+  <section class="editor">
+    <div class="cabecera">
+      <h1>{{ esAlta() ? 'Nuevo usuario' : 'Editar usuario' }}</h1>
+    </div>
+
+    @if (errorEditor(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    <form [formGroup]="forma" (ngSubmit)="guardar()">
+      <div class="bloque datos">
+        <label>
+          <span>Nombre</span>
+          <input formControlName="nombre" autocomplete="off" />
+          @if (problemaDe('nombre'); as problema) {
+            <small class="ayuda">{{ problema }}</small>
+          }
+        </label>
+
+        <label>
+          <span>Apellido paterno</span>
+          <input formControlName="apellido_paterno" autocomplete="off" />
+          @if (problemaDe('apellido_paterno'); as problema) {
+            <small class="ayuda">{{ problema }}</small>
+          }
+        </label>
+
+        <label>
+          <span>Apellido materno (opcional)</span>
+          <input formControlName="apellido_materno" autocomplete="off" />
+          @if (problemaDe('apellido_materno'); as problema) {
+            <small class="ayuda">{{ problema }}</small>
+          }
+        </label>
+
+        <label>
+          <span>RFC</span>
+          <input
+            formControlName="rfc"
+            [readonly]="rfcBloqueado()"
+            maxlength="13"
+            autocomplete="off"
+            spellcheck="false"
+            (input)="alEscribirRfc($event)"
+          />
+          @if (problemaDe('rfc'); as problema) {
+            <small class="ayuda">{{ problema }}</small>
+          } @else if (rfcBloqueado()) {
+            <small class="pista">No se puede cambiar después del alta.</small>
+          }
+        </label>
+
+        <label>
+          <span>Correo (opcional)</span>
+          <input formControlName="email" autocomplete="off" />
+          @if (problemaDe('email'); as problema) {
+            <small class="ayuda">{{ problema }}</small>
+          } @else if (rfcBloqueado()) {
+            <small class="pista">No se puede cambiar después del alta.</small>
+          }
+        </label>
+
+        <label>
+          <span>Puesto (opcional)</span>
+          <input formControlName="puesto" autocomplete="off" />
+          @if (problemaDe('puesto'); as problema) {
+            <small class="ayuda">{{ problema }}</small>
+          }
+        </label>
+
+        @if (esAlta()) {
+          <label>
+            <span>Fecha de contratación (opcional)</span>
+            <input type="date" formControlName="fecha_contratacion" />
+            @if (problemaDe('fecha_contratacion'); as problema) {
+              <small class="ayuda">{{ problema }}</small>
+            } @else {
+              <small class="pista">Si la dejas vacía se usa la fecha de hoy.</small>
+            }
+          </label>
+        }
+      </div>
+
+      @if (esAlta()) {
+        <div class="bloque">
+          <h2>Roles</h2>
+          @for (rol of catalogo(); track rol.id) {
+            <label class="casilla">
+              <input
+                type="checkbox"
+                [checked]="rolesMarcados().includes(rol.id)"
+                (change)="alternarRol(rol.id)"
+              />
+              <span>{{ rol.nombre }}</span>
+            </label>
+          } @empty {
+            <p class="vacio">Se están cargando los roles…</p>
+          }
+          @if (faltaUnRol()) {
+            <small class="ayuda">Elige al menos un rol.</small>
+          }
+        </div>
+      } @else {
+        <p class="nota">
+          El RFC, el correo y los roles no se cambian aquí. Los roles se cambian en la ficha, porque
+          cambiar un permiso cierra las sesiones abiertas de esa persona y eso se ve a solas. Si el
+          RFC está mal, la baja y el alta de la persona es lo que corresponde, no editarlo.
+        </p>
+      }
+
+      <div class="acciones">
+        <button type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
+        <button
+          type="submit"
+          class="primario"
+          [disabled]="guardando() || forma.invalid || faltaUnRol()"
+        >
+          {{ guardando() ? 'Guardando…' : esAlta() ? 'Dar de alta' : 'Guardar' }}
+        </button>
+      </div>
+    </form>
+  </section>
+} @else if (vista() === 'detalle' && abierto(); as ficha) {
+  <section class="ficha">
+    <div class="cabecera">
+      <div>
+        <h1>{{ nombreCompleto(ficha) }}</h1>
+        <p class="tenue">
+          {{ ficha.rfc }}
+          @if (ficha.email) {
+            · {{ ficha.email }}
+          }
+        </p>
+      </div>
+      <div class="cabecera-botones">
+        @if (puedeEditar()) {
+          <button type="button" (click)="editar(ficha)">Editar</button>
+        }
+        <button type="button" (click)="volverALista()">Volver a la lista</button>
+      </div>
+    </div>
+
+    @if (errorAccion(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    <div class="bloque">
+      <dl>
+        <dt>Puesto</dt>
+        <dd>{{ ficha.puesto ?? '—' }}</dd>
+
+        <dt>Estado</dt>
+        <dd>
+          <span class="estado estado-{{ estadoDeCuenta(ficha) }}">
+            {{ ETIQUETA_ESTADO[estadoDeCuenta(ficha)] }}
+          </span>
+        </dd>
+
+        <dt>Fecha de contratación</dt>
+        <dd>{{ fechaDe(ficha.fecha_contratacion) }}</dd>
+
+        <dt>Último acceso</dt>
+        <dd>
+          {{ ficha.ultimo_acceso ? fechaDe(ficha.ultimo_acceso) : 'Nunca ha entrado' }}
+        </dd>
+
+        <dt>Intentos de clave</dt>
+        <dd>
+          {{ ficha.intentos_fallidos }} fallidos
+          @if (ficha.bloqueado_hasta) {
+            <span class="tenue">· bloqueado hasta {{ fechaDe(ficha.bloqueado_hasta) }}</span>
+          }
+        </dd>
+      </dl>
+    </div>
+
+    @if (puedeEditar()) {
+      <div class="bloque">
+        <h2>Acciones</h2>
+        <p class="nota">
+          Cambiar los roles o desactivar la cuenta cierra sus sesiones abiertas de inmediato, en
+          todos los equipos donde esté conectada. Reseteando la clave no pasa eso con tu propia
+          sesión: solo con las suyas.
+        </p>
+
+        <div class="acciones">
+          <button
+            type="button"
+            class="peligro"
+            (click)="alternarActivo()"
+            [disabled]="guardando() || motivoDeDesactivar(ficha) !== null"
+            [title]="motivoDeDesactivar(ficha) ?? ''"
+          >
+            {{ ficha.activo ? 'Desactivar cuenta' : 'Reactivar cuenta' }}
+          </button>
+          <button type="button" (click)="resetearContrasena()" [disabled]="guardando()">
+            Resetear contraseña
+          </button>
+        </div>
+
+        @if (motivoDeDesactivar(ficha); as candado) {
+          <small class="ayuda">{{ candado }}</small>
+        }
+      </div>
+
+      <div class="bloque">
+        <h2>Roles</h2>
+        @for (rol of catalogo(); track rol.id) {
+          <label class="casilla">
+            <input
+              type="checkbox"
+              [checked]="rolesMarcados().includes(rol.id)"
+              (change)="alternarRol(rol.id)"
+            />
+            <span>
+              {{ rol.nombre }}
+              @if (rol.descripcion) {
+                <small class="pista">{{ rol.descripcion }}</small>
+              }
+            </span>
+          </label>
+        } @empty {
+          <p class="vacio">Se están cargando los roles…</p>
+        }
+
+        @if (motivoDeQuitarAdmin(); as candado) {
+          <small class="ayuda">{{ candado }}</small>
+        }
+
+        <div class="acciones">
+          <button
+            type="button"
+            class="primario"
+            (click)="guardarRoles()"
+            [disabled]="
+              guardando() || rolesMarcados().length === 0 || motivoDeQuitarAdmin() !== null
+            "
+          >
+            {{ guardando() ? 'Guardando…' : 'Guardar roles' }}
+          </button>
+        </div>
+
+        <p class="pista">Al guardar, la persona tiene que entrar de nuevo.</p>
+      </div>
+    }
+  </section>
+} @else {
+  <section class="lista">
+    <div class="cabecera">
+      <div>
+        <h1>Usuarios y roles</h1>
+        <p class="tenue">{{ total() }} {{ total() === 1 ? 'persona' : 'personas' }}</p>
+      </div>
+      @if (puedeCrear()) {
+        <button type="button" class="primario" (click)="nuevo()">Nuevo usuario</button>
+      }
+    </div>
+
+    <div class="filtros">
+      <input
+        type="search"
+        placeholder="Buscar por nombre, apellido, RFC o correo"
+        [value]="buscador()"
+        (input)="buscar($any($event.target).value)"
+      />
+
+      <select
+        class="filtro"
+        [value]="filtroRol() ?? ''"
+        (change)="filtrarRol($any($event.target).value)"
+      >
+        <option value="">Todos los roles</option>
+        @for (rol of catalogo(); track rol.id) {
+          <option [value]="rol.id">{{ rol.nombre }}</option>
+        }
+      </select>
+
+      <select
+        class="filtro"
+        [value]="filtroActivo()"
+        (change)="filtrarActivo($any($event.target).value)"
+      >
+        <option value="activos">Solo activos</option>
+        <option value="inactivos">Solo dados de baja</option>
+        <option value="todos">Todos</option>
+      </select>
+    </div>
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (buscando() && filas().length === 0) {
+      <p class="vacio">Buscando…</p>
+    } @else if (filas().length === 0) {
+      <p class="vacio">Nadie coincide con eso.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Puesto</th>
+            <th>Roles</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of filas(); track fila.id) {
+            <tr>
+              <td>
+                <strong>{{ nombreCompleto(fila) }}</strong>
+                <span class="tenue">{{ fila.rfc }}</span>
+              </td>
+              <td>{{ fila.puesto ?? '—' }}</td>
+              <td>{{ rolesEnLinea(fila) || '—' }}</td>
+              <td>
+                <span class="estado estado-{{ estadoDeCuenta(fila) }}">
+                  {{ ETIQUETA_ESTADO[estadoDeCuenta(fila)] }}
+                </span>
+              </td>
+              <td class="acciones-celda">
+                <button type="button" class="chico" (click)="ver(fila)">Ver</button>
+                @if (puedeEditar()) {
+                  <button type="button" class="chico" (click)="editar(fila)">Editar</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (hayMas()) {
+        <div class="acciones">
+          <button type="button" (click)="cargarMas()" [disabled]="buscando()">
+            Cargar más ({{ total() - filas().length }})
+          </button>
+        </div>
+      }
+    }
+  </section>
+}

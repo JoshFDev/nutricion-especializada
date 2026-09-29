@@ -164,7 +164,8 @@ export const MENU: Grupo[] = [
         ruta: 'usuarios',
         etiqueta: 'Usuarios y roles',
         permiso: 'usuarios.ver',
-        pendiente: 'Usuarios, roles y la matriz de permisos.',
+        pendiente: 'Usuarios, roles y la clave de cada quien.',
+        carga: () => import('../usuarios/usuarios').then((m) => m.Usuarios),
       },
       {
         ruta: 'auditoria',

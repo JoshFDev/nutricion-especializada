@@ -1,0 +1,323 @@
+/*
+ * La pantalla de usuarios.
+ *
+ * Misma familia que las demas: los colores son las variables de
+ * `styles.scss`, la tabla y los botones son los de productos, precios y caja.
+ * Lo unico propio son `.estado` (la insignia de la columna de estado), la
+ * linea de la clave temporal y `.ficha`, que ordena los bloques de la ficha
+ * en una columna angosta.
+ */
+
+:host {
+  display: block;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.tenue {
+  display: block;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+/* Lo que explica algo que la pantalla no puede dejar claro sola: que el RFC
+   no se edita, que cambiar un rol cierra sesiones, y que la clave se ve una
+   vez. */
+.pista,
+.nota,
+.aviso {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+}
+
+.nota,
+.aviso {
+  max-width: 46rem;
+  margin: 0.5rem 0 0;
+}
+
+/* --------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cabecera-botones {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filtros {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.filtros input[type='search'] {
+  flex: 1;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.filtro {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------------------ la lista */
+
+table {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+}
+
+th,
+td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.acciones-celda {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.vacio {
+  margin: 0 0 1rem;
+  color: var(--texto-tenue);
+}
+
+/*
+ * El estado de la cuenta, como insignia.
+ *
+ * "Debe cambiar su clave" va en el azul de marca y no en el rojo: es un
+ * pendiente de la propia persona, no una falla de la cuenta, y ponerlo en
+ * rojo hace que el administrador lo lea como algo que hay que arreglar en el
+ * sistema. La paleta no tiene un color de aviso (`styles.scss` solo tiene
+ * acento, peligro y exito) y agregar un cuarto solo para esta insignia
+ * cambia el color de toda la app.
+ */
+.estado {
+  display: inline-block;
+  padding: 0.0625rem 0.5rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+}
+
+.estado-ok {
+  color: var(--exito-texto);
+  background: var(--exito-suave);
+  border-color: var(--exito-texto);
+}
+
+.estado-debe_cambiar {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento-texto);
+}
+
+.estado-bloqueado,
+.estado-inactivo {
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-color: var(--peligro);
+}
+
+/* -------------------------------------------------------------- la clave nueva */
+
+/*
+ * El panel de la contrasena temporal.
+ *
+ * Va sobre un fondo de aviso y el codigo en una caja de monoespaciada, sin
+ * nada que lo recorte: lo que se va a entregar es eso, y tiene que poder
+ * seleccionarse con el mouse cuando el portapapeles no esta disponible (ver
+ * `copiarClave`, que falla en http sin TLS y deja el texto a mano).
+ */
+.clave {
+  max-width: 46rem;
+  padding: 1rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 8px;
+}
+
+.linea-clave {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.linea-clave code {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 1.125rem;
+  color: var(--texto);
+  word-break: break-all;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  user-select: all;
+}
+
+/* ------------------------------------------------------------- el editor y la ficha */
+
+.editor,
+.ficha {
+  max-width: 46rem;
+}
+
+.bloque {
+  margin-bottom: 1rem;
+}
+
+.datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+}
+
+.datos label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.datos input {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+/* El RFC y el correo se muestran igual pero sin poder tocarse: quien edita
+   tiene que ver el RFC que tiene la persona enfrente, y un campo que
+   desaparece de la vista no dice nada de por que no se puede cambiar. */
+.datos input[readonly] {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-style: dashed;
+}
+
+.casilla {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.casilla input {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.casilla span {
+  font-size: 0.9375rem;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}
+
+/* El problema va debajo del campo y no solo en el aviso de arriba: si no,
+   hay que adivinar QUAL de los campos hay que corregir. */
+.ayuda {
+  display: block;
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+/* ------------------------------------------------------------------- botones */
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+button.peligro {
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-color: var(--peligro);
+}
+
+button.primario:disabled,
+button.peligro:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}

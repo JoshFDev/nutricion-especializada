@@ -1,0 +1,386 @@
+<!--
+  Facturacion: lista, captura y detalle en una sola pantalla, como compras.
+
+  Lo que la pantalla no tiene, y es decision y no olvido: no hay edicion (el
+  unico PATCH del modulo es el del estatus), no hay borrado (una factura
+  cancelada tiene que quedar en la bitacora) y no se ofrecen notas canceladas
+  (facturar mercancia que no salio es un CFDI que el SAT rechaza).
+
+  El total que se ve en la captura es un preview de las notas marcadas. El que
+  vale lo calcula el servidor sumando los subtotales, y por eso no se manda.
+-->
+@if (pantalla() === 'captura') {
+  <section class="captura">
+    <div class="cabecera">
+      <h1>Nueva factura</h1>
+      <button type="button" (click)="volverAlListado()">Volver a la lista</button>
+    </div>
+
+    @if (errorCaptura(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    <!-- El cliente primero: de el son las notas que se pueden marcar. -->
+    <div class="bloque">
+      @if (cliente(); as elegido) {
+        <div class="elegido">
+          <span
+            ><strong>{{ elegido.nombre }}</strong></span
+          >
+          <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
+        </div>
+      } @else {
+        <label for="buscar-cliente">Cliente</label>
+        <input
+          id="buscar-cliente"
+          type="search"
+          autocomplete="off"
+          placeholder="Nombre del cliente"
+          [value]="buscadorCliente.texto()"
+          (input)="buscadorCliente.escribir($any($event.target).value)"
+          (focus)="buscadorCliente.alEntrar()"
+          (focusout)="buscadorCliente.alSalir($event)"
+          (keydown.escape)="buscadorCliente.cerrar()"
+        />
+        @if (buscadorCliente.lista()) {
+          <ul class="resultados">
+            @for (opcion of buscadorCliente.opciones(); track opcion.id) {
+              <li>
+                <button type="button" (click)="buscadorCliente.elegir(opcion)">
+                  {{ opcion.nombre }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        @if (buscadorCliente.sinNada(); as aviso) {
+          <p class="aviso">{{ aviso }}</p>
+        }
+      }
+    </div>
+
+    <div class="bloque datos">
+      <div class="campo">
+        <label for="fecha">Fecha de la factura</label>
+        <input
+          id="fecha"
+          type="date"
+          [value]="fecha()"
+          (change)="fecha.set($any($event.target).value)"
+        />
+        <p class="ayuda">Si la dejas vacía se usa la de hoy.</p>
+      </div>
+      <div class="campo">
+        <label for="metodo">Forma de pago del CFDI (opcional)</label>
+        <input
+          id="metodo"
+          type="text"
+          maxlength="60"
+          autocomplete="off"
+          [value]="metodoPago()"
+          (input)="metodoPago.set($any($event.target).value)"
+        />
+        <p class="ayuda">No es el método con el que se cobró, es el del CFDI.</p>
+      </div>
+    </div>
+
+    <div class="bloque" [class.apagado]="cliente() === null">
+      <div class="cabecera-notas">
+        <h2>Notas que cubre</h2>
+        @if (hayNotas()) {
+          <button type="button" class="chico" (click)="alternarTodas()">
+            {{ elegidas() === notas().length ? 'Desmarcar todas' : 'Marcar todas' }}
+          </button>
+        }
+      </div>
+
+      @if (cargandoNotas()) {
+        <p class="vacio">Buscando las notas del cliente…</p>
+      } @else if (!hayNotas()) {
+        <p class="vacio">
+          Este cliente no tiene notas pendientes, parciales ni pagadas que facturar. Las notas
+          canceladas no se pueden facturar.
+        </p>
+      } @else {
+        <table class="notas">
+          <thead>
+            <tr>
+              <th scope="col"><span class="oculto">Facturar</span></th>
+              <th scope="col">Folio</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Estatus</th>
+              <th scope="col" class="num">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (nota of notas(); track nota.nota_id) {
+              <tr [class.marcada]="nota.elegida">
+                <td>
+                  <input
+                    type="checkbox"
+                    [checked]="nota.elegida"
+                    (change)="alternar(nota.nota_id)"
+                    [attr.aria-label]="'Facturar la nota ' + nota.folio"
+                  />
+                </td>
+                <td>{{ nota.folio }}</td>
+                <td>{{ nota.fecha }}</td>
+                <td>
+                  <span [class.tenue]="nota.estatus === 'pagada'">{{
+                    estatusNotaComoTexto(nota.estatus)
+                  }}</span>
+                </td>
+                <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        <p class="nota">
+          Una nota que ya esté en otra factura activa se va a rechazar al guardar: el listado de
+          notas no dice cuáles están facturadas. Si pasa, quítala de la lista.
+        </p>
+      }
+    </div>
+
+    <div class="total">
+      <span> {{ elegidas() }} {{ elegidas() === 1 ? 'nota' : 'notas' }} marcadas </span>
+      <strong>{{ montoComoTexto(total()) }}</strong>
+    </div>
+
+    <div class="acciones">
+      <button type="button" class="primario" [disabled]="!puedeGuardar()" (click)="guardar()">
+        {{ guardando() ? 'Guardando…' : 'Generar la factura' }}
+      </button>
+    </div>
+  </section>
+} @else if (pantalla() === 'detalle') {
+  <section class="detalle">
+    <div class="cabecera">
+      <h1>Factura</h1>
+      <button type="button" (click)="volverAlListado()">Volver a la lista</button>
+    </div>
+
+    @if (errorDetalle(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (cargandoDetalle()) {
+      <p class="vacio">Cargando la factura…</p>
+    } @else if (detalle(); as factura) {
+      <dl class="datos-factura">
+        <div>
+          <dt>Cliente</dt>
+          <dd>{{ factura.cliente }}</dd>
+        </div>
+        <div>
+          <dt>Fecha</dt>
+          <dd>{{ factura.fecha }}</dd>
+        </div>
+        <div>
+          <dt>Forma de pago</dt>
+          <dd>{{ factura.metodo_pago ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>Estatus</dt>
+          <dd [class.cancelada]="factura.estatus === 'cancelada'">
+            {{ estatusComoTexto(factura.estatus) }}
+          </dd>
+        </div>
+        <div>
+          <dt>Total</dt>
+          <dd>{{ montoComoTexto(factura.monto_total) }}</dd>
+        </div>
+      </dl>
+
+      @if (factura.motivo_cancelacion) {
+        <p class="motivo">
+          <strong>Motivo de la cancelación:</strong> {{ factura.motivo_cancelacion }}
+        </p>
+      }
+
+      <h2>Notas que cubre</h2>
+      <table class="notas">
+        <thead>
+          <tr>
+            <th scope="col">Folio</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Estatus</th>
+            <th scope="col" class="num">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (nota of factura.notas; track nota.nota_id) {
+            <tr>
+              <td>{{ nota.nota }}</td>
+              <td>{{ nota.fecha }}</td>
+              <td>{{ estatusNotaComoTexto(nota.estatus) }}</td>
+              <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <p class="nota">
+        El total es el que calculó el backend sumando los subtotales de estas notas, no el preview
+        de la captura.
+      </p>
+
+      @if (factura.estatus === 'cancelada') {
+        <p class="nota">
+          Una factura cancelada ya no se vuelve a emitir. Se pide una nueva con las mismas notas.
+        </p>
+      }
+
+      @if (puedeEmitirFactura() || puedeCancelarFactura()) {
+        @if (pidiendoMotivo()) {
+          <div class="cancelar">
+            <label for="motivo">Motivo de la cancelación</label>
+            <textarea
+              id="motivo"
+              rows="3"
+              maxlength="500"
+              [value]="motivo()"
+              (input)="motivo.set($any($event.target).value)"
+            ></textarea>
+            @if (problemaDeMotivo(motivo()); as problema) {
+              <p class="ayuda">{{ problema }}</p>
+            }
+            <div class="acciones">
+              <button
+                type="button"
+                class="peligro"
+                [disabled]="problemaDeMotivo(motivo()) !== null || cambiando()"
+                (click)="confirmarCancelacion()"
+              >
+                {{ cambiando() ? 'Cancelando…' : 'Confirmar la cancelación' }}
+              </button>
+              <button type="button" (click)="pidiendoMotivo.set(false)">No</button>
+            </div>
+          </div>
+        } @else {
+          <div class="acciones">
+            @if (puedeEmitirFactura()) {
+              <button
+                type="button"
+                class="primario"
+                [disabled]="cambiando()"
+                (click)="marcarEmitida()"
+              >
+                {{ cambiando() ? 'Guardando…' : 'Marcar como emitida' }}
+              </button>
+            }
+            @if (puedeCancelarFactura()) {
+              <button type="button" class="peligro" (click)="cancelar()">
+                Cancelar la factura
+              </button>
+            }
+          </div>
+        }
+      } @else if (factura.estatus !== 'cancelada') {
+        <p class="nota">Tu rol puede ver las facturas, pero no emitirlas ni cancelarlas.</p>
+      }
+    }
+  </section>
+} @else {
+  <section class="lista">
+    <div class="cabecera">
+      <h1>Facturación</h1>
+      @if (puedeSolicitar()) {
+        <button type="button" class="primario" (click)="abrirCaptura()">Nueva factura</button>
+      }
+    </div>
+
+    <p class="subtitulo">
+      Las notas de remisión agrupadas por cliente. Una factura se solicita con las notas que cubre y
+      de ahí en adelante solo avanza: se emite o se cancela con motivo.
+    </p>
+
+    <div class="filtros">
+      <input
+        type="search"
+        autocomplete="off"
+        placeholder="Cliente o forma de pago"
+        [value]="filtroTexto()"
+        (input)="buscar($any($event.target).value)"
+      />
+      <select
+        class="filtro"
+        [value]="filtroEstatus()"
+        (change)="cambiarEstatus($any($event.target).value)"
+        aria-label="Filtrar por estatus"
+      >
+        <option value="">Todos los estatus</option>
+        <option value="solicitada">Solicitadas</option>
+        <option value="emitida">Emitidas</option>
+        <option value="cancelada">Canceladas</option>
+      </select>
+      <label class="fecha">
+        Desde
+        <input
+          type="date"
+          [value]="filtroDesde()"
+          (change)="cambiarDesde($any($event.target).value)"
+        />
+      </label>
+      <label class="fecha">
+        Hasta
+        <input
+          type="date"
+          [value]="filtroHasta()"
+          (change)="cambiarHasta($any($event.target).value)"
+        />
+      </label>
+    </div>
+
+    @if (errorLista(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (cargando() && filas().length === 0) {
+      <p class="vacio">Buscando facturas…</p>
+    } @else if (filas().length === 0) {
+      <p class="vacio">No hay facturas que mostrar.</p>
+    } @else {
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Cliente</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Forma de pago</th>
+            <th scope="col" class="num">Notas</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col">Estatus</th>
+            <th scope="col"><span class="oculto">Ver</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (factura of filas(); track factura.id) {
+            <tr>
+              <td>{{ factura.cliente }}</td>
+              <td>{{ factura.fecha }}</td>
+              <td>{{ factura.metodo_pago ?? '—' }}</td>
+              <td class="num">{{ factura.notas }}</td>
+              <td class="num">{{ montoComoTexto(factura.monto_total) }}</td>
+              <td>
+                <span [class.cancelada]="factura.cancelada">{{
+                  estatusComoTexto(factura.estatus)
+                }}</span>
+              </td>
+              <td class="acciones-celda">
+                <button type="button" class="chico" (click)="ver(factura)">Ver</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="paginacion">
+        <button type="button" [disabled]="!hayMas() || cargandoMas()" (click)="cargarMas()">
+          {{ cargandoMas() ? 'Buscando…' : 'Cargar más' }}
+        </button>
+        <span class="cuenta">{{ filas().length }} de {{ totalEncontrado() }} facturas</span>
+      </div>
+    }
+  </section>
+}

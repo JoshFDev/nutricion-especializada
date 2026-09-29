@@ -146,6 +146,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Facturacion',
         permiso: 'facturas.ver',
         pendiente: 'Emitir facturas y ver las ya emitidas.',
+        carga: () => import('../facturacion/facturacion').then((m) => m.Facturacion),
       },
       {
         ruta: 'caja',

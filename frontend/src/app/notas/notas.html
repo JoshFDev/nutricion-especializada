@@ -757,26 +757,10 @@
                       type="button"
                       class="chico"
                       (click)="imprimir(nota.id)"
-                      title="Imprimir dos copias en una hoja (se corta por la mitad)"
+                      title="Imprimir el papel de la nota"
                     >
                       PDF
                     </button>
-                    @if (nota.renglones > 9) {
-                      <!--
-                        Con mas de 9 renglones la nota no cabe entera en la
-                        copia chica del papel a dos. Se ofrece ademas la hoja
-                        vertical con una sola copia completa, que es lo unico que
-                        sirve cuando la nota es larga.
-                      -->
-                      <button
-                        type="button"
-                        class="chico"
-                        (click)="imprimir(nota.id, 1)"
-                        title="Imprimir una sola copia en hoja vertical, completa (nota larga)"
-                      >
-                        PDF 1
-                      </button>
-                    }
                     <button
                       type="button"
                       class="chico"

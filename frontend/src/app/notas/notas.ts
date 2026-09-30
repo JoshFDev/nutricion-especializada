@@ -1163,15 +1163,13 @@ export class Notas {
   /**
    * Abre el papel de la nota.
    *
-   * Por defecto son DOS copias en una hoja (una para el cliente, otra para el
-   * archivo, y se corta por la mitad). `copias = 1` sale vertical a tamano
-   * completo, que es lo que hace falta cuando la nota es larga y la letra de
-   * la copia chica ya no se lee sin lupa.
+   * El PDF es la plantilla del Excel: vertical, una hoja. Para dos copias se
+   * elige "2 paginas por hoja" al imprimir.
    */
-  async imprimir(notaId: number, copias: 1 | 2 = 2): Promise<void> {
+  async imprimir(notaId: number): Promise<void> {
     this.errorLista.set(null);
     try {
-      await this.api.abrirPdf(notaId, copias);
+      await this.api.abrirPdf(notaId);
     } catch (falla) {
       this.errorLista.set(errorLegible(falla).mensaje);
     }

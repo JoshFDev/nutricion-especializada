@@ -537,12 +537,12 @@ export class NotasApi {
   /**
    * Abre el PDF en una pestana.
    *
-   * `copias` es 2 por defecto: el papel trae la misma nota dos veces en una
-   * hoja, una para el cliente y otra para el archivo, y se corta por la
-   * mitad. Con 1 sale vertical a tamano completo, que es lo que se quiere
-   * cuando la nota es larga y en la copia chica la letra ya no se lee.
+   * El papel es la plantilla del Excel, en vertical y a una hoja. Para sacar
+   * dos en una sola hoja (una para el cliente y otra para el archivo) se elige
+   * "2 paginas por hoja" en el dialogo de impresion: el papel es el mismo y se
+   * corta por la mitad.
    */
-  async abrirPdf(notaId: number, copias: 1 | 2 = 2): Promise<void> {
+  async abrirPdf(notaId: number): Promise<void> {
     const ventana = window.open('', '_blank');
     if (ventana === null) {
       throw new Error(
@@ -552,10 +552,7 @@ export class NotasApi {
 
     try {
       const pdf = await firstValueFrom(
-        this.http.get(`${API}/notas-remision/${notaId}/pdf`, {
-          params: { copias },
-          responseType: 'blob',
-        }),
+        this.http.get(`${API}/notas-remision/${notaId}/pdf`, { responseType: 'blob' }),
       );
       const url = URL.createObjectURL(pdf);
       ventana.location.href = url;

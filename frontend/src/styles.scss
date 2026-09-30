@@ -20,7 +20,12 @@
 
   --texto: #1b1f24;
   --texto-suave: #5a6169;
-  --texto-tenue: #868d95;
+  /* El tenue de verdad: sigue siendo el gris mas claro de la paleta, pero
+     pasa de 3.4:1 a 4.7:1 sobre blanco y con eso ya cumple AA. Antes fallaba,
+     y no en texto grande: se usa para codigos de producto, "faltan 3" y los
+     "N de M" de la paginacion, todo a 12-13px, que es donde el contraste
+     tiene que ser estricto. Mismo tono que el que estaba, solo mas oscuro. */
+  --texto-tenue: #6e757d;
 
   /* El azul de marca. Oscuro a proposito: es el fondo de la barra y de los
      botones, y un acento claro ahi no tendria contraste con el texto

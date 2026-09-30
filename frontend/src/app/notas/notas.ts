@@ -32,10 +32,25 @@ import {
   type Folio,
   type Nota,
   type NotaListada,
+  ORDENES_NOTAS,
+  type OrdenNotas,
   type Periodo,
   type Producto,
   type ResumenTalonario,
 } from './notas-api';
+/**
+ * El cobro en linea usa el MISMO servicio y los mismos tipos de la pantalla de
+ * pagos, en vez de un segundo `POST /api/pagos` escrito aqui. Se reutiliza a
+ * proposito: si el contrato del pago cambia, cambia en un solo lado y no en dos
+ * pantallas que lo mandan de forma distinta.
+ */
+import {
+  METODOS_PAGO,
+  PagosApi,
+  cuerpoDePago,
+  hoyComoTexto,
+  type MetodoPago,
+} from '../pagos/pagos-api';
 
 /**
  * El mostrador: capturar una nota de remision y ver las que ya se guardaron.
@@ -90,6 +105,7 @@ import {
 })
 export class Notas {
   private readonly api = inject(NotasApi);
+  private readonly apiPagos = inject(PagosApi);
   private readonly apiDirecciones = inject(DireccionesApi);
   private readonly sesion = inject(Sesion);
 
@@ -137,6 +153,18 @@ export class Notas {
    */
   readonly ultimaGuardada = signal<Nota | null>(null);
 
+  // --------------------------------------------------------- el cobro en linea
+  /**
+   * Cobrar una nota sin salirse de la pantalla. La nota que se esta cobrando
+   * (por id), el monto escrito y el metodo. Sehattan de una en una porque en un
+   * mostrador se cobra una nota a la vez.
+   */
+  readonly cobrando = signal<number | null>(null);
+  readonly montoCobro = signal('');
+  readonly metodoCobro = signal<MetodoPago>('Efectivo');
+  readonly guardandoCobro = signal(false);
+  readonly errorCobro = signal<string | null>(null);
+
   // --------------------------------------------------------- las direcciones
   /** El catalogo de destinos de la sucursal. Ver `direcciones-api.ts`. */
   readonly direcciones = signal<DireccionEntrega[]>([]);
@@ -175,6 +203,22 @@ export class Notas {
   /** `'todo'` no se manda: es la ausencia de periodo. Ver `Periodo`. */
   readonly periodo = signal<Periodo | 'todo'>('hoy');
   readonly buscar = signal('');
+  /** El orden lo pone el SERVIDOR (`ordenar` del esquema), no la pantalla. */
+  readonly ordenar = signal<OrdenNotas>('fecha_desc');
+
+  /** Las opciones del desplegable de orden. */
+  readonly ordenes = ORDENES_NOTAS;
+
+  /**
+   * El texto escrito en los buscadores de cliente y de producto.
+   *
+   * Antes no estaban en ningun lado: el `input` era uncontrolled y el texto se
+   * quedaba en el DOM, lo que hacia imposible limpiarlo al guardar sin ir a
+   * tocar el elemento a mano. Con el texto en un signal, limpiar la captura
+   * es limpiar signals.
+   */
+  readonly textoCliente = signal('');
+  readonly textoProducto = signal('');
 
   /** La nota abierta en la tabla, con sus renglones. `null` es "ninguna". */
   readonly detalle = signal<Nota | null>(null);
@@ -245,6 +289,13 @@ export class Notas {
    * palabra. Son tres Searches distintos y por eso son tres esperas.
    */
   private temporizadorFiltros: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * El aviso de "guardada" se cierra solo. Antes era una franja fija arriba de
+   * la pantalla que no se iba nunca, y empujaba hacia abajo todo lo demas; con
+   * el aviso flotando, que ademas se recoge solo, la pantalla no necesita
+   * reservar ese renglon para siempre.
+   */
+  private temporizadorAviso: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     void this.cargar();
@@ -272,6 +323,7 @@ export class Notas {
    * pedir confirmacion es esperar a que la persona pare.
    */
   buscarCliente(texto: string): void {
+    this.textoCliente.set(texto);
     clearTimeout(this.temporizadorCliente);
     const limpio = texto.trim();
     if (limpio.length < 2) {
@@ -294,6 +346,7 @@ export class Notas {
   }
 
   buscarProducto(texto: string): void {
+    this.textoProducto.set(texto);
     clearTimeout(this.temporizadorProducto);
     const limpio = texto.trim();
     if (limpio.length < 1) {
@@ -326,6 +379,10 @@ export class Notas {
     this.cliente.set(null);
     this.lineas.set(vaciar(this.lineas()));
     this.resultadosCliente.set([]);
+    // El buscador queda en blanco, no con el texto del cliente que se acaba de
+    // quitar: si no, se abre el desplegable con la busqueda anterior puesta.
+    this.textoCliente.set('');
+    this.resultadosProducto.set([]);
   }
 
   /**
@@ -461,6 +518,38 @@ export class Notas {
    * recargar la tabla de abajo para que la nota (o su nuevo total) se vea sin
    * que la persona tenga que buscarla.
    */
+  /**
+   * Deja la captura en blanco para la nota siguiente.
+   *
+   * Se llama DESPUES de guardar, y tambien al cancelar una edicion. Todo lo que
+   * se capturo queda en cero: renglones, direccion, la direccion elegida de la
+   * lista, el texto de los dos buscadores y el cliente.
+   *
+   * El cliente tambien se va, a proposito. Podria quedarse (en un mostrador a
+   * veces son varias notas seguidas para el mismo cliente) pero dejarlo puesto
+   * hace que la nota NUEVA se vea como si todavia tuviera lo que el operador
+   * acaba de emitir, y el precio que se esta mostrando en la cuenta es el del
+   * cliente anterior. Si hace falta lo mismo, se elige otra vez.
+   *
+   * Los temporizadores de los buscadores se cancelan tambien: si no, el
+   * `setTimeout` de una busqueda a medio camino reviviria y llenaria el
+   * desplegable de resultados con clientes de una captura que ya no existe.
+   */
+  private limpiarCaptura(): void {
+    this.lineas.set(vaciar(this.lineas()));
+    this.cliente.set(null);
+    this.direccion.set('');
+    this.direccionElegida.set(null);
+    this.textoCliente.set('');
+    this.textoProducto.set('');
+    this.resultadosCliente.set([]);
+    this.resultadosProducto.set([]);
+    clearTimeout(this.temporizadorCliente);
+    clearTimeout(this.temporizadorProducto);
+    this.buscandoCliente.set(false);
+    this.buscandoProducto.set(false);
+  }
+
   async guardar(): Promise<void> {
     const cliente = this.cliente();
     const enEdicion = this.editando();
@@ -474,18 +563,37 @@ export class Notas {
         this.ultimaGuardada.set(await this.api.crear(cuerpo));
       } else {
         const cuerpo = cuerpoDeEdicion(cliente.id, this.lineas(), this.direccion());
-        const nota = await this.api.editar(enEdicion.id, cuerpo);
-        this.ultimaGuardada.set(nota);
+        this.ultimaGuardada.set(await this.api.editar(enEdicion.id, cuerpo));
         this.editando.set(null);
-        this.lineas.set(vaciar(this.lineas()));
-        this.direccionElegida.set(null);
       }
+      // La captura se limpia en las DOS ramas y con el MISMO metodo. Antes solo
+      // se limpiaba al editar, y al dar de alta se seguian viendo los renglones
+      // y el total de la nota que ya se habia emitido.
+      this.limpiarCaptura();
       await this.recargar();
+      this.avisarGuardada();
     } catch (falla) {
       this.error.set(this.explicar(falla));
     } finally {
       this.guardando.set(false);
     }
+  }
+
+  /**
+   * Programa el cierre del aviso de nota guardada. Si se vuelve a guardar
+   * antes de que se cierre, se cancela el cierre anterior: si no, el primer
+   * aviso se llevaria por delante al segundo y la palomita desaparecería
+   * mientras el mostrador sigue viendo la nota nueva.
+   */
+  private avisarGuardada(): void {
+    if (this.temporizadorAviso !== undefined) clearTimeout(this.temporizadorAviso);
+    this.temporizadorAviso = setTimeout(() => this.ultimaGuardada.set(null), 8000);
+  }
+
+  /** Cierra el aviso a mano, sin esperar los ocho segundos. */
+  cerrarAviso(): void {
+    if (this.temporizadorAviso !== undefined) clearTimeout(this.temporizadorAviso);
+    this.ultimaGuardada.set(null);
   }
 
   /**
@@ -540,6 +648,130 @@ export class Notas {
   readonly puedeGuardarDirecciones = computed(() => this.sesion.puede('direcciones.crear'));
   readonly puedeEditarDirecciones = computed(() => this.sesion.puede('direcciones.editar'));
   readonly puedeBorrarDirecciones = computed(() => this.sesion.puede('direcciones.eliminar'));
+
+  /**
+   * Cobrar desde la propia nota. El permiso es el de PAGOS, no uno de notas:
+   * registrar un cobro es un pago, y aunque la pantalla sea la de notas, el
+   * que no tiene `pagos.crear` no debe poder mover dinero desde aqui.
+   */
+  readonly puedeCobrar = computed(() => this.sesion.puede('pagos.crear'));
+
+  /**
+   * Una nota se puede cobrar en el mostrador mientras siga abierta. Una
+   * `parcial` tambien: se le puede pagar el resto. Lo que ya no se puede es
+   * una `pagada` (sobraria dinero) ni una `cancelada` (no se cobra lo que se
+   * devolvio).
+   */
+  sePuedeCobrar(nota: NotaListada): boolean {
+    return nota.estatus === 'pendiente' || nota.estatus === 'parcial';
+  }
+
+  /**
+   * Abre el cobro de una nota y deja el monto listo.
+   *
+   * El monto se prellena SOLO con una nota `pendiente`, y con prellenarse
+   * exactamente lo que vale: en ese estatus, por definicion, no hay nada
+   * pagado todavia.
+   *
+   * En una `parcial` se deja EN BLANCO a proposito, aunque parezca menos
+   * comodo. El backend no expone cuanto se le aplico a la nota, asi que
+   * prellenar el subtotal mandaria de mas y el trigger lo rebotaria con un
+   * error; el operador escribe el resto, que es justo lo que ya se hace en la
+   * pantalla de pagos.
+   */
+  abrirCobro(nota: NotaListada): void {
+    if (!this.puedeCobrar() || !this.sePuedeCobrar(nota)) return;
+    this.montoCobro.set(nota.estatus === 'pendiente' ? nota.subtotal.toFixed(2) : '');
+    this.montoCobroEscribiendo.set(false);
+    this.metodoCobro.set('Efectivo');
+    this.errorCobro.set(null);
+    this.cobrando.set(nota.id);
+  }
+
+  /** Los metodos de pago, tal cual los acepta el backend. */
+  readonly metodos = METODOS_PAGO;
+
+  /**
+   * Si el operador YA ESTA ESCRIBIENDO el monto.
+   *
+   * Existe para que el campo no salga marcado en rojo desde el principio: abrir
+   * el formulario con el monto en blanco no es un error, es el estado de
+   * partida. El rojo llega cuando se teclea algo que no sirve.
+   */
+  readonly montoCobroEscribiendo = signal(false);
+
+  /** Escribe el monto y apaga el error anterior: si ya se corrigio, el aviso se va. */
+  escribirMontoCobro(texto: string): void {
+    this.montoCobro.set(texto);
+    this.montoCobroEscribiendo.set(true);
+    if (this.errorCobro() !== null) this.errorCobro.set(null);
+  }
+
+  /** El boton de confirmar solo se enciende con un monto que se pueda cobrar. */
+  readonly montoCobroValido = computed(() => {
+    const monto = Number(this.montoCobro());
+    return this.montoCobro().trim() !== '' && Number.isFinite(monto) && monto > 0;
+  });
+
+  /** Cierra el formulario de cobro sin cobrar nada. */
+  cerrarCobro(): void {
+    this.cobrando.set(null);
+    this.montoCobro.set('');
+    this.montoCobroEscribiendo.set(false);
+    this.errorCobro.set(null);
+  }
+
+  /**
+   * Registra el cobro: un solo pago, con una sola aplicacion, a la nota que se
+   * esta cobrando. El monto del pago y el de la aplicacion son el mismo numero
+   * porque aqui no hay a donde repartirlo.
+   */
+  async confirmarCobro(): Promise<void> {
+    const id = this.cobrando();
+    if (id === null || this.guardandoCobro()) return;
+    const nota = this.notas().find((n) => n.id === id);
+    // Si el monto no sirve, el boton esta apagado y el campo marcado: no hace
+    // falta un mensaje para repetir lo que el campo ya esta diciendo.
+    if (nota === undefined || !this.montoCobroValido()) return;
+
+    this.guardandoCobro.set(true);
+    this.errorCobro.set(null);
+    try {
+      // El cuerpo lo arma `cuerpoDePago`, el MISMO helper que usa la pantalla
+      // de pagos. No se escribe a mano a proposito: ese helper es quien
+      // redondea a dos decimales y quien deja fuera las aplicaciones en cero, y
+      // duplicar esas reglas aqui es la forma facil de que las dos pantallas
+      // se desincronicen.
+      await this.apiPagos.crear(
+        cuerpoDePago(
+          nota.cliente_id,
+          hoyComoTexto(),
+          this.metodoCobro(),
+          this.montoCobro(),
+          false,
+          '',
+          [
+            {
+              nota_id: nota.id,
+              folio: nota.folio,
+              fecha: nota.fecha,
+              subtotal: nota.subtotal,
+              estatus: nota.estatus as 'pendiente' | 'parcial',
+              monto: this.montoCobro(),
+            },
+          ],
+        ),
+      );
+      this.cerrarCobro();
+      // La nota cambia de estatus (queda `parcial` o `pagada`) y eso solo se ve
+      // recargando la lista.
+      await this.recargar();
+    } catch (falla) {
+      this.errorCobro.set(this.explicar(falla));
+    } finally {
+      this.guardandoCobro.set(false);
+    }
+  }
 
   /**
    * El boton grande se apaga con cliente, renglones y lineas sin problemas.
@@ -706,6 +938,7 @@ export class Notas {
       const respuesta = await this.api.listar({
         periodo: this.periodo() === 'todo' ? undefined : (this.periodo() as Periodo),
         buscar: this.buscar() === '' ? undefined : this.buscar(),
+        ordenar: this.ordenar(),
         limite: this.limite,
         offset: 0,
       });
@@ -729,6 +962,7 @@ export class Notas {
       const respuesta = await this.api.listar({
         periodo: this.periodo() === 'todo' ? undefined : (this.periodo() as Periodo),
         buscar: this.buscar() === '' ? undefined : this.buscar(),
+        ordenar: this.ordenar(),
         limite: this.limite,
         offset: this.notas().length,
       });
@@ -752,6 +986,18 @@ export class Notas {
 
   aPeriodo(valor: string): void {
     this.periodo.set(valor as Periodo | 'todo');
+    void this.recargar();
+  }
+
+  /**
+   * Cambia el orden del listado y vuelve a la primera pagina.
+   *
+   * El `recargar()` (y no un `cargarMas`) es lo correcto aqui: al cambiar el
+   * criterio de orden, quedarse en la pagina 3 significaria mostrar una ventana
+   * del medio de otra lista, que no es lo que nadie pide.
+   */
+  aOrdenar(valor: string): void {
+    this.ordenar.set(valor as OrdenNotas);
     void this.recargar();
   }
 
@@ -848,8 +1094,7 @@ export class Notas {
   /** Cierra el formulario de edicion y deja la pantalla como una nota nueva. */
   cancelarEdicion(): void {
     this.editando.set(null);
-    this.lineas.set(vaciar(this.lineas()));
-    this.direccionElegida.set(null);
+    this.limpiarCaptura();
     this.error.set(null);
     this.subirArriba();
   }

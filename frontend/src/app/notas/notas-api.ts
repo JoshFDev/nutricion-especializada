@@ -113,6 +113,8 @@ export interface NotaListada {
   subtotal: number;
   estatus: EstatusNota;
   renglones: number;
+  /** Los kilos que salen en el camion, sumados de los renglones. */
+  kg_total: number;
 }
 
 /**
@@ -128,9 +130,26 @@ export interface NotaListada {
  */
 export type Periodo = 'hoy' | 'ultimos_7';
 
+/**
+ * Como se pide el listado ordenado. Son las cuatro combinaciones que ofrece el
+ * desplegable de la pantalla, y son las UNICAS que el backend acepta: el
+ * esquema del servidor es un enum y no un campo libre, para que nadie pueda
+ * pedir un orden sin indice.
+ */
+export type OrdenNotas = 'fecha_desc' | 'fecha_asc' | 'subtotal_desc' | 'subtotal_asc';
+
+/** Lo que el desplegable muestra, y a que valor del backend corresponde. */
+export const ORDENES_NOTAS: { valor: OrdenNotas; texto: string }[] = [
+  { valor: 'fecha_desc', texto: 'Mas recientes primero' },
+  { valor: 'fecha_asc', texto: 'Mas antiguas primero' },
+  { valor: 'subtotal_desc', texto: 'Mayor total primero' },
+  { valor: 'subtotal_asc', texto: 'Menor total primero' },
+];
+
 export interface FiltroNotas {
   periodo?: Periodo;
   buscar?: string;
+  ordenar: OrdenNotas;
   limite: number;
   offset: number;
 }
@@ -445,6 +464,7 @@ export class NotasApi {
         params: {
           ...(filtro.periodo === undefined ? {} : { periodo: filtro.periodo }),
           ...(filtro.buscar === undefined ? {} : { buscar: filtro.buscar }),
+          ordenar: filtro.ordenar,
           limite: filtro.limite,
           offset: filtro.offset,
         },

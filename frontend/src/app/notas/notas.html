@@ -1,13 +1,15 @@
 <!--
-  El mostrador: captura arriba, notas guardadas abajo.
+  El mostrador: la captura y las notas a la misma altura.
 
-  La pantalla es de DOS partes en una sola vista, sin paginas entre ellas:
-  la captura (cliente, producto, renglones, direccion) y la tabla de las
-  notas que ya se emitieron. Antes, guardar tapaba el mostrador con un
-  comprobante de pantalla completa y cada nota obligaba a una pagina aparte
-  para verla: en un mostrador se emiten veinte notas por hora y la mayoria
-  para el mismo cliente, asi que lo que hace falta despues de guardar es
-  volver a capturar, no leer un folio gigante.
+  En pantalla ancha la pantalla son DOS columnas: la captura (cliente,
+  producto, renglones, direccion) a la izquierda y la tabla de las notas
+  emitidas a la derecha, para que una nota guardada se vea caer en su
+  lugar sin cambiar de pagina (en pantalla angosta todo vuelve a una sola
+  columna). Antes, guardar tapaba el mostrador con un comprobante de
+  pantalla completa y cada nota obligaba a una pagina aparte para verla:
+  en un mostrador se emiten veinte notas por hora y la mayoria para el
+  mismo cliente, asi que lo que hace falta despues de guardar es volver a
+  capturar, no leer un folio gigante.
 -->
 <section class="pos">
   <header class="cabecera">
@@ -66,516 +68,528 @@
     de saber a quien se le cobra es agregar renglones con el precio
     equivocado.
   -->
-  <div class="bloque">
-    @if (cliente(); as elegido) {
-      <div class="elegido">
-        <span>
-          <strong>{{ elegido.nombre }}</strong>
-          @if (elegido.establo) {
-            <span class="tenue"> · {{ elegido.establo }}</span>
-          }
-          @if (editando(); as nota) {
-            <span class="tenue"> · {{ nota.folio }}</span>
-          }
-        </span>
-        <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
-      </div>
-    } @else {
-      <label for="buscar-cliente">Cliente</label>
-      <input
-        id="buscar-cliente"
-        type="search"
-        autocomplete="off"
-        placeholder="Nombre, clave o RFC del cliente"
-        (input)="buscarCliente($any($event.target).value)"
-      />
-      @if (buscandoCliente() && resultadosCliente().length === 0) {
-        <p class="buscando">Buscando...</p>
-      }
-      @if (resultadosCliente().length > 0) {
-        <ul class="resultados">
-          @for (opcion of resultadosCliente(); track opcion.id) {
-            <li>
-              <button type="button" (click)="elegirCliente(opcion)">
-                <span>{{ opcion.nombre }}</span>
-                @if (opcion.codigo_cliente) {
-                  <span class="tenue">{{ opcion.codigo_cliente }}</span>
-                }
-                @if (opcion.rfc) {
-                  <span class="tenue" aria-hidden="true">·</span>
-                  <span class="tenue">{{ opcion.rfc }}</span>
-                }
-              </button>
-            </li>
-          }
-        </ul>
-      }
-    }
-  </div>
-
-  <div class="bloque" [class.apagado]="cliente() === null">
-    <label for="buscar-producto">Producto</label>
-    <input
-      id="buscar-producto"
-      type="search"
-      autocomplete="off"
-      placeholder="Codigo o nombre del producto"
-      [disabled]="cliente() === null"
-      (input)="buscarProducto($any($event.target).value)"
-    />
-    @if (buscandoProducto() && resultadosProducto().length === 0) {
-      <p class="buscando">Buscando...</p>
-    }
-    @if (resultadosProducto().length > 0) {
-      <ul class="resultados">
-        @for (opcion of resultadosProducto(); track opcion.id) {
-          <li>
-            <button
-              type="button"
-              [disabled]="preguntando() === opcion.id"
-              (click)="agregarProducto(opcion)"
-            >
-              <span>{{ opcion.nombre }}</span>
-              <span class="tenue">{{ opcion.codigo }}</span>
-            </button>
-          </li>
-        }
-      </ul>
-    }
-  </div>
-
-  @if (hayLineas()) {
-    <table class="renglones">
-      <thead>
-        <tr>
-          <th scope="col">Producto</th>
-          <th scope="col">Bultos</th>
-          <th scope="col">Kg por bulto</th>
-          <th scope="col">Precio por kg</th>
-          <th scope="col">Total</th>
-          <th scope="col"><span class="oculto">Quitar</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (linea of lineas(); track linea.uid) {
-          <tr>
-            <td>
-              {{ linea.producto_nombre }}
-              <span class="tenue">{{ linea.producto_codigo }}</span>
-              <span class="origen">{{ origenComoTexto(linea) }}</span>
-            </td>
-            <td>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                inputmode="decimal"
-                [value]="linea.cantidad_bultos"
-                (change)="ponerCantidad(linea.uid, $any($event.target).value)"
-                [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
-              />
-            </td>
-            <td>
-              <input
-                type="number"
-                min="0"
-                step="0.001"
-                inputmode="decimal"
-                [value]="linea.kg_bulto"
-                (change)="ponerKilos(linea.uid, $any($event.target).value)"
-                [attr.aria-label]="'Kilos por bulto de ' + linea.producto_nombre"
-              />
-            </td>
-            <td class="num">
-              {{ linea.precio_unit_kg === null ? '—' : montoComoTexto(linea.precio_unit_kg) }}
-            </td>
-            <td class="num">{{ montoDeLinea(linea) }}</td>
-            <td>
-              <button
-                type="button"
-                class="peligro chico"
-                (click)="quitarLinea(linea.uid)"
-                [attr.aria-label]="'Quitar ' + linea.producto_nombre"
-              >
-                {{ editando() === null ? 'Quitar' : 'Devolver todo' }}
-              </button>
-            </td>
-          </tr>
-          @if (problemasDeLinea(linea)['cantidad_bultos']; as problema) {
-            <tr class="con-problema">
-              <td colspan="6">{{ problema }}</td>
-            </tr>
-          }
-        }
-      </tbody>
-    </table>
-
-    <div class="cierre">
-      <p class="kilos">
-        {{ kilosComoTexto(kilos()) }} kg en total
+  <div class="mosaico">
+    <div class="captura">
+      <div class="bloque">
         @if (cliente(); as elegido) {
-          <span class="tenue">para {{ elegido.nombre }}</span>
+          <div class="elegido">
+            <span>
+              <strong>{{ elegido.nombre }}</strong>
+              @if (elegido.establo) {
+                <span class="tenue"> · {{ elegido.establo }}</span>
+              }
+              @if (editando(); as nota) {
+                <span class="tenue"> · {{ nota.folio }}</span>
+              }
+            </span>
+            <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
+          </div>
+        } @else {
+          <label for="buscar-cliente">Cliente</label>
+          <input
+            id="buscar-cliente"
+            type="search"
+            autocomplete="off"
+            placeholder="Nombre, clave o RFC del cliente"
+            (input)="buscarCliente($any($event.target).value)"
+          />
+          @if (buscandoCliente() && resultadosCliente().length === 0) {
+            <p class="buscando">Buscando...</p>
+          }
+          @if (resultadosCliente().length > 0) {
+            <ul class="resultados">
+              @for (opcion of resultadosCliente(); track opcion.id) {
+                <li>
+                  <button type="button" (click)="elegirCliente(opcion)">
+                    <span>{{ opcion.nombre }}</span>
+                    @if (opcion.codigo_cliente) {
+                      <span class="tenue">{{ opcion.codigo_cliente }}</span>
+                    }
+                    @if (opcion.rfc) {
+                      <span class="tenue" aria-hidden="true">·</span>
+                      <span class="tenue">{{ opcion.rfc }}</span>
+                    }
+                  </button>
+                </li>
+              }
+            </ul>
+          }
         }
-        @if (editando(); as nota) {
-          <span class="tenue">· antes valian {{ montoComoTexto(nota.subtotal) }}</span>
-        }
-      </p>
-      <p class="total">{{ totalComoTexto() }}</p>
-      <p class="aviso">
-        Este total es un preview. El que vale es el que calcula la base al guardar.
-      </p>
-    </div>
-  }
+      </div>
 
-  <!--
+      <div class="bloque" [class.apagado]="cliente() === null">
+        <label for="buscar-producto">Producto</label>
+        <input
+          id="buscar-producto"
+          type="search"
+          autocomplete="off"
+          placeholder="Codigo o nombre del producto"
+          [disabled]="cliente() === null"
+          (input)="buscarProducto($any($event.target).value)"
+        />
+        @if (buscandoProducto() && resultadosProducto().length === 0) {
+          <p class="buscando">Buscando...</p>
+        }
+        @if (resultadosProducto().length > 0) {
+          <ul class="resultados">
+            @for (opcion of resultadosProducto(); track opcion.id) {
+              <li>
+                <button
+                  type="button"
+                  [disabled]="preguntando() === opcion.id"
+                  (click)="agregarProducto(opcion)"
+                >
+                  <span>{{ opcion.nombre }}</span>
+                  <span class="tenue">{{ opcion.codigo }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      @if (hayLineas()) {
+        <table class="renglones">
+          <thead>
+            <tr>
+              <th scope="col">Producto</th>
+              <th scope="col">Bultos</th>
+              <th scope="col">Kg por bulto</th>
+              <th scope="col">Precio por kg</th>
+              <th scope="col">Total</th>
+              <th scope="col"><span class="oculto">Quitar</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (linea of lineas(); track linea.uid) {
+              <tr>
+                <td>
+                  {{ linea.producto_nombre }}
+                  <span class="tenue">{{ linea.producto_codigo }}</span>
+                  <span class="origen">{{ origenComoTexto(linea) }}</span>
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputmode="decimal"
+                    [value]="linea.cantidad_bultos"
+                    (change)="ponerCantidad(linea.uid, $any($event.target).value)"
+                    [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    inputmode="decimal"
+                    [value]="linea.kg_bulto"
+                    (change)="ponerKilos(linea.uid, $any($event.target).value)"
+                    [attr.aria-label]="'Kilos por bulto de ' + linea.producto_nombre"
+                  />
+                </td>
+                <td class="num">
+                  {{ linea.precio_unit_kg === null ? '—' : montoComoTexto(linea.precio_unit_kg) }}
+                </td>
+                <td class="num">{{ montoDeLinea(linea) }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="peligro chico"
+                    (click)="quitarLinea(linea.uid)"
+                    [attr.aria-label]="'Quitar ' + linea.producto_nombre"
+                  >
+                    {{ editando() === null ? 'Quitar' : 'Devolver todo' }}
+                  </button>
+                </td>
+              </tr>
+              @if (problemasDeLinea(linea)['cantidad_bultos']; as problema) {
+                <tr class="con-problema">
+                  <td colspan="6">{{ problema }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+
+        <div class="cierre">
+          <p class="kilos">
+            {{ kilosComoTexto(kilos()) }} kg en total
+            @if (cliente(); as elegido) {
+              <span class="tenue">para {{ elegido.nombre }}</span>
+            }
+            @if (editando(); as nota) {
+              <span class="tenue">· antes valian {{ montoComoTexto(nota.subtotal) }}</span>
+            }
+          </p>
+          <p class="total">{{ totalComoTexto() }}</p>
+          <p class="aviso">
+            Este total es un preview. El que vale es el que calcula la base al guardar.
+          </p>
+        </div>
+      }
+
+      <!--
     La direccion de la sucursal: de la lista guardada o escrita a mano.
     Es del MOSTRADOR y no del cliente: se guarda en `direcciones_entrega`
     (migracion 0011) y se copia al documento, no se enlaza con una tabla de
     clientes. Por eso elegir una aqui no cambia ninguna nota vieja.
   -->
-  <div class="direccion">
-    <label for="direccion">Direccion de entrega (opcional)</label>
+      <div class="direccion">
+        <label for="direccion">Direccion de entrega (opcional)</label>
 
-    @if (puedeVerDirecciones() && direcciones().length > 0) {
-      <select
-        aria-label="Direccion guardada de la sucursal"
-        [value]="direccionElegida() ?? ''"
-        (change)="elegirDireccion($any($event.target).value)"
-      >
-        <option value="" disabled>Elegir una guardada de la lista...</option>
-        @for (dir of direcciones(); track dir.id) {
-          <option [value]="dir.id" [selected]="direccionElegida() === dir.id">
-            {{ dir.nombre }}
-          </option>
+        @if (puedeVerDirecciones() && direcciones().length > 0) {
+          <select
+            aria-label="Direccion guardada de la sucursal"
+            [value]="direccionElegida() ?? ''"
+            (change)="elegirDireccion($any($event.target).value)"
+          >
+            <option value="" disabled>Elegir una guardada de la lista...</option>
+            @for (dir of direcciones(); track dir.id) {
+              <option [value]="dir.id" [selected]="direccionElegida() === dir.id">
+                {{ dir.nombre }}
+              </option>
+            }
+          </select>
         }
-      </select>
-    }
 
-    <input
-      id="direccion"
-      type="text"
-      maxlength="300"
-      placeholder="Calle, numero, colonia, localidad..."
-      [value]="direccion()"
-      (input)="escribirDireccion($any($event.target).value)"
-    />
+        <input
+          id="direccion"
+          type="text"
+          maxlength="300"
+          placeholder="Calle, numero, colonia, localidad..."
+          [value]="direccion()"
+          (input)="escribirDireccion($any($event.target).value)"
+        />
 
-    @if (puedeVerDirecciones() && direcciones().length > 0) {
-      <ul class="lista-direcciones">
-        @for (dir of direcciones(); track dir.id) {
-          <li [class.elegida]="direccionElegida() === dir.id">
-            <button type="button" class="elegir" (click)="elegirDireccion(dir.id)">
-              <strong>{{ dir.nombre }}</strong>
-              <span>{{ dir.direccion }}</span>
-            </button>
-            <div class="botones-stick">
-              @if (puedeEditarDirecciones()) {
-                <button type="button" class="chico" (click)="abrirEdicionDireccion(dir.id)">
-                  Editar
+        @if (puedeVerDirecciones() && direcciones().length > 0) {
+          <ul class="lista-direcciones">
+            @for (dir of direcciones(); track dir.id) {
+              <li [class.elegida]="direccionElegida() === dir.id">
+                <button type="button" class="elegir" (click)="elegirDireccion(dir.id)">
+                  <strong>{{ dir.nombre }}</strong>
+                  <span>{{ dir.direccion }}</span>
                 </button>
-              }
-              @if (puedeBorrarDirecciones()) {
-                <button
-                  type="button"
-                  class="chico peligro"
-                  (click)="borrarDireccion(dir.id)"
-                  [attr.aria-label]="'Borrar la direccion ' + dir.nombre"
-                >
-                  Borrar
-                </button>
-              }
+                <div class="botones-stick">
+                  @if (puedeEditarDirecciones()) {
+                    <button type="button" class="chico" (click)="abrirEdicionDireccion(dir.id)">
+                      Editar
+                    </button>
+                  }
+                  @if (puedeBorrarDirecciones()) {
+                    <button
+                      type="button"
+                      class="chico peligro"
+                      (click)="borrarDireccion(dir.id)"
+                      [attr.aria-label]="'Borrar la direccion ' + dir.nombre"
+                    >
+                      Borrar
+                    </button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (formaDireccion(); as forma) {
+          <div class="forma-direccion">
+            <p class="forma-titulo">
+              {{
+                forma.id === null
+                  ? 'Guardar esta direccion en la lista'
+                  : 'Corregir la direccion guardada'
+              }}
+            </p>
+            <div class="campo">
+              <label for="nombre-direccion">Nombre corto</label>
+              <input
+                id="nombre-direccion"
+                type="text"
+                maxlength="80"
+                placeholder="Ej. Sucursal centro"
+                [value]="forma.nombre"
+                (input)="enFormaDireccion('nombre', $any($event.target).value)"
+              />
             </div>
-          </li>
+            <div class="campo">
+              <label for="texto-direccion">Direccion</label>
+              <input
+                id="texto-direccion"
+                type="text"
+                maxlength="300"
+                [value]="forma.direccion"
+                (input)="enFormaDireccion('direccion', $any($event.target).value)"
+              />
+            </div>
+            @if (errorDireccion(); as mensajeDir) {
+              <p class="error-direccion" role="alert">{{ mensajeDir }}</p>
+            }
+            <div class="acciones">
+              <button
+                type="button"
+                class="primario chico"
+                [disabled]="!direccionGuardable()"
+                (click)="guardarDireccion()"
+              >
+                {{ guardandoDireccion() ? 'Guardando...' : 'Guardar la direccion' }}
+              </button>
+              <button type="button" class="chico" (click)="cerrarAltaDireccion()">No</button>
+            </div>
+          </div>
+        } @else {
+          @if (puedeGuardarDirecciones()) {
+            <div class="acciones">
+              <button
+                type="button"
+                class="chico"
+                [disabled]="direccion().trim().length < 5"
+                (click)="abrirAltaDireccion()"
+              >
+                Guardar esta direccion en la lista
+              </button>
+            </div>
+          }
         }
-      </ul>
-    }
 
-    @if (formaDireccion(); as forma) {
-      <div class="forma-direccion">
-        <p class="forma-titulo">
-          {{
-            forma.id === null
-              ? 'Guardar esta direccion en la lista'
-              : 'Corregir la direccion guardada'
-          }}
+        <p class="aviso">
+          Las direcciones son de la sucursal, no del cliente. La nota copia el texto: corregir o
+          borrar la lista no cambia las notas ya emitidas.
         </p>
-        <div class="campo">
-          <label for="nombre-direccion">Nombre corto</label>
-          <input
-            id="nombre-direccion"
-            type="text"
-            maxlength="80"
-            placeholder="Ej. Sucursal centro"
-            [value]="forma.nombre"
-            (input)="enFormaDireccion('nombre', $any($event.target).value)"
-          />
-        </div>
-        <div class="campo">
-          <label for="texto-direccion">Direccion</label>
-          <input
-            id="texto-direccion"
-            type="text"
-            maxlength="300"
-            [value]="forma.direccion"
-            (input)="enFormaDireccion('direccion', $any($event.target).value)"
-          />
-        </div>
-        @if (errorDireccion(); as mensajeDir) {
-          <p class="error-direccion" role="alert">{{ mensajeDir }}</p>
-        }
-        <div class="acciones">
-          <button
-            type="button"
-            class="primario chico"
-            [disabled]="!direccionGuardable()"
-            (click)="guardarDireccion()"
-          >
-            {{ guardandoDireccion() ? 'Guardando...' : 'Guardar la direccion' }}
-          </button>
-          <button type="button" class="chico" (click)="cerrarAltaDireccion()">No</button>
-        </div>
       </div>
-    } @else {
-      @if (puedeGuardarDirecciones()) {
-        <div class="acciones">
-          <button
-            type="button"
-            class="chico"
-            [disabled]="direccion().trim().length < 5"
-            (click)="abrirAltaDireccion()"
-          >
-            Guardar esta direccion en la lista
-          </button>
-        </div>
-      }
-    }
 
-    <p class="aviso">
-      Las direcciones son de la sucursal, no del cliente. La nota copia el texto: corregir o borrar
-      la lista no cambia las notas ya emitidas.
-    </p>
-  </div>
-
-  <div class="acciones">
-    <button type="button" class="primario grande" [disabled]="!puedeGuardar()" (click)="guardar()">
-      {{ textoGuardar() }}
-    </button>
-    @if (editando() !== null) {
-      <button type="button" class="grande" (click)="cancelarEdicion()">Salir</button>
-    }
-  </div>
-
-  <hr class="separador" />
-
-  <!--
-    La tabla de las notas emitidas.
-  -->
-  <section class="tabla-pos" aria-label="Notas emitidas">
-    <header class="cabecera">
-      <h2>Notas emitidas</h2>
-      <button type="button" class="chico" [disabled]="cargandoLista()" (click)="recargar()">
-        {{ cargandoLista() ? 'Buscando...' : 'Recargar' }}
-      </button>
-    </header>
-
-    <div class="filtros">
-      <input
-        type="search"
-        autocomplete="off"
-        placeholder="Buscar por folio (A-1001) o por cliente"
-        (input)="aBuscar($any($event.target).value)"
-      />
-      <select
-        class="filtro"
-        [value]="periodo()"
-        (change)="aPeriodo($any($event.target).value)"
-        aria-label="Filtrar por periodo"
-      >
-        <option value="hoy">Hoy</option>
-        <option value="ultimos_7">Ultimos 7 dias</option>
-        <option value="todo">Todos</option>
-      </select>
+      <div class="acciones">
+        <button
+          type="button"
+          class="primario grande"
+          [disabled]="!puedeGuardar()"
+          (click)="guardar()"
+        >
+          {{ textoGuardar() }}
+        </button>
+        @if (editando() !== null) {
+          <button type="button" class="grande" (click)="cancelarEdicion()">Salir</button>
+        }
+      </div>
     </div>
 
-    @if (errorLista(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    @if (cargandoLista() && notas().length === 0) {
-      <p class="vacio">Buscando notas...</p>
-    } @else if (notas().length === 0) {
-      <p class="vacio">No hay notas que mostrar.</p>
-    } @else {
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Folio</th>
-            <th scope="col">Cliente</th>
-            <th scope="col">Fecha</th>
-            <th scope="col" class="num">Renglones</th>
-            <th scope="col" class="num">Total</th>
-            <th scope="col">Estatus</th>
-            <th scope="col"><span class="oculto">Acciones</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (nota of notas(); track nota.id) {
-            <tr [class.resaltada]="ultimaGuardada()?.id === nota.id">
-              <td>
-                <strong>{{ nota.folio }}</strong>
-              </td>
-              <td>{{ nota.cliente }}</td>
-              <td>{{ nota.fecha }}</td>
-              <td class="num">{{ nota.renglones }}</td>
-              <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
-              <td>
-                <span class="estatus" [class.cancelada]="nota.estatus === 'cancelada'">
-                  {{ estatusComoTexto(nota.estatus) }}
-                </span>
-              </td>
-              <td class="acciones-celda">
-                @if (puedeVer()) {
-                  <button type="button" class="chico" (click)="ver(nota)">
-                    {{ detalle()?.id === nota.id ? 'Ocultar' : 'Ver' }}
-                  </button>
-                  <button
-                    type="button"
-                    class="chico"
-                    (click)="imprimir(nota.id)"
-                    title="Imprimir el PDF"
-                  >
-                    PDF
-                  </button>
-                  <button
-                    type="button"
-                    class="chico"
-                    (click)="excel(nota.id)"
-                    title="Descargar el Excel"
-                  >
-                    Excel
-                  </button>
-                }
-                <button
-                  type="button"
-                  class="chico"
-                  (click)="devolver(nota)"
-                  [disabled]="!puedeEditar() || !sePuedeDevolver(nota)"
-                  [title]="porqueNoDevolver(nota)"
-                >
-                  Devolver
-                </button>
-                <button
-                  type="button"
-                  class="chico peligro"
-                  (click)="abrirCancelacion(nota)"
-                  [disabled]="!puedeCancelar() || !sePuedeCancelar(nota)"
-                >
-                  Cancelar
-                </button>
-              </td>
-            </tr>
-
-            @if (detalle()?.id === nota.id && detalle(); as abierta) {
-              <tr class="fila-detalle">
-                <td colspan="7">
-                  <div>
-                    <dl>
-                      <dt>Cliente</dt>
-                      <dd>{{ abierta.cliente }}</dd>
-                      <dt>Fecha</dt>
-                      <dd>{{ abierta.fecha }}</dd>
-                      @if (abierta.vendedor; as vendedor) {
-                        <dt>Vendio</dt>
-                        <dd>{{ vendedor }}</dd>
-                      }
-                      @if (abierta.direccion_entrega; as destino) {
-                        <dt>Direccion</dt>
-                        <dd>{{ destino }}</dd>
-                      }
-                      <dt>Total</dt>
-                      <dd class="total">{{ montoComoTexto(abierta.subtotal) }}</dd>
-                    </dl>
-
-                    @if (abierta.motivo_cancelacion; as motivo) {
-                      <p class="cancelada">Cancelada: {{ motivo }}</p>
-                    }
-
-                    <table class="detalle">
-                      <thead>
-                        <tr>
-                          <th scope="col">Producto</th>
-                          <th scope="col" class="num">Bultos</th>
-                          <th scope="col" class="num">Kg por bulto</th>
-                          <th scope="col" class="num">Kg</th>
-                          <th scope="col" class="num">Precio por kg</th>
-                          <th scope="col" class="num">Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (renglon of abierta.renglones; track renglon.id) {
-                          <tr>
-                            <td>
-                              {{ renglon.producto_nombre }}
-                              <span class="tenue">{{ renglon.producto_codigo }}</span>
-                            </td>
-                            <td class="num">{{ bultosComoTexto(renglon.cantidad_bultos) }}</td>
-                            <td class="num">{{ kilosComoTexto(renglon.kg_bulto) }}</td>
-                            <td class="num">
-                              {{ kilosComoTexto(renglon.kg_bulto * renglon.cantidad_bultos) }}
-                            </td>
-                            <td class="num">{{ montoComoTexto(renglon.precio_unit_kg) }}</td>
-                            <td class="num">{{ montoComoTexto(renglon.subtotal) }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-            }
-
-            @if (cancelando()?.id === nota.id && cancelando(); as notaCancelando) {
-              <tr class="fila-detalle">
-                <td colspan="7">
-                  <div class="cancelar">
-                    <label for="motivo">Motivo de la cancelacion</label>
-                    <textarea
-                      id="motivo"
-                      rows="3"
-                      maxlength="500"
-                      [value]="motivo()"
-                      (input)="motivo.set($any($event.target).value)"
-                    ></textarea>
-                    <p class="ayuda">
-                      Es obligatorio: cancelar la {{ notaCancelando.folio }} devuelve la mercancia.
-                    </p>
-                    <div class="acciones">
-                      <button
-                        type="button"
-                        class="peligro"
-                        [disabled]="!motivoValido()"
-                        (click)="confirmarCancelacion()"
-                      >
-                        {{ guardandoCancelacion() ? 'Cancelando...' : 'Confirmar la cancelacion' }}
-                      </button>
-                      <button type="button" (click)="cerrarCancelacion()">No</button>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            }
-          }
-        </tbody>
-      </table>
-
-      <div class="paginacion">
-        <button type="button" [disabled]="!hayMas() || buscandoMas()" (click)="cargarMas()">
-          {{ buscandoMas() ? 'Buscando...' : 'Cargar mas' }}
+    <!--
+    La tabla de las notas emitidas: en la columna de la derecha, a la vista
+    mientras se captura, para que una nota guardada se vea CAER en su lugar
+    sin cambiar de pagina.
+  -->
+    <section class="tabla-pos" aria-label="Notas emitidas">
+      <header class="cabecera">
+        <h2>Notas emitidas</h2>
+        <button type="button" class="chico" [disabled]="cargandoLista()" (click)="recargar()">
+          {{ cargandoLista() ? 'Buscando...' : 'Recargar' }}
         </button>
-        <span class="cuenta">{{ notas().length }} de {{ totalNotas() }} notas</span>
+      </header>
+
+      <div class="filtros">
+        <input
+          type="search"
+          autocomplete="off"
+          placeholder="Buscar por folio (A-1001) o por cliente"
+          (input)="aBuscar($any($event.target).value)"
+        />
+        <select
+          class="filtro"
+          [value]="periodo()"
+          (change)="aPeriodo($any($event.target).value)"
+          aria-label="Filtrar por periodo"
+        >
+          <option value="hoy">Hoy</option>
+          <option value="ultimos_7">Ultimos 7 dias</option>
+          <option value="todo">Todos</option>
+        </select>
       </div>
-    }
-  </section>
+
+      @if (errorLista(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      @if (cargandoLista() && notas().length === 0) {
+        <p class="vacio">Buscando notas...</p>
+      } @else if (notas().length === 0) {
+        <p class="vacio">No hay notas que mostrar.</p>
+      } @else {
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Folio</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Fecha</th>
+              <th scope="col" class="num">Renglones</th>
+              <th scope="col" class="num">Total</th>
+              <th scope="col">Estatus</th>
+              <th scope="col"><span class="oculto">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (nota of notas(); track nota.id) {
+              <tr [class.resaltada]="ultimaGuardada()?.id === nota.id">
+                <td>
+                  <strong>{{ nota.folio }}</strong>
+                </td>
+                <td>{{ nota.cliente }}</td>
+                <td>{{ nota.fecha }}</td>
+                <td class="num">{{ nota.renglones }}</td>
+                <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
+                <td>
+                  <span class="estatus" [class.cancelada]="nota.estatus === 'cancelada'">
+                    {{ estatusComoTexto(nota.estatus) }}
+                  </span>
+                </td>
+                <td class="acciones-celda">
+                  @if (puedeVer()) {
+                    <button type="button" class="chico" (click)="ver(nota)">
+                      {{ detalle()?.id === nota.id ? 'Ocultar' : 'Ver' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="chico"
+                      (click)="imprimir(nota.id)"
+                      title="Imprimir el PDF"
+                    >
+                      PDF
+                    </button>
+                    <button
+                      type="button"
+                      class="chico"
+                      (click)="excel(nota.id)"
+                      title="Descargar el Excel"
+                    >
+                      Excel
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="chico"
+                    (click)="devolver(nota)"
+                    [disabled]="!puedeEditar() || !sePuedeDevolver(nota)"
+                    [title]="porqueNoDevolver(nota)"
+                  >
+                    Devolver
+                  </button>
+                  <button
+                    type="button"
+                    class="chico peligro"
+                    (click)="abrirCancelacion(nota)"
+                    [disabled]="!puedeCancelar() || !sePuedeCancelar(nota)"
+                  >
+                    Cancelar
+                  </button>
+                </td>
+              </tr>
+
+              @if (detalle()?.id === nota.id && detalle(); as abierta) {
+                <tr class="fila-detalle">
+                  <td colspan="7">
+                    <div>
+                      <dl>
+                        <dt>Cliente</dt>
+                        <dd>{{ abierta.cliente }}</dd>
+                        <dt>Fecha</dt>
+                        <dd>{{ abierta.fecha }}</dd>
+                        @if (abierta.vendedor; as vendedor) {
+                          <dt>Vendio</dt>
+                          <dd>{{ vendedor }}</dd>
+                        }
+                        @if (abierta.direccion_entrega; as destino) {
+                          <dt>Direccion</dt>
+                          <dd>{{ destino }}</dd>
+                        }
+                        <dt>Total</dt>
+                        <dd class="total">{{ montoComoTexto(abierta.subtotal) }}</dd>
+                      </dl>
+
+                      @if (abierta.motivo_cancelacion; as motivo) {
+                        <p class="cancelada">Cancelada: {{ motivo }}</p>
+                      }
+
+                      <table class="detalle">
+                        <thead>
+                          <tr>
+                            <th scope="col">Producto</th>
+                            <th scope="col" class="num">Bultos</th>
+                            <th scope="col" class="num">Kg por bulto</th>
+                            <th scope="col" class="num">Kg</th>
+                            <th scope="col" class="num">Precio por kg</th>
+                            <th scope="col" class="num">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (renglon of abierta.renglones; track renglon.id) {
+                            <tr>
+                              <td>
+                                {{ renglon.producto_nombre }}
+                                <span class="tenue">{{ renglon.producto_codigo }}</span>
+                              </td>
+                              <td class="num">{{ bultosComoTexto(renglon.cantidad_bultos) }}</td>
+                              <td class="num">{{ kilosComoTexto(renglon.kg_bulto) }}</td>
+                              <td class="num">
+                                {{ kilosComoTexto(renglon.kg_bulto * renglon.cantidad_bultos) }}
+                              </td>
+                              <td class="num">{{ montoComoTexto(renglon.precio_unit_kg) }}</td>
+                              <td class="num">{{ montoComoTexto(renglon.subtotal) }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              }
+
+              @if (cancelando()?.id === nota.id && cancelando(); as notaCancelando) {
+                <tr class="fila-detalle">
+                  <td colspan="7">
+                    <div class="cancelar">
+                      <label for="motivo">Motivo de la cancelacion</label>
+                      <textarea
+                        id="motivo"
+                        rows="3"
+                        maxlength="500"
+                        [value]="motivo()"
+                        (input)="motivo.set($any($event.target).value)"
+                      ></textarea>
+                      <p class="ayuda">
+                        Es obligatorio: cancelar la {{ notaCancelando.folio }} devuelve la
+                        mercancia.
+                      </p>
+                      <div class="acciones">
+                        <button
+                          type="button"
+                          class="peligro"
+                          [disabled]="!motivoValido()"
+                          (click)="confirmarCancelacion()"
+                        >
+                          {{
+                            guardandoCancelacion() ? 'Cancelando...' : 'Confirmar la cancelacion'
+                          }}
+                        </button>
+                        <button type="button" (click)="cerrarCancelacion()">No</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+
+        <div class="paginacion">
+          <button type="button" [disabled]="!hayMas() || buscandoMas()" (click)="cargarMas()">
+            {{ buscandoMas() ? 'Buscando...' : 'Cargar mas' }}
+          </button>
+          <span class="cuenta">{{ notas().length }} de {{ totalNotas() }} notas</span>
+        </div>
+      }
+    </section>
+  </div>
 
   <!--
     El talonario de folios: SOLO con `notas.folios` (Administrador). Es la
@@ -586,11 +600,7 @@
     <section class="talonario-pos" aria-label="Talonario de folios">
       <header class="cabecera">
         <h2>Talonario de folios</h2>
-        <button
-          type="button"
-          class="chico"
-          (click)="alternarTalonario()"
-        >
+        <button type="button" class="chico" (click)="alternarTalonario()">
           {{ talonarioAbierto() ? 'Ocultar' : 'Administrar' }}
         </button>
       </header>
@@ -602,8 +612,8 @@
 
         <p class="aviso">
           El POS quema el folio de la serie en uso: ahora es
-          <strong>{{ serieActivaComoTexto() }}</strong>. Vaciar el prefijo
-          deja folios de puros numeros ("2704"); un prefijo los imprime
+          <strong>{{ serieActivaComoTexto() }}</strong
+          >. Vaciar el prefijo deja folios de puros numeros ("2704"); un prefijo los imprime
           adelante ("RE-2704").
         </p>
 
@@ -642,7 +652,11 @@
               />
             </div>
             <label class="casilla">
-              <input type="checkbox" [checked]="activarAlCargar()" (change)="activarAlCargar.set($any($event.target).checked)" />
+              <input
+                type="checkbox"
+                [checked]="activarAlCargar()"
+                (change)="activarAlCargar.set($any($event.target).checked)"
+              />
               Usarla como serie activa
             </label>
           </div>
@@ -719,7 +733,10 @@
                         } @else {
                           <div class="folios-lista">
                             @for (folio of foliosDetalle(); track folio.id) {
-                              <span class="folio-chip" [class.disponible]="folio.estatus === 'disponible'">
+                              <span
+                                class="folio-chip"
+                                [class.disponible]="folio.estatus === 'disponible'"
+                              >
                                 {{ folio.completo }}
                                 <small>{{ estatusFolioComoTexto(folio.estatus) }}</small>
                               </span>
@@ -730,7 +747,9 @@
                               </button>
                             }
                           </div>
-                          <p class="cuenta">{{ foliosDetalle().length }} de {{ totalFoliosDetalle() }} folios</p>
+                          <p class="cuenta">
+                            {{ foliosDetalle().length }} de {{ totalFoliosDetalle() }} folios
+                          </p>
                         }
                       }
                     </td>

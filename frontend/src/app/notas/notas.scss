@@ -8,18 +8,23 @@
  *
  * La pantalla junta DOS familias que ya existen: la CAPTURA de notas (los
  * bloques con buscador, los renglones con inputs y el cierre con el total)
- * y la TABLA con filtros y paginacion de compras/proveedores, que es la de
- * abajo. Los colores salen de `styles.scss`, no de valores sueltos.
+ * y la TABLA con filtros y paginacion de compras/proveedores. En pantalla
+ * ancha van a la par, en dos columnas (`.mosaico`); en pantalla angosta la
+ * tabla baja. Los colores salen de `styles.scss`, no de valores sueltos.
  */
 
 :host {
   display: block;
 }
 
-h1,
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
 h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
 }
 
 /* ------------------------------------------------------------- la cabecera */
@@ -36,6 +41,92 @@ h2 {
   max-width: 46rem;
   margin: 0;
   color: var(--texto-suave);
+}
+
+/*
+ * El mosaico de dos columnas: la CAPTURA a la izquierda y las NOTAS a la
+ * derecha. En un mostrador ancho una sola columna deja la mitad de la
+ * pagina vacia, y la nota guardada quedo fuera de la vista: ahora se ve
+ * caer en su lugar mientras se captura la siguiente.
+ */
+.mosaico {
+  display: grid;
+  grid-template-columns: minmax(0, 46rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+/* En pantallas angostas (menos de la anchura de una columna mas el menu
+   lateral) el mosaico vuelve a ser una sola columna, como antes. Es solo
+   la primera columna la que se agota: debajo de 46rem las dos columnas se
+   pisarian, y una sola columna sigue siendo legible. */
+@media (max-width: 64rem) {
+  .mosaico {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* La captura es una tarjeta y media: los bloques, el cierre y la direccion
+   se agrupan en tarjetas iguales, y los renglones y la barra de guardar
+   cierran la columna. */
+
+.captura {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.captura .bloque,
+.captura .cierre,
+.captura .direccion {
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+.captura .renglones {
+  margin-bottom: 0;
+}
+
+/*
+ * La barra de GUARDAR baja pegada al borde inferior de la pantalla mientras
+ * se captura: el total y el boton no se van con el scroll, como debe pasar
+ * en un mostrador donde cada nota guardada es una captura nueva. En
+ * pantallas chicas (modo de una columna) tambien funciona: la barra se queda
+ * pegada al fondo de la pagina.
+ */
+.captura > .acciones {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 3;
+  margin: 0;
+  padding: 0.75rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  box-shadow: 0 0.5rem 1.25rem rgb(27 31 36 / 12%);
+}
+
+.captura > .acciones .grande {
+  flex: 1;
+}
+
+/* Los campos van sobre una tarjeta de la misma `--superficie`: si quedaran
+   del mismo color no se distinguiria el campo de la tarjeta. El fondo de
+   pagina (`--fondo`) es lo que le falta de contraste, y es el mismo que
+   los campos usan sobre el fondo de la pagina. */
+.captura input[type='search'],
+.captura input[type='text'],
+.captura input[type='number'],
+.captura textarea,
+.captura select {
+  background: var(--fondo);
+}
+
+.captura .resultados {
+  background: var(--fondo);
 }
 
 /* ----------------------------------------- los avisos de arriba de la captura */
@@ -230,6 +321,10 @@ tbody tr:last-child td {
   color: var(--texto-tenue);
 }
 
+.renglones input[type='number'] {
+  background: var(--fondo);
+}
+
 .con-problema td {
   padding-top: 0;
   font-size: 0.8125rem;
@@ -260,7 +355,7 @@ tbody tr:last-child td {
 
 .total {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -300,7 +395,7 @@ tbody tr:last-child td {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.5rem 0.625rem;
-  background: var(--superficie);
+  background: var(--fondo);
   border: 1px solid var(--borde);
   border-radius: 6px;
 }
@@ -333,7 +428,7 @@ tbody tr:last-child td {
 .forma-direccion {
   margin-top: 0.75rem;
   padding: 0.625rem 0.75rem;
-  background: var(--superficie);
+  background: var(--fondo);
   border: 1px solid var(--borde);
   border-radius: 6px;
 }
@@ -411,16 +506,38 @@ button.peligro {
   clip-path: inset(50%);
 }
 
-.separador {
-  margin: 1.5rem 0;
-  border: 0;
-  border-top: 1px solid var(--borde);
-}
-
 /* ---------------------------------------------------- la tabla de las notas */
+
+/* La columna de las notas guardadas es la segunda mitad del mosaico y lleva
+   la misma tarjeta que la captura: cabecera, filtros y tabla dentro de un
+   marco igual, para que las dos columnas se lean como dos paneles. */
+.tabla-pos {
+  padding: 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
 
 .tabla-pos .cabecera {
   align-items: baseline;
+}
+
+/* Dentro de la tarjeta la tabla no repite el marco: solo quedan las lineas
+   entre renglones, que son las que dicen donde termina uno y empieza otro. */
+.tabla-pos .tabla,
+.tabla-pos .tabla thead th {
+  background: transparent;
+}
+
+.tabla-pos .tabla {
+  border: 0;
+}
+
+/* Los filtros van sobre la tarjeta de las notas: el mismo contraste que los
+   campos de la captura. */
+.tabla-pos .filtros input,
+.tabla-pos .filtros select {
+  background: var(--fondo);
 }
 
 .filtros {
@@ -438,6 +555,16 @@ button.peligro {
 
 /* La fila de la nota que se acaba de guardar: se ve a donde fue a parar. */
 .tabla tbody tr.resaltada > td {
+  background: var(--exito-suave);
+}
+
+/* Pasar la mano por una fila la enciende: en una tabla larga ayuda a seguir
+   la linea con la vista. La guardada recien se sigue viendo verde. */
+.tabla tbody tr:hover > td {
+  background: var(--fondo);
+}
+
+.tabla tbody tr.resaltada:hover > td {
   background: var(--exito-suave);
 }
 
@@ -536,9 +663,11 @@ button.peligro {
 /* ----------------------------------------------- el talonario de folios */
 
 .talonario-pos {
-  margin-top: 2rem;
-  border-top: 1px solid var(--borde);
-  padding-top: 1.25rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
 }
 
 .talonario-pos .cabecera {

@@ -23,6 +23,7 @@ import {
   type Listado,
   type Nota,
   type NotaListada,
+  type ResumenTalonario,
 } from './modelo.js';
 
 /**
@@ -153,13 +154,20 @@ export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number
     // disponible: la unidad es la transaccion entera, no solo los renglones.
     // Una nota cuyo alta se revierte no puede dejar el 1002 quemado, o el
     // talonario pierde numeros sin que exista ninguna nota que los use.
-    const folioId = await repo.tomarFolioDisponible(c, d.serie);
+    //
+    // La serie la resuelve el servicio y no el POS: el cliente no la manda
+    // (`cuerpoDeNota` ni la incluye), y el talonario del que se quema lo
+    // dejo puesta quien administra `notas.folios`. Si el alta trae una, se
+    // respeta (la API la acepta para quien la quiera mandar), pero el POS
+    // no tiene por que saber que serie es la de hoy.
+    const serie = d.serie ?? (await repo.leerSerieActiva(c));
+    const folioId = await repo.tomarFolioDisponible(c, serie);
     if (folioId === 0) {
       throw new ReglaNegocio(
         'SIN_FOLIOS',
-        `No queda ningun folio disponible de la serie ${d.serie}`,
+        `No queda ningun folio disponible de la serie ${etiquetaDeSerie(serie)}`,
         {
-          serie: d.serie,
+          serie,
         },
       );
     }
@@ -352,8 +360,31 @@ export async function cancelar(cliente: PoolClient, id: number, motivo: string):
 // FOLIOS
 // =====================================================================
 
+/** Como se le dice a una serie en un mensaje: el prefijo, o su ausencia. */
+function etiquetaDeSerie(serie: string): string {
+  return serie === '' ? 'sin prefijo' : serie;
+}
+
 export async function listarFolios(cliente: PoolClient, q: ListarFolios): Promise<Listado<Folio>> {
   return repo.listarFolios(cliente, q);
+}
+
+/** El resumen por serie, para la pantalla del talonario (ver `ResumenTalonario`). */
+export async function resumenDeTalonarios(cliente: PoolClient): Promise<ResumenTalonario[]> {
+  return repo.resumenDeTalonarios(cliente);
+}
+
+/** La serie activa: la que el POS usara para su siguiente folio. */
+export async function leerSerieActiva(cliente: PoolClient): Promise<{ serie: string }> {
+  return { serie: await repo.leerSerieActiva(cliente) };
+}
+
+/** Guarda la serie activa y devuelve como quedo. */
+export async function establecerSerieActiva(
+  cliente: PoolClient,
+  serie: string,
+): Promise<{ serie: string }> {
+  return { serie: await repo.establecerSerieActiva(cliente, serie) };
 }
 
 /**

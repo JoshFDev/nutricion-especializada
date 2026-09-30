@@ -120,6 +120,24 @@ export interface Folio {
 }
 
 /**
+ * Una serie del talonario con lo que tiene, para el resumen de la pantalla.
+ *
+ * `minimo` y `maximo` son el tramo cubierto de esa serie; `ejemplo` es el
+ * folio que se veria primero ("A-1001" o solo "2704"), que es como la
+ * persona reconoce la serie en el menu. `disponibles` es lo que decide si
+ * la serie se puede activar o no: una serie sin folios libres es historia.
+ */
+export interface ResumenTalonario {
+  serie: string;
+  ejemplo: string;
+  minimo: number | null;
+  maximo: number | null;
+  disponibles: number;
+  usados: number;
+  cancelados: number;
+}
+
+/**
  * Lo que el PDF necesita del cliente, y `consultarNota` NO trae.
  *
  * `consultarNota` solo junta el nombre, y con eso alcanza para una tabla en
@@ -145,13 +163,18 @@ export interface ClienteImprimible {
 }
 
 /**
- * `serie + folio_numero` en un solo texto: "A-1001".
+ * `serie + folio_numero` en un solo texto: "A-1001", o solo "2704" cuando
+ * la serie esta vacia.
  *
  * Es lo que se muestra y lo que se busca, no algo que el frontend tenga
- * que armar. Un numero suelto no dice nada: el mismo 1001 en la serie A y
- * en la serie B son dos documentos distintos.
+ * que armar. Cuando hay serie, el numero no dice nada: el mismo 1001 en la
+ * serie A y en la serie B son dos documentos distintos; y con la serie
+ * vacia (el formato de puros numeros que elige quien administra el
+ * talonario) el folio es el numero, y agregar un guion o un espacio lo
+ * falsificaria en el papel.
  */
-export const componerFolio = (serie: string, numero: number): string => `${serie}-${numero}`;
+export const componerFolio = (serie: string, numero: number): string =>
+  serie === '' ? `${numero}` : `${serie}-${numero}`;
 
 export const mapearRenglon = (f: FilaRenglon): Renglon => ({
   id: Number(f.id),

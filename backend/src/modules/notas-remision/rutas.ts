@@ -6,6 +6,7 @@ import {
   crearNotaEsquema,
   crearTalonarioEsquema,
   editarNotaEsquema,
+  establecerSerieActivaEsquema,
   idNotaEsquema,
   listarFoliosEsquema,
   listarNotasEsquema,
@@ -45,7 +46,28 @@ rutasNotasRemision.use(requiereSesion);
 // ------------------------------------------------------------------ folios
 //
 // Antes que las notas, por el mismo motivo que `/efectivo` en precios: son
-// rutas literales y Express las compara antes que las de recurso.
+// rutas literales y Express las compara antes que las de recurso. Y dentro
+// del bloque, las literales (`/serie-activa`) van antes que `/folios`,
+// aunque no se pisan: son dos segmentos y `/folios` tiene uno.
+
+rutasNotasRemision.get(
+  '/folios/serie-activa',
+  requierePermiso('notas.folios'),
+  controladorFolios.leerSerieActiva,
+);
+
+rutasNotasRemision.put(
+  '/folios/serie-activa',
+  requierePermiso('notas.folios'),
+  validarBody(establecerSerieActivaEsquema),
+  controladorFolios.establecerSerieActiva,
+);
+
+rutasNotasRemision.get(
+  '/folios/resumen',
+  requierePermiso('notas.folios'),
+  controladorFolios.resumen,
+);
 
 rutasNotasRemision.get(
   '/folios',

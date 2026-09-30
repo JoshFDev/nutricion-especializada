@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { contar, consultar, consultarUno } from '../../db/transaccion.js';
 import { fechaComoTexto } from '../../core/valores.js';
 import type { CrearTalonario, ListarFolios, ListarNotas } from './esquemas.js';
+import { componerFolio } from './modelo.js';
 import type {
   ClienteImprimible,
   EstatusNota,
@@ -10,6 +11,7 @@ import type {
   Folio,
   Listado,
   NotaListada,
+  ResumenTalonario,
 } from './modelo.js';
 
 /**
@@ -112,14 +114,16 @@ const construirFiltro = (q: ListarNotas) => {
     condiciones.push(`n.fecha <= $${valores.length}::date`);
   }
 
-  // El folio completo ("A-1001") y el nombre del cliente. Se busca con
-  // ILIKE y no con `=`: el operador escribe "1001" sin la serie la mitad
-  // de las veces, y exigirle la serie exacta lo hace escribir "A-1001" a mano.
+  // El folio completo ("A-1001" o solo "2704" cuando la serie es vacia) y el
+  // nombre del cliente. Se busca con ILIKE y no con `=`: el operador escribe
+  // "1001" sin la serie la mitad de las veces, y exigirle la serie exacta lo
+  // hace escribir "A-1001" a mano.
   if (q.buscar !== undefined) {
     valores.push(`%${q.buscar}%`);
     condiciones.push(
       `(f.folio_numero::TEXT ILIKE $${valores.length}
-        OR CONCAT(f.serie, '-', f.folio_numero) ILIKE $${valores.length}
+        OR CASE WHEN f.serie = '' THEN f.folio_numero::TEXT
+                ELSE f.serie || '-' || f.folio_numero::TEXT END ILIKE $${valores.length}
         OR c.nombre ILIKE $${valores.length})`,
     );
   }
@@ -583,7 +587,7 @@ export async function listarFolios(cliente: PoolClient, q: ListarFolios): Promis
       id: Number(f.id),
       serie: f.serie,
       folio_numero: f.folio_numero,
-      completo: `${f.serie}-${f.folio_numero}`,
+      completo: componerFolio(f.serie, f.folio_numero),
       estatus: f.estatus,
       nota_id: f.nota_id === null ? null : Number(f.nota_id),
     })),
@@ -651,4 +655,82 @@ export async function insertarFolios(cliente: PoolClient, d: CrearTalonario): Pr
     [d.serie, d.desde, d.hasta],
   );
   return Number(r?.total ?? 0);
+}
+
+// ----------------------------------------------------------------- serie activa
+
+/**
+ * La serie que el POS usa para el siguiente folio.
+ *
+ * Es una preferencia guardada en `serie_folio_activa` (una sola fila). Si
+ * la fila no existe se devuelve vacia: ese dia el talonario no esta
+ * configurado, y mejor fallar por falta de folios `disponibles` que por una
+ * excepcion que nadie dijo.
+ */
+export async function leerSerieActiva(cliente: PoolClient): Promise<string> {
+  const fila = await consultarUno<{ serie: string }>(
+    cliente,
+    `SELECT serie FROM serie_folio_activa WHERE id = 1`,
+  );
+  return fila?.serie ?? '';
+}
+
+/**
+ * Guarda la serie activa y devuelve la que quedo.
+ *
+ * `ON CONFLICT DO UPDATE` mantiene la fila unica: la preferencia se pisa,
+ * no crece. La serie ya viene normalizada del esquema (`serieEsquema`), y
+ * por eso aqui se inserta tal cual.
+ */
+export async function establecerSerieActiva(cliente: PoolClient, serie: string): Promise<string> {
+  const fila = await consultarUno<{ serie: string }>(
+    cliente,
+    `INSERT INTO serie_folio_activa (id, serie)
+     VALUES (1, $1)
+     ON CONFLICT (id) DO UPDATE
+     SET serie = EXCLUDED.serie, actualizada_en = now()
+     RETURNING serie`,
+    [serie],
+  );
+  return fila?.serie ?? '';
+}
+
+/**
+ * Un renglon por serie, con lo que cabe en la pantalla del talonario.
+ *
+ * La pantalla no pinta los cientos de folios de una serie: pinta la serie y
+ * lo que tiene LIBRE, que es lo que decide si se puede usar ahora. Los
+ * folios sueltos se ven con `listarFolios` filtrando la serie, y esto es el
+ * resumen que se carga una vez.
+ */
+export async function resumenDeTalonarios(cliente: PoolClient): Promise<ResumenTalonario[]> {
+  const filas = await consultar<{
+    serie: string;
+    minimo: number | null;
+    maximo: number | null;
+    disponibles: string;
+    usados: string;
+    cancelados: string;
+  }>(
+    cliente,
+    `SELECT f.serie, MIN(f.folio_numero) AS minimo, MAX(f.folio_numero) AS maximo,
+            count(*) FILTER (WHERE f.estatus = 'disponible') AS disponibles,
+            count(*) FILTER (WHERE f.estatus = 'usado') AS usados,
+            count(*) FILTER (WHERE f.estatus = 'cancelado') AS cancelados
+     FROM folios f
+     GROUP BY f.serie
+     ORDER BY f.serie`,
+  );
+
+  return filas.map((f) => ({
+    serie: f.serie,
+    // `componerFolio` necesita un numero y el de menor es el que se imprime
+    // primero: es el ejemplo que ve la persona antes de pedir el tramo.
+    ejemplo: componerFolio(f.serie, f.minimo ?? 0),
+    minimo: f.minimo,
+    maximo: f.maximo,
+    disponibles: Number(f.disponibles),
+    usados: Number(f.usados),
+    cancelados: Number(f.cancelados),
+  }));
 }

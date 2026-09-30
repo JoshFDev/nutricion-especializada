@@ -28,6 +28,22 @@ const sinControl = (campo: string) =>
     message: `${campo} no puede llevar saltos de linea ni caracteres raros`,
   });
 
+/**
+ * El prefijo del folio, ya normalizado.
+ *
+ * La serie es el FORMATO del folio y la elige quien carga el talonario:
+ * puede ir vacia (folio de puros numeros, "2704") o llevar un prefijo de
+ * hasta 10 caracteres ("RE-2704"). Se normaliza a mayusculas y sin
+ * espacios de los lados, y esa es toda la regla: no hay un catalogo de
+ * series detras, el prefijo es texto que se imprime tal cual en la nota.
+ *
+ * Se comparte entre el alta de talonario, la seleccion de la serie activa
+ * y el alta de nota, que son los tres lugares donde una serie cruza la api.
+ */
+const serieEsquema = sinControl('La serie')
+  .max(10, 'La serie es de 10 caracteres')
+  .transform((v) => v.trim().toUpperCase());
+
 /** BIGINT. El tope de MAX_SAFE_INTEGER evita que un id de 10^20 llegue ya redondeado. */
 const idPositivo = z.coerce
   .number()
@@ -124,7 +140,12 @@ export const renglonNotaEsquema = z
  * `serie` en vez de `folio_id`: el numero lo elige el sistema (el mas bajo
  * disponible de esa serie) porque si el operador escribiera el numero, dos
  * personas cobrando a la vez podrian pedir el mismo y una de las dos se
- * quedaria sin nota. El talonario lo administra el admin con `notas.folios`.
+ * quedaria sin nota.
+ *
+ * `serie` es OPCIONAL y el servicio la resuelve si falta: usa la serie
+ * "activa" que el administrador dejo puesta (ver `establecerSerieActiva`).
+ * El POS no la manda nunca; el talonario lo administra el admin con
+ * `notas.folios`.
  *
  * `cliente_id` y `fecha` son obligatorios porque los dos cambian el precio
  * que se cobra y el saldo que se toca. `fecha` se valida aparte para poder
@@ -133,10 +154,7 @@ export const renglonNotaEsquema = z
 export const crearNotaEsquema = z
   .object({
     cliente_id: idPositivo,
-    serie: sinControl('La serie')
-      .min(1, 'La serie no puede ir vacia')
-      .max(10, 'La serie es de 10 caracteres')
-      .transform((v) => v.toUpperCase()),
+    serie: serieEsquema.optional(),
     fecha: fecha('fecha').optional(),
     direccion_entrega: sinControl('La direccion de entrega')
       .max(300, 'La direccion de entrega es de 300 caracteres')
@@ -255,13 +273,14 @@ export const listarNotasEsquema = z
  * quiere tener impreso ("del 1001 al 1200"), no en un numero suelto. El
  * limite de 5000 folios por llamada evita que un `desde: 1, hasta: 9999999`
  * llene la tabla de una sentada.
+ *
+ * `serie` es el PREFIJO del folio y puede ir vacio: vacio = folios de puros
+ * numeros ("2704"). Es la eleccion del formato que hizo el admin al cargar
+ * el talonario, no algo que la api intercale.
  */
 export const crearTalonarioEsquema = z
   .object({
-    serie: sinControl('La serie')
-      .min(1, 'La serie no puede ir vacia')
-      .max(10, 'La serie es de 10 caracteres')
-      .transform((v) => v.toUpperCase()),
+    serie: serieEsquema.default(''),
     desde: z.coerce
       .number()
       .int()
@@ -283,6 +302,13 @@ export const crearTalonarioEsquema = z
     path: ['hasta'],
   });
 
+/** Cualquier uso de `establecerSerieActiva`, con la serie normalizada. */
+export const establecerSerieActivaEsquema = z
+  .object({
+    serie: serieEsquema.default(''),
+  })
+  .strict();
+
 /** Listado del talonario, para la pantalla de administracion. */
 export const listarFoliosEsquema = z
   .object({
@@ -301,4 +327,5 @@ export type RenglonNota = z.infer<typeof renglonNotaEsquema>;
 export type CancelarNota = z.infer<typeof cancelarNotaEsquema>;
 export type ListarNotas = z.infer<typeof listarNotasEsquema>;
 export type CrearTalonario = z.infer<typeof crearTalonarioEsquema>;
+export type EstablecerSerieActiva = z.infer<typeof establecerSerieActivaEsquema>;
 export type ListarFolios = z.infer<typeof listarFoliosEsquema>;

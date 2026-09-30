@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALMACEN_ID, SERIE, cuerpoDeEdicion, cuerpoDeNota } from './notas-api';
+import { ALMACEN_ID, cuerpoDeEdicion, cuerpoDeNota } from './notas-api';
 import {
   cambiarCantidad,
   cambiarKilos,
@@ -47,11 +47,19 @@ function lineaLista(cantidad = 1): Linea {
 }
 
 describe('el cuerpo de la nota', () => {
-  it('lleva el cliente, la serie y los renglones', () => {
+  it('lleva el cliente y los renglones', () => {
     const cuerpo = cuerpoDeNota(3, [lineaLista(2)]);
     expect(cuerpo.cliente_id).toBe(3);
-    expect(cuerpo.serie).toBe(SERIE);
     expect(cuerpo.renglones).toHaveLength(1);
+  });
+
+  it('NO lleva la serie: la resuelve el backend con la serie activa', () => {
+    // La serie la decide quien administra el talonario y se guarda en la
+    // base (`serie_folio_activa`). Si el POS la mandara, un cajero podria
+    // quemar folios de cualquier serie, y el esquema del alta es `strict`.
+    const cuerpo = cuerpoDeNota(3, [lineaLista()]);
+    expect(cuerpo).not.toHaveProperty('serie');
+    expect(JSON.stringify(cuerpo)).not.toContain('serie');
   });
 
   it('NO lleva subtotal: es una columna GENERATED y el esquema es strict', () => {

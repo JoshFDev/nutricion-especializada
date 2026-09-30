@@ -7,6 +7,7 @@ import type {
   CrearNota,
   CrearTalonario,
   EditarNota,
+  EstablecerSerieActiva,
   ListarFolios,
   ListarNotas,
 } from './esquemas.js';
@@ -128,6 +129,20 @@ export const controladorNotas = {
 export const controladorFolios = {
   listar: async (req: Request, res: Response): Promise<void> => {
     res.json(await servicio.listarFolios(req.db, consulta<ListarFolios>(req)));
+  },
+
+  resumen: async (req: Request, res: Response): Promise<void> => {
+    res.json(await servicio.resumenDeTalonarios(req.db));
+  },
+
+  leerSerieActiva: async (req: Request, res: Response): Promise<void> => {
+    res.json(await servicio.leerSerieActiva(req.db));
+  },
+
+  establecerSerieActiva: async (req: Request, res: Response): Promise<void> => {
+    res.json(
+      await servicio.establecerSerieActiva(req.db, cuerpo<EstablecerSerieActiva>(req).serie),
+    );
   },
 
   crearTalonario: async (req: Request, res: Response): Promise<void> => {

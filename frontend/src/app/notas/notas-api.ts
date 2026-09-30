@@ -135,6 +135,34 @@ export interface Listado<T> {
   offset: number;
 }
 
+/** `notas-remision/modelo.ts` -> `Folio`: un numero del talonario. */
+export interface Folio {
+  id: number;
+  serie: string;
+  folio_numero: number;
+  completo: string;
+  estatus: 'disponible' | 'usado' | 'cancelado';
+  nota_id: number | null;
+}
+
+/** `notas-remision/modelo.ts` -> `ResumenTalonario`. */
+export interface ResumenTalonario {
+  serie: string;
+  ejemplo: string;
+  minimo: number | null;
+  maximo: number | null;
+  disponibles: number;
+  usados: number;
+  cancelados: number;
+}
+
+/** El cuerpo de `POST /folios`: un tramo de talonario. */
+export interface CuerpoTalonario {
+  serie: string;
+  desde: number;
+  hasta: number;
+}
+
 // ------------------------------------------------------------------ el cuerpo
 
 /**
@@ -143,6 +171,11 @@ export interface Listado<T> {
  *
  * Lo que se ve aqui, y no en la pantalla, es lo que decides NO mandar:
  *
+ *   - `serie`: NO se manda. El talonario del que sale el folio es la
+ *     "serie activa" que dejo puesta quien administra `notas.folios`
+ *     (endpoint `PUT /folios/serie-activa`), y el backend la resuelve si
+ *     el cuerpo no la trae. El mostrador no debe saber que serie es la de
+ *     hoy: eso cambio en la oficina, no en el mostrador.
  *   - `subtotal`: NO existe. Es una columna GENERATED y el esquema es
  *     `strict`, asi que mandarla da un 400 con un mensaje en ingles sobre
  *     "cannot insert into column". Es el 400 mas confuso de toda la API.
@@ -163,7 +196,6 @@ export interface Listado<T> {
  */
 export interface CuerpoNota {
   cliente_id: number;
-  serie: string;
   direccion_entrega?: string | null;
   renglones: RenglonNotaBody[];
 }
@@ -229,20 +261,6 @@ export interface RenglonEdicionBody {
  */
 export const ALMACEN_ID = 1;
 
-/**
- * La serie del talonario de donde sale el folio.
- *
- * La serie no se elige en esta pantalla a proposito: `crear()` toma el
- * folio mas bajo disponible de la SERIE que le pidan, con candado, y por
- * eso el numero no lo escribe el operador (dos personas cobrando a la vez
- * podrian pedir el mismo). La semilla carga los folios 1001-1003 en la
- * serie 'A', que es el DEFAULT de la tabla `folios`.
- *
- * Cuando exista la pantalla del talonario (`notas.folios`), elijan la
- * persona y esto se quita.
- */
-export const SERIE = 'A';
-
 /** Arma el cuerpo de la nota. */
 export function cuerpoDeNota(
   clienteId: number,
@@ -255,7 +273,6 @@ export function cuerpoDeNota(
 
   const cuerpo: CuerpoNota = {
     cliente_id: clienteId,
-    serie: SERIE,
     renglones: lineas.map((linea) => {
       const kilos = kgComoTextoSiHayQueMandarlo(linea);
       return {
@@ -525,6 +542,78 @@ export class NotasApi {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
     return Number(respuesta.headers.get('x-renglones-fuera') ?? 0);
+  }
+
+  // ------------------------------------------------------- el talonario
+
+  /**
+   * Lo que el POS usara para su siguiente folio: la serie activa.
+   *
+   * Esta es la preferencia que dejo puesta quien administra el talonario
+   * (`notas.folios`). Vacua significa folios de puros numeros, el formato
+   * normal del negocio.
+   */
+  async serieActiva(): Promise<string> {
+    const respuesta = await firstValueFrom(
+      this.http.get<{ serie: string }>(`${API}/notas-remision/folios/serie-activa`),
+    );
+    return respuesta.serie;
+  }
+
+  /** Guarda la serie activa. Nada de `PATCH`: la preferencia se pisa entera. */
+  async ponerSerieActiva(serie: string): Promise<string> {
+    const respuesta = await firstValueFrom(
+      this.http.put<{ serie: string }>(`${API}/notas-remision/folios/serie-activa`, { serie }),
+    );
+    return respuesta.serie;
+  }
+
+  /**
+   * Un renglon por serie, para la tabla del talonario.
+   *
+   * No pinta los cientos de folios de una serie: pinta la serie y lo que
+   * tiene libre, que es lo que decide si se puede activar. Los folios
+   * sueltos de una serie se piden con `listarFolios`.
+   */
+  async resumenDeTalonarios(): Promise<ResumenTalonario[]> {
+    return firstValueFrom(
+      this.http.get<ResumenTalonario[]>(`${API}/notas-remision/folios/resumen`),
+    );
+  }
+
+  /** Los folios de una serie, para ver los numeros que la componen. */
+  async listarFolios(filtro: {
+    serie?: string;
+    limite: number;
+    offset: number;
+  }): Promise<Listado<Folio>> {
+    return firstValueFrom(
+      this.http.get<Listado<Folio>>(`${API}/notas-remision/folios`, {
+        params: {
+          ...(filtro.serie === undefined ? {} : { serie: filtro.serie }),
+          limite: filtro.limite,
+          offset: filtro.offset,
+        },
+      }),
+    );
+  }
+
+  /**
+   * Carga un tramo de talonario, del `desde` al `hasta` inclusive.
+   *
+   * `serie` es el PREFIJO de esos folios y puede ir vacio: vacio = folios
+   * de puros numeros. El formato lo decide la persona al cargar el tramo,
+   * no el codigo.
+   */
+  async crearTalonario(
+    cuerpo: CuerpoTalonario,
+  ): Promise<{ creados: number; omitidos: number; primero: number; ultimo: number }> {
+    return firstValueFrom(
+      this.http.post<{ creados: number; omitidos: number; primero: number; ultimo: number }>(
+        `${API}/notas-remision/folios`,
+        cuerpo,
+      ),
+    );
   }
 }
 

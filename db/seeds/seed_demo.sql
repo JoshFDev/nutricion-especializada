@@ -27,7 +27,10 @@ INSERT INTO proveedores (nombre, contacto, telefono) VALUES
 INSERT INTO clientes (codigo_cliente, nombre, establo, especie_id) VALUES
     ('CL01', 'Cliente de prueba', 'Establo de prueba', 1);
 
-INSERT INTO folios (folio_numero) VALUES (1001), (1002), (1003);
+-- Un talonario en el formato del negocio: serie vacia (folios de puros
+-- numeros) arrancando en el 2704. La serie ACTIVA ya viene vacia desde la
+-- migracion 0012, asi que este es el talonario que usa el POS.
+INSERT INTO folios (serie, folio_numero) VALUES ('', 2704), ('', 2705), ('', 2706);
 
 -- ---------------------------------------------------------------------
 -- Precios
@@ -64,14 +67,14 @@ SELECT c.id, p.id, a.id, 100, 7.20
 INSERT INTO notas_remision (folio_id, cliente_id, direccion_entrega)
 SELECT f.id, c.id, 'Carretera a Puebla km 12'
   FROM folios f, clientes c
- WHERE f.folio_numero = 1001 AND c.codigo_cliente = 'CL01';
+ WHERE f.folio_numero = 2704 AND c.codigo_cliente = 'CL01';
 
 INSERT INTO nota_remision_detalle (nota_id, producto_id, almacen_id,
                                    cantidad_bultos, kg_bulto, precio_unit_kg)
 SELECT n.id, p.id, a.id, 10, 20, 8.50
   FROM notas_remision n, notas_remision nr, folios f,
        clientes c, productos p, almacenes a
- WHERE f.folio_numero = 1001 AND nr.folio_id = f.id AND n.id = nr.id
+ WHERE f.folio_numero = 2704 AND nr.folio_id = f.id AND n.id = nr.id
    AND c.codigo_cliente = 'CL01' AND n.cliente_id = c.id
    AND p.codigo = 'LAC' AND a.nombre = 'Bodega principal';
 

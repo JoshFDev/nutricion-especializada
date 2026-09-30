@@ -15,6 +15,7 @@ import { rutasProductos } from './modules/productos/rutas.js';
 import { rutasClientes } from './modules/clientes/rutas.js';
 import { rutasUsuarios } from './modules/usuarios/rutas.js';
 import { rutasNotasRemision } from './modules/notas-remision/rutas.js';
+import { rutasDirecciones } from './modules/direcciones/rutas.js';
 import { rutasPagos } from './modules/pagos/rutas.js';
 import { rutasCompras } from './modules/compras/rutas.js';
 import { rutasProveedores } from './modules/proveedores/rutas.js';
@@ -74,6 +75,9 @@ export function crearApp(): Express {
   app.use('/api/precios', rutasPrecios);
   app.use('/api/productos', rutasProductos);
   app.use('/api/notas-remision', rutasNotasRemision);
+  // El catalogo de direcciones de entrega cuelga junto al POS porque es donde
+  // se usa, pero es un recurso aparte: son de la sucursal y no de un cliente.
+  app.use('/api/direcciones-entrega', rutasDirecciones);
   app.use('/api/pagos', rutasPagos);
   app.use('/api/compras', rutasCompras);
   app.use('/api/proveedores', rutasProveedores);

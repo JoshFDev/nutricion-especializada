@@ -1,29 +1,58 @@
 import PDFDocument from 'pdfkit';
+import ExcelJS from 'exceljs';
 import { kilosComoTexto, montoComoTexto, numeroComoTexto } from '../../core/valores.js';
+import {
+  COLUMNAS_PAPEL,
+  FILAS_PAPEL,
+  FILAS_POR_RENGLON,
+  MAX_RENGLONES,
+  PRIMERA_FILA_DETALLE,
+  fechaCorta,
+  leerPlantilla,
+} from './plantilla.js';
 import type { ClienteImprimible, Nota } from './modelo.js';
 
 /**
- * La nota de remision impresa.
+ * La nota de remision impresa: LA PLANTILLA DEL EXCEL, TAL CUAL.
  *
- * Es una funcion PURA: recibe la nota ya leida y devuelve un `Buffer` de
- * bytes. No abre la base, no conoce Express y no escribe en disco, asi que
- * se puede probar sin levantar nada (ver `tests/unit/notas.pdf.test.ts`) y
- * lo unico que puede salir mal es que los datos esten raros.
+ * Este archivo dibuja la misma hoja que `excel.ts` rellena, no una maqueta
+ * parecida. Las dos salen de `plantillas/nota-remision.xlsx` y las dos leen su
+ * geometria de ahi: los anchos de columna, las alturas de fila, las celdas
+ * combinadas, los textos fijos y el tamano de cada letra. Por eso el PDF y el
+ * Excel son el mismo papel y no dos papeles parecidos, y por eso, si alguien
+ * corrige una linea de la plantilla, los dos quedan corregidos.
  *
- * Por que se ARMA ENTERO en memoria y no se hace `doc.pipe(res)`: `pipe`
- * manda las cabeceras antes de saber si el documento se pudo dibujar, y a
- * partir de ahi un error ya no se puede convertir en un 404 ni en un 500
- * con su mensaje: el manejador de errores de `app.ts` intentaria poner un
- * JSON encima de una respuesta que ya empezo a salir como PDF, y reventaria
- * con "Cannot set headers after they are sent". Armando el buffer primero,
- * un fallo es un fallo de verdad y el cliente recibe el mismo JSON que en
- * cualquier otra ruta. Una nota son decenas de renglones: el buffer pesa
- * unos cuantos kilobytes.
+ * Que salga IGUAL, y no "parecido", es lo que hace util tener los dos: en un
+ * mostrador da lo mismo imprima quien lo imprima, y la copia del cliente y la
+ * del archivo son el mismo documento con el mismo numero.
+ *
+ * Como se arma:
+ *
+ *   1. Se mide la plantilla: de donde empieza cada columna y cada fila, y que
+ *      celdas hay. No hay NI UN numero de medida metido a mano en este archivo.
+ *   2. Se escriben los DATOS en las mismas celdas donde los pone el Excel (B7 el
+ *      folio, B8 el cliente, E8 la fecha, B10 la direccion, los renglones en
+ *      cada bloque y E40 el total), ANTES de dibujar.
+ *   3. Se dibuja una caja por celda y su texto con la misma letra y el mismo
+ *      lado, y encima la diagonal de los bloques que la nota no llena, igual que
+ *      el Excel.
+ *
+ * La plantilla es mas ALTA que una hoja LETTER (828 contra 792 puntos), que es
+ * justo por lo que el Excel la imprime con "ajustar a una pagina". Aqui se hace
+ * la misma cuenta, asi que el PDF sale en una hoja y del mismo tamano que el
+ * Excel.
+ *
+ * Por que se arma ENTERO en memoria y no se hace `doc.pipe(res)`: `pipe` manda
+ * las cabeceras antes de saber si el documento se pudo dibujar, y a partir de
+ * ahi un error ya no se puede convertir en un 404 ni en un 500 con su mensaje:
+ * el manejador de errores intentaria poner un JSON encima de una respuesta que
+ * ya empezo a salir como PDF. Armando el buffer primero, un fallo es un fallo de
+ * verdad y el cliente recibe el mismo JSON que en cualquier otra ruta.
  *
  * Lo que se imprime es lo que la base guardo, nunca un recalculo. El importe
  * que vale es el `subtotal` de `notas_remision`, que mantiene
- * `fn_recalcular_subtotal_nota`, y los precios son los del renglon, que son
- * los que se cobraron aunque hoy la lista diga otra cosa.
+ * `fn_recalcular_subtotal_nota`, y los precios son los del renglon, que son los
+ * que se cobraron aunque hoy la lista diga otra cosa.
  */
 
 /** Membrete: sale impreso arriba. Viene del entorno, no de la base. */
@@ -34,125 +63,192 @@ export interface DatosEmpresa {
   telefono: string;
 }
 
-const MARGEN = 40;
-const TAMANO_EMPRESA = 15;
-const TAMANO_DATO = 9.5;
-const TAMANO_TEXTO = 8.5;
-const TAMANO_CELDA = 8;
-const TAMANO_PIE = 7.5;
-const ALTO_CELDA = 12;
-const SEPARADOR = 5;
-const GRIS_LINEA = '#9aa0a6';
-const GRIS_TENUE = '#5f6368';
-const GRIS_FONDO = '#eceff1';
+/**
+ * La hoja y los margenes con los que la imprime Excel.
+ *
+ * Los margenes son los del `pageSetup` de la plantilla, en puntos (1 pulgada =
+ * 72). No son los de pdfkit: si se dibujara con otros, el papel saldria
+ * distinto al del Excel y habria que volver a ajustarlos cada vez que cambie el
+ * tamano.
+ */
+const PAGINA = { ancho: 612, alto: 792 } as const;
+const MARGEN = { arriba: 53.8, abajo: 0, izquierda: 28.3, derecha: 28.3 } as const;
+
+/** El hueco entre el borde de la celda y su texto. */
+const RELLENO = 2;
+
+const GRIS_LINEA = '#000000';
+const GRIS_SUAVE = '#9aa0a6';
 const ROJO = '#b00020';
 
-/** Como se lee el estatus en el papel. La clave de la base no se imprime. */
-const ETIQUETA_ESTATUS: Record<Nota['estatus'], string> = {
-  pendiente: 'Pendiente de pago',
-  parcial: 'Pago parcial',
-  pagada: 'Pagada',
-  cancelada: 'CANCELADA',
-};
-
 /**
- * Las columnas del detalle.
- *
- * Los anchos suman 502 y el ancho util es 532 (letter menos 40 de margen
- * por lado), asi que los 30 que sobran se van en los 6 separadores de 5pt.
- * La descripcion se queda con 176 porque es la unica columna que necesita
- * texto largo, y aun asi es la que primero se parte en dos lineas: `doc.text`
- * con `width` ENVUELVE y no recorta, y un nombre de producto cortado a la
- * mitad es un renglon que nadie puede revisar.
- *
- * Se declaran una por una y no como arreglo anonimo porque las filas se
- * arman nombrando la columna: con `noUncheckedIndexedAccess` un
- * `COLUMNAS[1]` es `T | undefined` y habria que comprobarlo en cada celda.
+ * A ExcelJS le faltan los tipos de `load`, aunque el paquete si lo trae. Sin el
+ * cast, `tsc` dice que el metodo no existe y en runtime si esta.
  */
-const COL_CODIGO = { titulo: 'Codigo', ancho: 46, alineacion: 'left' as const };
-const COL_DESCRIPCION = { titulo: 'Descripcion', ancho: 176, alineacion: 'left' as const };
-const COL_ALMACEN = { titulo: 'Almacen', ancho: 66, alineacion: 'left' as const };
-const COL_BULTOS = { titulo: 'Bultos', ancho: 42, alineacion: 'right' as const };
-const COL_KG_BULTO = { titulo: 'Kg/bulto', ancho: 48, alineacion: 'right' as const };
-const COL_PRECIO = { titulo: 'Precio/kg', ancho: 58, alineacion: 'right' as const };
-const COL_IMPORTE = { titulo: 'Importe', ancho: 66, alineacion: 'right' as const };
+interface ExcelJSConLoad {
+  load: (datos: ArrayBuffer) => Promise<unknown>;
+}
 
-const COLUMNAS = [
-  COL_CODIGO,
-  COL_DESCRIPCION,
-  COL_ALMACEN,
-  COL_BULTOS,
-  COL_KG_BULTO,
-  COL_PRECIO,
-  COL_IMPORTE,
-];
+/** Una celda ya resuelta: donde esta, que ocupa y que dice. */
+interface Casilla {
+  /** La celda principal del bloque combinado; para una celda suelta, ella misma. */
+  maestro: string;
+  x: number;
+  y: number;
+  ancho: number;
+  alto: number;
+  texto: string;
+  tamano: number;
+  negrita: boolean;
+  rojo: boolean;
+  alineacion: 'left' | 'center' | 'right';
+  centroVertical: boolean;
+}
 
-/**
- * Unicode que NO esta en WinAnsiEncoding, el juego de las 14 fuentes
- * estandar que pdfkit usa sin embeber nada.
- *
- * Son los caracteres que se cuelan solos: una comilla tipografica o un
- * guion largo copiados de otro documento, o un teclado en otro idioma. Sin
- * esta tabla pdfkit dibuja el caracter fuente vacio y el documento sale con
- * un cuadrado en medio del nombre del producto.
- */
-const SUSTITUCIONES: Record<string, string> = {
-  '\u2018': "'",
-  '\u2019': "'",
-  '\u201a': "'",
-  '\u201b': "'",
-  '\u201c': '"',
-  '\u201d': '"',
-  '\u201e': '"',
-  '\u2013': '-',
-  '\u2014': '-',
-  '\u2026': '...',
-  '\u2022': '-',
-  '\u00a0': ' ',
-  '\u00ad': '',
-};
+/** La plantilla, ya medida. */
+interface Papel {
+  casillas: Casilla[];
+  ancho: number;
+  alto: number;
+}
 
-/**
- * Texto que pdfkit sabe dibujar.
- *
- * Tres pasos, y los tres importan:
- *
- * 1. `normalize('NFC')`: un nombre tecleado en macOS llega DESCOMPUES ("o"
- *    mas un acento combinante, dos code points). Sin esto el acento se
- *    pierde, y el mismo cliente sale con otro nombre en el papel que en la
- *    pantalla. `normalize` es parte del lenguaje, no de ICU, asi que no
- *    depende de los datos del runtime.
- *
- * 2. Los caracteres de control se descartan en vez de imprimirse: un salto
- *    de linea pegado a un renglon descuadra la tabla entera.
- *
- * 3. Lo que no existe en WinAnsi se marca con `?`. Un `?` en el papel se ve
- *    y se pregunta; un caracter invisible solo se descubre cuando el
- *    cliente reclama que su nombre esta mal escrito.
- *
- * Las marcas combinantes sueltas (0x300-0x36f) se BORRAN y no se cambian
- * por `?`: si sobrevivieron a la normalizacion, borrarlas deja "REMISION",
- * que es el texto correcto sin tilde, mientras que `?` dejaria "REMISI?N",
- * que ya no es una palabra.
- */
-const textoSeguro = (valor: string | null | undefined): string => {
+/** Que dice el estilo de una celda, sea texto plano, formula o texto con formato. */
+const textoDe = (valor: unknown): string => {
   if (valor === null || valor === undefined) return '';
-  let salida = '';
-  for (const caracter of valor.normalize('NFC')) {
-    const code = caracter.codePointAt(0) ?? 0;
-    if (code < 0x20 || code === 0x7f) continue;
-    if (code >= 0x300 && code <= 0x36f) continue;
-    const sustituto = SUSTITUCIONES[caracter];
-    if (sustituto !== undefined) {
-      salida += sustituto;
-    } else {
-      salida += code <= 0xff ? caracter : '?';
+  if (typeof valor === 'string' || typeof valor === 'number') return String(valor);
+  if (typeof valor === 'object') {
+    const objeto = valor as { result?: unknown; richText?: { text: string }[]; text?: unknown };
+    if (Array.isArray(objeto.richText)) return objeto.richText.map((parte) => parte.text).join('');
+    if (objeto.result !== undefined) return textoDe(objeto.result);
+    if (objeto.text !== undefined) return textoDe(objeto.text);
+  }
+  return '';
+};
+
+/**
+ * Lee la plantilla y la mide.
+ *
+ * De aqui salen TODOS los numeros del papel: donde empieza cada columna, donde
+ * cada fila, y el tamano de cada caja. La conversion de columna a puntos es la
+ * de Excel (px = ancho * 7 + 5, y pt = px * 0.75 a 96 dpi); con estos numeros el
+ * papel queda del mismo tamano que en Excel, que es lo que importa. Si se
+ * cambian, el PDF se descuadra del Excel sin que nada avise.
+ */
+const medirPlantilla = async (): Promise<Papel> => {
+  const libro = new ExcelJS.Workbook();
+  // `load` cuelga de `libro.xlsx`, igual que en `excel.ts`. El buffer es el
+  // `ArrayBuffer` que declara exceljs, no el `Buffer` de Node: en runtime son
+  // el mismo objeto y el cast es solo para que los dos tipos se encuentren.
+  await (libro.xlsx as unknown as ExcelJSConLoad).load(
+    (await leerPlantilla()) as unknown as ArrayBuffer,
+  );
+  const hoja = libro.worksheets[0];
+  if (hoja === undefined) {
+    // La plantilla es una hoja sola. Si el archivo se regenera mal, que aparezca
+    // aqui y no al imprimir por la noche.
+    throw new Error('La plantilla de nota de remision no trae ninguna hoja de calculo');
+  }
+
+  // Donde ACABA cada columna y cada fila. Con esos dos numeros, el ancho de
+  // cualquier celda es restar, y el de un bloque combinado sale solo.
+  const finDeColumna: number[] = [];
+  let x = 0;
+  for (let c = 1; c <= COLUMNAS_PAPEL.length; c += 1) {
+    x += ((hoja.getColumn(c).width ?? 8.43) * 7 + 5) * 0.75;
+    finDeColumna.push(x);
+  }
+  const ancho = x;
+
+  const finDeFila: number[] = [];
+  let y = 0;
+  for (let f = 1; f <= FILAS_PAPEL; f += 1) {
+    y += hoja.getRow(f).height ?? 15;
+    finDeFila.push(y);
+  }
+  const alto = y;
+
+  const casillas: Casilla[] = [];
+  const vistas = new Set<string>();
+  for (let f = 1; f <= FILAS_PAPEL; f += 1) {
+    for (let c = 1; c <= COLUMNAS_PAPEL.length; c += 1) {
+      const celda = hoja.getCell(f, c);
+      // El maestro de una celda combinada trae el rango entero; de ahi salen las
+      // medidas de la caja. Una celda suelta es un rango de una.
+      const maestro = celda.master;
+      const clave = maestro.address;
+      if (vistas.has(clave)) continue;
+      vistas.add(clave);
+
+      // El rango combinado, si lo hay; una celda suelta no tiene.
+      const rango = maestro.address.includes(':') ? maestro.address.split(':') : [];
+      const finDe = rango[1] ?? '';
+      const filaFin = /\d+/.exec(finDe);
+      const colFin = /[A-Z]+/.exec(finDe);
+      const ultimaFila = filaFin === null ? undefined : hoja.getRow(Number(filaFin[0]));
+      const ultimaCol = colFin === null ? undefined : hoja.getColumn(colFin[0]);
+
+      const x0 = c === 1 ? 0 : (finDeColumna[c - 2] ?? 0);
+      const y0 = f === 1 ? 0 : (finDeFila[f - 2] ?? 0);
+      // `ultimaCol.number` ya es el numero de columna (1 a 7), que es
+      // justo el indice de `finDeColumna` menos uno.
+      const x1 =
+        ultimaCol !== undefined
+          ? (finDeColumna[ultimaCol.number - 1] ?? x)
+          : (finDeColumna[c - 1] ?? x);
+      const y1 =
+        ultimaFila !== undefined
+          ? (finDeFila[ultimaFila.number - 1] ?? y)
+          : (finDeFila[f - 1] ?? y);
+
+      const fuente = celda.font ?? {};
+      const alineacion = celda.alignment ?? {};
+      const horizontal = alineacion.horizontal;
+
+      casillas.push({
+        maestro: clave,
+        x: x0,
+        y: y0,
+        ancho: x1 - x0,
+        alto: y1 - y0,
+        texto: textoDe(celda.value),
+        tamano: typeof fuente.size === 'number' ? fuente.size : 12,
+        negrita: fuente.bold === true,
+        rojo: fuente.color?.argb === 'FFFF0000' || fuente.color?.argb === 'FFB00020',
+        alineacion: horizontal === 'center' || horizontal === 'right' ? horizontal : 'left',
+        centroVertical: alineacion.vertical === 'middle' || alineacion.vertical === 'bottom',
+      });
     }
   }
-  return salida;
+
+  return { casillas, ancho, alto };
 };
 
-/** pdfkit es un stream: aqui se junta entero en un `Buffer`. */
+/**
+ * El hueco que se deja abajo, para que la ultima fila no quede pegada al borde
+ * de papel. Sin esto el papel entra justo hasta el limite y pdfkit, que anade
+ * pagina cuando un texto se pasa del margen inferior, reparte el formulario en
+ * tres hojas.
+ */
+const RESERVA = 10;
+
+/** La escala con la que el papel entra en la hoja: la misma cuenta que Excel. */
+const escalaDelPapel = (papel: Papel): number => {
+  const utilAncho = PAGINA.ancho - MARGEN.izquierda - MARGEN.derecha;
+  const utilAlto = PAGINA.alto - MARGEN.arriba - RESERVA;
+  return Math.min(1, utilAncho / papel.ancho, utilAlto / papel.alto);
+};
+
+/**
+ * Un texto que la letra estandar no sabe dibujar.
+ *
+ * Las fuentes de pdfkit (Helvetica) usan WinAnsi, que ya trae las tildes y la
+ * enye del espanol, asi que los acentos se dejan pasar tal cual. Lo que se
+ * cambia por '?' es lo que no cabe en 255: un emoji o un ideograma, que en el
+ * papel salen como un signo de pregunta en vez de romper el PDF entero.
+ */
+const textoSeguro = (texto: string): string =>
+  [...texto].map((caracter) => ((caracter.codePointAt(0) ?? 63) <= 0xff ? caracter : '?')).join('');
+
 const aBuffer = (doc: PDFKit.PDFDocument): Promise<Buffer> =>
   new Promise((resolver, rechazar) => {
     const trozos: Buffer[] = [];
@@ -166,445 +262,170 @@ const aBuffer = (doc: PDFKit.PDFDocument): Promise<Buffer> =>
     doc.end();
   });
 
-const anchoUtil = (doc: PDFKit.PDFDocument): number => doc.page.width - MARGEN * 2;
-
-/** Cuanto mide un texto con el ancho dado, sin dibujarlo. */
-const altoDe = (doc: PDFKit.PDFDocument, texto: string, ancho: number, tamano: number): number =>
-  doc.font('Helvetica').fontSize(tamano).heightOfString(texto, { width: ancho });
-
-/**
- * ¿Cabe lo que sigue? Si no, pagina nueva.
- *
- * `doc.text` con coordenadas absolutas NO salta de pagina solo: eso solo
- * pasa con el flujo de texto normal. Con `doc.y` elegido, escribir un renglon
- * que no cabe lo manda encima del pie o fuera de la hoja, y pdfkit no
- * avisa. Por eso cada bloque pregunta antes de dibujarse.
- *
- * `alCambiarPagina` no es un detalle: es lo que redibuja los titulos de la
- * tabla. Sin eso la segunda pagina es una lista de numeros sin columnas, que
- * es justo el papel que nadie puede usar para detectar un kilo de mas.
- */
-const asegurarEspacio = (
+/** El recuadro de una celda. */
+const recuadro = (
   doc: PDFKit.PDFDocument,
-  alto: number,
-  alCambiarPagina: () => void,
+  caja: { x: number; y: number; ancho: number; alto: number },
 ): void => {
-  if (doc.y + alto <= doc.page.height - MARGEN) return;
-  doc.addPage();
-  alCambiarPagina();
-};
-
-const dibujarLinea = (doc: PDFKit.PDFDocument, y: number, color = GRIS_LINEA): void => {
   doc
     .save()
-    .lineWidth(0.5)
-    .strokeColor(color)
-    .moveTo(MARGEN, y)
-    .lineTo(doc.page.width - MARGEN, y)
+    .lineWidth(0.6)
+    .strokeColor(GRIS_LINEA)
+    .rect(caja.x, caja.y, caja.ancho, caja.alto)
     .stroke()
     .restore();
 };
 
-/** Una linea de texto en un ancho, en negrita o normal. */
-const linea = (
-  doc: PDFKit.PDFDocument,
-  texto: string,
-  x: number,
-  y: number,
-  ancho: number,
-  opciones: {
-    negrita?: boolean;
-    tamano?: number;
-    alineacion?: 'left' | 'right' | 'center';
-    color?: string;
-  } = {},
-): number => {
-  const tamano = opciones.tamano ?? TAMANO_DATO;
+/**
+ * El texto de una celda, con la misma letra y el mismo lado que en el Excel.
+ *
+ * Hay una diferencia que obliga a ajustar: la plantilla esta compuesta con
+ * Bahnschrift Condensed, que es una letra ESTRECHA, y pdfkit solo trae
+ * Helvetica, que es mas ancha. Con la misma medida, "SUBTOTAL" se pasaba de su
+ * celda y pdfkit lo partia en dos ("SUBT" + "AL"), y un nombre de producto
+ * partido a media palabra en el papel es peor que uno un punto mas chico.
+ *
+ * Por eso, cuando el texto no cabe en su caja, se baja la letra lo justo para
+ * que quepa. Solo baja en esas celdas: el resto va con el tamano que dice la
+ * plantilla, que es el que se ve bien.
+ *
+ * La vertical se centra con el alto de la LINEA, no con el de la caja: casi
+ * todas las celdas de la plantilla son de altura triple y su texto va al medio,
+ * que es lo que dice `vertical: middle`.
+ */
+const textoDeCelda = (doc: PDFKit.PDFDocument, caja: Casilla): void => {
+  if (caja.texto === '') return;
+  doc.font(caja.negrita ? 'Helvetica-Bold' : 'Helvetica').fillColor(caja.rojo ? ROJO : '#000000');
+
+  const texto = textoSeguro(caja.texto);
+  const disponible = caja.ancho - RELLENO * 2;
+  const anchoNecesario = doc.fontSize(caja.tamano).widthOfString(texto);
+  const tamano =
+    anchoNecesario > disponible ? (caja.tamano * disponible) / anchoNecesario : caja.tamano;
+  doc.fontSize(tamano);
+
+  const altoLinea = doc.currentLineHeight();
+  const y = caja.centroVertical ? caja.y + (caja.alto - altoLinea) / 2 : caja.y + RELLENO;
+  doc.text(texto, caja.x + RELLENO, y, {
+    width: disponible,
+    align: caja.alineacion,
+    lineBreak: false,
+  });
+};
+
+/** Escribe un dato en una celda de la plantilla. */
+const escribir = (papel: Papel, maestro: string, texto: string): void => {
+  const casilla = papel.casillas.find((c) => c.maestro === maestro);
+  if (casilla === undefined) return;
+  casilla.texto = texto;
+};
+
+/**
+ * La diagonal que tacha un bloque de renglon vacio.
+ *
+ * Es la misma que el Excel pone en los bloques sin usar: de esquina a esquina,
+ * para que se vea que la nota viene completa y no se escriba nada despues.
+ */
+const tachar = (doc: PDFKit.PDFDocument, caja: Casilla): void => {
   doc
-    .font(opciones.negrita ? 'Helvetica-Bold' : 'Helvetica')
-    .fontSize(tamano)
-    .fillColor(opciones.color ?? '#111111');
-  const alto = doc.font('Helvetica').fontSize(tamano).heightOfString(texto, { width: ancho });
-  doc.text(texto, x, y, {
-    width: ancho,
-    align: opciones.alineacion ?? 'left',
-  });
-  return alto;
-};
-
-/** Memberse, titulo del documento, folio y fecha. */
-const dibujarMembrete = (doc: PDFKit.PDFDocument, empresa: DatosEmpresa, nota: Nota): void => {
-  const derecha = doc.page.width - MARGEN;
-  const anchoCaja = 176;
-  const xCaja = derecha - anchoCaja;
-  const anchoIzquierda = xCaja - MARGEN - 20;
-
-  let y = MARGEN;
-  y += linea(doc, textoSeguro(empresa.nombre), MARGEN, y, anchoIzquierda, {
-    negrita: true,
-    tamano: TAMANO_EMPRESA,
-  });
-  y += 2;
-
-  const datos = [empresa.rfc, empresa.direccion, empresa.telefono]
-    .map(textoSeguro)
-    .filter((dato) => dato !== '');
-  for (const dato of datos) {
-    y += linea(doc, dato, MARGEN, y, anchoIzquierda, {
-      tamano: TAMANO_TEXTO,
-      color: GRIS_TENUE,
-    });
-  }
-
-  y = MARGEN;
-  y += linea(doc, 'NOTA DE REMISIÓN', xCaja, y, anchoCaja, {
-    negrita: true,
-    tamano: 11,
-    alineacion: 'center',
-  });
-  y += 6;
-  y += linea(doc, `Folio: ${textoSeguro(nota.folio)}`, xCaja, y, anchoCaja, {
-    negrita: true,
-    tamano: 12,
-    alineacion: 'center',
-  });
-  y += 3;
-  y += linea(doc, `Fecha: ${textoSeguro(nota.fecha)}`, xCaja, y, anchoCaja, {
-    tamano: TAMANO_TEXTO,
-    color: GRIS_TENUE,
-    alineacion: 'center',
-  });
-  y += 3;
-  linea(doc, ETIQUETA_ESTATUS[nota.estatus], xCaja, y, anchoCaja, {
-    negrita: true,
-    tamano: 9,
-    alineacion: 'center',
-    color: nota.estatus === 'cancelada' ? ROJO : GRIS_TENUE,
-  });
-
-  dibujarLinea(doc, 96, '#111111');
-  doc.y = 108;
+    .save()
+    .lineWidth(0.5)
+    .strokeColor(GRIS_SUAVE)
+    .moveTo(caja.x + 1, caja.y + 1)
+    .lineTo(caja.x + caja.ancho - 1, caja.y + caja.alto - 1)
+    .stroke()
+    .restore();
 };
 
 /**
- * A quien se le entrega y a donde.
+ * El sello de una nota cancelada.
  *
- * El destino es `direccion_entrega` si la nota la trae, y si no la direccion
- * que tiene el cliente en su ficha. No se inventa una direccion: una nota
- * sin direccion de entrega es normal (el producto se queda en el almacen), y
- * ponerle la direccion del cliente a la fuerza hace creer que se mando ahi
- * algo que no se mando.
+ * El papel es el de siempre, porque es el que la gente ya conoce y sabe donde
+ * esta cada cosa, pero una nota devuelta tiene que verse cancelada en el papel
+ * de la empresa igual que en el del cliente: el que no lo ve archiva una
+ * entrega que se devolvio como si fuera real. Va atravesado sobre el papel y no
+ * como una fila mas, porque el papel tiene el aspecto de una nota buena.
  */
-const dibujarDestinatario = (
-  doc: PDFKit.PDFDocument,
-  nota: Nota,
-  cliente: ClienteImprimible,
-): void => {
-  const mitad = (anchoUtil(doc) - 24) / 2;
-  const xDerecha = MARGEN + mitad + 24;
-  const y = doc.y;
-
-  const izquierda = [
-    cliente.nombre,
-    cliente.razon_social,
-    // El RFC va con su etiqueta y no suelto: un `GAX0401019AB` a secas
-    // pegado al nombre no se sabe si es parte del nombre o del RFC.
-    cliente.rfc === null ? null : `RFC: ${cliente.rfc}`,
-    cliente.codigo === null ? null : `Cliente: ${cliente.codigo}`,
-    cliente.establo,
-    cliente.especie,
-    cliente.telefono,
-  ];
-  const derecha = [nota.direccion_entrega ?? cliente.direccion];
-
-  const altoDeBloque = (valores: (string | null | undefined)[]): number => {
-    const lineas = valores.map(textoSeguro).filter((dato) => dato !== '');
-    return lineas.reduce((total, dato) => total + altoDe(doc, dato, mitad, TAMANO_DATO), 0);
-  };
-
-  // El alto se toma del bloque mas largo de los dos, no del ultimo que se
-  // escribio: el de la izquierda tiene cinco lineas y el de la derecha
-  // normalmente una, y si se midiera al terminar el derecho, el nombre del
-  // cliente se comeria la direccion de entrega.
-  const alto = Math.max(altoDeBloque(izquierda), altoDeBloque(derecha));
-
-  const bloque = (titulo: string, valores: (string | null | undefined)[], x: number): void => {
-    let cursor = y;
-    cursor += linea(doc, titulo, x, cursor, mitad, {
-      negrita: true,
-      tamano: TAMANO_TEXTO,
-      color: GRIS_TENUE,
-    });
-    cursor += 3;
-    for (const dato of valores.map(textoSeguro)) {
-      if (dato === '') continue;
-      cursor += linea(doc, dato, x, cursor, mitad, {});
-    }
-  };
-
-  bloque('CLIENTE', izquierda, MARGEN);
-  bloque('DESTINO DE ENTREGA', derecha, xDerecha);
-
-  doc.y = y + alto + 4;
-  dibujarLinea(doc, doc.y, GRIS_LINEA);
-  doc.y += 12;
-};
-
-/**
- * La caja roja de una nota cancelada.
- *
- * Es lo primero que se ve despues del membrete, y no un renglon mas al
- * final, porque un papel con el mismo membrete y la misma tabla que el de
- * una nota buena se puede archivar donde sea. El motivo va escrito porque
- * `chk_notas_motivo_cancelacion` lo exige: una cancelacion sin motivo es un
- * boton que borra trabajo.
- */
-const dibujarCancelacion = (doc: PDFKit.PDFDocument, nota: Nota): void => {
+const selloDeCancelacion = (doc: PDFKit.PDFDocument, nota: Nota, papel: Papel): void => {
   if (nota.estatus !== 'cancelada') return;
+  const izquierda = papel.ancho * 0.1;
+  const ancho = papel.ancho * 0.8;
+  const alto = papel.alto * 0.1;
 
-  const ancho = anchoUtil(doc);
-  const motivo = textoSeguro(nota.motivo_cancelacion);
-  const lineas = motivo === '' ? [] : motivo.split('\n');
-  const alto =
-    30 + lineas.reduce((total, t) => total + altoDe(doc, t, ancho - 24, TAMANO_TEXTO), 0);
-
-  asegurarEspacio(doc, alto, () => {
-    doc.y = MARGEN;
-  });
-
-  const y = doc.y;
-  doc.save().lineWidth(1).strokeColor(ROJO).rect(MARGEN, y, ancho, alto).stroke().restore();
-
-  let cursor = y + 8;
-  cursor += linea(doc, 'DOCUMENTO CANCELADO', MARGEN + 12, cursor, ancho - 24, {
-    negrita: true,
-    tamano: 10,
-    color: ROJO,
-    alineacion: 'center',
-  });
-  if (motivo !== '') {
-    for (const texto of lineas) {
-      cursor += linea(doc, texto, MARGEN + 12, cursor, ancho - 24, {
-        tamano: TAMANO_TEXTO,
-        color: ROJO,
-        alineacion: 'center',
-      });
-    }
-  }
-
-  doc.y = y + alto + 14;
-};
-
-/** La fila de titulos, que se repite en cada pagina. */
-const dibujarTitulos = (doc: PDFKit.PDFDocument): void => {
-  const y = doc.y;
-  doc.rect(MARGEN, y, anchoUtil(doc), ALTO_CELDA + 3).fill(GRIS_FONDO);
-  let x = MARGEN;
-  for (const columna of COLUMNAS) {
-    linea(doc, columna.titulo, x + 3, y + 4, columna.ancho - 6, {
-      negrita: true,
-      tamano: TAMANO_CELDA,
-      alineacion: columna.alineacion,
-    });
-    x += columna.ancho + SEPARADOR;
-  }
-  dibujarLinea(doc, y + ALTO_CELDA + 3, '#5f6368');
-  doc.y = y + ALTO_CELDA + 8;
-};
-
-/** Los renglones de la nota, con salto de pagina y titulos repetidos. */
-const dibujarRenglones = (doc: PDFKit.PDFDocument, nota: Nota): void => {
-  asegurarEspacio(doc, 120, () => {
-    doc.y = MARGEN;
-  });
-  dibujarTitulos(doc);
-
-  for (const renglon of nota.renglones) {
-    const celdas = [
-      { columna: COL_CODIGO, texto: textoSeguro(renglon.producto_codigo) },
-      { columna: COL_DESCRIPCION, texto: textoSeguro(renglon.producto_nombre) },
-      { columna: COL_ALMACEN, texto: textoSeguro(renglon.almacen) },
-      { columna: COL_BULTOS, texto: numeroComoTexto(renglon.cantidad_bultos, 2) },
-      { columna: COL_KG_BULTO, texto: kilosComoTexto(renglon.kg_bulto) },
-      { columna: COL_PRECIO, texto: montoComoTexto(renglon.precio_unit_kg) },
-      { columna: COL_IMPORTE, texto: montoComoTexto(renglon.subtotal) },
-    ];
-
-    // La fila crece lo que necesite la descripcion, que es la unica celda
-    // que puede partirse en dos lineas. El resto siempre cabe en una.
-    const altoFila = Math.max(
-      ALTO_CELDA,
-      ...celdas.map((celda) => altoDe(doc, celda.texto, celda.columna.ancho - 6, TAMANO_CELDA) + 5),
-    );
-
-    asegurarEspacio(doc, altoFila, () => dibujarTitulos(doc));
-
-    const y = doc.y;
-    let x = MARGEN;
-    for (const celda of celdas) {
-      linea(doc, celda.texto, x + 3, y + 3, celda.columna.ancho - 6, {
-        tamano: TAMANO_CELDA,
-        alineacion: celda.columna.alineacion,
-      });
-      x += celda.columna.ancho + SEPARADOR;
-    }
-    doc.y = y + altoFila;
-    dibujarLinea(doc, doc.y, '#e0e0e0');
-  }
-  doc.y += 10;
-};
-
-/**
- * Totales.
- *
- * Bultos y kilos SI se suman aqui, porque no hay ninguna columna que los
- * traiga: la base guarda el subtotal de la nota pero no el total de kilos
- * entregados, y un total de kilos en papel es lo que revisa quien recibe.
- *
- * El importe NO se suma: se imprime el `subtotal` de la nota. Es el que
- * mantiene `fn_recalcular_subtotal_nota` y el que el sistema usa para el
- * saldo del cliente, asi que si aqui se recalculara y los dos no
- * coincidieran, el papel estaria mostrando una cifra que la base no
- * reconoce.
- */
-const dibujarTotales = (doc: PDFKit.PDFDocument, nota: Nota): void => {
-  const bultos = nota.renglones.reduce((total, r) => total + r.cantidad_bultos, 0);
-  const kilos = nota.renglones.reduce((total, r) => total + r.cantidad_bultos * r.kg_bulto, 0);
-  const ancho = 210;
-  const x = doc.page.width - MARGEN - ancho;
-  const alto = 62;
-
-  asegurarEspacio(doc, alto, () => {
-    doc.y = MARGEN;
-  });
-
-  const y = doc.y;
-  linea(doc, `Bultos: ${numeroComoTexto(bultos, 2)}`, x, y, ancho, {
-    tamano: TAMANO_TEXTO,
-    alineacion: 'right',
-    color: GRIS_TENUE,
-  });
-  linea(doc, `Kilos: ${kilosComoTexto(kilos)}`, x, y + 12, ancho, {
-    tamano: TAMANO_TEXTO,
-    alineacion: 'right',
-    color: GRIS_TENUE,
-  });
-  dibujarLinea(doc, y + 30, '#111111');
-  linea(doc, 'TOTAL', x, y + 36, ancho, {
-    negrita: true,
-    tamano: TAMANO_TEXTO,
-    alineacion: 'right',
-    color: GRIS_TENUE,
-  });
-  linea(doc, `$${montoComoTexto(nota.subtotal)}`, x, y + 47, ancho, {
-    negrita: true,
-    tamano: 13,
-    alineacion: 'right',
-  });
-
-  doc.y = y + alto;
-};
-
-/**
- * Las dos firmas.
- *
- * Una remision la firma quien entrega y quien recibe, y sin las dos no sirve
- * para reclamar que falto un bulto. Van siempre juntas en la misma pagina:
- * una firma sola en el pie de la ultima hoja es un papel que se perdio, y
- * por eso el bloque pide su espacio completo antes de dibujarse en vez de
- * dejar que pdfkit lo parta.
- */
-const dibujarFirmas = (doc: PDFKit.PDFDocument, nota: Nota, cliente: ClienteImprimible): void => {
-  const ancho = (anchoUtil(doc) - 24) / 2;
-  const alto = 74;
-
-  asegurarEspacio(doc, alto, () => {
-    doc.y = MARGEN;
-  });
-
-  const y = doc.y;
-  const aviso =
-    'Recibí los productos y las cantidades descritos en este documento, en las condiciones que aquí se anotan.';
+  doc.save();
+  doc.translate(papel.ancho / 2, papel.alto / 2);
+  doc.rotate(-12);
+  doc.translate(-papel.ancho / 2, -papel.alto / 2);
   doc
-    .font('Helvetica')
-    .fontSize(TAMANO_TEXTO)
-    .fillColor(GRIS_TENUE)
-    .text(aviso, MARGEN, y, { width: anchoUtil(doc) });
-  doc.y = y + altoDe(doc, aviso, anchoUtil(doc), TAMANO_TEXTO) + 12;
+    .lineWidth(3)
+    .strokeColor(ROJO)
+    .rect(izquierda, papel.alto / 2 - alto / 2, ancho, alto)
+    .stroke()
+    .font('Helvetica-Bold')
+    .fontSize(26)
+    .fillColor(ROJO)
+    .text(textoSeguro('CANCELADA'), izquierda, papel.alto / 2 - 13, {
+      width: ancho,
+      align: 'center',
+      lineBreak: false,
+    })
+    .restore();
 
-  const firma = (x: number, titulo: string, nombre: string): void => {
-    const yFirma = doc.y;
-    dibujarLinea(doc, yFirma);
-    linea(doc, titulo, x, yFirma + 4, ancho, {
-      negrita: true,
-      tamano: TAMANO_TEXTO,
-      alineacion: 'center',
-    });
-    if (nombre !== '') {
-      linea(doc, nombre, x, yFirma + 16, ancho, {
-        tamano: TAMANO_CELDA,
-        alineacion: 'center',
-        color: GRIS_TENUE,
+  if (nota.motivo_cancelacion !== null && nota.motivo_cancelacion !== '') {
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .fillColor(ROJO)
+      .text(`Motivo: ${textoSeguro(nota.motivo_cancelacion)}`, izquierda, papel.alto * 0.62, {
+        width: ancho,
+        align: 'center',
       });
-    }
-  };
-
-  // Una nota sin vendedor es posible (`vendedor_id` es NULL para lo capturado
-  // por import/manual), y entonces se imprime la linea de firma sin nombre:
-  // un espacio en blanco donde firmaba el operador.
-  firma(MARGEN, 'ENTREGÓ', nota.vendedor ?? '');
-  firma(MARGEN + ancho + 24, 'RECIBÍ CONFORME', textoSeguro(cliente.nombre));
-};
-
-/**
- * Pie de pagina, con el folio y la numeracion.
- *
- * Se dibuja al final, con `switchToPage`, porque "pagina 2 de 3" no se puede
- * escribir hasta que se sepa cuantas hay. Por eso el documento se abre con
- * `bufferPages: true`: sin eso, pdfkit manda la pagina a la salida en
- * cuanto se llena y despues no hay forma de volver a ella.
- *
- * `margins.bottom = 0` es obligatorio y no es cosmetico. El pie va POR DEBAJO
- * del margen, que es donde tiene que estar, y `doc.text` agrega una pagina
- * automaticamente cuando la coordenada se pasa del margen inferior. Sin
- * esto, dibujar el pie crea la pagina siguiente: un PDF de una hoja con el
- * pie puesto se va a tres hojas, con una vacia al final de cada pagina real.
- */
-const dibujarPies = (doc: PDFKit.PDFDocument, nota: Nota): void => {
-  const rango = doc.bufferedPageRange();
-  for (let i = 0; i < rango.count; i += 1) {
-    doc.switchToPage(rango.start + i);
-    doc.page.margins.bottom = 0;
-
-    const y = doc.page.height - MARGEN + 12;
-    const ancho = (anchoUtil(doc) - 12) / 2;
-    linea(doc, `Nota de remisión ${textoSeguro(nota.folio)}`, MARGEN, y, ancho, {
-      tamano: TAMANO_PIE,
-      color: GRIS_TENUE,
-    });
-    linea(doc, `Página ${i + 1} de ${rango.count}`, MARGEN + ancho + 12, y, ancho, {
-      tamano: TAMANO_PIE,
-      color: GRIS_TENUE,
-      alineacion: 'right',
-    });
   }
 };
 
 /**
  * Arma el PDF de una nota.
  *
- * `autoFirstPage: false` y la primera pagina se agrega explicita: el
- * membrete empieza en MARGEN, no en el margen que pdfkit pondria, y con la
- * pagina automatica el margen ya viene gastado.
+ * `autoFirstPage: false` y la primera pagina se agrega explicita: el papel
+ * empieza en el margen de la plantilla, no en el que pondria pdfkit, y con la
+ * pagina automatica ese margen ya viene gastado.
  */
 export async function pdfNotaRemision(
   nota: Nota,
   cliente: ClienteImprimible,
   empresa: DatosEmpresa,
 ): Promise<Buffer> {
+  const papel = await medirPlantilla();
+
+  // Los datos van en las MISMAS celdas donde los pone el Excel y ANTES de
+  // dibujar: si se escribieran despues, el papel ya estaria impreso.
+  escribir(papel, 'B7', nota.folio);
+  escribir(papel, 'B8', cliente.nombre);
+  escribir(papel, 'E8', fechaCorta(nota.fecha));
+  escribir(papel, 'B10', nota.direccion_entrega ?? cliente.direccion ?? '');
+
+  for (let i = 0; i < MAX_RENGLONES; i += 1) {
+    const fila = PRIMERA_FILA_DETALLE + i * FILAS_POR_RENGLON;
+    const renglon = nota.renglones[i];
+    if (renglon === undefined) continue;
+    escribir(papel, `A${fila}`, numeroComoTexto(renglon.cantidad_bultos, 2));
+    escribir(papel, `B${fila}`, renglon.producto_nombre);
+    escribir(papel, `D${fila}`, kilosComoTexto(renglon.kg_bulto));
+    escribir(papel, `E${fila}`, montoComoTexto(renglon.precio_unit_kg));
+    escribir(papel, `F${fila}`, montoComoTexto(renglon.subtotal));
+  }
+  // El total de la nota, el de la base, no el de sumar la hoja.
+  escribir(papel, 'E40', montoComoTexto(nota.subtotal));
+
   const doc = new PDFDocument({
-    size: 'LETTER',
-    margin: MARGEN,
+    size: [PAGINA.ancho, PAGINA.alto],
+    // Margenes EN CERO a proposito. Si se le pasa un numero a `margin`, pdfkit
+    // lo aplica a los cuatro lados, y con los margenes de la plantilla (arriba
+    // 53.8, abajo 0) el alto usable queda en 684 puntos: el papel entra hasta
+    // los 738 y entonces pdfkit lo parte en varias hojas. La posicion la pone
+    // el `translate` de mas abajo, y con margen cero pdfkit nunca anade pagina
+    // solo.
+    margin: 0,
     autoFirstPage: false,
     bufferPages: true,
     info: {
@@ -614,13 +435,49 @@ export async function pdfNotaRemision(
   });
 
   doc.addPage();
-  dibujarMembrete(doc, empresa, nota);
-  dibujarDestinatario(doc, nota, cliente);
-  dibujarCancelacion(doc, nota);
-  dibujarRenglones(doc, nota);
-  dibujarTotales(doc, nota);
-  dibujarFirmas(doc, nota, cliente);
-  dibujarPies(doc, nota);
+
+  // El papel se dibuja con la misma escala con la que lo imprimiría Excel: la
+  // plantilla es mas alta que la hoja, y sin esto se sale por abajo.
+  const escala = escalaDelPapel(papel);
+  doc.save();
+  doc.translate(MARGEN.izquierda, MARGEN.arriba);
+  doc.scale(escala);
+
+  /*
+   * pdfkit no se entera de la escala. Su cursor `doc.y` avanza en unidades SIN
+   * escalar, asi que al recorrer los 828 puntos de la plantilla se pasa de los
+   * 792 de la hoja y pdfkit mete una pagina nueva en medio del formulario: el
+   * papel salia repartido en tres hojas.
+   *
+   * La salida es subirle la altura a la pagina mientras se dibuja. El
+   * `MediaBox` se escribio al crear la pagina y no se vuelve a tocar, asi que
+   * el PDF sigue siendo de 612 x 792; lo que cambia es el numero con el que
+   * pdfkit decide si cabe un texto, que es justo lo que hay que relajar.
+   */
+  const altoDeLaHoja = doc.page.height;
+  doc.page.height = altoDeLaHoja + papel.alto + 40;
+
+  for (const casilla of papel.casillas) recuadro(doc, casilla);
+  for (const casilla of papel.casillas) textoDeCelda(doc, casilla);
+
+  // La diagonal de los bloques vacios, encima de su propio texto.
+  for (let i = 0; i < MAX_RENGLONES; i += 1) {
+    const fila = PRIMERA_FILA_DETALLE + i * FILAS_POR_RENGLON;
+    if (nota.renglones[i] !== undefined) continue;
+    for (const letra of ['A', 'B', 'D', 'E', 'F']) {
+      const casilla = papel.casillas.find((c) => c.maestro === `${letra}${fila}`);
+      if (casilla !== undefined) tachar(doc, casilla);
+    }
+  }
+
+  selloDeCancelacion(doc, nota, papel);
+
+  doc.restore();
+  doc.page.height = altoDeLaHoja;
 
   return aBuffer(doc);
 }
+
+/** Cuantos renglones de la nota NO caben en el papel, igual que en el Excel. */
+export const renglonesFuera = (nota: Nota): number =>
+  Math.max(0, nota.renglones.length - MAX_RENGLONES);

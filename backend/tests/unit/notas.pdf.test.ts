@@ -1,6 +1,10 @@
 import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { pdfNotaRemision, type DatosEmpresa } from '../../src/modules/notas-remision/pdf.js';
+import {
+  pdfNotaRemision,
+  renglonesFuera,
+  type DatosEmpresa,
+} from '../../src/modules/notas-remision/pdf.js';
 import type { ClienteImprimible, Nota, Renglon } from '../../src/modules/notas-remision/modelo.js';
 
 /**
@@ -184,47 +188,102 @@ const contarApariciones = (buf: Buffer, aguja: string): number => {
   }
 };
 
+/** El `MediaBox` del PDF: el tamano de la hoja. */
+const mediaBox = (buf: Buffer): number[] =>
+  (/\/MediaBox\s*\[([^\]]+)\]/.exec(buf.toString('latin1'))?.[1] ?? '')
+    .trim()
+    .split(/\s+/)
+    .map(Number);
+
+/** Cuantas paginas trae. */
+const paginasDe = (buf: Buffer): number =>
+  (buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+
+/**
+ * Cuantas diagonales lleva el papel, que son las de los renglones vacios.
+ *
+ * Se cuentan por el `moveto` de cada una: los recuadros de las celdas se
+ * dibujan con `rect` y no mueven el punto, asi que el numero de `moveto` ES el
+ * numero de diagonales. Es la forma de preguntar "hay mas rayas en este papel
+ * que en el otro" sin depender del color ni de donde esten.
+ */
+const diagonalesDe = (buf: Buffer): number => {
+  let total = 0;
+  for (const flujo of flujos(buf)) {
+    // `\bm\b` y no `/\d\s+\d\s+m/`: pdfkit escribe el punto como `x y m`
+    // y la `m` de `cm` (la matriz de la pagina) NO cuenta, porque va pegada a
+    // una letra y no es una palabra suelta.
+    total += (flujo.match(/\bm\b/g) ?? []).length;
+  }
+  return total;
+};
+
 describe('pdf de la nota de remision', () => {
-  it('arma un PDF de verdad', async () => {
+  it('arma un PDF de verdad, en UNA hoja vertical', async () => {
     const bytes = await pdfNotaRemision(nota(), cliente(), EMPRESA);
 
     expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(bytes.length).toBeGreaterThan(1000);
     expect(bytes.subarray(-8).toString('latin1').trimEnd()).toContain('%%EOF');
+    // El papel es la plantilla del Excel, que es vertical. Que saliera apaisado
+    // era el papel de dos copias que se descarto.
+    expect(mediaBox(bytes)).toEqual([0, 0, 612, 792]);
+    expect(paginasDe(bytes)).toBe(1);
   });
 
-  it('pone el membrete de la empresa', async () => {
-    const bytes = await pdfNotaRemision(nota(), cliente(), EMPRESA);
-    const texto = quitarEspacios(textoDelPdf(bytes));
+  /*
+   * Lo que diferencia este PDF del que habia antes: el papel es LA PLANTILLA DEL
+   * EXCEL. Los rotulos de abajo no los pone este archivo, estan en la hoja; si
+   * aparecen en el PDF, es que el PDF esta dibujando esa hoja y no una maqueta
+   * parecida.
+   */
+  it('imprime el papel de la plantilla, con sus rotulos', async () => {
+    const texto = quitarEspacios(textoDelPdf(await pdfNotaRemision(nota(), cliente(), EMPRESA)));
 
-    expect(texto).toContain(quitarEspacios('Nutrición Especializada'));
-    expect(texto).toContain(quitarEspacios('NIE-010101-XYZ'));
-    expect(texto).toContain(quitarEspacios('Carretera Federal 15 km 4'));
-    expect(texto).toContain(quitarEspacios('NOTA DE REMISIÓN'));
+    for (const rotulo of [
+      'CANT',
+      'CONCEPTO',
+      'PRECIOUNIT',
+      'SUBTOTAL',
+      'TOTAL',
+      'ENTREGADO',
+      'RECIBIDO',
+      'FOLIO',
+      'CLIENTE',
+      'DIRECCIÓN',
+    ]) {
+      expect(texto, `falta el rotulo ${rotulo}`).toContain(quitarEspacios(rotulo));
+    }
   });
 
-  it('pone el folio, la fecha y quien recibe', async () => {
-    const bytes = await pdfNotaRemision(nota(), cliente(), EMPRESA);
-    const texto = quitarEspacios(textoDelPdf(bytes));
-
-    expect(texto).toContain('A-1001');
-    expect(texto).toContain('2026-09-27');
-    expect(texto).toContain(quitarEspacios('Granja Los Robles'));
-    expect(texto).toContain(quitarEspacios('Establo Norte'));
-    expect(texto).toContain(quitarEspacios('Bovinos lecheros'));
-    expect(texto).toContain(quitarEspacios('RECIBÍ CONFORME'));
-  });
-
-  it('imprime los renglones con su importe', async () => {
+  it('pone los datos en las mismas celdas donde los pone el Excel', async () => {
     const bytes = await pdfNotaRemision(
       nota({
+        folio: 'A-1042',
+        fecha: '2026-09-30',
+        direccion_entrega: 'Carretera a Cholula km 12',
+      }),
+      cliente(),
+      EMPRESA,
+    );
+    const texto = quitarEspacios(textoDelPdf(bytes));
+
+    expect(texto).toContain('A-1042');
+    expect(texto).toContain(quitarEspacios('Granja Los Robles'));
+    expect(texto).toContain('30-sep-26');
+    expect(texto).toContain(quitarEspacios('Carretera a Cholula km 12'));
+  });
+
+  it('imprime los renglones con su importe, en las celdas del bloque', async () => {
+    const bytes = await pdfNotaRemision(
+      nota({
+        subtotal: 13_125,
         renglones: [
           renglon(),
           renglon({
             id: 2,
             producto_codigo: 'MTO',
-            producto_nombre: 'MEAT BUILDER',
-            almacen: 'Bodega Puebla',
+            producto_nombre: 'MINERAL TRAZ',
             cantidad_bultos: 4,
             kg_bulto: 25.5,
             precio_unit_kg: 30,
@@ -237,190 +296,135 @@ describe('pdf de la nota de remision', () => {
     );
     const texto = quitarEspacios(textoDelPdf(bytes));
 
-    expect(texto).toContain('LAC');
     expect(texto).toContain(quitarEspacios('VIMILAC 400'));
-    expect(texto).toContain(quitarEspacios('Bodega BUAP'));
-    expect(texto).toContain('MTO');
-    expect(texto).toContain(quitarEspacios('MEAT BUILDER'));
-    expect(texto).toContain(quitarEspacios('Bodega Puebla'));
-    // 10 bultos x 25 kg x $37.50
+    expect(texto).toContain('10.00');
+    expect(texto).toContain('25.000');
+    expect(texto).toContain('37.50');
     expect(texto).toContain('9,375.00');
-    // 4 bultos x 25.5 kg x $30.00
+    expect(texto).toContain(quitarEspacios('MINERAL TRAZ'));
     expect(texto).toContain('3,060.00');
   });
 
-  it('usa el subtotal de la nota, no la suma de los renglones', async () => {
-    // Los renglones suman 9,375 + 3,060 = 12,435 pero la nota vale 12,000:
-    // el papel tiene que decir 12,000.00, que es lo que la base usa para el
-    // saldo del cliente.
+  it('el total es el de la nota, no la suma de los renglones', async () => {
+    // Los renglones suman 12_435 y la nota vale 9_999: si el PDF sumara la
+    // hoja, imprimiria el numero equivocado en el papel.
     const bytes = await pdfNotaRemision(
       nota({
-        subtotal: 12000,
-        renglones: [
-          renglon(),
-          renglon({ id: 2, producto_codigo: 'MTO', subtotal: 3060, cantidad_bultos: 4 }),
-        ],
+        subtotal: 9999,
+        renglones: [renglon({ subtotal: 9375 }), renglon({ id: 2, subtotal: 3060 })],
       }),
       cliente(),
       EMPRESA,
     );
     const texto = quitarEspacios(textoDelPdf(bytes));
 
-    expect(texto).toContain('$12,000.00');
-    expect(texto).not.toContain('$12,435.00');
+    expect(texto).toContain('9,999.00');
+    expect(texto).not.toContain('12,435.00');
   });
 
-  it('suma los bultos y los kilos, que no estan en ninguna columna', async () => {
-    const bytes = await pdfNotaRemision(
+  it('tacha los bloques que la nota no llena, como el Excel', async () => {
+    // Tres renglones en un papel de nueve: las seis diagonales de los huecos.
+    const conTres = await pdfNotaRemision(
+      nota({ renglones: [renglon(), renglon({ id: 2 }), renglon({ id: 3 })] }),
+      cliente(),
+      EMPRESA,
+    );
+    const conTodos = await pdfNotaRemision(
       nota({
-        renglones: [
-          renglon(),
-          renglon({
-            id: 2,
-            producto_codigo: 'MTO',
-            cantidad_bultos: 4,
-            kg_bulto: 25.5,
-            subtotal: 3060,
-          }),
-        ],
-      }),
-      cliente(),
-      EMPRESA,
-    );
-    const texto = quitarEspacios(textoDelPdf(bytes));
-
-    expect(texto).toContain('Bultos:14.00');
-    // 10 x 25 + 4 x 25.5 = 352 kg
-    expect(texto).toContain('Kilos:352.000');
-  });
-
-  it('avisa que la nota esta cancelada, con su motivo', async () => {
-    const bytes = await pdfNotaRemision(
-      nota({ estatus: 'cancelada', motivo_cancelacion: 'Se rechazo la mercancia' }),
-      cliente(),
-      EMPRESA,
-    );
-    const texto = quitarEspacios(textoDelPdf(bytes));
-
-    expect(texto).toContain(quitarEspacios('DOCUMENTO CANCELADO'));
-    expect(texto).toContain(quitarEspacios('Se rechazo la mercancia'));
-  });
-
-  it('una nota sin motivo de cancelacion igual avisa, sin imprimir un hueco', async () => {
-    const bytes = await pdfNotaRemision(
-      nota({ estatus: 'cancelada', motivo_cancelacion: null }),
-      cliente(),
-      EMPRESA,
-    );
-    const texto = quitarEspacios(textoDelPdf(bytes));
-
-    expect(texto).toContain(quitarEspacios('DOCUMENTO CANCELADO'));
-    expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-  });
-
-  it('una nota larga salta de pagina y repite los titulos de la tabla', async () => {
-    // 120 renglones no caben en una hoja: si no saltara de pagina, todos los
-    // de mas se dibujarian encima del pie o fuera del papel, en silencio.
-    const bytes = await pdfNotaRemision(
-      nota({
-        subtotal: 1_125_000,
-        renglones: Array.from({ length: 120 }, (_vacio, i) =>
-          renglon({
-            id: i + 1,
-            producto_codigo: `P-${i + 1}`,
-            producto_nombre: `PRODUCTO DE PRUEBA NUMERO ${i + 1}`,
-            subtotal: 9375,
-          }),
-        ),
+        renglones: Array.from({ length: 9 }, (_, i) => renglon({ id: i + 1 })),
       }),
       cliente(),
       EMPRESA,
     );
 
-    const texto = quitarEspacios(textoDelPdf(bytes));
-
-    // 120 renglones no caben en una hoja, asi que salen 3 paginas, cada una
-    // con su pie.
-    expect(contarApariciones(bytes, 'Página')).toBe(3);
-    expect(texto).toContain('Página1de3');
-    expect(texto).toContain('Página2de3');
-    expect(texto).toContain('Página3de3');
-
-    // Y los titulos se repiten en las tres: sin esto la segunda pagina es una
-    // lista de numeros sin columnas, que es el papel que nadie puede usar
-    // para detectar un kilo de mas.
-    expect(contarApariciones(bytes, 'Descripcion')).toBe(3);
-
-    // El ultimo renglon tambien sale, no solo los primeros.
-    expect(texto).toContain('P-120');
+    // Nueve renglones: el papel esta lleno y no lleva ni una diagonal. Con
+    // tres: seis bloques vacios por cinco casillas, treinta rayas.
+    expect(diagonalesDe(conTodos)).toBe(0);
+    expect(diagonalesDe(conTres)).toBe(6 * 5);
   });
 
-  it('imprime igual un nombre con acentos descompuestos', async () => {
-    // asi es como llega un nombre tecleado en macOS: "o" y el acento por
-    // separado. Sin normalizar, el acento se pierde en el papel.
-    const descompuesto = 'Jos'.normalize('NFD') + 'é Pérez';
-    const bytes = await pdfNotaRemision(
-      nota({ cliente: descompuesto }),
-      cliente({ nombre: descompuesto, establo: null, especie: null }),
-      EMPRESA,
-    );
-    const texto = quitarEspacios(textoDelPdf(bytes));
+  it('una nota larga NO se parte: el papel tiene nueve renglones y se cuenta', async () => {
+    const notaLarga = nota({
+      renglones: Array.from({ length: 30 }, (_, i) =>
+        renglon({ id: i + 1, producto_nombre: `PRODUCTO NUMERO ${i + 1}` }),
+      ),
+    });
+    const bytes = await pdfNotaRemision(notaLarga, cliente(), EMPRESA);
 
-    expect(texto).toContain(quitarEspacios('José Pérez'));
+    // Es lo mismo que hace el Excel con la misma nota: imprime los primeros
+    // nueve y avisa de los que se quedaron fuera.
+    expect(paginasDe(bytes)).toBe(1);
+    expect(renglonesFuera(notaLarga)).toBe(21);
+    expect(renglonesFuera(nota({ renglones: [renglon()] }))).toBe(0);
   });
 
-  it('un caracter que no existe en la fuente no rompe el documento', async () => {
-    // Los caracteres fuera de WinAnsi se cambian por `?`. Lo que no se puede
-    // es dejar que pdfkit reviente, porque entonces el operador se queda sin
-    // poder imprimir la nota por un emoji en un nombre.
+  it('una nota cancelada se ve cancelada, con su motivo', async () => {
     const bytes = await pdfNotaRemision(
-      nota({ renglones: [renglon({ producto_nombre: 'VIMILAC 400 para 🐮' })] }),
+      nota({ estatus: 'cancelada', motivo_cancelacion: 'Se devolvio la mercancia' }),
       cliente(),
       EMPRESA,
     );
+    const texto = quitarEspacios(textoDelPdf(bytes));
 
-    expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-    expect(quitarEspacios(textoDelPdf(bytes))).toContain('VIMILAC400para?');
-  });
-
-  it('un salto de linea en un dato no descuadra la tabla', async () => {
-    const bytes = await pdfNotaRemision(
-      nota({ renglones: [renglon({ producto_nombre: 'VIMILAC\n400\nCONCENTRADO' })] }),
-      cliente(),
-      EMPRESA,
-    );
-
-    // El texto sale pegado, sin el salto que partia la fila en tres lineas
-    // dentro de una celda de 176 puntos de ancho.
-    expect(quitarEspacios(textoDelPdf(bytes))).toContain(quitarEspacios('VIMILAC 400 CONCENTRADO'));
+    expect(texto).toContain('CANCELADA');
+    expect(texto).toContain(quitarEspacios('Se devolvio la mercancia'));
+    // Y el papel sigue siendo el de una hoja: una cancelacion no reparte el
+    // formulario.
+    expect(paginasDe(bytes)).toBe(1);
   });
 
   it('una nota sin renglones no revienta', async () => {
-    // El API no deja crear una nota sin renglones, pero el render no depende
-    // de eso: si manana un reporte reuse estas piezas, no debe reventar.
     const bytes = await pdfNotaRemision(nota({ renglones: [] }), cliente(), EMPRESA);
 
     expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-    expect(contarApariciones(bytes, 'TOTAL')).toBe(1);
+    // El papel vacio conserva sus rotulos (CANT, TOTAL...) y solo falta lo que
+    // se llenaba con la nota. Ojo con contar "TOTAL": tambien esta dentro de
+    // "SUBTOTAL".
+    expect(contarApariciones(bytes, 'CANT')).toBe(1);
+    expect(quitarEspacios(textoDelPdf(bytes))).toContain('TOTAL');
+    expect(paginasDe(bytes)).toBe(1);
   });
 
-  it('con datos fiscales imprime la razon social y el RFC', async () => {
+  it('imprime igual un nombre con acentos descompuestos', async () => {
+    // Solo el nombre del cliente: el papel de la plantilla tiene una casilla
+    // CLIENTE y una DIRECCION, y no tiene donde poner el establo ni la especie.
+    // Van en la pantalla y en el Excel abierto, no en el impreso.
     const bytes = await pdfNotaRemision(
       nota(),
-      cliente({ rfc: 'GAX-040101-9AB', razon_social: 'Granja Los Robles SPR' }),
+      cliente({ nombre: 'Granja Muñoz e Hijos', establo: 'Rancho Ángel' }),
       EMPRESA,
     );
     const texto = quitarEspacios(textoDelPdf(bytes));
 
-    expect(texto).toContain(quitarEspacios('Granja Los Robles SPR'));
-    expect(texto).toContain('GAX-040101-9AB');
+    expect(texto).toContain(quitarEspacios('Granja Muñoz e Hijos'));
   });
 
-  it('sin datos fiscales no imprime ni un guion de relleno', async () => {
-    const bytes = await pdfNotaRemision(nota(), cliente({ rfc: null }), EMPRESA);
-    const texto = quitarEspacios(textoDelPdf(bytes));
+  it('un caracter que no existe en la fuente no rompe el documento', async () => {
+    const bytes = await pdfNotaRemision(
+      nota(),
+      cliente({ nombre: 'Granja \u{1F600} emoji \u{4E2D}\u{6587}' }),
+      EMPRESA,
+    );
 
-    expect(texto).not.toContain('GAX');
-    expect(texto).toContain(quitarEspacios('Granja Los Robles'));
+    expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(paginasDe(bytes)).toBe(1);
+  });
+
+  it('un dato larguisimo no descuadra el papel', async () => {
+    const bytes = await pdfNotaRemision(
+      nota({
+        renglones: [
+          renglon({
+            producto_nombre:
+              'ALIMENTO BALANCEADO PARA VACAS LECHERAS DE ALTA PRODUCCION CON NIVEL DE PROTEINA Y ENERGIA AJUSTADO A LA EPOCA DE LACTANCION',
+          }),
+        ],
+      }),
+      cliente(),
+      EMPRESA,
+    );
+
+    expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(paginasDe(bytes)).toBe(1);
   });
 });

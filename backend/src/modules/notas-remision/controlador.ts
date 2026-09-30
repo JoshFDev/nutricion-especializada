@@ -65,11 +65,19 @@ export const controladorNotas = {
    * (misma nota, impresa otra vez) tiene que salir el de ahora.
    */
   pdf: async (req: Request, res: Response): Promise<void> => {
-    const { bytes, nombreArchivo } = await servicio.pdf(req.db, parametros<{ id: number }>(req).id);
+    const { bytes, nombreArchivo, renglonesFuera } = await servicio.pdf(
+      req.db,
+      parametros<{ id: number }>(req).id,
+    );
     res
       .setHeader('Content-Type', 'application/pdf')
       .setHeader('Content-Disposition', `inline; filename="${nombreArchivo}"`)
       .setHeader('Cache-Control', 'no-store')
+      // El PDF tiene los mismos nueve renglones que el Excel, asi que avisa
+      // de los que no cupieron igual que el Excel. Sin esta cabecera el aviso
+      // del frente nunca sale para el PDF, y el papel se imprime incompleto en
+      // silencio.
+      .setHeader('X-Renglones-Fuera', String(renglonesFuera))
       .send(bytes);
   },
 

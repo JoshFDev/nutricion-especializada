@@ -4,7 +4,7 @@ import { env } from '../../config/entorno.js';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { resolverEfectivo } from '../precios/repositorio.js';
 import { excelNotaRemision } from './excel.js';
-import { pdfNotaRemision } from './pdf.js';
+import { pdfNotaRemision, renglonesFuera } from './pdf.js';
 import * as repo from './repositorio.js';
 import type {
   CrearNota,
@@ -81,7 +81,7 @@ export async function consultar(cliente: PoolClient, id: number): Promise<Nota> 
 export async function pdf(
   cliente: PoolClient,
   id: number,
-): Promise<{ bytes: Buffer; nombreArchivo: string }> {
+): Promise<{ bytes: Buffer; nombreArchivo: string; renglonesFuera: number }> {
   const nota = await leer(cliente, id);
 
   const datosCliente = await clienteImprimible(cliente, nota);
@@ -93,7 +93,15 @@ export async function pdf(
     telefono: env.EMPRESA_TELEFONO,
   });
 
-  return { bytes, nombreArchivo: nombreDelArchivo(nota, 'pdf') };
+  // El papel tiene nueve renglones, igual que la plantilla del Excel, asi que
+  // una nota mas larga imprime los primeros nueve. Se devuelve cuantas se
+  // quedaron fuera para que el frente avise, que es lo que ya hacia el Excel: un
+  // papel impreso con 9 de 30 renglones no se nota hasta que se cuenta.
+  return {
+    bytes,
+    nombreArchivo: nombreDelArchivo(nota, 'pdf'),
+    renglonesFuera: renglonesFuera(nota),
+  };
 }
 
 /**

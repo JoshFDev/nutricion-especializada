@@ -17,6 +17,13 @@
   display: block;
 }
 
+/* El foco con teclado se marca solido y a la vista: en una pantalla donde
+   casi todo es tactil, quien llega con teclado merece ver donde esta. */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
 h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -239,6 +246,7 @@ select,
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.625rem 0.75rem;
+  font-size: 1.0625rem;
   background: var(--acento-suave);
   border: 1px solid var(--acento);
   border-radius: 6px;
@@ -323,6 +331,7 @@ tbody tr:last-child td {
 
 .renglones input[type='number'] {
   background: var(--fondo);
+  padding-block: 0.5rem;
 }
 
 .con-problema td {
@@ -358,6 +367,7 @@ tbody tr:last-child td {
   font-size: 1.75rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--acento);
 }
 
 /* El aviso del preview. Se ve DESPUES del numero, no antes: la regla de
@@ -463,6 +473,23 @@ button {
   border: 1px solid var(--borde);
   border-radius: 6px;
   cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+/* Pasar sobre un boton lo enciende con el color del acento: la transicion
+   de arriba lo hace sentir un boton y no una etiqueta. El primario ya lleva
+   el acento, y uno apagado no se enciende. */
+button:not(:disabled):hover {
+  border-color: var(--acento);
+}
+
+button.primario:not(:disabled):hover {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
 }
 
 button.primario {
@@ -642,7 +669,12 @@ button.peligro {
 
 .vacio {
   margin: 0 0 1rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
   color: var(--texto-tenue);
+  background: var(--fondo);
+  border: 1px dashed var(--borde);
+  border-radius: 8px;
 }
 
 .buscando {

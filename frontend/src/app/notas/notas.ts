@@ -194,10 +194,16 @@ export class Notas {
     return this.editando() === null ? 'Guardar la nota' : 'Guardar la devolucion';
   });
 
-  /** En edicion el precio de la linea ya se cobro: no se vuelve a preguntar. */
+  /**
+   * Lo que se esta capturando se puede guardar.
+   *
+   * El ALTA se puede siempre; la correccion solo mientras el estatus de la
+   * nota lo permita (pendiente o parcial, que es lo que se comprueba aqui) y
+   * los triggers de 0008 lo impiden en la base, no antes.
+   */
   readonly editable = computed(() => {
     const nota = this.editando();
-    return nota !== null && (nota.estatus === 'pendiente' || nota.estatus === 'parcial');
+    return nota === null || nota.estatus === 'pendiente' || nota.estatus === 'parcial';
   });
 
   /** La direccion escrita, con la del catalogo si se eligio alguna. */
@@ -501,9 +507,10 @@ export class Notas {
    * apagada, no la que se enciende y falla con un 403.
    *
    * `editable()` tambien entra, y no por el permiso: es el estatus de la
-   * nota. Una pagada o una cancelada no se pueden corregir (los triggers de
-   * 0008 lo impiden en la base, no aqui), asi que el boton tiene que estar
-   * apagado antes, no despues del error.
+   * nota. En un ALTA siempre vale; en una correccion una pagada o una
+   * cancelada no se pueden corregir (los triggers de 0008 lo impiden en la
+   * base, no aqui), asi que el boton tiene que estar apagado antes, no
+   * despues del error.
    */
   readonly puedeGuardar = computed(
     () =>

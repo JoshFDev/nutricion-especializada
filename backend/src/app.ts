@@ -52,7 +52,25 @@ export function crearApp(): Express {
   app.use(helmet());
 
   // 3. CORS con lista blanca, no comodin: el origen se compara exacto.
-  app.use(cors({ origin: origenesCORS, credentials: true }));
+  //
+  // `exposedHeaders` NO es opcional. El navegador solo deja leer desde
+  // JavaScript las seis cabeceras "seguras" (Cache-Control, Content-Language,
+  // Content-Length, Content-Type, Expires, Last-Modified) y, si el servidor no
+  // pide lo contrario, ninguna mas. `Content-Disposition` esta fuera de esa
+  // lista, asi que sin esto el frontend que descarga el Excel nunca ve el
+  // nombre del archivo y se queda con el nombre generico: todas las descargas
+  // se llamaban `nota-remision(1).xlsx`, `nota-remision(2).xlsx`... porque el
+  // navegador solo le ponia numero al repetidor.
+  //
+  // `X-Renglones-Fuera` va aqui por lo mismo: sin exponerse, el aviso de "la
+  // nota tiene mas renglones que el papel" nunca se dispara.
+  app.use(
+    cors({
+      origin: origenesCORS,
+      credentials: true,
+      exposedHeaders: ['Content-Disposition', 'X-Renglones-Fuera'],
+    }),
+  );
 
   // 4. Solo JSON. El limite de 1mb evita que alguien mande un cuerpo
   //    gigante para tumbar el proceso.

@@ -26,10 +26,12 @@ import {
   cuerpoDeNota,
   type Cliente,
   type EstatusNota,
+  type Folio,
   type Nota,
   type NotaListada,
   type Periodo,
   type Producto,
+  type ResumenTalonario,
 } from './notas-api';
 
 /**
@@ -890,6 +892,182 @@ export class Notas {
   /** Una nota cancelada ya no se cancela otra vez. */
   sePuedeCancelar(nota: NotaListada): boolean {
     return nota.estatus !== 'cancelada';
+  }
+
+  // ------------------------------------------------------- el talonario
+  /**
+   * La serie ACTIVA la elige quien llega hasta aqui: `notas.folios` lo
+   * tiene solo el Administrador (migracion 0008), y este es el unico lugar
+   * del POS que no le sirve a quien cobra.
+   *
+   * Esta seccion vive en el mostrador y no en una pantalla aparte por la
+   * misma razon que las direcciones: es la otra mitad del modulo de notas,
+   * y un menu aparte para una sola pantalla de un solo rol seria ofrecer
+   * un modulo que casi nadie llega a ver. La llamada no sale al ABRIR la
+   * pantalla: sale al ABRIR la seccion, porque un cajero que solo captura
+   * no tiene por que pagar ese viaje.
+   */
+  readonly puedeAdministrarFolios = computed(() => this.sesion.puede('notas.folios'));
+
+  readonly talonarioAbierto = signal(false);
+  readonly resumen = signal<ResumenTalonario[]>([]);
+  /** El prefijo en uso; vacio = folios de puros numeros. */
+  readonly serieActiva = signal('');
+  readonly cargandoTalonario = signal(false);
+  readonly errorTalonario = signal<string | null>(null);
+
+  /** El formulario del alta: el prefijo y el tramo de folios. */
+  readonly formaTalonario = signal({ serie: '', desde: '', hasta: '' });
+  readonly activarAlCargar = signal(true);
+  readonly guardandoTalonario = signal(false);
+
+  /** La serie abierta en detalle y sus folios, para ver los numeros. */
+  readonly serieEnDetalle = signal<string | null>(null);
+  readonly foliosDetalle = signal<Folio[]>([]);
+  readonly totalFoliosDetalle = signal(0);
+  readonly cargandoFolios = signal(false);
+  readonly buscandoFolios = signal(false);
+
+  /**
+   * El tramo del formulario: prefijo de hasta 10, dos enteros, en orden y
+   * de 5000 folios, que es el tope que impone el backend tambien.
+   */
+  readonly tramoValido = computed(() => {
+    const forma = this.formaTalonario();
+    if (forma.serie.trim().length > 10) return false;
+    const desde = Number(forma.desde);
+    const hasta = Number(forma.hasta);
+    if (!Number.isInteger(desde) || desde < 1) return false;
+    if (!Number.isInteger(hasta) || hasta < desde) return false;
+    return hasta - desde + 1 <= 5000;
+  });
+
+  readonly hayMasFolios = computed(
+    () => this.foliosDetalle().length < this.totalFoliosDetalle() && !this.buscandoFolios(),
+  );
+
+  /** Como se muestra la serie activa, que puede ser vacia. */
+  serieActivaComoTexto(): string {
+    const activa = this.serieActiva();
+    return activa === '' ? 'puros numeros' : activa;
+  }
+
+  alternarTalonario(): void {
+    this.talonarioAbierto.update((abierto) => !abierto);
+    if (this.talonarioAbierto()) void this.cargarTalonario();
+  }
+
+  async cargarTalonario(): Promise<void> {
+    this.cargandoTalonario.set(true);
+    this.errorTalonario.set(null);
+    try {
+      const [resumen, activa] = await Promise.all([
+        this.api.resumenDeTalonarios(),
+        this.api.serieActiva(),
+      ]);
+      this.resumen.set(resumen);
+      this.serieActiva.set(activa);
+    } catch (falla) {
+      this.errorTalonario.set(errorLegible(falla).mensaje);
+    } finally {
+      this.cargandoTalonario.set(false);
+    }
+  }
+
+  enFormaTalonario(campo: 'serie' | 'desde' | 'hasta', valor: string): void {
+    this.formaTalonario.update((forma) => ({ ...forma, [campo]: valor }));
+  }
+
+  /**
+   * Carga un tramo de talonario y, si el cuadro esta marcado, lo deja como
+   * la serie activa de una vez. Son las dos cosas que hace una persona que
+   * esta alimentando el talonario: cargar los numeros que siguen y decirle
+   * al POS de donde sale el proximo folio.
+   */
+  async cargarTramo(): Promise<void> {
+    if (!this.tramoValido() || this.guardandoTalonario()) return;
+    const forma = this.formaTalonario();
+    this.guardandoTalonario.set(true);
+    this.errorTalonario.set(null);
+    try {
+      await this.api.crearTalonario({
+        serie: forma.serie.trim(),
+        desde: Number(forma.desde),
+        hasta: Number(forma.hasta),
+      });
+      if (this.activarAlCargar()) {
+        this.serieActiva.set(await this.api.ponerSerieActiva(forma.serie.trim()));
+      }
+      this.formaTalonario.set({ serie: '', desde: '', hasta: '' });
+      await this.cargarTalonario();
+    } catch (falla) {
+      this.errorTalonario.set(errorLegible(falla).mensaje);
+    } finally {
+      this.guardandoTalonario.set(false);
+    }
+  }
+
+  /** Cambia la serie activa sin cargar folios: la serie ya tiene que existir. */
+  async usarSerie(serie: string): Promise<void> {
+    if (this.guardandoTalonario()) return;
+    this.errorTalonario.set(null);
+    try {
+      this.serieActiva.set(await this.api.ponerSerieActiva(serie));
+    } catch (falla) {
+      this.errorTalonario.set(errorLegible(falla).mensaje);
+    }
+  }
+
+  /** Abre y cierra los folios de una serie, y los deja vacios al cerrar. */
+  async alternarSerie(serie: string): Promise<void> {
+    if (this.serieEnDetalle() === serie) {
+      this.serieEnDetalle.set(null);
+      return;
+    }
+    this.serieEnDetalle.set(serie);
+    this.foliosDetalle.set([]);
+    this.totalFoliosDetalle.set(0);
+    await this.cargarFolios(serie);
+  }
+
+  async cargarFolios(serie: string): Promise<void> {
+    if (this.cargandoFolios()) return;
+    this.cargandoFolios.set(true);
+    try {
+      const respuesta = await this.api.listarFolios({ serie, limite: 100, offset: 0 });
+      this.foliosDetalle.set(respuesta.datos);
+      this.totalFoliosDetalle.set(respuesta.total);
+    } catch (falla) {
+      this.errorTalonario.set(errorLegible(falla).mensaje);
+    } finally {
+      this.cargandoFolios.set(false);
+    }
+  }
+
+  async cargarMasFolios(): Promise<void> {
+    const serie = this.serieEnDetalle();
+    if (serie === null || !this.hayMasFolios()) return;
+    this.buscandoFolios.set(true);
+    try {
+      const respuesta = await this.api.listarFolios({
+        serie,
+        limite: 100,
+        offset: this.foliosDetalle().length,
+      });
+      this.foliosDetalle.update((ya) => [...ya, ...respuesta.datos]);
+      this.totalFoliosDetalle.set(respuesta.total);
+    } catch (falla) {
+      this.errorTalonario.set(errorLegible(falla).mensaje);
+    } finally {
+      this.buscandoFolios.set(false);
+    }
+  }
+
+  /** `disponible` y `usado` en el idioma del mostrador. */
+  estatusFolioComoTexto(estatus: Folio['estatus']): string {
+    if (estatus === 'disponible') return 'Disponible';
+    if (estatus === 'usado') return 'Usado';
+    return 'Cancelado';
   }
 
   // -------------------------------------------------------------- el texto

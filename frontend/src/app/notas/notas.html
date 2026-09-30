@@ -576,4 +576,171 @@
       </div>
     }
   </section>
+
+  <!--
+    El talonario de folios: SOLO con `notas.folios` (Administrador). Es la
+    otra mitad del modulo de notas, y por eso vive en esta pantalla y no en
+    un menu aparte.
+  -->
+  @if (puedeAdministrarFolios()) {
+    <section class="talonario-pos" aria-label="Talonario de folios">
+      <header class="cabecera">
+        <h2>Talonario de folios</h2>
+        <button
+          type="button"
+          class="chico"
+          (click)="alternarTalonario()"
+        >
+          {{ talonarioAbierto() ? 'Ocultar' : 'Administrar' }}
+        </button>
+      </header>
+
+      @if (talonarioAbierto()) {
+        @if (errorTalonario(); as mensajeTal) {
+          <p class="error-talonario" role="alert">{{ mensajeTal }}</p>
+        }
+
+        <p class="aviso">
+          El POS quema el folio de la serie en uso: ahora es
+          <strong>{{ serieActivaComoTexto() }}</strong>. Vaciar el prefijo
+          deja folios de puros numeros ("2704"); un prefijo los imprime
+          adelante ("RE-2704").
+        </p>
+
+        <div class="alta-talonario">
+          <p class="forma-titulo">Cargar tramo de talonario</p>
+          <div class="campos-talonario">
+            <div class="campo chico">
+              <label for="prefijo-folio">Prefijo (opcional)</label>
+              <input
+                id="prefijo-folio"
+                type="text"
+                maxlength="10"
+                placeholder="Vacio = solo numeros"
+                [value]="formaTalonario().serie"
+                (input)="enFormaTalonario('serie', $any($event.target).value)"
+              />
+            </div>
+            <div class="campo chico">
+              <label for="desde-folio">Desde</label>
+              <input
+                id="desde-folio"
+                type="number"
+                min="1"
+                [value]="formaTalonario().desde"
+                (input)="enFormaTalonario('desde', $any($event.target).value)"
+              />
+            </div>
+            <div class="campo chico">
+              <label for="hasta-folio">Hasta</label>
+              <input
+                id="hasta-folio"
+                type="number"
+                min="1"
+                [value]="formaTalonario().hasta"
+                (input)="enFormaTalonario('hasta', $any($event.target).value)"
+              />
+            </div>
+            <label class="casilla">
+              <input type="checkbox" [checked]="activarAlCargar()" (change)="activarAlCargar.set($any($event.target).checked)" />
+              Usarla como serie activa
+            </label>
+          </div>
+          <div class="acciones">
+            <button
+              type="button"
+              class="primario chico"
+              [disabled]="!tramoValido() || guardandoTalonario()"
+              (click)="cargarTramo()"
+            >
+              {{ guardandoTalonario() ? 'Cargando...' : 'Cargar tramo' }}
+            </button>
+          </div>
+        </div>
+
+        @if (cargandoTalonario()) {
+          <p class="cargando">Cargando talonario...</p>
+        } @else if (resumen().length === 0) {
+          <p class="cargando">Todavia no hay folios cargados en ningun talonario.</p>
+        } @else {
+          <table class="tabla-talonario">
+            <thead>
+              <tr>
+                <th>Serie</th>
+                <th>Tramo</th>
+                <th>Disponibles</th>
+                <th>Usados</th>
+                <th>Cancelados</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (serie of resumen(); track serie.serie) {
+                <tr [class.activa]="serieActiva() === serie.serie">
+                  <td>{{ serie.ejemplo }}</td>
+                  <td>
+                    @if (serie.minimo !== null) {
+                      {{ serie.minimo }} – {{ serie.maximo }}
+                    }
+                  </td>
+                  <td>{{ serie.disponibles }}</td>
+                  <td>{{ serie.usados }}</td>
+                  <td>{{ serie.cancelados }}</td>
+                  <td class="acciones-fila">
+                    <button
+                      type="button"
+                      class="chico"
+                      [disabled]="serie.disponibles === 0 || guardandoTalonario()"
+                      [attr.aria-label]="'Usar la serie ' + serie.ejemplo"
+                      [title]="serie.disponibles === 0 ? 'No tiene folios libres para usar' : ''"
+                      (click)="usarSerie(serie.serie)"
+                    >
+                      {{ serieActiva() === serie.serie ? 'En uso' : 'Usar' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="chico"
+                      [attr.aria-label]="'Ver los folios de ' + serie.ejemplo"
+                      (click)="alternarSerie(serie.serie)"
+                    >
+                      {{ serieEnDetalle() === serie.serie ? 'Ocultar' : 'Folios' }}
+                    </button>
+                  </td>
+                </tr>
+
+                @if (serieEnDetalle() === serie.serie) {
+                  <tr class="detalle-folios">
+                    <td colspan="6">
+                      @if (cargandoFolios()) {
+                        <p class="cargando">Cargando folios...</p>
+                      } @else {
+                        @if (foliosDetalle().length === 0) {
+                          <p class="cargando">No se encontraron folios de esta serie.</p>
+                        } @else {
+                          <div class="folios-lista">
+                            @for (folio of foliosDetalle(); track folio.id) {
+                              <span class="folio-chip" [class.disponible]="folio.estatus === 'disponible'">
+                                {{ folio.completo }}
+                                <small>{{ estatusFolioComoTexto(folio.estatus) }}</small>
+                              </span>
+                            }
+                            @if (hayMasFolios()) {
+                              <button type="button" class="chico" (click)="cargarMasFolios()">
+                                {{ buscandoFolios() ? 'Buscando...' : 'Cargar mas' }}
+                              </button>
+                            }
+                          </div>
+                          <p class="cuenta">{{ foliosDetalle().length }} de {{ totalFoliosDetalle() }} folios</p>
+                        }
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        }
+      }
+    </section>
+  }
 </section>

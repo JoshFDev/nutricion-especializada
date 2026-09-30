@@ -3991,6 +3991,111 @@ revisar(
   JSON.stringify(rangoInvertido.cuerpo),
 );
 
+// ------------------------------------------------------- ordenar el listado
+
+/**
+ * Ordenar se hace en el servidor y no en la pantalla, y esta es la razon: con
+ * paginacion, ordenar en el cliente solo reacomoda las notas que YA estan
+ * cargadas y el orden global queda mentiroso. Estos casos comprueban las cuatro
+ * combinaciones del desplegable del mostrador.
+ */
+const todasNotas = (await pedir('/api/notas-remision?limite=200', tokenAdmin)).cuerpo?.datos ?? [];
+const monotono = (datos, campo, sentido) => {
+  for (let i = 1; i < datos.length; i++) {
+    const a = datos[i - 1][campo];
+    const b = datos[i][campo];
+    if (sentido === 'desc' ? a < b : a > b) return false;
+  }
+  return true;
+};
+
+const porFechaDesc = await pedir('/api/notas-remision?ordenar=fecha_desc&limite=200', tokenAdmin);
+revisar(
+  'ordenar=fecha_desc -> 200',
+  porFechaDesc.status === 200,
+  JSON.stringify(porFechaDesc.cuerpo),
+);
+revisar(
+  'y sale de la mas reciente a la mas vieja',
+  monotono(porFechaDesc.cuerpo?.datos ?? [], 'fecha', 'desc'),
+  JSON.stringify((porFechaDesc.cuerpo?.datos ?? []).map((n) => n.fecha)),
+);
+
+const porFechaAsc = await pedir('/api/notas-remision?ordenar=fecha_asc&limite=200', tokenAdmin);
+revisar(
+  'ordenar=fecha_asc sale al reves',
+  monotono(porFechaAsc.cuerpo?.datos ?? [], 'fecha', 'asc'),
+  JSON.stringify((porFechaAsc.cuerpo?.datos ?? []).map((n) => n.fecha)),
+);
+
+const porTotalDesc = await pedir(
+  '/api/notas-remision?ordenar=subtotal_desc&limite=200',
+  tokenAdmin,
+);
+revisar(
+  'ordenar=subtotal_desc sale del mayor al menor',
+  monotono(porTotalDesc.cuerpo?.datos ?? [], 'subtotal', 'desc'),
+  JSON.stringify((porTotalDesc.cuerpo?.datos ?? []).map((n) => n.subtotal)),
+);
+
+const porTotalAsc = await pedir('/api/notas-remision?ordenar=subtotal_asc&limite=200', tokenAdmin);
+revisar(
+  'ordenar=subtotal_asc sale del menor al mayor',
+  monotono(porTotalAsc.cuerpo?.datos ?? [], 'subtotal', 'asc'),
+  JSON.stringify((porTotalAsc.cuerpo?.datos ?? []).map((n) => n.subtotal)),
+);
+
+// El default tiene que ser el mismo que fecha_desc, o el listado "apareceria"
+// ordenado de otra forma segun de donde se venga.
+const sinOrdenar = await pedir('/api/notas-remision?limite=200', tokenAdmin);
+revisar(
+  'sin ordenar sale igual que fecha_desc',
+  JSON.stringify(sinOrdenar.cuerpo?.datos?.map((n) => n.id)) ===
+    JSON.stringify(porFechaDesc.cuerpo?.datos?.map((n) => n.id)),
+  'el default no es fecha_desc',
+);
+
+const ordenarMal = await pedir('/api/notas-remision?ordenar=subtotal', tokenAdmin);
+revisar(
+  'ordenar=subtotal a secas -> 400 (no se admiten campos sueltos)',
+  ordenarMal.status === 400,
+  JSON.stringify(ordenarMal.cuerpo),
+);
+
+const ordenarInyectado = await pedir(
+  '/api/notas-remision?ordenar=fecha_desc;DROP%20TABLE%20notas_remision--',
+  tokenAdmin,
+);
+revisar(
+  'ordenar con SQL dentro -> 400',
+  ordenarInyectado.status === 400,
+  JSON.stringify(ordenarInyectado.cuerpo),
+);
+
+// El total de kilos viene con cada fila, para no tener que pedir el detalle de
+// cada nota solo para saber cuanto sale el camion.
+const conKilos = todasNotas.find((n) => n.id === notaBaseId);
+revisar(
+  'el listado trae los kilos de la nota',
+  typeof conKilos?.kg_total === 'number',
+  JSON.stringify(conKilos),
+);
+const detalleParaComparar = (await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin)).cuerpo;
+const sumaDetalle = (detalleParaComparar?.renglones ?? []).reduce(
+  (suma, r) => suma + r.cantidad_bultos * r.kg_bulto,
+  0,
+);
+revisar(
+  'y son los mismos que dicen sus renglones',
+  Math.abs((conKilos?.kg_total ?? -1) - sumaDetalle) < 0.0001,
+  `listado ${conKilos?.kg_total} vs detalle ${sumaDetalle}`,
+);
+revisar(
+  'una nota sin renglones no viene con kilos NaN',
+  Number.isFinite(todasNotas[0]?.kg_total ?? 0) || todasNotas.length === 0,
+  JSON.stringify(todasNotas[0]?.kg_total),
+);
+
 const verNota = await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin);
 revisar('ver el detalle -> 200', verNota.status === 200);
 revisar('trae los renglones', verNota.cuerpo?.renglones?.length >= 1);

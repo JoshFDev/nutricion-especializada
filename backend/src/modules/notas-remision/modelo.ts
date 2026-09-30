@@ -99,6 +99,17 @@ export interface NotaListada {
   subtotal: number;
   estatus: EstatusNota;
   renglones: number;
+  /**
+   * Los kilos que salen en el camion: la suma de `cantidad_bultos * kg_bulto`
+   * de los renglones. Viene con el listado y no se pide aparte porque el
+   * mostrador lo necesita en CADA fila para saber que se lleva, y pedir el
+   * detalle de cada nota seria una consulta por fila.
+   *
+   * `renglones` sigue venant porque cuenta otra cosa: cuantas lineas tiene la
+   * nota, que no es lo mismo que cuantos productos (el mismo producto puede
+   * repetirse en dos renglones con distinto kg por bulto).
+   */
+  kg_total: number;
 }
 
 /** Como devuelve el listado, igual que en productos y precios. */

@@ -249,6 +249,23 @@ const paginacion = {
 export const periodosEsquema = z.enum(['hoy', 'ultimos_7']);
 
 /** Listado. Los filtros son los de una pantalla de ventas, no mas. */
+/**
+ * Como se ordena el listado de notas.
+ *
+ * Es un enum y no dos parametros sueltos (`campo` + `direccion`) a proposito:
+ * lo que el mostrador ofrece en un desplegable son las cuatro COMBINACIONES
+ * que se piden ("los mas recientes", "el mayor total", ...), y un enum obliga a
+ * que esas cuatro sean las unicas validas. Con dos parametros libres se
+ * podrian pedir cosas que no tienen indice, como ordenar por el nombre de la
+ * serie, y cada una de esas es una consulta que se pone lenta sin avisar.
+ *
+ * `fecha_desc` es el default y es lo que siempre se pidio: la nota mas
+ * reciente arriba.
+ */
+export const ordenNotasEsquema = z
+  .enum(['fecha_desc', 'fecha_asc', 'subtotal_desc', 'subtotal_asc'])
+  .default('fecha_desc');
+
 export const listarNotasEsquema = z
   .object({
     cliente_id: idPositivo.optional(),
@@ -258,6 +275,7 @@ export const listarNotasEsquema = z
     desde: fecha('desde').optional(),
     hasta: fecha('hasta').optional(),
     buscar: sinControl('La busqueda').max(120).optional(),
+    ordenar: ordenNotasEsquema,
     ...paginacion,
   })
   .strict()

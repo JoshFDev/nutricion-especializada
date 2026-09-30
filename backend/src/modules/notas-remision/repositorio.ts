@@ -72,6 +72,23 @@ const FROM_RENGLON = `
 const orden = (campo: string, direccion: 'ASC' | 'DESC'): string =>
   `ORDER BY n.${campo} ${direccion}, n.id ${direccion}`;
 
+/**
+ * Traduce el `ordenar` del esquema a un `ORDER BY`.
+ *
+ * El segundo campo (`n.id`) no es decorativo: sin el, dos notas de la misma
+ * fecha y el mismo total pueden salir en cualquier orden entre paginas, y la
+ * nota 2 de la pagina 1 desaparece cuando se pide la pagina 2. Con el `id` de
+ * empate el orden es total y la paginacion no pierde ni repite nada.
+ */
+const ORDENES_NOTAS = {
+  fecha_desc: orden('fecha', 'DESC'),
+  fecha_asc: orden('fecha', 'ASC'),
+  subtotal_desc: orden('subtotal', 'DESC'),
+  subtotal_asc: orden('subtotal', 'ASC'),
+} as const;
+
+const ordenDeNotas = (cual: keyof typeof ORDENES_NOTAS): string => ORDENES_NOTAS[cual];
+
 const construirFiltro = (q: ListarNotas) => {
   const valores: unknown[] = [];
   const condiciones: string[] = [];
@@ -164,16 +181,19 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
     subtotal: string;
     estatus: EstatusNota;
     renglones: string;
+    kg_total: string | null;
   }>(
     cliente,
     `SELECT n.id, n.cliente_id, n.fecha, n.subtotal, n.estatus,
             f.folio_numero, f.serie,
             c.nombre AS cliente_nombre,
             v.nombre AS vendedor_nombre,
-            (SELECT count(*) FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS renglones
+            (SELECT count(*) FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS renglones,
+            (SELECT COALESCE(SUM(d.cantidad_bultos * d.kg_bulto), 0)
+               FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS kg_total
      ${FROM_NOTA}
      ${donde}
-     ${orden('fecha', 'DESC')}
+     ${ordenDeNotas(q.ordenar)}
      LIMIT $${valores.length + 1} OFFSET $${valores.length + 2}`,
     [...valores, q.limite, q.offset],
   );
@@ -189,6 +209,7 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
       subtotal: Number(f.subtotal),
       estatus: f.estatus,
       renglones: Number(f.renglones),
+      kg_total: Number(f.kg_total ?? 0),
     })),
     total: Number(total),
     limite: q.limite,

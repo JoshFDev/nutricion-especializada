@@ -3,6 +3,7 @@ import {
   agregar,
   cambiarCantidad,
   cambiarKilos,
+  conDisponible,
   conPrecio,
   kgComoTextoSiHayQueMandarlo,
   kilosDeLinea,
@@ -14,6 +15,7 @@ import {
   origenComoTexto,
   problemasDe,
   quitar,
+  restanteDe,
   totalDeLinea,
   totalDeLineas,
   vaciar,
@@ -103,6 +105,27 @@ describe('la cantidad de bultos', () => {
   it('lo que no es numero deja la cantidad como estaba', () => {
     // Distinto del cero: si no se puede leer, no se adivina.
     expect(cambiarCantidad(lista(4), 'abc').cantidad_bultos).toBe(4);
+  });
+
+  it('un decimal se trunca: los bultos son unidades, no peso', () => {
+    // "3.8" bultos no existen: trunca a 3 en vez de redondear a 4, porque
+    // redondear inventa un bulto que nadie cargo entero.
+    expect(cambiarCantidad(lista(), '3.8').cantidad_bultos).toBe(3);
+  });
+});
+
+describe('lo que hay del producto', () => {
+  it('sin disponible no dice cuantos quedan', () => {
+    expect(restanteDe(lista(2))).toBeNull();
+  });
+
+  it('el restante es el disponible menos lo escrito', () => {
+    const linea = conDisponible(lista(2), 8);
+    expect(restanteDe(linea)).toBe(6);
+  });
+
+  it('si se pide mas de lo que hay, en vez de restante hay un faltante', () => {
+    expect(restanteDe(conDisponible(lista(10), 6))).toBe(-4);
   });
 });
 

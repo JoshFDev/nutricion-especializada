@@ -7,6 +7,7 @@ import {
   agregar,
   cambiarCantidad,
   cambiarKilos,
+  conDisponible,
   conPrecio,
   kilosDeLinea,
   kilosDeLineas,
@@ -16,11 +17,13 @@ import {
   origenComoTexto,
   problemasDe,
   quitar,
+  restanteDe,
   totalDeLineas,
   vaciar,
   type Linea,
 } from './linea';
 import {
+  ALMACEN_ID,
   NotasApi,
   cuerpoDeEdicion,
   cuerpoDeNota,
@@ -361,10 +364,49 @@ export class Notas {
       }
       this.lineas.update((lineas) => agregar(lineas, conPrecio(lineaVacia(producto), precio)));
       this.resultadosProducto.set([]);
+      void this.saberDisponible(producto.id);
     } catch (falla) {
       this.error.set(errorLegible(falla).mensaje);
     } finally {
       this.preguntando.set(null);
+    }
+  }
+
+  /**
+   * Cuantos bultos quedan del producto, y ponerlos en los renglones que lo
+   * llevan.
+   *
+   * Se pregunta DESPUES de agregar la linea y no antes: el "Disponibles" es
+   * una anotacion del renglon, y si el producto no tiene precio la factura ni
+   * se forma. Un fallo no echa la captura abajo; el renglon se queda sin
+   * contador, que es lo que ya se veia antes de saber cuanto habia.
+   */
+  private async saberDisponible(productoId: number, almacenId: number = ALMACEN_ID): Promise<void> {
+    const disponibles = await this.api.existencia(productoId, almacenId);
+    if (disponibles === null) return;
+    this.lineas.update((lineas) =>
+      lineas.map((linea) =>
+        linea.producto_id === productoId ? conDisponible(linea, disponibles) : linea,
+      ),
+    );
+  }
+
+  /**
+   * Pide el disponible de cada producto distinto que haya en los renglones.
+   *
+   * Se usa al abrir una nota para corregirla: los renglones recien cargados
+   * no traen su saldo, y el operador decide cuantos bultos devolver viendo
+   * cuantos quedan. Un producto por llamada, y cada una toca solo sus filas.
+   */
+  private refrescarDisponibles(): void {
+    const porProducto = new Map<number, number>();
+    for (const linea of this.lineas()) {
+      if (!porProducto.has(linea.producto_id)) {
+        porProducto.set(linea.producto_id, linea.almacen_id ?? ALMACEN_ID);
+      }
+    }
+    for (const [productoId, almacenId] of porProducto) {
+      void this.saberDisponible(productoId, almacenId);
     }
   }
 
@@ -405,6 +447,7 @@ export class Notas {
   bultosComoTexto = bultosComoTexto;
   montoComoTexto = montoComoTexto;
   kilosComoTexto = kilosComoTexto;
+  restanteDeLinea = restanteDe;
 
   // ------------------------------------------------------------- el guardado
   /**
@@ -772,6 +815,7 @@ export class Notas {
         rfc: null,
       });
       this.lineas.set(completa.renglones.map(lineaDeRenglon));
+      this.refrescarDisponibles();
       this.direccion.set(completa.direccion_entrega ?? '');
       // El texto puede coincidir con una del catalogo, pero no se puede
       // saber cual es: se deja como direccion nueva. Si habia una elegida, se

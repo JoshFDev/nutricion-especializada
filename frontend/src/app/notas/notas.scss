@@ -1,24 +1,21 @@
 /*
  * El mostrador.
  *
- * Pensado para una pantalla tactil de mostrador, no para una pantalla de
- * escritorio con mouse: los botones de la tabla son altos, los numeros van
- * alineados a la derecha (es dinero y se compara de columna), y el renglon
- * se quita con un boton de texto y no con un iconito de 12 pixeles.
+ * Diseno sobrio de punto de venta: fondo gris claro, paneles blancos con
+ * borde fino, encabezados de tabla firmes, cifras alineadas a la derecha con
+ * numeros tabulares, y un solo color de acento (azul marino) para la accion
+ * principal. Sin degradados, sin sombras marcadas, sin animaciones llamativas.
  *
- * La pantalla junta DOS familias que ya existen: la CAPTURA de notas (los
- * bloques con buscador, los renglones con inputs y el cierre con el total)
- * y la TABLA con filtros y paginacion de compras/proveedores. En pantalla
- * ancha van a la par, en dos columnas (`.mosaico`); en pantalla angosta la
- * tabla baja. Los colores salen de `styles.scss`, no de valores sueltos.
+ * Pensado para pantalla tactil: los controles miden al menos `--alto-tactil`
+ * de alto. Todos los colores salen de `styles.scss`.
  */
 
 :host {
   display: block;
+  max-width: 82rem;
+  margin: 0 auto;
 }
 
-/* El foco con teclado se marca solido y a la vista: en una pantalla donde
-   casi todo es tactil, quien llega con teclado merece ver donde esta. */
 :focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: 2px;
@@ -26,15 +23,25 @@
 
 h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 h2 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-suave);
 }
 
-/* ------------------------------------------------------------- la cabecera */
+strong {
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------- cabecera */
 
 .cabecera {
   display: flex;
@@ -44,38 +51,19 @@ h2 {
   margin-bottom: 1rem;
 }
 
+.pos > .cabecera {
+  padding-bottom: 0.875rem;
+  border-bottom: 2px solid var(--acento);
+}
+
 .subtitulo {
   max-width: 46rem;
-  margin: 0;
-  color: var(--texto-suave);
+  margin: 0.125rem 0 0;
+  color: var(--texto-tenue);
+  font-size: 0.875rem;
 }
 
-/*
- * El mosaico de dos columnas: la CAPTURA a la izquierda y las NOTAS a la
- * derecha. En un mostrador ancho una sola columna deja la mitad de la
- * pagina vacia, y la nota guardada quedo fuera de la vista: ahora se ve
- * caer en su lugar mientras se captura la siguiente.
- */
-.mosaico {
-  display: grid;
-  grid-template-columns: minmax(0, 46rem) minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
-}
-
-/* En pantallas angostas (menos de la anchura de una columna mas el menu
-   lateral) el mosaico vuelve a ser una sola columna, como antes. Es solo
-   la primera columna la que se agota: debajo de 46rem las dos columnas se
-   pisarian, y una sola columna sigue siendo legible. */
-@media (max-width: 64rem) {
-  .mosaico {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* La captura es una tarjeta y media: los bloques, el cierre y la direccion
-   se agrupan en tarjetas iguales, y los renglones y la barra de guardar
-   cierran la columna. */
+/* ------------------------------------------------------------- captura */
 
 .captura {
   display: flex;
@@ -83,27 +71,33 @@ h2 {
   gap: 1rem;
 }
 
+.captura-top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 40rem) {
+  .captura-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .captura .bloque,
 .captura .cierre,
 .captura .direccion {
   margin: 0;
-  padding: 0.75rem 0.875rem;
+  padding: 0.875rem 1rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 8px;
+  border-radius: var(--radio-tarjeta);
 }
 
 .captura .renglones {
   margin-bottom: 0;
 }
 
-/*
- * La barra de GUARDAR baja pegada al borde inferior de la pantalla mientras
- * se captura: el total y el boton no se van con el scroll, como debe pasar
- * en un mostrador donde cada nota guardada es una captura nueva. En
- * pantallas chicas (modo de una columna) tambien funciona: la barra se queda
- * pegada al fondo de la pagina.
- */
+/* Barra de guardar: pegada al borde inferior mientras se captura. */
 .captura > .acciones {
   position: sticky;
   bottom: 1rem;
@@ -111,44 +105,45 @@ h2 {
   margin: 0;
   padding: 0.75rem;
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-  box-shadow: 0 0.5rem 1.25rem rgb(27 31 36 / 12%);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-tarjeta);
+  box-shadow: 0 -2px 8px rgb(27 35 45 / 8%);
 }
 
 .captura > .acciones .grande {
   flex: 1;
 }
 
-/* Los campos van sobre una tarjeta de la misma `--superficie`: si quedaran
-   del mismo color no se distinguiria el campo de la tarjeta. El fondo de
-   pagina (`--fondo`) es lo que le falta de contraste, y es el mismo que
-   los campos usan sobre el fondo de la pagina. */
+/* Los campos sobre una tarjeta blanca llevan un gris muy claro. */
 .captura input[type='search'],
 .captura input[type='text'],
 .captura input[type='number'],
 .captura textarea,
-.captura select {
-  background: var(--fondo);
-}
-
+.captura select,
 .captura .resultados {
-  background: var(--fondo);
+  background: var(--campo);
 }
 
-/* ----------------------------------------- los avisos de arriba de la captura */
+/* ------------------------------------------------------------- avisos */
 
-.editando {
+.editando,
+.guardada {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radio-tarjeta);
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+.editando {
   color: var(--texto);
   background: var(--acento-suave);
-  border: 1px solid var(--acento);
-  border-radius: 6px;
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--acento);
 }
 
 .editando p {
@@ -156,17 +151,11 @@ h2 {
 }
 
 .guardada {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
-  margin-bottom: 1rem;
-  padding: 0.625rem 0.75rem;
   color: var(--exito-texto);
   background: var(--exito-suave);
-  border: 1px solid var(--exito-texto);
-  border-radius: 6px;
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--exito-texto);
 }
 
 .guardada-aparte {
@@ -177,23 +166,24 @@ h2 {
   margin: 0;
 }
 
-/* ------------------------------------------------------------- los bloques */
+/* ------------------------------------------------------------- bloques */
 
 .bloque {
   position: relative;
   margin-bottom: 1rem;
 }
 
-/* Sin cliente no se puede agregar producto, y el campo se apaga en vez de
-   dejar que se escriba y luego no sirva de nada. */
 .bloque.apagado {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 label {
   display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
+  margin-bottom: 0.3125rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--texto-suave);
 }
 
@@ -201,37 +191,64 @@ input[type='search'],
 input[type='text'],
 textarea {
   width: 100%;
-  padding: 0.5rem 0.625rem;
+  min-height: var(--alto-tactil);
+  padding: 0.5rem 0.75rem;
   font: inherit;
   color: var(--texto);
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+}
+
+input[type='search']::placeholder,
+input[type='text']::placeholder,
+textarea::placeholder {
+  color: var(--texto-tenue);
+}
+
+input[type='search']:disabled {
+  cursor: not-allowed;
 }
 
 textarea {
+  min-height: 0;
   resize: vertical;
 }
 
 input[type='number'] {
   width: 6.5rem;
+  min-height: 2.5rem;
   padding: 0.375rem 0.5rem;
   font: inherit;
+  font-variant-numeric: tabular-nums;
   text-align: right;
   color: var(--texto);
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
 }
 
 select,
 .filtro {
-  padding: 0.5rem 0.625rem;
+  min-height: var(--alto-tactil);
+  padding: 0.5rem 0.75rem;
   font: inherit;
   color: var(--texto);
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--acento);
+}
+
+input[type='checkbox'] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--acento);
 }
 
 .tenue {
@@ -239,47 +256,57 @@ select,
   font-size: 0.8125rem;
 }
 
-/* El cliente ya elegido se ve como un dato, no como un campo vacio. */
+/* Cliente ya elegido: se presenta como dato, no como campo. */
 .elegido {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
-  font-size: 1.0625rem;
+  min-height: var(--alto-tactil);
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
   background: var(--acento-suave);
-  border: 1px solid var(--acento);
-  border-radius: 6px;
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--acento);
+  border-radius: var(--radio);
 }
 
-/* ---------------------------------------------------------- los resultados */
+/* ------------------------------------------------------------- resultados */
 
 .resultados {
   position: absolute;
   z-index: 2;
   left: 0;
   right: 0;
+  max-height: 18rem;
   margin: 0.25rem 0 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+  box-shadow: 0 4px 12px rgb(27 35 45 / 14%);
+}
+
+.resultados li + li {
+  border-top: 1px solid var(--borde);
 }
 
 .resultados button {
   display: flex;
   width: 100%;
-  align-items: baseline;
+  min-height: var(--alto-tactil);
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.875rem;
   font: inherit;
   text-align: left;
   color: var(--texto);
   background: none;
   border: 0;
+  border-radius: 0;
   cursor: pointer;
 }
 
@@ -287,7 +314,11 @@ select,
   background: var(--acento-suave);
 }
 
-/* -------------------------------------------------------------- la tabla de captura */
+.resultados button:disabled {
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------- tablas */
 
 .renglones,
 .detalle,
@@ -301,22 +332,31 @@ select,
 
 th,
 td {
-  padding: 0.5rem 0.625rem;
+  padding: 0.625rem 0.75rem;
   text-align: left;
+  vertical-align: middle;
   border-bottom: 1px solid var(--borde);
 }
 
 th {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--texto-suave);
-  background: var(--fondo);
+  background: var(--encabezado-tabla);
+  border-bottom: 1px solid var(--borde-fuerte);
+  white-space: nowrap;
 }
 
-/* El dinero y las cantidades a la derecha: se comparan de columna. */
+/* Dinero y cantidades: a la derecha, con cifras del mismo ancho. */
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+th.num {
+  text-align: right;
 }
 
 tbody tr:last-child td {
@@ -325,35 +365,54 @@ tbody tr:last-child td {
 
 .origen {
   display: block;
+  margin-top: 0.125rem;
   font-size: 0.75rem;
   color: var(--texto-tenue);
 }
 
 .renglones input[type='number'] {
-  background: var(--fondo);
-  padding-block: 0.5rem;
+  background: var(--campo);
+}
+
+.renglones td:nth-child(4),
+.renglones td:nth-child(5) {
+  white-space: nowrap;
+}
+
+.disponibles {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--exito-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.disponibles.falta {
+  color: var(--peligro-texto);
+  font-weight: 600;
 }
 
 .con-problema td {
-  padding-top: 0;
+  padding-top: 0.375rem;
+  padding-bottom: 0.5rem;
   font-size: 0.8125rem;
   color: var(--peligro-texto);
   background: var(--peligro-suave);
   border-bottom: 1px solid var(--borde);
 }
 
-/* ---------------------------------------------------------------- el cierre */
+/* ------------------------------------------------------------- cierre */
 
 .cierre {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.25rem 1rem;
   align-items: baseline;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0;
   padding: 0.875rem 1rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: var(--radio-tarjeta);
 }
 
 .kilos {
@@ -370,9 +429,6 @@ tbody tr:last-child td {
   color: var(--acento);
 }
 
-/* El aviso del preview. Se ve DESPUES del numero, no antes: la regla de
-   este proyecto es que el backend decide, y el preview se explica sin
-   quitarle importancia al total. */
 .aviso {
   grid-column: 1 / -1;
   margin: 0;
@@ -380,23 +436,28 @@ tbody tr:last-child td {
   color: var(--texto-tenue);
 }
 
-/* --------------------------------------------------------------- la direccion */
+.direccion .aviso {
+  margin-top: 0.75rem;
+}
+
+/* ------------------------------------------------------------- direccion */
 
 .direccion {
-  margin-bottom: 1.25rem;
+  margin-bottom: 0;
 }
 
 .direccion select {
   display: block;
+  width: 100%;
   margin-bottom: 0.5rem;
 }
 
 .lista-direcciones {
-  margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
   display: grid;
   gap: 0.375rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
 }
 
 .lista-direcciones li {
@@ -404,10 +465,10 @@ tbody tr:last-child td {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.5rem 0.625rem;
-  background: var(--fondo);
+  padding: 0.5rem 0.75rem;
+  background: var(--campo);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: var(--radio);
 }
 
 .lista-direcciones li.elegida {
@@ -417,16 +478,23 @@ tbody tr:last-child td {
 
 .lista-direcciones .elegir {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.125rem;
-  padding: 0;
+  padding: 0.25rem 0;
   font: inherit;
   text-align: left;
   color: var(--texto);
   background: none;
   border: 0;
   cursor: pointer;
+}
+
+.lista-direcciones .elegir span {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
 }
 
 .botones-stick {
@@ -437,41 +505,50 @@ tbody tr:last-child td {
 
 .forma-direccion {
   margin-top: 0.75rem;
-  padding: 0.625rem 0.75rem;
-  background: var(--fondo);
+  padding: 0.875rem 1rem;
+  background: var(--campo);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-left: 4px solid var(--acento);
+  border-radius: var(--radio);
 }
 
 .forma-titulo {
-  margin: 0 0 0.625rem;
+  margin: 0 0 0.75rem;
   font-weight: 600;
 }
 
 .forma-direccion .campo {
-  margin-bottom: 0.625rem;
+  margin-bottom: 0.75rem;
+}
+
+.forma-direccion .acciones {
+  margin-top: 0.25rem;
 }
 
 .error-direccion {
-  margin: 0 0 0.625rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
   color: var(--peligro-texto);
 }
 
-/* ------------------------------------------------------------- los botones */
+/* ------------------------------------------------------------- botones */
 
 .acciones {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.625rem;
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 button {
-  padding: 0.5rem 0.875rem;
+  min-height: var(--alto-tactil);
+  padding: 0.5rem 1rem;
   font: inherit;
+  font-weight: 500;
   color: var(--texto);
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
   cursor: pointer;
   transition:
     background-color 0.12s ease,
@@ -479,17 +556,20 @@ button {
     color 0.12s ease;
 }
 
-/* Pasar sobre un boton lo enciende con el color del acento: la transicion
-   de arriba lo hace sentir un boton y no una etiqueta. El primario ya lleva
-   el acento, y uno apagado no se enciende. */
 button:not(:disabled):hover {
+  background: var(--acento-suave);
   border-color: var(--acento);
 }
 
-button.primario:not(:disabled):hover {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
+button:not(:disabled):active {
+  background: var(--borde);
+}
+
+button:disabled {
+  color: var(--texto-tenue);
+  background: var(--campo);
+  border-color: var(--borde);
+  cursor: not-allowed;
 }
 
 button.primario {
@@ -498,31 +578,49 @@ button.primario {
   border-color: var(--acento);
 }
 
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
+button.primario:not(:disabled):hover {
+  color: var(--sobre-acento);
+  background: var(--acento-hover);
+  border-color: var(--acento-hover);
 }
 
-button:disabled {
-  cursor: not-allowed;
+button.primario:not(:disabled):active {
+  background: var(--acento-hover);
+}
+
+button.primario:disabled {
+  color: var(--texto-tenue);
+  background: var(--encabezado-tabla);
+  border-color: var(--borde);
 }
 
 button.grande {
-  padding: 0.75rem 1.5rem;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.75rem;
   font-size: 1.0625rem;
   font-weight: 600;
 }
 
 button.chico {
-  padding: 0.25rem 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
   font-size: 0.8125rem;
 }
 
 button.peligro {
   color: var(--peligro-texto);
   border-color: var(--peligro);
+}
+
+button.peligro:not(:disabled):hover {
+  color: #ffffff;
+  background: var(--peligro);
+  border-color: var(--peligro);
+}
+
+button.peligro:disabled {
+  color: var(--texto-tenue);
+  border-color: var(--borde);
 }
 
 .oculto {
@@ -533,38 +631,32 @@ button.peligro {
   clip-path: inset(50%);
 }
 
-/* ---------------------------------------------------- la tabla de las notas */
+/* ------------------------------------------------------------- notas emitidas */
 
-/* La columna de las notas guardadas es la segunda mitad del mosaico y lleva
-   la misma tarjeta que la captura: cabecera, filtros y tabla dentro de un
-   marco igual, para que las dos columnas se lean como dos paneles. */
-.tabla-pos {
-  padding: 1rem;
+.tabla-pos,
+.talonario-pos {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 8px;
+  border-radius: var(--radio-tarjeta);
 }
 
-.tabla-pos .cabecera {
-  align-items: baseline;
-}
-
-/* Dentro de la tarjeta la tabla no repite el marco: solo quedan las lineas
-   entre renglones, que son las que dicen donde termina uno y empieza otro. */
-.tabla-pos .tabla,
-.tabla-pos .tabla thead th {
-  background: transparent;
+.tabla-pos .cabecera,
+.talonario-pos .cabecera {
+  align-items: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--borde);
 }
 
 .tabla-pos .tabla {
-  border: 0;
+  background: transparent;
+  border: 1px solid var(--borde);
 }
 
-/* Los filtros van sobre la tarjeta de las notas: el mismo contraste que los
-   campos de la captura. */
 .tabla-pos .filtros input,
 .tabla-pos .filtros select {
-  background: var(--fondo);
+  background: var(--campo);
 }
 
 .filtros {
@@ -577,53 +669,74 @@ button.peligro {
 
 .filtros input[type='search'] {
   flex: 1;
-  min-width: 10rem;
+  min-width: 12rem;
 }
 
-/* La fila de la nota que se acaba de guardar: se ve a donde fue a parar. */
 .tabla tbody tr.resaltada > td {
   background: var(--exito-suave);
 }
 
-/* Pasar la mano por una fila la enciende: en una tabla larga ayuda a seguir
-   la linea con la vista. La guardada recien se sigue viendo verde. */
 .tabla tbody tr:hover > td {
-  background: var(--fondo);
+  background: var(--campo);
 }
 
 .tabla tbody tr.resaltada:hover > td {
   background: var(--exito-suave);
 }
 
+.tabla tbody tr.fila-detalle:hover > td {
+  background: var(--campo);
+}
+
 .estatus {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--exito-texto);
+  background: var(--exito-suave);
+  border: 1px solid var(--exito-texto);
+  border-radius: var(--radio);
 }
 
 .estatus.cancelada {
+  margin: 0;
+  padding: 0.125rem 0.5rem;
   color: var(--texto-tenue);
+  background: var(--campo);
+  border: 1px solid var(--borde-fuerte);
 }
 
 .acciones-celda {
+  display: table-cell;
   white-space: nowrap;
   text-align: right;
 }
 
-/* El detalle que se abre debajo de una fila con "Ver", y el motivo de la
-   cancelacion que se abre con "Cancelar". Van en una fila mas ancha que la
-   tabla, ocupando todo el ancho de las columnas. */
+.acciones-celda button + button {
+  margin-left: 0.25rem;
+}
+
+/* Detalle y cancelacion: fila que ocupa todo el ancho de la tabla. */
 .fila-detalle > td {
-  padding: 0.875rem 1rem;
-  background: var(--fondo);
+  padding: 1rem 1.25rem;
+  background: var(--campo);
 }
 
 .fila-detalle dl {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.25rem 1rem;
-  margin: 0 0 0.875rem;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1.5rem;
+  margin: 0 0 1rem;
 }
 
 .fila-detalle dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--texto-suave);
 }
 
@@ -632,25 +745,33 @@ button.peligro {
 }
 
 .fila-detalle dd.total {
+  font-size: 1rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--texto);
 }
 
-.cancelada {
-  margin: 0 0 0.875rem;
-  padding: 0.625rem 0.75rem;
+.fila-detalle .detalle {
+  margin-bottom: 0;
+}
+
+/* Bloque del motivo de cancelacion dentro del detalle. */
+.fila-detalle p.cancelada {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.875rem;
   color: var(--peligro-texto);
   background: var(--peligro-suave);
   border: 1px solid var(--peligro);
-  border-radius: 6px;
+  border-left-width: 4px;
+  border-radius: var(--radio);
 }
 
 .cancelar {
-  max-width: 34rem;
+  max-width: 36rem;
 }
 
 .ayuda {
-  margin: 0.25rem 0 0;
+  margin: 0.375rem 0 0;
   font-size: 0.8125rem;
   color: var(--peligro-texto);
 }
@@ -658,23 +779,24 @@ button.peligro {
 .paginacion {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  gap: 0.875rem;
+  margin-bottom: 0;
 }
 
 .cuenta {
   font-size: 0.8125rem;
   color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
 }
 
 .vacio {
-  margin: 0 0 1rem;
-  padding: 1.5rem 1rem;
+  margin: 0;
+  padding: 2rem 1rem;
   text-align: center;
   color: var(--texto-tenue);
-  background: var(--fondo);
-  border: 1px dashed var(--borde);
-  border-radius: 8px;
+  background: var(--campo);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: var(--radio);
 }
 
 .buscando {
@@ -683,50 +805,36 @@ button.peligro {
   color: var(--texto-tenue);
 }
 
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
-}
-
-/* ----------------------------------------------- el talonario de folios */
-
-.talonario-pos {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-}
-
-.talonario-pos .cabecera {
-  align-items: baseline;
-}
-
+.error,
 .error-talonario {
   margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 1rem;
   color: var(--peligro-texto);
   background: var(--peligro-suave);
   border: 1px solid var(--peligro);
-  border-radius: 6px;
+  border-left-width: 4px;
+  border-radius: var(--radio);
+}
+
+/* ------------------------------------------------------------- talonario */
+
+.talonario-pos .aviso {
+  margin-bottom: 1rem;
 }
 
 .alta-talonario {
   margin-bottom: 1.25rem;
-  padding: 1rem;
-  border: 1px dashed var(--borde);
-  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  background: var(--campo);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
 }
 
 .campos-talonario {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.875rem;
+  gap: 1rem;
   margin-bottom: 0.875rem;
 }
 
@@ -734,31 +842,54 @@ button.peligro {
   min-width: 9rem;
 }
 
-.campos-talonario input {
+.campos-talonario input[type='text'],
+.campos-talonario input[type='number'] {
   width: 100%;
+  background: var(--superficie);
 }
 
 .casilla {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.5rem;
+  min-height: var(--alto-tactil);
+  margin: 0;
   font-size: 0.875rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--texto);
 }
 
 .tabla-talonario {
   width: 100%;
   border-collapse: collapse;
+  border: 1px solid var(--borde);
 }
 
 .tabla-talonario th,
 .tabla-talonario td {
-  padding: 0.5rem 0.625rem;
-  border-bottom: 1px solid var(--borde);
+  padding: 0.625rem 0.75rem;
   text-align: left;
+  border-bottom: 1px solid var(--borde);
+}
+
+.tabla-talonario th {
+  border-bottom: 1px solid var(--borde-fuerte);
+}
+
+.tabla-talonario td:nth-child(3),
+.tabla-talonario td:nth-child(4),
+.tabla-talonario td:nth-child(5) {
+  font-variant-numeric: tabular-nums;
 }
 
 .tabla-talonario tbody tr.activa > td {
   background: var(--exito-suave);
+}
+
+.tabla-talonario tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .acciones-fila {
@@ -766,8 +897,12 @@ button.peligro {
   text-align: right;
 }
 
+.acciones-fila button + button {
+  margin-left: 0.25rem;
+}
+
 .detalle-folios > td {
-  background: var(--fondo);
+  background: var(--campo);
 }
 
 .folios-lista {
@@ -775,29 +910,59 @@ button.peligro {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.375rem;
-  margin-bottom: 0.375rem;
+  margin-bottom: 0.5rem;
 }
 
 .folio-chip {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--borde);
-  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
 }
 
 .folio-chip.disponible {
-  border-color: var(--exito-texto);
   color: var(--exito-texto);
+  border-color: var(--exito-texto);
 }
 
 .folio-chip small {
   margin-left: 0.375rem;
   color: var(--texto-tenue);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .cargando {
   margin: 0.375rem 0;
   font-size: 0.8125rem;
   color: var(--texto-tenue);
+}
+
+/* ------------------------------------------------------------- pantallas angostas */
+
+@media (max-width: 48rem) {
+  .tabla-pos,
+  .talonario-pos {
+    overflow-x: auto;
+  }
+
+  .lista-direcciones li {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .botones-stick {
+    justify-content: flex-end;
+  }
+}
+
+/* ------------------------------------------------------------- impresion */
+
+@media print {
+  .captura > .acciones {
+    position: static;
+    box-shadow: none;
+  }
 }

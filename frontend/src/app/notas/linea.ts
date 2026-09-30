@@ -28,6 +28,12 @@ export interface Linea {
   kg_editado: boolean;
   cantidad_bultos: number;
   /**
+   * Cuantos bultos hay del producto en el almacen, en el momento en que se
+   * consulto. `undefined` cuando no se pudo saber (o cuando la linea viene
+   * de una nota que ya se emitio y nadie lo pidio todavia).
+   */
+  disponible_bultos?: number;
+  /**
    * El id del renglon en la base, cuando la linea viene de una nota que se
    * esta corrigiendo.
    *
@@ -108,6 +114,30 @@ export function conPrecio(linea: Linea, precio: PrecioEfectivo): Linea {
 }
 
 /**
+ * Pone cuantos bultos hay del producto en el almacen.
+ *
+ * Es un dato de inventario que se consulta aparte del precio: el precio se
+ * pregunta para cada producto que se agrega, y lo que hay se pregunta para
+ * cada renglon, por eso va como un paso separado (`saberDisponible` en la
+ * vista) y no dentro de `agregarProducto`.
+ */
+export function conDisponible(linea: Linea, disponibles: number): Linea {
+  return { ...linea, disponible_bultos: disponibles };
+}
+
+/**
+ * Lo que queda del producto despues de lo capturado: disponible menos lo
+ * que se escribe en los bultos. Es el "se van restando" del mostrador.
+ *
+ * `null` cuando no se sabe cuantos hay: un renglon sin `disponible_bultos`
+ * no puede decir si falta, y la pantalla se calla en vez de inventar.
+ */
+export function restanteDe(linea: Linea): number | null {
+  if (linea.disponible_bultos === undefined) return null;
+  return linea.disponible_bultos - linea.cantidad_bultos;
+}
+
+/**
  * Que tan chistoso esta el producto: si el precio es de este cliente o el
  * de la lista. El POS lo dice en la linea porque es la pregunta que se
  * hace el operador ("¿le estoy cobrando bien?") y la respuesta son dos
@@ -169,9 +199,13 @@ export function montoDeLinea(linea: Linea): string {
  * ("no puede ser cero ni negativo"), y una linea en cero es una linea que
  * no se puede cobrar ni borrar sin buscarla. Volver a uno deja la nota en
  * un estado que si se puede mandar.
+ *
+ * Los bultos son UNIDADES, no peso: un decimal no se manda. Se trunca a
+ * numero entero en lugar de redondear, porque redondear convertiria "3.8"
+ * en cuatro bultos de algo que no se cargo entero.
  */
 export function cambiarCantidad(linea: Linea, cantidad: number | string): Linea {
-  const numero = Number(cantidad);
+  const numero = Math.trunc(Number(cantidad));
   // Lo que no se puede leer se IGNORA y no se convierte en uno. La distincion
   // es con el cero, que si es un numero valido que el backend no acepta; un
   // "abc" a medio teclear no es un cero, y pisar la cantidad que habia con
@@ -261,14 +295,18 @@ export function vaciar(lineas: Linea[]): Linea[] {
 export function problemasDe(linea: Linea): Record<string, string> {
   const problemas: Record<string, string> = {};
 
+  // Los bultos son unidades: enteros y positivos. `Number.isInteger` aparte
+  // del `> 0`, para que "2.5" no pase como si fueran dos bultos y pico.
   const entero = (numero: number, maximo: number): boolean =>
-    Math.floor(numero) > 0 && numero <= maximo;
+    Number.isInteger(numero) && numero > 0 && numero <= maximo;
 
   if (!entero(linea.cantidad_bultos, 99_999_999)) {
-    problemas['cantidad_bultos'] = 'La cantidad debe ser un numero positivo';
+    problemas['cantidad_bultos'] =
+      'La cantidad debe ser un numero entero positivo (los bultos no llevan decimales)';
   }
-  if (!entero(linea.kg_bulto, 9_999_999)) {
-    // El mismo `> 0` del `decimal` del backend, y por el mismo motivo.
+  if (!(linea.kg_bulto > 0 && linea.kg_bulto <= 9_999_999)) {
+    // Los kilos por bulto SI llevan decimales, asi que no es el `entero` de
+    // arriba: solo el mismo `> 0` del `decimal` del backend.
     problemas['kg_bulto'] = 'Los kilos por bulto tienen que ser mas de cero';
   }
   if (linea.precio_unit_kg === null) {

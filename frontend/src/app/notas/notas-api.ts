@@ -53,6 +53,14 @@ export interface PrecioEfectivo {
   vigente_hasta: string | null;
 }
 
+/** `inventario/modelo.ts` -> `Existencia`. El POS usa solo `existencia_bultos`. */
+export interface Existencia {
+  producto_id: number;
+  almacen_id: number;
+  /** En BULTOS, que es la unidad con la que se compra y se vende. */
+  existencia_bultos: number;
+}
+
 /** `notas-remision/modelo.ts` -> `Renglon`. */
 export interface RenglonNota {
   id: number;
@@ -386,6 +394,29 @@ export class NotasApi {
         params: { producto_id: productoId, cliente_id: clienteId },
       }),
     );
+  }
+
+  /**
+   * Cuantos bultos hay de un producto en el almacen, como los cuenta la
+   * propia base (la suma de los movimientos de inventario).
+   *
+   * Es el "Disponibles" que se ve bajo los bultos de cada renglon. Un
+   * `null` es "no se supo" -- el permiso `inventario.ver` no es de la
+   * cajera en alguna base rara, o la consulta fallo -- y la pantalla se
+   * queda sin contador, que es mejor que bloquear la captura por saberlo.
+   */
+  async existencia(productoId: number, almacenId: number = ALMACEN_ID): Promise<number | null> {
+    try {
+      const respuesta = await firstValueFrom(
+        this.http.get<Listado<Existencia>>(`${API}/inventario/existencia`, {
+          params: { producto_id: productoId, almacen_id: almacenId },
+        }),
+      );
+      const fila = respuesta.datos[0];
+      return fila === undefined ? null : fila.existencia_bultos;
+    } catch {
+      return null;
+    }
   }
 
   /**

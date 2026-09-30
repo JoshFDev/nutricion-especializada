@@ -90,11 +90,12 @@ describe('el cuerpo de la nota', () => {
     expect(cuerpo.renglones[0]).not.toHaveProperty('id');
   });
 
-  it('los bultos van como texto, con dos decimales', () => {
+  it('los bultos van como texto y sin decimales', () => {
     // El backend acepta numero o texto y lo normaliza a texto antes de
-    // validar. Mandar texto quita de en medio el double.
-    const cuerpo = cuerpoDeNota(3, [lineaLista(8.5)]);
-    expect(cuerpo.renglones[0].cantidad_bultos).toBe('8.5');
+    // validar. Mandar texto quita de en medio el double. Y son enteros: un
+    // bulto es una unidad, no un peso, y `cambiarCantidad` trunca.
+    const cuerpo = cuerpoDeNota(3, [lineaLista(8)]);
+    expect(cuerpo.renglones[0].cantidad_bultos).toBe('8');
     expect(typeof cuerpo.renglones[0].cantidad_bultos).toBe('string');
   });
 

@@ -1,8 +1,13 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { kilosComoTexto, montoComoTexto, numeroComoTexto } from '../../core/valores.js';
+import {
+  BLOQUES_DETALLE,
+  FILAS_POR_RENGLON,
+  MAX_RENGLONES,
+  PRIMERA_FILA_DETALLE,
+  fechaCorta,
+  leerPlantilla,
+} from './plantilla.js';
 import type { ClienteImprimible, Nota } from './modelo.js';
 
 /**
@@ -40,73 +45,6 @@ import type { ClienteImprimible, Nota } from './modelo.js';
  * querer; la diagonal en los renglones vacios es lo que deja claro que la
  * nota viene completa o no se vuelve a escribir.
  */
-
-/** Los renglones de detalle de la plantilla empiezan en la fila 13, de 3 en 3. */
-const PRIMERA_FILA_DETALLE = 13;
-const FILAS_POR_RENGLON = 3;
-const MAX_RENGLONES = 9;
-
-/** Los __5__ bloques combinados de cada renglon, con su celda principal. */
-const BLOQUES_DETALLE = [
-  { celda: 'A' },
-  { celda: 'B' },
-  { celda: 'D' },
-  { celda: 'E' },
-  { celda: 'F' },
-] as const;
-
-const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const RUTA_PLANTILLA = join(RAIZ, 'plantillas', 'nota-remision.xlsx');
-const RUTA_PLANTILLA_EJEMPLO = join(RAIZ, 'plantillas', 'nota-remision.example.xlsx');
-
-/**
- * La plantilla real y, si no esta, el ejemplo.
- *
- * La real no se versiona (trae la caratula con los datos del negocio), asi que
- * en un clon limpio solo existe el ejemplo, con la caratula en blanco. Un
- * error que no sea "no existe" si se propaga: un archivo corrupto o sin
- * permiso tiene que doler, no esconderse detras del ejemplo.
- */
-async function leerPlantilla(): Promise<Buffer> {
-  try {
-    return await readFile(RUTA_PLANTILLA);
-  } catch (falla) {
-    if ((falla as NodeJS.ErrnoException).code !== 'ENOENT') throw falla;
-    return readFile(RUTA_PLANTILLA_EJEMPLO);
-  }
-}
-
-/**
- * La fecha como se lee en el papel: "27-sep-26".
- *
- * `nota.fecha` llega como "AAAA-MM-DD" (el formato de la base), y en el
- * papel va en el mismo orden coloquial que en el PDF. El mes es la
- * abreviatura en espanol, como la escribe la gente, no un numero ni la
- * inicial mayuscula.
- */
-const MESES_CORTOS = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
-
-const fechaCorta = (fecha: string): string => {
-  const [anio, mes, dia] = fecha.split('-').map(Number) as [number, number, number];
-  const mesCorto = MESES_CORTOS[mes - 1];
-  if (mesCorto === undefined) return fecha;
-  const diaTexto = String(dia).padStart(2, '0');
-  const anioTexto = String(anio).slice(2);
-  return `${diaTexto}-${mesCorto}-${anioTexto}`;
-};
 
 /**
  * La diagonal que tacha los renglones vacios.

@@ -201,7 +201,7 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
   return {
     datos: filas.map((f) => ({
       id: Number(f.id),
-      folio: `${f.serie}-${f.folio_numero}`,
+      folio: componerFolio(f.serie, f.folio_numero),
       cliente_id: Number(f.cliente_id),
       cliente: f.cliente_nombre,
       vendedor: f.vendedor_nombre,

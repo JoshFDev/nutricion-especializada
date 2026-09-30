@@ -66,17 +66,34 @@
         <div class="bloque">
           @if (cliente(); as elegido) {
             <span class="etiqueta">Cliente</span>
+            <!--
+              El cliente ya elegido. Se ve como un CAMPO con lo que tiene
+              adentro, no como una caja de color distinta: cuando el campo de
+              al lado (el producto) y este son dos cosas de distinta forma, la
+              pantalla parece un formulario a medio llenar en vez de dos campos
+              con su valor. La pastilla azul de antes competia con el boton de
+              guardar, que es la unica accion de verdad.
+            -->
             <div class="elegido">
-              <span>
-                <strong>{{ elegido.nombre }}</strong>
+              <span class="elegido-texto">
+                <span class="elegido-nombre" [title]="elegido.nombre">
+                  {{ elegido.nombre }}
+                </span>
                 @if (elegido.establo) {
-                  <span class="tenue"> · {{ elegido.establo }}</span>
+                  <span class="tenue">{{ elegido.establo }}</span>
                 }
                 @if (editando(); as nota) {
-                  <span class="tenue"> · {{ nota.folio }}</span>
+                  <span class="tenue">{{ nota.folio }}</span>
                 }
               </span>
-              <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
+              <button
+                type="button"
+                class="enlace"
+                (click)="cambiarCliente()"
+                [attr.aria-label]="'Cambiar el cliente ' + elegido.nombre"
+              >
+                Cambiar
+              </button>
             </div>
           } @else {
             <label class="etiqueta" for="buscar-cliente">Cliente</label>
@@ -740,10 +757,26 @@
                       type="button"
                       class="chico"
                       (click)="imprimir(nota.id)"
-                      title="Imprimir el PDF"
+                      title="Imprimir dos copias en una hoja (se corta por la mitad)"
                     >
                       PDF
                     </button>
+                    @if (nota.renglones > 9) {
+                      <!--
+                        Con mas de 9 renglones la nota no cabe entera en la
+                        copia chica del papel a dos. Se ofrece ademas la hoja
+                        vertical con una sola copia completa, que es lo unico que
+                        sirve cuando la nota es larga.
+                      -->
+                      <button
+                        type="button"
+                        class="chico"
+                        (click)="imprimir(nota.id, 1)"
+                        title="Imprimir una sola copia en hoja vertical, completa (nota larga)"
+                      >
+                        PDF 1
+                      </button>
+                    }
                     <button
                       type="button"
                       class="chico"
@@ -895,76 +928,81 @@
               @if (cobrando() === nota.id && sePuedeCobrar(nota)) {
                 <tr class="fila-detalle">
                   <td colspan="7">
-                    <div class="cobrar">
-                      <p class="cobrar-titulo">
-                        Cobrar <strong>{{ nota.folio }}</strong> a
-                        {{ nota.cliente }}
-                        <span class="tenue"
-                          >&middot; la nota vale {{ montoComoTexto(nota.subtotal) }}</span
-                        >
-                      </p>
+                    <!--
+                      El cobro, en UNA SOLA LINEA: monto, metodo y los dos
+                      botones. Antes iba en un bloque apilado con el titulo
+                      arriba, que en una fila de tabla empujaba todo hacia
+                      abajo y habia que hacer scroll para llegar al boton. En
+                      una tablet se llena y se confirma sin soltar la nota.
 
-                      <div class="cobrar-campos">
-                        <div class="cobrar-campo">
-                          <label for="monto-cobro">Monto que se cobra</label>
-                          <!--
-                            NO hay mensaje en pantalla por escribir mal un
-                            numero: se marca el campo y se apaga el boton. En una
-                            tablet de mostrador el aviso se lee cuando la
-                            persona ya movio la mano al renglon siguiente, asi
-                            que el mensaje interrumpe mas de lo que informa.
-                          -->
-                          <input
-                            id="monto-cobro"
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            inputmode="decimal"
-                            [value]="montoCobro()"
-                            (input)="escribirMontoCobro($any($event.target).value)"
-                            [class.malo]="montoCobroEscribiendo() && !montoCobroValido()"
-                            [attr.aria-invalid]="montoCobroEscribiendo() && !montoCobroValido()"
-                          />
-                        </div>
-                        <div class="cobrar-campo">
-                          <label for="metodo-cobro">Metodo</label>
-                          <select
-                            id="metodo-cobro"
-                            [value]="metodoCobro()"
-                            (change)="metodoCobro.set($any($event.target).value)"
-                          >
-                            @for (metodo of metodos; track metodo) {
-                              <option [value]="metodo">{{ metodo }}</option>
-                            }
-                          </select>
-                        </div>
+                      El titulo va a la izquierda del renglon, no arriba: la
+                      fila ya dice de que nota es, asi que repetirlo en un
+                      parrafo propio era gasto de alto.
+                    -->
+                    <div class="cobrar">
+                      <div class="cobrar-quien">
+                        <span class="cobrar-folio">{{ nota.folio }}</span>
+                        <span class="cobrar-cliente">{{ nota.cliente }}</span>
+                        <span class="tenue">vale {{ montoComoTexto(nota.subtotal) }}</span>
                       </div>
 
-                      @if (nota.estatus === 'parcial') {
-                        <p class="ayuda">
-                          Esta nota ya tiene un pago parcial: escribe cuanto falta, no el total.
-                        </p>
-                      }
-                      <div class="acciones">
+                      <div class="cobrar-campos">
+                        <label class="oculto" for="monto-cobro">Monto que se cobra</label>
+                        <!--
+                          NO hay mensaje en pantalla por escribir mal un numero:
+                          se marca el campo y se apaga el boton. En una tablet de
+                          mostrador el aviso se lee cuando la persona ya movio la
+                          mano al renglon siguiente, asi que el mensaje
+                          interrumpe mas de lo que informa.
+                        -->
+                        <input
+                          id="monto-cobro"
+                          class="cobrar-monto"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          inputmode="decimal"
+                          placeholder="Monto"
+                          [value]="montoCobro()"
+                          (input)="escribirMontoCobro($any($event.target).value)"
+                          [class.malo]="montoCobroEscribiendo() && !montoCobroValido()"
+                          [attr.aria-invalid]="montoCobroEscribiendo() && !montoCobroValido()"
+                        />
+                        <label class="oculto" for="metodo-cobro">Metodo de pago</label>
+                        <select
+                          id="metodo-cobro"
+                          class="cobrar-metodo"
+                          [value]="metodoCobro()"
+                          (change)="metodoCobro.set($any($event.target).value)"
+                        >
+                          @for (metodo of metodos; track metodo) {
+                            <option [value]="metodo">{{ metodo }}</option>
+                          }
+                        </select>
                         <button
                           type="button"
                           class="primario"
                           [disabled]="guardandoCobro() || !montoCobroValido()"
                           (click)="confirmarCobro()"
                         >
-                          {{ guardandoCobro() ? 'Cobrando...' : 'Confirmar el cobro' }}
+                          {{ guardandoCobro() ? 'Cobrando...' : 'Cobrar' }}
                         </button>
-                        <button type="button" (click)="cerrarCobro()">No</button>
+                        <button
+                          type="button"
+                          class="cobrar-no"
+                          (click)="cerrarCobro()"
+                          aria-label="Cerrar sin cobrar"
+                        >
+                          No
+                        </button>
                       </div>
 
-                      <!--
-                        El error de VERDAD (el que devuelve el backend) si se
-                        escribe, pero va DEBAJO del boton y no encima del
-                        formulario: es una correccion de la accion, no algo que
-                        tape la captura mientras se llena. Lo de "el numero no
-                        sirve" no lleva mensaje: eso lo dice el campo marcado en
-                        rojo con el boton apagado.
-                      -->
+                      @if (nota.estatus === 'parcial') {
+                        <p class="cobrar-pie">
+                          Ya tiene un pago parcial: escribe cuanto
+                          <strong>falta</strong>, no el total.
+                        </p>
+                      }
                       @if (errorCobro(); as mensajeCobro) {
                         <p class="error-cobro" role="alert">{{ mensajeCobro }}</p>
                       }
@@ -976,11 +1014,50 @@
           </tbody>
         </table>
 
+        <!--
+          Paginacion de verdad, no un "cargar mas" que pegaba filas al final:
+          con 50, 100 o mas notas eso era una tabla de tres pantallas, y para
+          llegar a una nota de hace tres semanas habia que bajar y bajar.
+
+          El tamano de pagina tambien se elige, porque cada quien trabaja
+          distinto: el que solo busca la de hace un rato quiere pocas, y el que
+          revisa el dia entero las quiere todas en una.
+        -->
         <div class="paginacion">
-          <button type="button" [disabled]="!hayMas() || buscandoMas()" (click)="cargarMas()">
-            {{ buscandoMas() ? 'Buscando...' : 'Cargar mas' }}
+          <button
+            type="button"
+            class="chico"
+            [disabled]="!hayPaginaAnterior() || cargandoLista()"
+            (click)="irAPagina(pagina() - 1)"
+          >
+            Anterior
           </button>
-          <span class="cuenta">{{ notas().length }} de {{ totalNotas() }} notas</span>
+
+          <span class="cuenta">
+            {{ rangoDePagina() }}
+            <span class="tenue">&middot; pagina {{ pagina() }} de {{ paginasTotales() }}</span>
+          </span>
+
+          <button
+            type="button"
+            class="chico"
+            [disabled]="!hayPaginaSiguiente() || cargandoLista()"
+            (click)="irAPagina(pagina() + 1)"
+          >
+            Siguiente
+          </button>
+
+          <label class="oculto" for="tamano-pagina">Notas por pagina</label>
+          <select
+            id="tamano-pagina"
+            class="filtro tamano-pagina"
+            [value]="limiteComoTexto()"
+            (change)="aTamanoDePagina($any($event.target).value)"
+          >
+            <option value="25">25 por pagina</option>
+            <option value="50">50 por pagina</option>
+            <option value="100">100 por pagina</option>
+          </select>
         </div>
       }
     </section>

@@ -534,7 +534,15 @@ export class NotasApi {
    * (quedaria en el historial del navegador y en el log del proxy), asi que
    * la unica forma de imprimir es esta.
    */
-  async abrirPdf(notaId: number): Promise<void> {
+  /**
+   * Abre el PDF en una pestana.
+   *
+   * `copias` es 2 por defecto: el papel trae la misma nota dos veces en una
+   * hoja, una para el cliente y otra para el archivo, y se corta por la
+   * mitad. Con 1 sale vertical a tamano completo, que es lo que se quiere
+   * cuando la nota es larga y en la copia chica la letra ya no se lee.
+   */
+  async abrirPdf(notaId: number, copias: 1 | 2 = 2): Promise<void> {
     const ventana = window.open('', '_blank');
     if (ventana === null) {
       throw new Error(
@@ -544,7 +552,10 @@ export class NotasApi {
 
     try {
       const pdf = await firstValueFrom(
-        this.http.get(`${API}/notas-remision/${notaId}/pdf`, { responseType: 'blob' }),
+        this.http.get(`${API}/notas-remision/${notaId}/pdf`, {
+          params: { copias },
+          responseType: 'blob',
+        }),
       );
       const url = URL.createObjectURL(pdf);
       ventana.location.href = url;

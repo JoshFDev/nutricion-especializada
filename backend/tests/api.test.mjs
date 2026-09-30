@@ -3423,6 +3423,12 @@ revisar(
   pdfDeLaNota.headers.get('cache-control'),
 );
 
+revisar(
+  'y expone esa cabecera al navegador, que si no no se puede leer',
+  (pdfDeLaNota.headers.get('access-control-expose-headers') ?? '').includes('Content-Disposition'),
+  pdfDeLaNota.headers.get('access-control-expose-headers'),
+);
+
 const pdfSinNota = await pedirBytes('/api/notas-remision/99999999/pdf', tokenAdmin);
 revisar(
   'una nota que no existe sigue dando JSON, no un PDF roto',
@@ -3909,10 +3915,24 @@ revisar(
 
 const listadoNotas = await pedir('/api/notas-remision?limite=200', tokenAdmin);
 revisar('listar -> 200', listadoNotas.status === 200, JSON.stringify(listadoNotas.cuerpo?.error));
+// El folio es `PREFIX-NUMERO` cuando la serie tiene prefijo, y SOLO el numero
+// cuando la serie esta vacia (el formato de puros numeros que elige el admin).
+// Por eso el patron acepta las dos formas y, sobre todo, rechaza el guion
+// colgante que salia antes: una nota de serie vacia se imprimia como "-2704".
 revisar(
-  'trae el folio armado, no el numero suelto',
-  listadoNotas.cuerpo?.datos?.every((n) => /^[A-Z]+-\d+$/.test(n.folio)),
-  JSON.stringify(listadoNotas.cuerpo?.datos?.slice(0, 2)),
+  'trae el folio armado y sin guion colgando',
+  listadoNotas.cuerpo?.datos?.every((n) => /^(?:[A-Z]+-)?\d+$/.test(n.folio)),
+  JSON.stringify(listadoNotas.cuerpo?.datos?.slice(0, 2)?.map((n) => n.folio)),
+);
+
+// El detalle y el listado tienen que armar el folio IGUAL. Antes el listado lo
+// componia a mano y el detalle usaba `componerFolio`, asi que la misma nota
+// salia "2704" en un lado y "-2704" en el otro.
+revisar(
+  'el listado y el detalle arman el folio igual',
+  listadoNotas.cuerpo?.datos?.every((n) => !n.folio.startsWith('-')) &&
+    (await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin)).cuerpo?.folio !== undefined,
+  JSON.stringify(listadoNotas.cuerpo?.datos?.slice(0, 2)?.map((n) => n.folio)),
 );
 revisar(
   'y el nombre del cliente, no el id',

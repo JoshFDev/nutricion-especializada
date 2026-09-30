@@ -195,9 +195,23 @@ export class Notas {
    * para saber a cual se refiere un `total`.
    */
   readonly totalNotas = signal(0);
-  readonly limite = 50;
+  /**
+   * Cuantas notas se ven por pagina, y la pagina que se esta viendo.
+   *
+   * Antes esto era un "cargar mas" que pegaba las siguientes al final de la
+   * tabla. Con 50, 100 o mas notas eso es una tabla de tres pantallas y pico,
+   * y para llegar a una nota de hace tres semanas habia que bajar y bajar. Con
+   * paginas la tabla tiene alto fijo: se sabe cuantas hay, se sabe en cual
+   * estas, y se llega a la que se busca en dos clics.
+   *
+   * La pagina se elige en SALTOS porque `limite * (pagina - 1)`: los indices
+   * van en el `offset` de la API y un numero de pagina guardado seria un
+   * `offset` guardado, que se queda viejo en cuanto el filtro o el orden
+   * cambian y la API responde con otro total.
+   */
+  readonly limite = signal(25);
+  readonly pagina = signal(1);
   readonly cargandoLista = signal(false);
-  readonly buscandoMas = signal(false);
   readonly errorLista = signal<string | null>(null);
 
   /** `'todo'` no se manda: es la ausencia de periodo. Ver `Periodo`. */
@@ -233,7 +247,22 @@ export class Notas {
   readonly total = computed(() => totalDeLineas(this.lineas()));
   readonly kilos = computed(() => kilosDeLineas(this.lineas()));
   readonly hayLineas = computed(() => this.lineas().length > 0);
-  readonly hayMas = computed(() => this.notas().length < this.totalNotas());
+  /** Cuantas paginas hay en total, con la del tamano de pagina elegido. */
+  readonly paginasTotales = computed(() =>
+    Math.max(1, Math.ceil(this.totalNotas() / this.limite())),
+  );
+
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Que se ve en la barra: "1-25 de 340". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.totalNotas();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
 
   /** El texto del boton grande: dice que se esta haciendo, no "guardar". */
   readonly textoGuardar = computed(() => {
@@ -931,7 +960,14 @@ export class Notas {
   }
 
   // ------------------------------------------------------ la tabla de notas
-  async recargar(): Promise<void> {
+  /**
+   * Carga una pagina de la lista.
+   *
+   * Es la UNICA forma de pedir notas. Antes habia dos (`recargar` y
+   * `cargarMas`) que pegaban filas al final; con paginacion hay una sola, y
+   * `recargar()` es esta con la pagina 1.
+   */
+  private async cargarPagina(pagina: number): Promise<void> {
     this.cargandoLista.set(true);
     this.errorLista.set(null);
     try {
@@ -939,11 +975,12 @@ export class Notas {
         periodo: this.periodo() === 'todo' ? undefined : (this.periodo() as Periodo),
         buscar: this.buscar() === '' ? undefined : this.buscar(),
         ordenar: this.ordenar(),
-        limite: this.limite,
-        offset: 0,
+        limite: this.limite(),
+        offset: (pagina - 1) * this.limite(),
       });
       this.notas.set(respuesta.datos);
       this.totalNotas.set(respuesta.total);
+      this.pagina.set(pagina);
     } catch (falla) {
       this.notas.set([]);
       this.totalNotas.set(0);
@@ -953,26 +990,38 @@ export class Notas {
     }
   }
 
-  /** Siguiente pagina. Se PEGA a lo que ya hay, no se reemplaza. */
-  async cargarMas(): Promise<void> {
-    if (!this.hayMas() || this.buscandoMas()) return;
-    this.buscandoMas.set(true);
-    this.errorLista.set(null);
-    try {
-      const respuesta = await this.api.listar({
-        periodo: this.periodo() === 'todo' ? undefined : (this.periodo() as Periodo),
-        buscar: this.buscar() === '' ? undefined : this.buscar(),
-        ordenar: this.ordenar(),
-        limite: this.limite,
-        offset: this.notas().length,
-      });
-      this.notas.update((ya) => [...ya, ...respuesta.datos]);
-      this.totalNotas.set(respuesta.total);
-    } catch (falla) {
-      this.errorLista.set(errorLegible(falla).mensaje);
-    } finally {
-      this.buscandoMas.set(false);
-    }
+  /** Vuelve a la primera pagina, con el filtro o el orden que se tenga. */
+  async recargar(): Promise<void> {
+    await this.cargarPagina(1);
+  }
+
+  /** Cambia de pagina y sube la tabla a la vista: cambiar de pagina es un salto. */
+  async irAPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+    await this.cargarPagina(pagina);
+    this.subirTabla();
+  }
+
+  /**
+   * El tamano de pagina como texto, para el `[value]` del desplegable.
+   *
+   * En las plantillas de Angular no hay `String` global (si `JSON`, si `Math`,
+   * pero no `String`), y `[value]` necesita texto: con un numero, el `value`
+   * del `select` no coincide con ninguna opcion y el desplegable sale vacio.
+   */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  /**
+   * Cambia cuantas notas se ven por pagina.
+   *
+   * Vuelve SIEMPRE a la pagina 1: quedarse en la pagina 7 y cambiar de 25 a
+   * 50 filas es quedarse en un `offset` que ya no quiere decir nada.
+   */
+  async aTamanoDePagina(valor: string): Promise<void> {
+    this.limite.set(Number(valor));
+    await this.cargarPagina(1);
   }
 
   /** El buscador de la tabla: 250 ms, como todos los de la app. */
@@ -992,9 +1041,9 @@ export class Notas {
   /**
    * Cambia el orden del listado y vuelve a la primera pagina.
    *
-   * El `recargar()` (y no un `cargarMas`) es lo correcto aqui: al cambiar el
-   * criterio de orden, quedarse en la pagina 3 significaria mostrar una ventana
-   * del medio de otra lista, que no es lo que nadie pide.
+   * Vuelve a la pagina 1: al cambiar el criterio de orden, quedarse en la 3
+   * seria mostrar una ventana del medio de otra lista, que no es lo que nadie
+   * pide.
    */
   aOrdenar(valor: string): void {
     this.ordenar.set(valor as OrdenNotas);
@@ -1091,6 +1140,18 @@ export class Notas {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  /**
+   * Sube hasta la tabla de notas, no hasta arriba de la pagina.
+   *
+   * Al cambiar de pagina el scroll se queda donde estaba, y como la tabla esta
+   * mas abajo, el cambio de pagina no se ve: solo cambia el numero de la barra
+   * de paginacion, que puede estar fuera de pantalla. Con la tabla a la vista
+   * el cambio se ve.
+   */
+  private subirTabla(): void {
+    document.querySelector('.tabla-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   /** Cierra el formulario de edicion y deja la pantalla como una nota nueva. */
   cancelarEdicion(): void {
     this.editando.set(null);
@@ -1099,10 +1160,18 @@ export class Notas {
     this.subirArriba();
   }
 
-  async imprimir(notaId: number): Promise<void> {
+  /**
+   * Abre el papel de la nota.
+   *
+   * Por defecto son DOS copias en una hoja (una para el cliente, otra para el
+   * archivo, y se corta por la mitad). `copias = 1` sale vertical a tamano
+   * completo, que es lo que hace falta cuando la nota es larga y la letra de
+   * la copia chica ya no se lee sin lupa.
+   */
+  async imprimir(notaId: number, copias: 1 | 2 = 2): Promise<void> {
     this.errorLista.set(null);
     try {
-      await this.api.abrirPdf(notaId);
+      await this.api.abrirPdf(notaId, copias);
     } catch (falla) {
       this.errorLista.set(errorLegible(falla).mensaje);
     }

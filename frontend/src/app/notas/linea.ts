@@ -1,5 +1,5 @@
 import { decimalComoTexto, kilosComoTexto, montoComoTexto, redondearMonto } from '../nucleo/cifras';
-import type { Producto, PrecioEfectivo } from './notas-api';
+import type { Producto, PrecioEfectivo, RenglonNota } from './notas-api';
 
 /**
  * Un renglon del POS, tal como esta en la pantalla.
@@ -27,10 +27,22 @@ export interface Linea {
   /** Que la persona toco los kilos a mano y hay que mandarlos. */
   kg_editado: boolean;
   cantidad_bultos: number;
+  /**
+   * El id del renglon en la base, cuando la linea viene de una nota que se
+   * esta corrigiendo.
+   *
+   * Es lo que le dice al backend "este ya existia": sin el, cada guardado
+   * borraria todos los renglones y los volveria a crear, y con ellos sus
+   * movimientos de inventario. En el alta no hay ninguno, y por eso es
+   * opcional.
+   */
+  renglon_id?: number;
+  /** La bodega de la que salio el producto, si la linea viene de la nota. */
+  almacen_id?: number;
   /** El precio que resolved el backend. `null` si todavia no se sabe. */
   precio_unit_kg: number | null;
   /** De donde salio el precio, para poder decirlo en la pantalla. */
-  precio_origen: 'cliente' | 'publico' | null;
+  precio_origen: 'cliente' | 'publico' | 'nota' | null;
 }
 
 /** Un renglon todavia sin precio: sale al mundo cuando el precio llega. */
@@ -49,6 +61,43 @@ export function lineaVacia(producto: Producto): Linea {
   };
 }
 
+/**
+ * Un renglon que ya estaba en la nota, cargado para corregirla.
+ *
+ * Es la devolucion: la persona abre la nota, baja los bultos de lo que se
+ * llevo de mas, quita el renglon de lo que no se llevo, y guarda. El backend
+ * mete la diferencia al almacen y recalcula el subtotal.
+ *
+ * Tres cosas que aqui NO se pueden saber y por eso se resuelven asi:
+ *
+ *   - El precio no se vuelve a preguntar: se copia el del renglon, que es el
+ *     que se cobro. Preguntar el de hoy convertiria una devolucion de 8 bultos
+ *     en un cambio de precio por kilo.
+ *   - `presentacion_kg` se pone igual al `kg_bulto` que trae la nota. La nota
+ *     no guarda la presentacion del producto, solo los kilos que se
+ *     cobraron, y este valor solo se usa para saber si la persona VOLVIO a
+ *     escribir los kilos; si no los toco, no hay nada que mandar (ver
+ *     `kgComoTextoSiHayQueMandarlo`).
+ *   - `kg_editado` arranca en `false` aunque el renglon traiga unos kilos que
+ *     no son los del producto: los manda el `renglon_id`, no el flag.
+ */
+export function lineaDeRenglon(renglon: RenglonNota): Linea {
+  return {
+    uid: siguienteUid(),
+    producto_id: renglon.producto_id,
+    producto_codigo: renglon.producto_codigo,
+    producto_nombre: renglon.producto_nombre,
+    presentacion_kg: renglon.kg_bulto,
+    kg_bulto: renglon.kg_bulto,
+    kg_editado: false,
+    cantidad_bultos: renglon.cantidad_bultos,
+    renglon_id: renglon.id,
+    almacen_id: renglon.almacen_id,
+    precio_unit_kg: renglon.precio_unit_kg,
+    precio_origen: 'nota',
+  };
+}
+
 /** El precio ya resuelto se le pone a la linea. */
 export function conPrecio(linea: Linea, precio: PrecioEfectivo): Linea {
   return {
@@ -63,10 +112,15 @@ export function conPrecio(linea: Linea, precio: PrecioEfectivo): Linea {
  * de la lista. El POS lo dice en la linea porque es la pregunta que se
  * hace el operador ("¿le estoy cobrando bien?") y la respuesta son dos
  * palabras.
+ *
+ * `'nota'` es el caso de una linea que se cargo de una nota para corregirla:
+ * el precio no se volvio a preguntar, se tomo del renglon. Decir "precio de
+ * lista" ahi seria mentir, porque el de la lista puede ser otro.
  */
 export function origenComoTexto(linea: Linea): string {
   if (linea.precio_unit_kg === null) return 'sin precio';
   if (linea.precio_origen === 'cliente') return 'precio de cliente';
+  if (linea.precio_origen === 'nota') return 'precio de la nota';
   return 'precio de lista';
 }
 
@@ -243,8 +297,26 @@ export function cantidadComoTexto(linea: Linea): string {
   return decimalComoTexto(linea.cantidad_bultos, 2);
 }
 
-/** Los kilos por bulto, si la persona los toco. Si no, no se mandan. */
-export function kilosComoTextoSiEditados(linea: Linea): string | null {
+/**
+ * Los kilos por bulto, pero solo si hay que mandarlos.
+ *
+ * En el ALTA se mandan solo si la persona los toco: si no, se omiten y la
+ * base los rellena con `productos.presentacion_kg`, que es la presentacion
+ * real del producto y no la que el navegador recuerda.
+ *
+ * En la EDICION se mandan siempre, y la razon es el trigger
+ * `fn_default_kg_bulto` de 0001: `actualizarRenglon` hace
+ * `kg_bulto = COALESCE($4, NULL)`, o sea que un renglon enviado sin kilos
+ * vuelve a la presentacion del producto. Una nota que vendio bultos de 25.5
+ * kg porque ese dia el producto venia en 25.5 se convertiria sola en bultos
+ * de 25, con otros kilos y otro subtotal, por no haber mandado un campo que
+ * en pantalla no cambio.
+ *
+ * Por eso el nombre no dice "si se editaron": la regla es si hay que
+ * mandarlos, y depende de si la linea viene de la nota.
+ */
+export function kgComoTextoSiHayQueMandarlo(linea: Linea): string | null {
+  if (linea.renglon_id !== undefined) return decimalComoTexto(linea.kg_bulto, 3);
   if (!linea.kg_editado) return null;
   return decimalComoTexto(linea.kg_bulto, 3);
 }

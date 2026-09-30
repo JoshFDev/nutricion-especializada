@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
-import { cantidadComoTexto, kilosComoTextoSiEditados, type Linea } from './linea';
+import { cantidadComoTexto, kgComoTextoSiHayQueMandarlo, type Linea } from './linea';
 
 /**
  * La API del mostrador: clientes, productos, precios y el alta de la nota.
@@ -59,6 +59,7 @@ export interface RenglonNota {
   producto_id: number;
   producto_codigo: string;
   producto_nombre: string;
+  almacen_id: number;
   almacen: string;
   cantidad_bultos: number;
   kg_bulto: number;
@@ -73,12 +74,57 @@ export interface Nota {
   folio: string;
   cliente_id: number;
   cliente: string;
+  vendedor_id: number | null;
   vendedor: string | null;
   fecha: string;
   direccion_entrega: string | null;
   subtotal: number;
-  estatus: 'pendiente' | 'parcial' | 'pagada' | 'cancelada';
+  estatus: EstatusNota;
+  motivo_cancelacion: string | null;
+  creado_en: string;
+  actualizado_en: string;
   renglones: RenglonNota[];
+}
+
+export type EstatusNota = 'pendiente' | 'parcial' | 'pagada' | 'cancelada';
+
+/**
+ * `notas-remision/modelo.ts` -> `NotaListada`: la fila de la tabla de abajo.
+ *
+ * NO trae los renglones (traerlos para 50 notas seria pintar 50 tablas
+ * enteras), solo cuantos tiene. El detalle se pide con `consultar` cuando la
+ * persona abre una fila.
+ */
+export interface NotaListada {
+  id: number;
+  folio: string;
+  cliente_id: number;
+  cliente: string;
+  vendedor: string | null;
+  fecha: string;
+  subtotal: number;
+  estatus: EstatusNota;
+  renglones: number;
+}
+
+/**
+ * El periodo del listado. `hoy` y `ultimos_7` los resuelve la BASE
+ * (`periodosEsquema` en `notas-remision/esquemas.ts`), no el navegador: la
+ * fecha de una nota la decide `CURRENT_DATE` del servidor de la base, y un
+ * filtro armado con la fecha del navegador deja fuera la nota que se acaba de
+ * capturar cuando la maquina del mostrador y el servidor estan en dias
+ * distintos.
+ *
+ * `'todo'` no existe en el backend: es la ausencia de filtro, y se manda
+ * `undefined`.
+ */
+export type Periodo = 'hoy' | 'ultimos_7';
+
+export interface FiltroNotas {
+  periodo?: Periodo;
+  buscar?: string;
+  limite: number;
+  offset: number;
 }
 
 /** La envoltura de los listados. `notas-remision/modelo.ts` -> `Listado`. */
@@ -130,6 +176,44 @@ export interface RenglonNotaBody {
 }
 
 /**
+ * El cuerpo de `PATCH /api/notas-remision/:id`, tal como lo quiere
+ * `editarNotaEsquema`.
+ *
+ * Tres diferencias con el del alta, y las tres son obligatorias:
+ *
+ *   - `renglones[].id`: sin el, el backend no puede distinguir "este renglon
+ *     ya estaba" de "este es nuevo", y cada guardado borraria todos los
+ *     renglones y los volveria a crear. Con los renglones borrados y
+ *     recreados, sus movimientos de inventario tambien se borran y se
+ *     rehacen: una devolucion terminaria con el kardoex lleno de ruido.
+ *     Los que la persona quito de la tabla (una devolucion completa) no
+ *     vienen, y el backend los borra de verdad.
+ *   - `almacen_id`: se toma del renglon (`RenglonNota.almacen_id`), no del
+ *     `ALMACEN_ID` de este archivo. En el alta no hay de donde sacarlo porque
+ *     la nota es nueva; al corregir una nota, el producto puede haber salido
+ *     de otra bodega, y mandarle el almacen equivocado descuenta el stock de
+ *     la que no es.
+ *   - `precio_unit_kg`: tampoco se manda, y por la misma razon que en el
+ *     alta. El backend conserva el precio de los renglones que ya estaban
+ *     (ver `prepararRenglones` -> `aConservar` en el servicio), que es lo
+ *     que se cobro. Bajar bultos en una devolucion no puede cambiar el
+ *     precio por kilo de lo que quedo.
+ */
+export interface CuerpoEdicion {
+  cliente_id: number;
+  direccion_entrega: string | null;
+  renglones: RenglonEdicionBody[];
+}
+
+export interface RenglonEdicionBody {
+  id?: number;
+  producto_id: number;
+  almacen_id: number;
+  cantidad_bultos: string;
+  kg_bulto?: string;
+}
+
+/**
  * El almacen del que sale la venta.
  *
  * `almacenes.id` es un SMALLINT y no hay endpoint de almacenes todavia (no
@@ -173,7 +257,7 @@ export function cuerpoDeNota(
     cliente_id: clienteId,
     serie: SERIE,
     renglones: lineas.map((linea) => {
-      const kilos = kilosComoTextoSiEditados(linea);
+      const kilos = kgComoTextoSiHayQueMandarlo(linea);
       return {
         producto_id: linea.producto_id,
         almacen_id: ALMACEN_ID,
@@ -190,6 +274,43 @@ export function cuerpoDeNota(
   if (limpia) cuerpo.direccion_entrega = limpia;
 
   return cuerpo;
+}
+
+/**
+ * Arma el cuerpo de la edicion (la devolucion).
+ *
+ * A diferencia del alta, aqui la direccion se manda SIEMPRE, aunque venga
+ * vacia: `editarNotaEsquema` trata `direccion_entrega` como lo que es, un
+ * campo que se puede dejar en null, y mandarlo solo cuando hay texto hacia
+ * que quitar la direccion que la nota tenia y no se puede quitar. En el alta
+ * no hay nada que quitar (la nota no existia), asi que alli si vale la regla
+ * de "solo si hay algo".
+ */
+export function cuerpoDeEdicion(
+  clienteId: number,
+  lineas: Linea[],
+  direccion: string,
+): CuerpoEdicion {
+  if (lineas.length === 0) {
+    // Un renglon de menos es una devolucion; una nota sin renglones es un
+    // documento que no existe. Cancelarla es otra cosa y tiene otro boton.
+    throw new Error('Una nota necesita al menos un renglon');
+  }
+
+  return {
+    cliente_id: clienteId,
+    direccion_entrega: direccion.trim() === '' ? null : direccion.trim(),
+    renglones: lineas.map((linea) => {
+      const kilos = kgComoTextoSiHayQueMandarlo(linea);
+      return {
+        ...(linea.renglon_id === undefined ? {} : { id: linea.renglon_id }),
+        producto_id: linea.producto_id,
+        almacen_id: linea.almacen_id ?? ALMACEN_ID,
+        cantidad_bultos: cantidadComoTexto(linea),
+        ...(kilos === null ? {} : { kg_bulto: kilos }),
+      };
+    }),
+  };
 }
 
 // ----------------------------------------------------------------- las llamadas
@@ -260,6 +381,70 @@ export class NotasApi {
    */
   async crear(cuerpo: CuerpoNota): Promise<Nota> {
     return firstValueFrom(this.http.post<Nota>(`${API}/notas-remision`, cuerpo));
+  }
+
+  /**
+   * La tabla de notas de abajo del mostrador.
+   *
+   * `periodo` viaja tal cual y lo resuelve la base (ver `Periodo`), porque
+   * "hoy" es el dia de la base y no el del reloj del navegador. `buscar` lo
+   * acepta el backend por folio ("A-1001" o solo "1001") o por nombre del
+   * cliente, que son las dos cosas que se teclean en un mostrador.
+   */
+  async listar(filtro: FiltroNotas): Promise<Listado<NotaListada>> {
+    return firstValueFrom(
+      this.http.get<Listado<NotaListada>>(`${API}/notas-remision`, {
+        params: {
+          ...(filtro.periodo === undefined ? {} : { periodo: filtro.periodo }),
+          ...(filtro.buscar === undefined ? {} : { buscar: filtro.buscar }),
+          limite: filtro.limite,
+          offset: filtro.offset,
+        },
+      }),
+    );
+  }
+
+  /**
+   * La nota CON sus renglones: la que se abre al ver una fila de la tabla y
+   * la que se carga en el formulario para una devolucion.
+   *
+   * El listado no las trae (traerlas para 50 notas seria pintar 50 tablas),
+   * asi que abrir una fila o devolver mercancia cuesta una llamada. Es una
+   * llamada por cada vez que la persona hace algo con ESA nota, no por nota.
+   */
+  async consultar(notaId: number): Promise<Nota> {
+    return firstValueFrom(this.http.get<Nota>(`${API}/notas-remision/${notaId}`));
+  }
+
+  /**
+   * Corrige la nota: es la devolucion.
+   *
+   * Manda el detalle COMPLETO, no solo lo que cambio. Es lo que espera
+   * `editarNotaEsquema` y lo que hace el backend: los renglones que no
+   * vuelven en el arreglo se borran (y con ellos vuelve la mercancia al
+   * almacen, por el trigger de inventario) y los que vuelven con id se
+   * actualizan. Mandar "solo lo que bajo" haria que cada devolucion borrara
+   * la nota entera.
+   *
+   * Devuelve la nota ya recalculada, con el `subtotal` de la base: el total
+   * que se ve mientras se corrige es un preview y este es el del documento.
+   */
+  async editar(notaId: number, cuerpo: CuerpoEdicion): Promise<Nota> {
+    return firstValueFrom(this.http.patch<Nota>(`${API}/notas-remision/${notaId}`, cuerpo));
+  }
+
+  /**
+   * Cancela la nota, con su motivo.
+   *
+   * El motivo no es opcion: el backend lo exige (el CHECK
+   * `chk_notas_motivo_cancelacion` de la migracion 0008) porque una
+   * cancelacion sin explicacion es un boton que borra trabajo. Y cancelar no
+   * es lo mismo que devolver: la devolucion es `editar`.
+   */
+  async cancelar(notaId: number, motivo: string): Promise<Nota> {
+    return firstValueFrom(
+      this.http.post<Nota>(`${API}/notas-remision/${notaId}/cancelar`, { motivo }),
+    );
   }
 
   /**

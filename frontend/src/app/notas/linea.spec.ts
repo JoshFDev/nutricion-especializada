@@ -4,8 +4,10 @@ import {
   cambiarCantidad,
   cambiarKilos,
   conPrecio,
+  kgComoTextoSiHayQueMandarlo,
   kilosDeLinea,
   kilosDeLineas,
+  lineaDeRenglon,
   lineaValida,
   lineaVacia,
   montoDeLinea,
@@ -17,7 +19,7 @@ import {
   vaciar,
   type Linea,
 } from './linea';
-import type { PrecioEfectivo, Producto } from './notas-api';
+import type { PrecioEfectivo, Producto, RenglonNota } from './notas-api';
 
 const LAC: Producto = {
   id: 7,
@@ -177,6 +179,12 @@ describe('el origen del precio', () => {
     );
   });
 
+  it('el de la nota se dice, para una devolucion que se esta corrigiendo', () => {
+    // El precio se tomo del renglon y no se volvio a preguntar, asi que
+    // decir "precio de lista" ahi seria mentir.
+    expect(origenComoTexto({ ...lista(), precio_origen: 'nota' })).toBe('precio de la nota');
+  });
+
   it('sin precio se dice, no se disimula', () => {
     expect(origenComoTexto(lineaVacia(LAC))).toBe('sin precio');
   });
@@ -195,5 +203,70 @@ describe('que renglones se pueden mandar', () => {
   it('una cantidad descabellada se marca antes de mandarla', () => {
     // El backend valida hasta 8 cifras enteras; aqui se avisa.
     expect(problemasDe(cambiarCantidad(lista(), 999_999_999))['cantidad_bultos']).toBeDefined();
+  });
+});
+
+describe('un renglon que viene de la nota', () => {
+  /** El renglon que devuelve `GET /:id` para la nota 5. */
+  const renglon: RenglonNota = {
+    id: 41,
+    producto_id: 7,
+    producto_codigo: 'LAC',
+    producto_nombre: 'VIMILAC 400',
+    almacen_id: 2,
+    almacen: 'Bodega 2',
+    cantidad_bultos: 3,
+    kg_bulto: 25.5,
+    precio_unit_kg: 8.5,
+    subtotal: 650.25,
+  };
+
+  it('copia el renglon: producto, bultos, kilos, precio y bodega', () => {
+    const linea = lineaDeRenglon(renglon);
+    expect(linea.producto_id).toBe(7);
+    expect(linea.cantidad_bultos).toBe(3);
+    expect(linea.kg_bulto).toBe(25.5);
+    expect(linea.precio_unit_kg).toBe(8.5);
+    expect(linea.renglon_id).toBe(41);
+    expect(linea.almacen_id).toBe(2);
+  });
+
+  it('arranca sin que los kilos esten marcados como editados', () => {
+    // Los kilos de 25.5 no son los de la presentacion (20), pero al traer
+    // el renglon_id ya se mandan; el flag de "los toco a mano" es solo del alta.
+    expect(lineaDeRenglon(renglon).kg_editado).toBe(false);
+  });
+
+  it('el precio se dice como el de la nota, no se vuelve a preguntar', () => {
+    expect(lineaDeRenglon(renglon).precio_origen).toBe('nota');
+  });
+});
+
+describe('si hay que mandar los kilos por bulto', () => {
+  it('en el alta, sin tocarlos, no se mandan: los rellena la base', () => {
+    expect(kgComoTextoSiHayQueMandarlo(lista())).toBeNull();
+  });
+
+  it('en el alta, tocados, se mandan con tres decimales', () => {
+    expect(kgComoTextoSiHayQueMandarlo(cambiarKilos(lista(), 25.5))).toBe('25.5');
+  });
+
+  it('en la EDICION se mandan SIEMPRE, aunque no se hayan tocado', () => {
+    // La diferencia con el alta: el trigger `fn_default_kg_bulto` vuelve a
+    // la presentacion del producto cualquier renglon que llegue sin kilos,
+    // y una nota que vendio bultos de 25.5 se convertiria en bultos de 25.
+    const deNota = lineaDeRenglon({
+      id: 41,
+      producto_id: 7,
+      producto_codigo: 'LAC',
+      producto_nombre: 'VIMILAC 400',
+      almacen_id: 2,
+      almacen: 'Bodega 2',
+      cantidad_bultos: 3,
+      kg_bulto: 25.5,
+      precio_unit_kg: 8.5,
+      subtotal: 650.25,
+    });
+    expect(kgComoTextoSiHayQueMandarlo(deNota)).toBe('25.5');
   });
 });

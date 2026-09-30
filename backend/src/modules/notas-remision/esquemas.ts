@@ -210,12 +210,33 @@ const paginacion = {
   offset: z.coerce.number().int().min(0).default(0),
 };
 
+/**
+ * El periodo del listado, resuelto por la BASE y no por el navegador.
+ *
+ * El mostrador pregunta "las notas de hoy" y manda `periodo=hoy`, no dos
+ * fechas. La razon es el huso horario: la fecha de una nota la decide
+ * `CURRENT_DATE` del servidor de la base (ver `hoyEnLaBase` en
+ * `servicio.ts`), asi que una nota creada a las 11 de la noche con la
+ * computadora del mostrador en otro dia ya pertenece al dia de la base. Si
+ * el filtro lo armara el navegador con `new Date()`, esa nota apareceria en
+ * el listado de manana y no en el de hoy, que es justo la nota que el
+ * operador esta buscando.
+ *
+ * Los dos periodos se nombran, no se restan dias en el cliente: `hoy` es
+ * `CURRENT_DATE` y `ultimos_7` son los ultimos siete dias de la base, que
+ * incluyen hoy. Es el mismo criterio que los precios por vigencia, y la
+ * unica diferencia es que aqui el filtro es de una consulta y alli era el
+ * precio.
+ */
+export const periodosEsquema = z.enum(['hoy', 'ultimos_7']);
+
 /** Listado. Los filtros son los de una pantalla de ventas, no mas. */
 export const listarNotasEsquema = z
   .object({
     cliente_id: idPositivo.optional(),
     vendedor_id: idPositivo.optional(),
     estatus: z.enum(['pendiente', 'parcial', 'pagada', 'cancelada']).optional(),
+    periodo: periodosEsquema.optional(),
     desde: fecha('desde').optional(),
     hasta: fecha('hasta').optional(),
     buscar: sinControl('La busqueda').max(120).optional(),

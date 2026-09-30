@@ -33,16 +33,17 @@ clientes y proveedores, y flujo de caja/bancos.
 **Pendiente**
 
 - [x] Corregir los 11 bugs de la Avance 1 (ver "Bugs de la Avance 1: estado")
-- [x] API REST en Express (15 módulos: `salud`, `auth`, `catalogo`,
+- [x] API REST en Express (16 módulos: `salud`, `auth`, `catalogo`,
       `clientes`, `usuarios`, `productos`, `precios`, `notas-remision`,
       `pagos`, `proveedores`, `compras`, `inventario`, `caja`,
-      `facturacion` y `auditoria`)
+      `facturacion`, `auditoria` y `direcciones`)
 - [x] Login + endpoint de permisos (usar `fn_tiene_permiso`)
 - [x] Generación de PDF de notas de remisión
 - [x] Frontend en Angular: sesion, login, cambio de contrasena, marco con
       menu por permisos y los 14 modulos enrutados (las pantallas todavia
       no estan)
-- [ ] Pantallas del negocio (el POS es el primero)
+- [ ] Pantallas del negocio (el POS es el primero, con su lista de notas,
+      direcciones de entrega, devoluciones al editarlas y cancelaciones)
 - [ ] Modulo de reportes (las vistas ya existen, no hay endpoints)
 - [ ] Deploy (base de datos + backend + frontend)
 
@@ -77,7 +78,8 @@ nutricion-especializada-pos/
 │   │   ├── 0007_precios_sin_traslape.sql
 │   │   ├── 0008_notas_bloqueo_estado.sql
 │   │   ├── 0009_compras_motivo_cancelacion.sql
-│   │   └── 0010_facturas_auditoria_permisos.sql
+│   │   ├── 0010_facturas_auditoria_permisos.sql
+│   │   └── 0011_direcciones_entrega.sql        # lista de direcciones del POS
 │   ├── seeds/
 │   │   └── seed_demo.sql                  # datos de prueba (no reales)
 │   └── tests/                             # pruebas en SQL puro
@@ -91,7 +93,8 @@ nutricion-especializada-pos/
 │   │   │                                  #   notas-remision, pagos,
 │   │   │                                  #   proveedores, compras,
 │   │   │                                  #   inventario, caja,
-│   │   │                                  #   facturacion, auditoria
+│   │   │                                  #   facturacion, auditoria,
+│   │   │                                  #   direcciones
 │   │   ├── config/                        # entorno validado con Zod
 │   │   ├── app.ts                         # composición: orden de middlewares
 │   │   └── index.ts                       # arranque y cierre del pool
@@ -244,6 +247,30 @@ GET /precios      cambios de precio, con la variación
   no ve ninguna. Son las separaciones que ya traían `0006`, ahora con rutas
   donde se pueden probar.
 
+### `direcciones` — direcciones de entrega de la sucursal (`/api/direcciones-entrega`)
+
+| Endpoint         | Qué hace                                   |
+| ---------------- | ------------------------------------------ |
+| `GET /`          | Lista, ordenadas por nombre                |
+| `POST /`         | Da de alta con nombre corto + texto        |
+| `PUT /:id`       | Corrige (los dos campos se mandan siempre) |
+| `DELETE /:id`    | Borra del catálogo                         |
+
+- Son de la **sucursal**, no del cliente: el POS las ofrece y la persona
+  elige o escribe a mano la dirección de la entrega.
+- La nota copia el texto (`notas_remision.direccion_entrega`) y **no** apunta
+  a este catálogo: corregir o borrar una dirección nunca cambia las notas ya
+  emitidas, igual que el `nombre` de una especie no cambia los clientes que lo
+  usan. Por eso el `DELETE` no pregunta si está en uso.
+- Es un catálogo y se maneja como los de `0003`: permisos por ruta
+  (`direcciones.ver/crear/editar/eliminar`) y **sin** trigger
+  `fn_trg_permiso` en la tabla; la Cajera tiene todo y la Empleada solo
+  `ver` y `crear`.
+- `PUT` y no `PATCH`: los dos campos se mandan siempre, así corregir el
+  nombre sin tocar el texto no pierde el texto.
+- El nombre se valida único (índice `lower(nombre)`) y la dirección no puede
+  superar los 300 caracteres, que es el ancho de `direccion_entrega`.
+
 ## Usuarios, roles y permisos
 
 ### El modelo
@@ -255,10 +282,11 @@ usuarios ──┬── usuarios_roles ──┬── roles ── roles_permi
 ```
 
 - **permisos**: la unidad real de acceso, con código `modulo.accion`
-  (44 permisos: `clientes.editar`, `caja.eliminar`, `auditoria.caja`...).
+  (48 permisos: `clientes.editar`, `caja.eliminar`, `auditoria.caja`...).
   Los de notas de remisión son `notas.ver`, `notas.crear`, `notas.editar`,
   `notas.cancelar` y `notas.folios`; este último lo administra solo el
   Administrador (migración 0008), porque es quien declara una serie completa.
+  Los de direcciones (`direcciones.*`) vienen de la 0011.
 - **roles**: agrupa permisos. Vienen tres: `Administrador` (todo),
   `Empleada` (opera el día a día, sin precios ni caja.eliminar) y
   `Cajera` (caja y cobranza, sin ver precios).

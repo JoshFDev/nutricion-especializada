@@ -89,6 +89,19 @@ const construirFiltro = (q: ListarNotas) => {
     condiciones.push(`n.estatus = $${valores.length}`);
   }
 
+  if (q.periodo === 'hoy') {
+    // `CURRENT_DATE` y no una fecha que mande el frontend. Ver
+    // `periodosEsquema` en `esquemas.ts`: la fecha de la nota la decide la
+    // base, asi que el filtro tiene que decidirla la misma base o al final
+    // del dia la nota que se acaba de capturar no aparece donde se capturo.
+    condiciones.push('n.fecha = CURRENT_DATE');
+  } else if (q.periodo === 'ultimos_7') {
+    // Siete dias INCLUDING hoy: son hoy y los seis anteriores. Con
+    // `INTERVAL '7 days'` seria hoy y siete, y el nombre del filtro diria
+    // una cosa y el listado otra.
+    condiciones.push("n.fecha >= CURRENT_DATE - INTERVAL '6 days'");
+  }
+
   if (q.desde !== undefined) {
     valores.push(q.desde);
     condiciones.push(`n.fecha >= $${valores.length}::date`);

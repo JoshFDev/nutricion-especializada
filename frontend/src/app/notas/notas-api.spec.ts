@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ALMACEN_ID, SERIE, cuerpoDeNota } from './notas-api';
-import { cambiarCantidad, cambiarKilos, conPrecio, lineaVacia, type Linea } from './linea';
-import type { PrecioEfectivo, Producto } from './notas-api';
+import { ALMACEN_ID, SERIE, cuerpoDeEdicion, cuerpoDeNota } from './notas-api';
+import {
+  cambiarCantidad,
+  cambiarKilos,
+  conPrecio,
+  lineaDeRenglon,
+  lineaVacia,
+  type Linea,
+} from './linea';
+import type { PrecioEfectivo, Producto, RenglonNota } from './notas-api';
 
 /**
  * El cuerpo de la nota: lo que se manda al backend.
@@ -130,5 +137,81 @@ describe('el cuerpo de la nota', () => {
       cambiarCantidad(conPrecio(lineaVacia(otro), { ...PRECIO, producto_id: 9, precio_kg: 12 }), 3),
     ]);
     expect(cuerpo.renglones.map((r) => r.producto_id)).toEqual([7, 9]);
+  });
+});
+
+/**
+ * El cuerpo de la EDICION: la devolucion.
+ *
+ * Es la prueba de que una correccion no reescribe la nota entera: los
+ * renglones que ya estaban llevan su id para que el backend los actualice y
+ * no los borre y recree (y con ellos sus movimientos de inventario).
+ */
+describe('el cuerpo de la edicion', () => {
+  /** Un renglon de la nota 5, como lo devuelve `GET /:id`. */
+  const renglon: RenglonNota = {
+    id: 41,
+    producto_id: 7,
+    producto_codigo: 'LAC',
+    producto_nombre: 'VIMILAC 400',
+    almacen_id: 2,
+    almacen: 'Bodega 2',
+    cantidad_bultos: 3,
+    kg_bulto: 25.5,
+    precio_unit_kg: 8.5,
+    subtotal: 650.25,
+  };
+
+  /** La nota se carga con `lineaDeRenglon`, como hace la pantalla. */
+  const deNota = (): Linea => lineaDeRenglon(renglon);
+
+  it('lleva el cliente y los renglones con su id, para que el backend actualice', () => {
+    const cuerpo = cuerpoDeEdicion(3, [deNota()], '');
+    expect(cuerpo.cliente_id).toBe(3);
+    expect(cuerpo.renglones).toHaveLength(1);
+    expect(cuerpo.renglones[0].id).toBe(41);
+  });
+
+  it('la direccion vacia SI se manda: en la edicion se puede quitar', () => {
+    // En el alta, vacia no se manda (no hay nada que quitar); en la edicion
+    // va como `null` para que la nota pueda quedarse sin direccion.
+    expect(cuerpoDeEdicion(3, [deNota()], '').direccion_entrega).toBeNull();
+    expect(cuerpoDeEdicion(3, [deNota()], '   ').direccion_entrega).toBeNull();
+    expect(cuerpoDeEdicion(3, [deNota()], '  Calle 5  ').direccion_entrega).toBe('Calle 5');
+  });
+
+  it('el almacen sale del renglon, NO del ALMACEN_ID del alta', () => {
+    // El producto puede haber salido de otra bodega, y mandarle el almacen
+    // equivocado descuenta el stock del que no es.
+    expect(cuerpoDeEdicion(3, [deNota()], '').renglones[0].almacen_id).toBe(2);
+  });
+
+  it('los kilos se mandan SIEMPRE en la edicion', () => {
+    // Sin el id no se distinguen de un renglon nuevo, y un renglon sin kilos
+    // vuelve a la presentacion del producto (trigger `fn_default_kg_bulto`).
+    const cuerpo = cuerpoDeEdicion(3, [deNota()], '');
+    expect(cuerpo.renglones[0].kg_bulto).toBe('25.5');
+  });
+
+  it('el precio no se manda: el backend conserva el del renglon', () => {
+    const cuerpo = cuerpoDeEdicion(3, [deNota()], '');
+    expect(cuerpo.renglones[0]).not.toHaveProperty('precio_unit_kg');
+  });
+
+  it('un renglon nuevo (sin id, agregado por el buscador) se puede anadir a la nota', () => {
+    // No todo es devolver: a la nota tambien se le puede anadir producto. El
+    // renglon que entra por el buscador no tiene `renglon_id`, y ese es el
+    // que se manda sin id para que el backend lo cree.
+    const nuevo = conPrecio(lineaVacia({ ...LAC, id: 9, codigo: 'DHP', nombre: 'DHP-22' }), {
+      ...PRECIO,
+      producto_id: 9,
+    });
+    const cuerpo = cuerpoDeEdicion(3, [deNota(), nuevo], '');
+    expect(cuerpo.renglones[1]).not.toHaveProperty('id');
+    expect(cuerpo.renglones[1].producto_id).toBe(9);
+  });
+
+  it('una edicion sin renglones no sale: eso es cancelar, con otro boton', () => {
+    expect(() => cuerpoDeEdicion(3, [], '')).toThrow(/al menos un renglon/);
   });
 });

@@ -6,17 +6,77 @@
  * alineados a la derecha (es dinero y se compara de columna), y el renglon
  * se quita con un boton de texto y no con un iconito de 12 pixeles.
  *
- * Los colores son los de `styles.scss`, no valores sueltos: son los mismos
- * que el menu y el login, y por eso esta pantalla no define ninguno.
+ * La pantalla junta DOS familias que ya existen: la CAPTURA de notas (los
+ * bloques con buscador, los renglones con inputs y el cierre con el total)
+ * y la TABLA con filtros y paginacion de compras/proveedores, que es la de
+ * abajo. Los colores salen de `styles.scss`, no de valores sueltos.
  */
 
 :host {
   display: block;
 }
 
-h1 {
-  margin: 0 0 1rem;
+h1,
+h2 {
+  margin: 0;
   font-size: 1.25rem;
+}
+
+/* ------------------------------------------------------------- la cabecera */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.subtitulo {
+  max-width: 46rem;
+  margin: 0;
+  color: var(--texto-suave);
+}
+
+/* ----------------------------------------- los avisos de arriba de la captura */
+
+.editando {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--texto);
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+}
+
+.editando p {
+  margin: 0;
+}
+
+.guardada {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--exito-texto);
+  background: var(--exito-suave);
+  border: 1px solid var(--exito-texto);
+  border-radius: 6px;
+}
+
+.guardada-aparte {
+  margin: 0;
+}
+
+.acciones.secas {
+  margin: 0;
 }
 
 /* ------------------------------------------------------------- los bloques */
@@ -40,7 +100,8 @@ label {
 }
 
 input[type='search'],
-input[type='text'] {
+input[type='text'],
+textarea {
   width: 100%;
   padding: 0.5rem 0.625rem;
   font: inherit;
@@ -50,11 +111,25 @@ input[type='text'] {
   border-radius: 6px;
 }
 
+textarea {
+  resize: vertical;
+}
+
 input[type='number'] {
   width: 6.5rem;
   padding: 0.375rem 0.5rem;
   font: inherit;
   text-align: right;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+select,
+.filtro {
+  padding: 0.5rem 0.625rem;
+  font: inherit;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
@@ -113,10 +188,11 @@ input[type='number'] {
   background: var(--acento-suave);
 }
 
-/* -------------------------------------------------------------- la tabla */
+/* -------------------------------------------------------------- la tabla de captura */
 
 .renglones,
-.detalle {
+.detalle,
+.tabla {
   width: 100%;
   margin-bottom: 1rem;
   border-collapse: collapse;
@@ -199,8 +275,81 @@ tbody tr:last-child td {
   color: var(--texto-tenue);
 }
 
+/* --------------------------------------------------------------- la direccion */
+
 .direccion {
   margin-bottom: 1.25rem;
+}
+
+.direccion select {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.lista-direcciones {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.lista-direcciones li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.lista-direcciones li.elegida {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+.lista-direcciones .elegir {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.botones-stick {
+  display: flex;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.forma-direccion {
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.forma-titulo {
+  margin: 0 0 0.625rem;
+  font-weight: 600;
+}
+
+.forma-direccion .campo {
+  margin-bottom: 0.625rem;
+}
+
+.error-direccion {
+  margin: 0 0 0.625rem;
+  color: var(--peligro-texto);
 }
 
 /* ------------------------------------------------------------- los botones */
@@ -208,6 +357,7 @@ tbody tr:last-child td {
 .acciones {
   display: flex;
   gap: 0.625rem;
+  margin-top: 1rem;
 }
 
 button {
@@ -230,6 +380,10 @@ button.primario:disabled {
   color: var(--texto-tenue);
   background: var(--fondo);
   border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button:disabled {
   cursor: not-allowed;
 }
 
@@ -257,42 +411,110 @@ button.peligro {
   clip-path: inset(50%);
 }
 
-/* ---------------------------------------------------------- el comprobante */
-
-.comprobante {
-  max-width: 44rem;
+.separador {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--borde);
 }
 
-.folio {
-  margin: 0 0 1rem;
-  font-size: 1.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+/* ---------------------------------------------------- la tabla de las notas */
+
+.tabla-pos .cabecera {
+  align-items: baseline;
 }
 
-dl {
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.filtros input[type='search'] {
+  flex: 1;
+  min-width: 10rem;
+}
+
+/* La fila de la nota que se acaba de guardar: se ve a donde fue a parar. */
+.tabla tbody tr.resaltada > td {
+  background: var(--exito-suave);
+}
+
+.estatus {
+  color: var(--exito-texto);
+}
+
+.estatus.cancelada {
+  color: var(--texto-tenue);
+}
+
+.acciones-celda {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* El detalle que se abre debajo de una fila con "Ver", y el motivo de la
+   cancelacion que se abre con "Cancelar". Van en una fila mas ancha que la
+   tabla, ocupando todo el ancho de las columnas. */
+.fila-detalle > td {
+  padding: 0.875rem 1rem;
+  background: var(--fondo);
+}
+
+.fila-detalle dl {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.25rem 1rem;
-  margin: 0 0 1.25rem;
+  margin: 0 0 0.875rem;
 }
 
-dt {
+.fila-detalle dt {
   color: var(--texto-suave);
 }
 
-dd {
+.fila-detalle dd {
   margin: 0;
 }
 
-dd.total {
+.fila-detalle dd.total {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.nota {
-  margin: 0 0 1.25rem;
+.cancelada {
+  margin: 0 0 0.875rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}
+
+.cancelar {
+  max-width: 34rem;
+}
+
+.ayuda {
+  margin: 0.25rem 0 0;
   font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+.paginacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.cuenta {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.vacio {
+  margin: 0 0 1rem;
   color: var(--texto-tenue);
 }
 
@@ -300,20 +522,6 @@ dd.total {
   margin: 0.375rem 0 0;
   font-size: 0.8125rem;
   color: var(--texto-tenue);
-}
-
-.sin-permiso {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-.sin-permiso code {
-  padding: 0.0625rem 0.25rem;
-  font-size: 0.8125rem;
-  background: var(--fondo);
-  border: 1px solid var(--borde);
-  border-radius: 4px;
 }
 
 .error {

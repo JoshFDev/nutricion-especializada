@@ -57,59 +57,81 @@
 .barra {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  height: 3.25rem;
-  padding: 0 0.75rem 0 0.5rem;
+  gap: 0.75rem;
+  height: 3.5rem;
+  padding: 0 1rem 0 0.75rem;
   color: var(--sobre-acento);
-  background: var(--acento);
+  background: linear-gradient(135deg, var(--acento) 0%, #1e3a8a 100%);
   flex: 0 0 auto;
+  position: relative;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 12%),
+    0 0 0 1px rgb(255 255 255 / 5%) inset;
+
+  /* Línea decorativa sutil en la base */
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 15%), transparent);
+  }
 
   /*
-   * El logo y el nombre van en un bloque pegado (`agrupado`), no sueltos: el
-   * logo es de 1.75rem y el nombre arranca justo despues, y entre los dos
-   * queda el hueco del `gap` de la barra, que separa el logo del nombre como si
-   * fueran dos cosas distintas. Juntos se leen como una sola unidad.
+   * El logo y el nombre van en un bloque pegado (`agrupado`), no sueltos.
+   * Juntos se leen como una sola unidad de marca.
    */
   .agrupado {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.625rem;
     min-width: 0;
     margin-right: auto;
+    padding-right: 1rem;
+    border-right: 1px solid rgb(255 255 255 / 15%);
   }
 
   .marca {
-    /* La marca en versalitas y con un poco de tracking: es un nombre de
-       empresa, no un titulo de pantalla, y asi se diferencia del `h1` de cada
-       pagina sin gritar. */
-    font-size: 0.9375rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  /*
-   * Una sombra finita y no un borde: la barra va a quedar pegada arriba de
-   * un contenido que ahora baja debajo de ella, y sin nada que los separe
-   * la tabla pasa rozando el azul. Con la sombra se lee que la barra esta
-   * ENCIMA. Es de 1px de alto y muy clara, para no hacer una linea.
-   */
-  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
-
-  /*
-   * El nombre se recorta con puntos suspensivos en vez de partirse en dos
-   * lineas dentro de una barra de 3.25rem. Con el logo al lado, en un celular
-   * angosto ya no cabe "Nutricion Especializada" entero, y lo que se parte a la
-   * mitad queda mas feo que lo que no cabe. El `min-width: 0` es lo que
-   * permite el recorte: sin el, un flex item no se deja encoger.
-   */
-  .marca {
-    min-width: 0;
+    font-size: 1rem;
     font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    background: linear-gradient(135deg, var(--sobre-acento) 0%, rgb(255 255 255 / 85%) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 10%);
   }
+
+  /* Indicador de estado del sistema (online) */
+  .estado-sistema {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgb(255 255 255 / 70%);
+    opacity: 0.8;
+  }
+
+  .estado-sistema::before {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    background: var(--exito-texto);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--exito-texto);
+    animation: pulso 2s ease-in-out infinite;
+  }
+}
+
+@keyframes pulso {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
 }
 
 /*
@@ -254,11 +276,13 @@
 }
 
 .lateral {
-  width: 14rem;
+  width: 15rem;
   flex: 0 0 auto;
-  padding: 1rem 0.625rem;
+  padding: 1rem 0.5rem;
   background: var(--superficie);
   border-right: 1px solid var(--borde);
+  display: flex;
+  flex-direction: column;
 
   /*
    * Este `overflow-y` estaba antes y no hacia nada: como el marco media lo
@@ -272,64 +296,98 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 
-  .grupo + .grupo {
-    margin-top: 1.375rem;
+  .grupo {
+    padding: 0 0.25rem;
+
+    & + .grupo {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--borde);
+    }
   }
 
   h2 {
-    margin: 0 0 0.375rem;
-    padding: 0 0.625rem;
-    font-size: 0.6875rem;
+    margin: 0 0 0.5rem;
+    padding: 0 0.75rem;
+    font-size: 0.625rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    /*
-     * `--texto-suave` y no `--texto-tenue`, aunque el mas claro se vea mas
-     * limpio. Este texto son 11px y pesa 4.36:1 el tono tenue sobre blanco
-     * (6.27:1 el suave), y por debajo de 4.5:1 un textochito en mayusculas
-     * deja de leerse en una pantalla de mostrador con luz de tubo, que es
-     * justo donde se usa. Aqui la limpieza no vale la perdida de contraste.
-     */
-    color: var(--texto-suave);
+    color: var(--texto-tenue);
+    line-height: 1.3;
   }
 
   ul {
     margin: 0;
     padding: 0;
     list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
   }
 
   a {
     position: relative;
-    display: block;
-    padding: 0.4375rem 0.625rem;
-    border-radius: 0.375rem;
-    color: var(--texto);
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5625rem 0.75rem;
+    border-radius: 0.5rem;
+    color: var(--texto-suave);
     font-size: 0.875rem;
+    font-weight: 500;
     text-decoration: none;
-
-    /*
-     * El color de fondo y el del texto, y nada mas. Con el menu lleno, el
-     * renglon activo cambia de golpe cuando se navega y el salto se nota
-     * como un parpadeo; el color de fondo se apaga en 120ms, que se ve
-     * seguida y no distrae. No hay transicion de `transform` ni de nada que
-     * se mueva: eso es lo que estorba.
-     */
     transition:
-      background-color 0.12s ease-out,
-      color 0.12s ease-out;
+      background-color 0.15s ease,
+      color 0.15s ease,
+      padding-left 0.15s ease;
+
+    /* Icono del modulo (si existe) */
+    &::before {
+      content: attr(data-icon);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.25rem;
+      height: 1.25rem;
+      font-size: 1rem;
+      flex-shrink: 0;
+      opacity: 0.7;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
 
     &:hover {
-      background: var(--fondo);
+      background: var(--acento-suave);
+      color: var(--acento-texto);
+      padding-left: 1rem;
+
+      &::before {
+        opacity: 1;
+        transform: scale(1.1);
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--acento);
+      outline-offset: -2px;
+      background: var(--acento-suave);
+      color: var(--acento-texto);
     }
 
     /* `routerLinkActive` con `exact` para que "Notas de remision" no quede
        marcado mientras se esta en cualquier otra pantalla que tenga la
        palabra "remision" en la ruta. */
     &.activo {
-      background: var(--acento-suave);
-      color: var(--acento-texto);
+      background: var(--acento);
+      color: var(--sobre-acento);
       font-weight: 600;
+      box-shadow: 0 2px 8px rgb(30 64 175 / 25%);
+      padding-left: 1rem;
+
+      &::before {
+        opacity: 1;
+        color: var(--sobre-acento);
+      }
 
       /*
        * La barrita a la izquierda del renglon activo. El fondo solo no
@@ -341,14 +399,14 @@
        * esquinas redondeadas del fondo, y con `z-index` para que quede
        * encima del propio fondo del enlace.
        */
-      &::before {
+      &::after {
         content: '';
         position: absolute;
         top: 0.375rem;
         bottom: 0.375rem;
         left: 0;
         width: 3px;
-        background: var(--acento);
+        background: var(--sobre-acento);
         border-radius: 0 2px 2px 0;
       }
     }

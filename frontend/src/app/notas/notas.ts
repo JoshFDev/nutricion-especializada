@@ -217,6 +217,14 @@ export class Notas {
   /** `'todo'` no se manda: es la ausencia de periodo. Ver `Periodo`. */
   readonly periodo = signal<Periodo | 'todo'>('hoy');
   readonly buscar = signal('');
+
+  /** Filtro de fechas personalizado (AAAA-MM-DD). */
+  readonly fechaDesde = signal<string>('');
+  readonly fechaHasta = signal<string>('');
+
+  /** Exportando lista a Excel. */
+  readonly exportando = signal(false);
+
   /** El orden lo pone el SERVIDOR (`ordenar` del esquema), no la pantalla. */
   readonly ordenar = signal<OrdenNotas>('fecha_desc');
 
@@ -974,6 +982,8 @@ export class Notas {
       const respuesta = await this.api.listar({
         periodo: this.periodo() === 'todo' ? undefined : (this.periodo() as Periodo),
         buscar: this.buscar() === '' ? undefined : this.buscar(),
+        fecha_desde: this.fechaDesde() === '' ? undefined : this.fechaDesde(),
+        fecha_hasta: this.fechaHasta() === '' ? undefined : this.fechaHasta(),
         ordenar: this.ordenar(),
         limite: this.limite(),
         offset: (pagina - 1) * this.limite(),
@@ -1048,6 +1058,55 @@ export class Notas {
   aOrdenar(valor: string): void {
     this.ordenar.set(valor as OrdenNotas);
     void this.recargar();
+  }
+
+  /**
+   * Filtro de fecha desde (inicio).
+   */
+  aFechaDesde(valor: string): void {
+    this.fechaDesde.set(valor);
+    void this.recargar();
+  }
+
+  /**
+   * Filtro de fecha hasta (fin).
+   */
+  aFechaHasta(valor: string): void {
+    this.fechaHasta.set(valor);
+    void this.recargar();
+  }
+
+  /**
+   * Limpia los filtros de fecha personalizados.
+   */
+  limpiarFechas(): void {
+    this.fechaDesde.set('');
+    this.fechaHasta.set('');
+    void this.recargar();
+  }
+
+  /**
+   * Exporta la lista actual de notas a Excel.
+   *
+   * Descarga TODAS las notas del filtro actual (sin paginacion),
+   * no solo la pagina visible.
+   */
+  async exportarExcel(): Promise<void> {
+    this.exportando.set(true);
+    this.errorLista.set(null);
+    try {
+      await this.api.exportarExcel({
+        periodo: this.periodo() === 'todo' ? undefined : (this.periodo() as Periodo),
+        buscar: this.buscar() === '' ? undefined : this.buscar(),
+        fecha_desde: this.fechaDesde() === '' ? undefined : this.fechaDesde(),
+        fecha_hasta: this.fechaHasta() === '' ? undefined : this.fechaHasta(),
+        ordenar: this.ordenar(),
+      });
+    } catch (falla) {
+      this.errorLista.set(errorLegible(falla).mensaje);
+    } finally {
+      this.exportando.set(false);
+    }
   }
 
   // ------------------------------------------------------- las acciones

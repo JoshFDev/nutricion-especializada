@@ -149,9 +149,11 @@ export const ORDENES_NOTAS: { valor: OrdenNotas; texto: string }[] = [
 export interface FiltroNotas {
   periodo?: Periodo;
   buscar?: string;
+  fecha_desde?: string;
+  fecha_hasta?: string;
   ordenar: OrdenNotas;
-  limite: number;
-  offset: number;
+  limite?: number;
+  offset?: number;
 }
 
 /** La envoltura de los listados. `notas-remision/modelo.ts` -> `Listado`. */
@@ -459,16 +461,18 @@ export class NotasApi {
    * cliente, que son las dos cosas que se teclean en un mostrador.
    */
   async listar(filtro: FiltroNotas): Promise<Listado<NotaListada>> {
+    const params: Record<string, string | number> = {
+      ordenar: filtro.ordenar,
+    };
+    if (filtro['periodo'] !== undefined) params['periodo'] = filtro['periodo'];
+    if (filtro['buscar'] !== undefined) params['buscar'] = filtro['buscar'];
+    if (filtro['fecha_desde'] !== undefined) params['fecha_desde'] = filtro['fecha_desde'];
+    if (filtro['fecha_hasta'] !== undefined) params['fecha_hasta'] = filtro['fecha_hasta'];
+    if (filtro['limite'] !== undefined) params['limite'] = filtro['limite'];
+    if (filtro['offset'] !== undefined) params['offset'] = filtro['offset'];
+
     return firstValueFrom(
-      this.http.get<Listado<NotaListada>>(`${API}/notas-remision`, {
-        params: {
-          ...(filtro.periodo === undefined ? {} : { periodo: filtro.periodo }),
-          ...(filtro.buscar === undefined ? {} : { buscar: filtro.buscar }),
-          ordenar: filtro.ordenar,
-          limite: filtro.limite,
-          offset: filtro.offset,
-        },
-      }),
+      this.http.get<Listado<NotaListada>>(`${API}/notas-remision`, { params }),
     );
   }
 
@@ -516,60 +520,6 @@ export class NotasApi {
   }
 
   /**
-   * Abre el PDF de la nota en una pestana nueva.
-   *
-   * NO es un `<a href>` al endpoint, y esa es la diferencia entre que
-   * imprima y que no imprima nada: el token va en la cabecera
-   * `Authorization` (ver `nucleo/sesion.ts`), y un link plano no manda
-   * cabeceras, asi que el backend responde 401 y el operador ve una pantalla
-   * en blanco. Por eso se pide el PDF como blob.
-   *
-   * Y la ventana se abre ANTES de pedirlo, en blanco, a proposito: despues
-   * de un `await` el navegador ya no sabe que esto viene de un click y la
-   * bloquea como ventana emergente. Con la ventana ya abierta se le pone la
-   * direccion cuando llega el PDF, que es lo que sobrevive al bloqueo. Es
-   * el orden inverso al intuitivo y por eso esta aqui anotado.
-   *
-   * Un link con el token en el query se rechazo a proposito en el backend
-   * (quedaria en el historial del navegador y en el log del proxy), asi que
-   * la unica forma de imprimir es esta.
-   */
-  /**
-   * Abre el PDF en una pestana.
-   *
-   * El papel es la plantilla del Excel, en vertical y a una hoja. Para sacar
-   * dos en una sola hoja (una para el cliente y otra para el archivo) se elige
-   * "2 paginas por hoja" en el dialogo de impresion: el papel es el mismo y se
-   * corta por la mitad.
-   */
-  async abrirPdf(notaId: number): Promise<void> {
-    const ventana = window.open('', '_blank');
-    if (ventana === null) {
-      throw new Error(
-        'El navegador no dejo abrir la pestana. Revisa que no este bloqueando las ventanas.',
-      );
-    }
-
-    try {
-      const pdf = await firstValueFrom(
-        this.http.get(`${API}/notas-remision/${notaId}/pdf`, { responseType: 'blob' }),
-      );
-      const url = URL.createObjectURL(pdf);
-      ventana.location.href = url;
-      // El object URL se revaca con tiempo, no al cerrar: la ventana ya
-      // cambio de documento al navegar al blob, asi que no hay evento al
-      // que engancharse. Sin esto, una sesion de mostrador acumula un PDF
-      // en memoria por cada impresion.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (falla) {
-      // La pestana en blanco no se queda abierta: se cierra y el error lo
-      // ve la persona en la pantalla, que es donde puede leerlo.
-      ventana.close();
-      throw falla;
-    }
-  }
-
-  /**
    * Descarga el Excel de la nota.
    *
    * NO se abre en una pestana como el PDF: un `.xlsx` no lo abre el
@@ -601,6 +551,80 @@ export class NotasApi {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
     return Number(respuesta.headers.get('x-renglones-fuera') ?? 0);
+  }
+
+  /**
+   * Abre el PDF de la nota en una pestana nueva.
+   *
+   * NO es un `<a href>` al endpoint, y esa es la diferencia entre que
+   * imprima y que no imprima nada: el token va en la cabecera
+   * `Authorization` (ver `nucleo/sesion.ts`), y un link plano no manda
+   * cabeceras, asi que el backend responde 401 y el operador ve una pantalla
+   * en blanco. Por eso se pide el PDF como blob.
+   *
+   * Y la ventana se abre ANTES de pedirlo, en blanco, a proposito: despues
+   * de un `await` el navegador ya no sabe que esto viene de un click y la
+   * bloquea como ventana emergente. Con la ventana ya abierta se le pone la
+   * direccion cuando llega el PDF, que es lo que sobrevive al bloqueo. Es
+   * el orden inverso al intuitivo y por eso esta aqui anotado.
+   *
+   * Un link con el token en el query se rechazo a proposito en el backend
+   * (quedaria en el historial del navegador y en el log del proxy), asi que
+   * la unica forma de imprimir es esta.
+   */
+  async abrirPdf(notaId: number): Promise<void> {
+    const ventana = window.open('', '_blank');
+    if (ventana === null) {
+      throw new Error(
+        'El navegador no dejo abrir la pestana. Revisa que no este bloqueando las ventanas.',
+      );
+    }
+
+    try {
+      const pdf = await firstValueFrom(
+        this.http.get(`${API}/notas-remision/${notaId}/pdf`, { responseType: 'blob' }),
+      );
+      const url = URL.createObjectURL(pdf);
+      ventana.location.href = url;
+      // El object URL se revaca con tiempo, no al cerrar: la ventana ya
+      // cambio de documento al navegar al blob, asi que no hay evento al
+      // que engancharse. Sin esto, una sesion de mostrador acumula un PDF
+      // en memoria por cada impresion.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (falla) {
+      // La pestana en blanco no se queda abierta: se cierra y el error lo
+      // ve la persona en la pantalla, que es donde puede leerlo.
+      ventana.close();
+      throw falla;
+    }
+  }
+
+/**
+   * Descarga el Excel de la lista de notas (exportar lista completa).
+   *
+   * Igual que `abrirExcel`, se baja como `attachment` con `<a download>`.
+   */
+  async exportarExcel(filtro: FiltroNotas): Promise<void> {
+    const respuesta = await firstValueFrom(
+      this.http.get(`${API}/notas-remision/exportar`, {
+        params: {
+          ...(filtro.periodo === undefined ? {} : { periodo: filtro.periodo }),
+          ...(filtro.buscar === undefined ? {} : { buscar: filtro.buscar }),
+          ...(filtro.fecha_desde === undefined ? {} : { fecha_desde: filtro.fecha_desde }),
+          ...(filtro.fecha_hasta === undefined ? {} : { fecha_hasta: filtro.fecha_hasta }),
+          ordenar: filtro.ordenar,
+        },
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+
+    const url = URL.createObjectURL(respuesta.body as Blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = nombreDelExcel(respuesta.headers.get('content-disposition'));
+    enlace.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   // ------------------------------------------------------- el talonario

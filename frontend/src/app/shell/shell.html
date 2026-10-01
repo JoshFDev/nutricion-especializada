@@ -21,6 +21,7 @@
     <div class="agrupado">
       <img class="logo" src="logo-nutricion.png" alt="" />
       <span class="marca">Nutricion Especializada</span>
+      <span class="estado-sistema">Sistema activo</span>
     </div>
 
     <div class="usuario">
@@ -69,22 +70,53 @@
 
     <nav class="lateral" [class.abierto]="menuAbierto()">
       @for (grupo of menu(); track grupo.titulo) {
-        <div class="grupo">
-          <h2>{{ grupo.titulo }}</h2>
-          <ul>
-            @for (modulo of grupo.modulos; track modulo.ruta) {
-              <li>
-                <a
-                  [routerLink]="'/' + modulo.ruta"
-                  routerLinkActive="activo"
-                  (click)="cerrarMenu()"
-                >
-                  {{ modulo.etiqueta }}
-                </a>
-              </li>
+        @if (grupo.colapsable) {
+          <div class="grupo colapsable">
+            <button
+              type="button"
+              class="grupo-header"
+              (click)="alternarGrupo(grupo.titulo)"
+              [attr.aria-expanded]="!estaColapsado(grupo.titulo)"
+            >
+              <span class="grupo-titulo">{{ grupo.titulo }}</span>
+              <span class="grupo-chevron" [innerHTML]="icono(estaColapsado(grupo.titulo) ? 'chevronRight' : 'chevronDown')"></span>
+            </button>
+            @if (!estaColapsado(grupo.titulo)) {
+              <ul class="grupo-lista">
+                @for (modulo of grupo.modulos; track modulo.ruta) {
+                  <li>
+                    <a
+                      [routerLink]="'/' + modulo.ruta"
+                      routerLinkActive="activo"
+                      (click)="cerrarMenu()"
+                    >
+                      <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(modulo.icon)"></svg>
+                      {{ modulo.etiqueta }}
+                    </a>
+                  </li>
+                }
+              </ul>
             }
-          </ul>
-        </div>
+          </div>
+        } @else {
+          <div class="grupo">
+            <h2>{{ grupo.titulo }}</h2>
+            <ul>
+              @for (modulo of grupo.modulos; track modulo.ruta) {
+                <li>
+                  <a
+                    [routerLink]="'/' + modulo.ruta"
+                    routerLinkActive="activo"
+                    (click)="cerrarMenu()"
+                  >
+                    <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(modulo.icon)"></svg>
+                    {{ modulo.etiqueta }}
+                  </a>
+                </li>
+              }
+            </ul>
+          </div>
+        }
       }
     </nav>
 

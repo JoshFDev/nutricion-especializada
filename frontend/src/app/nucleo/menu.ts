@@ -25,6 +25,8 @@ export interface Modulo {
   permiso: string;
   /** Que se va a hacer aqui. Lo lee el aviso de "pantalla pendiente". */
   pendiente: string;
+  /** Nombre del icono SVG (sin extension, coincide con archivo en assets/icons). */
+  icon: string;
   /**
    * La pantalla del modulo, si ya existe.
    *
@@ -45,6 +47,10 @@ export interface Modulo {
 export interface Grupo {
   titulo: string;
   modulos: Modulo[];
+  /** Si es true, el grupo se puede colapsar/expandir (para Sistema, etc.) */
+  colapsable?: boolean;
+  /** Si es true y colapsable, empieza colapsado */
+  colapsadoPorDefecto?: boolean;
 }
 
 export const MENU: Grupo[] = [
@@ -55,6 +61,7 @@ export const MENU: Grupo[] = [
         ruta: 'notas',
         etiqueta: 'Notas de remision',
         permiso: 'notas.ver',
+        icon: 'clipboard',
         pendiente: 'Editar una nota ya capturada y reimprimir su PDF.',
         carga: () => import('../notas/notas').then((m) => m.Notas),
       },
@@ -67,6 +74,7 @@ export const MENU: Grupo[] = [
         ruta: 'productos',
         etiqueta: 'Productos',
         permiso: 'productos.ver',
+        icon: 'package',
         pendiente: 'Alta y edicion de productos con su clave y unidad.',
         carga: () => import('../productos/productos').then((m) => m.Productos),
       },
@@ -74,6 +82,7 @@ export const MENU: Grupo[] = [
         ruta: 'categorias',
         etiqueta: 'Categorias',
         permiso: 'categorias.ver',
+        icon: 'tag',
         pendiente: 'Categorias de producto y sus multipliers de rendimiento.',
         carga: () => import('../categorias/categorias').then((m) => m.Categorias),
       },
@@ -81,6 +90,7 @@ export const MENU: Grupo[] = [
         ruta: 'especies',
         etiqueta: 'Especies',
         permiso: 'especies.ver',
+        icon: 'cow',
         pendiente: 'Especies de cliente (bovino, porcino, etc.) y su rendimiento.',
         carga: () => import('../especies/especies').then((m) => m.Especies),
       },
@@ -88,6 +98,7 @@ export const MENU: Grupo[] = [
         ruta: 'precios',
         etiqueta: 'Precios',
         permiso: 'precios.ver',
+        icon: 'dollar-sign',
         pendiente: 'Listas de precios por especie y las vigorencias.',
         carga: () => import('../precios/precios').then((m) => m.Precios),
       },
@@ -100,6 +111,7 @@ export const MENU: Grupo[] = [
         ruta: 'clientes',
         etiqueta: 'Clientes',
         permiso: 'clientes.ver',
+        icon: 'users',
         pendiente: 'Alta de clientes con su codigo, especie y datos fiscales.',
         carga: () => import('../clientes/clientes').then((m) => m.Clientes),
       },
@@ -112,6 +124,7 @@ export const MENU: Grupo[] = [
         ruta: 'proveedores',
         etiqueta: 'Proveedores',
         permiso: 'proveedores.ver',
+        icon: 'truck',
         pendiente: 'Proveedores y sus folios de compra.',
         carga: () => import('../proveedores/proveedores').then((m) => m.Proveedores),
       },
@@ -119,6 +132,7 @@ export const MENU: Grupo[] = [
         ruta: 'compras',
         etiqueta: 'Compras',
         permiso: 'compras.ver',
+        icon: 'download',
         pendiente: 'Registrar compras, entradas de mercancia y sus folios.',
         carga: () => import('../compras/compras').then((m) => m.Compras),
       },
@@ -126,6 +140,7 @@ export const MENU: Grupo[] = [
         ruta: 'inventario',
         etiqueta: 'Inventario',
         permiso: 'inventario.ver',
+        icon: 'bar-chart',
         pendiente: 'Existencia por producto y los ajustes y mermas.',
         carga: () => import('../inventario/inventario').then((m) => m.Inventario),
       },
@@ -138,6 +153,7 @@ export const MENU: Grupo[] = [
         ruta: 'pagos',
         etiqueta: 'Pagos',
         permiso: 'pagos.ver',
+        icon: 'credit-card',
         pendiente: 'Registrar pagos y aplicarlos a las notas abiertas.',
         carga: () => import('../pagos/pagos').then((m) => m.Pagos),
       },
@@ -145,6 +161,7 @@ export const MENU: Grupo[] = [
         ruta: 'facturacion',
         etiqueta: 'Facturacion',
         permiso: 'facturas.ver',
+        icon: 'file-text',
         pendiente: 'Emitir facturas y ver las ya emitidas.',
         carga: () => import('../facturacion/facturacion').then((m) => m.Facturacion),
       },
@@ -152,6 +169,7 @@ export const MENU: Grupo[] = [
         ruta: 'caja',
         etiqueta: 'Caja y bancos',
         permiso: 'caja.ver',
+        icon: 'bank',
         pendiente: 'Cuentas, movimientos de ingreso y egreso, y su resumen.',
         carga: () => import('../caja/caja').then((m) => m.Caja),
       },
@@ -159,11 +177,14 @@ export const MENU: Grupo[] = [
   },
   {
     titulo: 'Sistema',
+    colapsable: true,
+    colapsadoPorDefecto: true,
     modulos: [
       {
         ruta: 'usuarios',
         etiqueta: 'Usuarios y roles',
         permiso: 'usuarios.ver',
+        icon: 'user-cog',
         pendiente: 'Usuarios, roles y la clave de cada quien.',
         carga: () => import('../usuarios/usuarios').then((m) => m.Usuarios),
       },
@@ -171,6 +192,7 @@ export const MENU: Grupo[] = [
         ruta: 'auditoria',
         etiqueta: 'Auditoria',
         permiso: 'auditoria.ver',
+        icon: 'scroll',
         pendiente: 'Las cinco bitacoras en solo lectura.',
         carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },

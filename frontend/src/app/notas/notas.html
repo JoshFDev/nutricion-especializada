@@ -686,32 +686,96 @@
       </header>
 
       <div class="filtros">
-        <input
-          type="search"
-          autocomplete="off"
-          placeholder="Buscar por folio (A-1001) o por cliente"
-          (input)="aBuscar($any($event.target).value)"
-        />
-        <select
-          class="filtro"
-          [value]="periodo()"
-          (change)="aPeriodo($any($event.target).value)"
-          aria-label="Filtrar por periodo"
-        >
-          <option value="hoy">Hoy</option>
-          <option value="ultimos_7">Ultimos 7 dias</option>
-          <option value="todo">Todos</option>
-        </select>
-        <select
-          class="filtro"
-          [value]="ordenar()"
-          (change)="aOrdenar($any($event.target).value)"
-          aria-label="Ordenar las notas"
-        >
-          @for (opcion of ordenes; track opcion.valor) {
-            <option [value]="opcion.valor">{{ opcion.texto }}</option>
-          }
-        </select>
+        <div class="filtros-grupo">
+          <label class="oculto" for="buscar-notas">Buscar notas</label>
+          <input
+            id="buscar-notas"
+            type="search"
+            autocomplete="off"
+            placeholder="Buscar por folio (A-1001) o por cliente"
+            (input)="aBuscar($any($event.target).value)"
+          />
+        </div>
+
+        <div class="filtros-grupo">
+          <label class="oculto" for="fecha-desde">Fecha desde</label>
+          <input
+            id="fecha-desde"
+            type="date"
+            class="filtro fecha"
+            [value]="fechaDesde()"
+            (change)="aFechaDesde($any($event.target).value)"
+            aria-label="Fecha inicio"
+          />
+          <label class="oculto" for="fecha-hasta">Fecha hasta</label>
+          <input
+            id="fecha-hasta"
+            type="date"
+            class="filtro fecha"
+            [value]="fechaHasta()"
+            (change)="aFechaHasta($any($event.target).value)"
+            aria-label="Fecha fin"
+          />
+        </div>
+
+        <div class="filtros-grupo">
+          <select
+            class="filtro"
+            [value]="periodo()"
+            (change)="aPeriodo($any($event.target).value)"
+            aria-label="Filtrar por periodo rapido"
+          >
+            <option value="hoy">Hoy</option>
+            <option value="ultimos_7">Ultimos 7 dias</option>
+            <option value="todo">Todos</option>
+          </select>
+        </div>
+
+        <div class="filtros-grupo">
+          <select
+            class="filtro"
+            [value]="ordenar()"
+            (change)="aOrdenar($any($event.target).value)"
+            aria-label="Ordenar las notas"
+          >
+            @for (opcion of ordenes; track opcion.valor) {
+              <option [value]="opcion.valor">{{ opcion.texto }}</option>
+            }
+          </select>
+        </div>
+
+        @if (fechaDesde() || fechaHasta()) {
+          <button
+            type="button"
+            class="filtro limpiar"
+            (click)="limpiarFechas()"
+            title="Limpiar filtro de fechas"
+          >
+            Limpiar fechas
+          </button>
+        }
+
+        @if (notas().length > 0) {
+          <button
+            type="button"
+            class="filtro exportar"
+            (click)="exportarExcel()"
+            [disabled]="exportando()"
+            title="Exportar lista a Excel"
+          >
+            @if (exportando()) {
+              <span class="spinner" aria-hidden="true"></span>
+              Exportando...
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icono">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Exportar Excel
+            }
+          </button>
+        }
       </div>
 
       @if (errorLista(); as mensaje) {
@@ -732,7 +796,9 @@
               <th scope="col" class="num">Kilos</th>
               <th scope="col" class="num">Total</th>
               <th scope="col">Estatus</th>
-              <th scope="col"><span class="oculto">Acciones</span></th>
+              <th scope="col" class="acciones-header">
+                <span class="acciones-label">ACCIONES</span>
+              </th>
             </tr>
           </thead>
           <tbody>

@@ -1,7 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { menuPara } from '../nucleo/menu';
+import { menuPara, type Grupo } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
+import { obtenerIcono } from '../nucleo/iconos/iconos';
 
 /**
  * El marco de la app: cabecera, menu lateral y el hueco de la pantalla.
@@ -29,7 +30,11 @@ export class Shell {
   private readonly sesion = inject(Sesion);
 
   /** Los grupos con lo que la persona puede ver, en el orden del catalogo. */
-  readonly menu = computed(() => menuPara(new Set(this.sesion.perfil()?.permisos ?? [])));
+  readonly menu = computed(() => {
+    const grupos = menuPara(new Set(this.sesion.perfil()?.permisos ?? []));
+    this.inicializarGruposColapsados(grupos);
+    return grupos;
+  });
 
   readonly nombre = computed(() => this.sesion.perfil()?.nombre ?? '');
   readonly puesto = computed(() => this.sesion.perfil()?.puesto ?? '');
@@ -38,9 +43,41 @@ export class Shell {
   /** En celular el menu arranca cerrado, para que la pantalla sirva. */
   readonly menuAbierto = signal(false);
 
+  /** Estado de grupos colapsables (Sistema, etc.) */
+  readonly gruposColapsados = signal<Record<string, boolean>>({});
+
+  /** Funcion para obtener iconos SVG en linea */
+  readonly icono = obtenerIcono;
+
   /** Cierra el menu de lado al elegir un modulo: en un celular tapar la pantalla es lo esperado. */
   cerrarMenu(): void {
     this.menuAbierto.set(false);
+  }
+
+  /** Alterna un grupo colapsable */
+  alternarGrupo(titulo: string): void {
+    this.gruposColapsados.update((estado) => ({
+      ...estado,
+      [titulo]: !estado[titulo],
+    }));
+  }
+
+  /** Verifica si un grupo esta colapsado */
+  estaColapsado(titulo: string): boolean {
+    return this.gruposColapsados()[titulo] === true;
+  }
+
+  /** Inicializa el estado colapsado para grupos que lo requieren */
+  inicializarGruposColapsados(grupos: Grupo[]): void {
+    const inicial: Record<string, boolean> = {};
+    for (const grupo of grupos) {
+      if (grupo.colapsable && grupo.colapsadoPorDefecto) {
+        inicial[grupo.titulo] = true;
+      }
+    }
+    if (Object.keys(inicial).length > 0) {
+      this.gruposColapsados.set(inicial);
+    }
   }
 
   async salir(): Promise<void> {

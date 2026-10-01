@@ -21,21 +21,10 @@
     <div class="agrupado">
       <img class="logo" src="logo-nutricion.png" alt="" />
       <span class="marca">Nutricion Especializada</span>
-      <span class="estado-sistema">Sistema activo</span>
     </div>
 
     <div class="usuario">
-      <div class="info">
-        <span class="nombre">
-          {{ nombre() }}
-          @if (puesto()) {
-            <span class="rol-badge">{{ puesto() }}</span>
-          }
-        </span>
-        @if (email()) {
-          <span class="puesto">{{ email() }}</span>
-        }
-      </div>
+      <span class="nombre-usuario">{{ nombre() }}</span>
 
       <!-- Botón para colapsar/expandir sidebar -->
       <button
@@ -58,8 +47,9 @@
             (click)="alternarSistemaDropdown()"
             [attr.aria-expanded]="sistemaDropdownAbierto()"
             aria-label="Menu del sistema"
+            title="Configuración"
           >
-            <span>Configuración</span>
+            <span class="sistema-icon" [innerHTML]="icono('settings')"></span>
           </button>
 
           @if (sistemaDropdownAbierto()) {
@@ -80,9 +70,8 @@
           }
         </div>
       } @else {
-        <button type="button" class="salir" (click)="salir()">
+        <button type="button" class="salir" (click)="salir()" aria-label="Cerrar sesión" title="Salir">
           <span class="salir-icon" [innerHTML]="icono('log-out')"></span>
-          <span>Salir</span>
         </button>
       }
     </div>

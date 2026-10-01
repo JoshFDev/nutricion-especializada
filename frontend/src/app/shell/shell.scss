@@ -104,29 +104,6 @@
     -webkit-text-fill-color: transparent;
     text-shadow: 0 1px 2px rgb(0 0 0 / 10%);
   }
-
-  /* Indicador de estado del sistema (online) */
-  .estado-sistema {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: rgb(255 255 255 / 70%);
-    opacity: 0.8;
-  }
-
-  .estado-sistema::before {
-    content: '';
-    width: 0.5rem;
-    height: 0.5rem;
-    background: var(--exito-texto);
-    border-radius: 50%;
-    box-shadow: 0 0 6px var(--exito-texto);
-    animation: pulso 2s ease-in-out infinite;
-  }
 }
 
 @keyframes pulso {
@@ -190,81 +167,64 @@
   padding-left: 1rem;
   border-left: 1px solid rgb(255 255 255 / 25%);
 
-  .info {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-    min-width: 0;
-  }
-
-  .nombre {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+  .nombre-usuario {
     font-size: 0.875rem;
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
-
-  .rol-badge {
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    padding: 0.125rem 0.375rem;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 20%);
     color: var(--sobre-acento);
     white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .puesto {
-    font-size: 0.75rem;
-    opacity: 0.8;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 150px;
   }
 }
 
-/* Salir es la unica ACCION de la barra, asi que se ve como boton y no como
-   texto: borde claro sobre el azul. Antes era texto suelto y se confundia con
-   el nombre de al lado. */
-.salir {
+/* Botones de la barra: solo iconos, compactos */
+.salir,
+.sistema-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--sobre-acento);
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
   background: rgb(255 255 255 / 12%);
   border: 1px solid rgb(255 255 255 / 30%);
   border-radius: 6px;
+  color: var(--sobre-acento);
   cursor: pointer;
   transition: background-color 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease;
   flex-shrink: 0;
 }
 
-.salir:hover {
+.salir:hover,
+.sistema-btn:hover {
   background: rgb(255 255 255 / 22%);
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
 }
 
-.salir:active {
+.salir:active,
+.sistema-btn:active {
   transform: translateY(0);
   box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
 }
 
-.salir svg {
-  width: 1rem;
-  height: 1rem;
+.salir:focus-visible,
+.sistema-btn:focus-visible {
+  outline: 2px solid var(--sobre-acento);
+  outline-offset: 2px;
+}
+
+.salir-icon,
+.sistema-icon {
+  width: 1.125rem;
+  height: 1.125rem;
   flex-shrink: 0;
+  color: var(--sobre-acento);
+
+  svg {
+    stroke-width: 2.5;
+  }
 }
 
 .cuerpo {
@@ -875,6 +835,18 @@ a:hover .menu-icon,
   outline-offset: 2px;
 }
 
+.salir-icon,
+.sistema-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  color: var(--sobre-acento);
+
+  svg {
+    stroke-width: 2.5;
+  }
+}
+
 .sistema-dropdown-menu {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -993,15 +965,31 @@ a:hover .menu-icon,
   font-size: 0.5625rem;
 }
 
-/* Ajustar padding del menu en movil */
-@media (max-width: 48rem) {
-  .sistema-btn span {
-    display: none;
+/* Fix: items en grupos no colapsables (Catalogo, Clientes, Abasto, Dinero)
+   tienen el mismo espaciado que los colapsables */
+.grupo:not(.colapsable) {
+  .grupo-titulo-simple {
+    border-bottom: 1px solid var(--borde);
+    margin-bottom: 0.25rem;
   }
-  
-  .sistema-btn {
-    min-width: 2.5rem;
-    padding: 0.5rem;
+
+  ul {
+    padding: 0 0.375rem 0.375rem;
+    margin: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  li a {
+    padding: 0.4375rem 0.75rem;
+    font-size: 0.8125rem;
+
+    .menu-icon {
+      width: 1.125rem;
+      height: 1.125rem;
+    }
   }
 }
 

@@ -39,8 +39,6 @@ export class Shell {
   });
 
   readonly nombre = computed(() => this.sesion.perfil()?.nombre ?? '');
-  readonly puesto = computed(() => this.sesion.perfil()?.puesto ?? '');
-  readonly email = computed(() => this.sesion.perfil()?.email ?? '');
 
   /** En celular el menu arranca cerrado, para que la pantalla sirva. */
   readonly menuAbierto = signal(false);

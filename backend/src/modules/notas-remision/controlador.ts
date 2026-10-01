@@ -132,6 +132,19 @@ export const controladorNotas = {
       ),
     );
   },
+
+  exportarExcel: async (req: Request, res: Response): Promise<void> => {
+    const bytes = await servicio.exportarExcel(req.db, consulta<ListarNotas>(req));
+    const nombre = `notas-remision-${new Date().toISOString().split('T')[0]}.xlsx`;
+    res
+      .setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .setHeader('Content-Disposition', `attachment; filename="${nombre}"`)
+      .setHeader('Cache-Control', 'no-store')
+      .send(bytes);
+  },
 };
 
 export const controladorFolios = {

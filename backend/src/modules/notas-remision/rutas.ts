@@ -7,6 +7,7 @@ import {
   crearTalonarioEsquema,
   editarNotaEsquema,
   establecerSerieActivaEsquema,
+  exportarNotasEsquema,
   idNotaEsquema,
   listarFoliosEsquema,
   listarNotasEsquema,
@@ -90,6 +91,14 @@ rutasNotasRemision.get(
   requierePermiso('notas.ver'),
   validarQuery(listarNotasEsquema),
   ctrl.listar,
+);
+
+// Exportar lista completa a Excel (mismos filtros que el listado, sin paginación)
+rutasNotasRemision.get(
+  '/exportar',
+  requierePermiso('notas.ver'),
+  validarQuery(exportarNotasEsquema),
+  ctrl.exportarExcel,
 );
 
 rutasNotasRemision.post(

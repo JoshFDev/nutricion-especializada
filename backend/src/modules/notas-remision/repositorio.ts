@@ -3,6 +3,8 @@ import { contar, consultar, consultarUno } from '../../db/transaccion.js';
 import { fechaComoTexto } from '../../core/valores.js';
 import type { CrearTalonario, ListarFolios, ListarNotas } from './esquemas.js';
 import { componerFolio } from './modelo.js';
+
+export { componerFolio };
 import type {
   ClienteImprimible,
   EstatusNota,
@@ -45,7 +47,7 @@ const COLUMNAS_NOTA = `
   v.nombre AS vendedor_nombre
 `;
 
-const FROM_NOTA = `
+export const FROM_NOTA = `
   FROM notas_remision n
   JOIN folios f       ON f.id = n.folio_id
   JOIN clientes c     ON c.id = n.cliente_id
@@ -87,9 +89,9 @@ const ORDENES_NOTAS = {
   subtotal_asc: orden('subtotal', 'ASC'),
 } as const;
 
-const ordenDeNotas = (cual: keyof typeof ORDENES_NOTAS): string => ORDENES_NOTAS[cual];
+export const ordenDeNotas = (cual: keyof typeof ORDENES_NOTAS): string => ORDENES_NOTAS[cual];
 
-const construirFiltro = (q: ListarNotas) => {
+export const construirFiltro = (q: ListarNotas) => {
   const valores: unknown[] = [];
   const condiciones: string[] = [];
 

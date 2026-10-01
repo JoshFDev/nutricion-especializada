@@ -8,7 +8,7 @@ import {
   fechaCorta,
   leerPlantilla,
 } from './plantilla.js';
-import type { ClienteImprimible, Nota } from './modelo.js';
+import type { ClienteImprimible, Nota, NotaListada } from './modelo.js';
 
 /**
  * La nota de remision en Excel.
@@ -204,4 +204,70 @@ export async function excelNotaRemision(
   // el que espera la firma de la funcion y el que `send` sabe mandar.
   const bytes = Buffer.from(await libro.xlsx.writeBuffer());
   return { bytes, renglonesFuera: renglonesFuera(nota) };
+}
+
+/**
+ * El Excel de la LISTA de notas.
+ *
+ * No usa la plantilla de nota individual, genera una hoja limpia con
+ * las columnas que se ven en la tabla: Folio, Cliente, Fecha, Total, Estatus, Kg.
+ */
+export async function excelListaNotas(
+  notas: NotaListada[],
+): Promise<Buffer> {
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet('Notas de remision');
+
+  libro.title = 'Listado de notas de remision';
+  libro.creator = 'Nutricion Especializada';
+
+  // Cabeceras
+  hoja.columns = [
+    { header: 'Folio', key: 'folio', width: 16 },
+    { header: 'Cliente', key: 'cliente', width: 40 },
+    { header: 'Fecha', key: 'fecha', width: 12 },
+    { header: 'Total', key: 'subtotal', width: 14 },
+    { header: 'Estatus', key: 'estatus', width: 14 },
+    { header: 'Kg', key: 'kg_total', width: 12 },
+  ];
+
+  // Estilo de cabecera
+  hoja.getRow(1).font = { bold: true };
+  hoja.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF1E3A8A' },
+  };
+  hoja.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  hoja.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Datos
+  for (const nota of notas) {
+    const row = hoja.addRow({
+      folio: nota.folio,
+      cliente: nota.cliente,
+      fecha: nota.fecha,
+      subtotal: nota.subtotal,
+      estatus: nota.estatus,
+      kg_total: nota.kg_total,
+    });
+
+    // Formato de números
+    row.getCell('subtotal').numFmt = '#,##0.00';
+    row.getCell('kg_total').numFmt = '#,##0.000';
+    row.getCell('fecha').alignment = { horizontal: 'center' };
+    row.getCell('subtotal').alignment = { horizontal: 'right' };
+    row.getCell('kg_total').alignment = { horizontal: 'right' };
+  }
+
+  // Filtro automático
+  hoja.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: 6 },
+  };
+
+  // Congelar primera fila
+  hoja.views = [{ state: 'frozen', ySplit: 1 }];
+
+  return Buffer.from(await libro.xlsx.writeBuffer());
 }

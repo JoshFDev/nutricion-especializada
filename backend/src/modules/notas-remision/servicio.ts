@@ -1,11 +1,12 @@
 import type { PoolClient } from 'pg';
-import { consultarUno, enTransaccionDe } from '../../db/transaccion.js';
+import { consultar as consultarDB, consultarUno, enTransaccionDe } from '../../db/transaccion.js';
 import { env } from '../../config/entorno.js';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { resolverEfectivo } from '../precios/repositorio.js';
-import { excelNotaRemision } from './excel.js';
+import { excelListaNotas, excelNotaRemision } from './excel.js';
 import { pdfNotaRemision, renglonesFuera } from './pdf.js';
 import * as repo from './repositorio.js';
+import { componerFolio, FROM_NOTA, ordenDeNotas } from './repositorio.js';
 import type {
   CrearNota,
   CrearTalonario,
@@ -121,6 +122,62 @@ export async function excel(
   const datosCliente = await clienteImprimible(cliente, nota);
   const { bytes, renglonesFuera } = await excelNotaRemision(nota, datosCliente);
   return { bytes, nombreArchivo: nombreDelArchivo(nota, 'xlsx'), renglonesFuera };
+}
+
+/**
+ * Exportar la lista completa de notas a Excel.
+ *
+ * Descarga TODAS las notas que coincidan con el filtro (sin paginación),
+ * no solo la página visible.
+ */
+export async function exportarExcel(
+  cliente: PoolClient,
+  q: ListarNotas,
+): Promise<Buffer> {
+  // Usar la misma consulta de listar pero SIN límite ni offset
+  const { valores, donde } = repo.construirFiltro(q);
+
+  const filas = await consultarDB<{
+    id: string;
+    folio_numero: number;
+    serie: string;
+    cliente_id: string;
+    cliente_nombre: string;
+    vendedor_nombre: string | null;
+    fecha: string;
+    subtotal: string;
+    estatus: string;
+    renglones: string;
+    kg_total: string | null;
+  }>(
+    cliente,
+    `SELECT n.id, n.cliente_id, n.fecha, n.subtotal, n.estatus,
+            f.folio_numero, f.serie,
+            c.nombre AS cliente_nombre,
+            v.nombre AS vendedor_nombre,
+            (SELECT count(*) FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS renglones,
+            (SELECT COALESCE(SUM(d.cantidad_bultos * d.kg_bulto), 0)
+               FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS kg_total
+       ${FROM_NOTA}
+       ${donde}
+       ${ordenDeNotas(q.ordenar)}`,
+    valores,
+  );
+
+  const notas: NotaListada[] = filas.map((f) => ({
+    id: Number(f.id),
+    folio: componerFolio(f.serie, f.folio_numero),
+    cliente_id: Number(f.cliente_id),
+    cliente: f.cliente_nombre,
+    vendedor: f.vendedor_nombre,
+    fecha: f.fecha,
+    subtotal: Number(f.subtotal),
+    estatus: f.estatus as EstatusNota,
+    renglones: Number(f.renglones),
+    kg_total: Number(f.kg_total ?? 0),
+  }));
+
+  return excelListaNotas(notas);
 }
 
 /**

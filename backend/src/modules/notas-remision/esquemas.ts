@@ -285,6 +285,26 @@ export const listarNotasEsquema = z
   });
 
 /**
+ * Esquema para exportar la lista completa (mismos filtros que listar, SIN paginación).
+ */
+export const exportarNotasEsquema = z
+  .object({
+    cliente_id: idPositivo.optional(),
+    vendedor_id: idPositivo.optional(),
+    estatus: z.enum(['pendiente', 'parcial', 'pagada', 'cancelada']).optional(),
+    periodo: periodosEsquema.optional(),
+    desde: fecha('desde').optional(),
+    hasta: fecha('hasta').optional(),
+    buscar: sinControl('La busqueda').max(120).optional(),
+    ordenar: ordenNotasEsquema,
+  })
+  .strict()
+  .refine((v) => v.desde === undefined || v.hasta === undefined || v.desde <= v.hasta, {
+    message: 'desde no puede ser posterior a hasta',
+    path: ['desde'],
+  });
+
+/**
  * Alta del talonario.
  *
  * `desde` y `hasta` en vez de "cuantos": el admin piensa en el rango que
@@ -344,6 +364,7 @@ export type EditarNota = z.infer<typeof editarNotaEsquema>;
 export type RenglonNota = z.infer<typeof renglonNotaEsquema>;
 export type CancelarNota = z.infer<typeof cancelarNotaEsquema>;
 export type ListarNotas = z.infer<typeof listarNotasEsquema>;
+export type ExportarNotas = z.infer<typeof exportarNotasEsquema>;
 export type CrearTalonario = z.infer<typeof crearTalonarioEsquema>;
 export type EstablecerSerieActiva = z.infer<typeof establecerSerieActivaEsquema>;
 export type ListarFolios = z.infer<typeof listarFoliosEsquema>;

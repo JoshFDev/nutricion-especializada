@@ -36,14 +36,55 @@
           <span class="puesto">{{ email() }}</span>
         }
       </div>
-      <button type="button" class="salir" (click)="salir()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-        <span>Salir</span>
+
+      <!-- Botón para colapsar/expandir sidebar -->
+      <button
+        type="button"
+        class="sidebar-toggle"
+        (click)="alternarSidebar()"
+        [attr.aria-expanded]="!sidebarColapsado()"
+        aria-label="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
+        title="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
+      >
+        <span class="toggle-icon" [innerHTML]="icono(sidebarColapsado() ? 'chevronRight' : 'chevronLeft')"></span>
       </button>
+
+      <!-- Dropdown Sistema (solo para usuarios con permisos de admin) -->
+      @if (puedeVerSistema()) {
+        <div class="sistema-dropdown">
+          <button
+            type="button"
+            class="sistema-btn"
+            (click)="alternarSistemaDropdown()"
+            [attr.aria-expanded]="sistemaDropdownAbierto()"
+            aria-label="Menu del sistema"
+          >
+            <span>Configuración</span>
+          </button>
+
+          @if (sistemaDropdownAbierto()) {
+            <div class="sistema-dropdown-menu" role="menu">
+              @for (opcion of sistemaOpciones(); track opcion.ruta) {
+                <button
+                  type="button"
+                  class="sistema-dropdown-item"
+                  (click)="irAOpcion(opcion)"
+                  role="menuitem"
+                  [attr.aria-label]="opcion.etiqueta"
+                >
+                  <span class="dropdown-icon" [innerHTML]="icono(opcion.icono)"></span>
+                  <span>{{ opcion.etiqueta }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <button type="button" class="salir" (click)="salir()">
+          <span class="salir-icon" [innerHTML]="icono('log-out')"></span>
+          <span>Salir</span>
+        </button>
+      }
     </div>
   </header>
 
@@ -68,8 +109,9 @@
       ></button>
     }
 
-    <nav class="lateral" [class.abierto]="menuAbierto()">
+    <nav class="lateral" [class.abierto]="menuAbierto()" [class.colapsado]="sidebarColapsado()">
       @for (grupo of menu(); track grupo.titulo) {
+        @if (grupo.titulo !== 'Sistema') {
         @if (grupo.colapsable) {
           <div class="grupo colapsable">
             <button
@@ -89,9 +131,10 @@
                       [routerLink]="'/' + modulo.ruta"
                       routerLinkActive="activo"
                       (click)="cerrarMenu()"
+                      [title]="sidebarColapsado() ? modulo.etiqueta : ''"
                     >
-                      <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(modulo.icon)"></svg>
-                      {{ modulo.etiqueta }}
+                      <span class="menu-icon" [innerHTML]="icono(modulo.icon)"></span>
+                      <span class="menu-texto">{{ modulo.etiqueta }}</span>
                     </a>
                   </li>
                 }
@@ -100,7 +143,7 @@
           </div>
         } @else {
           <div class="grupo">
-            <h2>{{ grupo.titulo }}</h2>
+            <span class="grupo-titulo-simple">{{ grupo.titulo }}</span>
             <ul>
               @for (modulo of grupo.modulos; track modulo.ruta) {
                 <li>
@@ -108,14 +151,16 @@
                     [routerLink]="'/' + modulo.ruta"
                     routerLinkActive="activo"
                     (click)="cerrarMenu()"
+                    [title]="sidebarColapsado() ? modulo.etiqueta : ''"
                   >
-                    <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(modulo.icon)"></svg>
-                    {{ modulo.etiqueta }}
+                    <span class="menu-icon" [innerHTML]="icono(modulo.icon)"></span>
+                    <span class="menu-texto">{{ modulo.etiqueta }}</span>
                   </a>
                 </li>
               }
             </ul>
           </div>
+        }
         }
       }
     </nav>

@@ -1,8 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { menuPara, type Grupo } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
-import { obtenerIcono } from '../nucleo/iconos/iconos';
+import { ICONOS } from '../nucleo/iconos/iconos';
 
 /**
  * El marco de la app: cabecera, menu lateral y el hueco de la pantalla.
@@ -28,6 +29,7 @@ import { obtenerIcono } from '../nucleo/iconos/iconos';
 export class Shell {
   private readonly router = inject(Router);
   private readonly sesion = inject(Sesion);
+  private readonly sanitizer = inject(DomSanitizer);
 
   /** Los grupos con lo que la persona puede ver, en el orden del catalogo. */
   readonly menu = computed(() => {
@@ -43,15 +45,72 @@ export class Shell {
   /** En celular el menu arranca cerrado, para que la pantalla sirva. */
   readonly menuAbierto = signal(false);
 
+  /** Estado del sidebar: colapsado (solo iconos) vs expandido (iconos + texto) */
+  readonly sidebarColapsado = signal(false);
+
   /** Estado de grupos colapsables (Sistema, etc.) */
   readonly gruposColapsados = signal<Record<string, boolean>>({});
 
-  /** Funcion para obtener iconos SVG en linea */
-  readonly icono = obtenerIcono;
+  /** Estado del dropdown del menu de sistema en la barra superior */
+  readonly sistemaDropdownAbierto = signal(false);
+
+  /** Obtiene el icono SVG como SafeHtml para usar con [innerHTML] */
+  icono(nombre: string): SafeHtml {
+    const svg = ICONOS[nombre] ?? ICONOS['clipboard'];
+    return this.sanitizer.bypassSecurityTrustHtml(svg);
+  }
+
+  /** Opciones del menu Sistema (solo las que el usuario puede ver) */
+  readonly sistemaOpciones = computed(() => {
+    const permisos = new Set(this.sesion.perfil()?.permisos ?? []);
+    const opciones: { etiqueta: string; ruta: string; icono: string; permiso: string }[] = [];
+    
+    if (permisos.has('usuarios.ver')) {
+      opciones.push({ etiqueta: 'Usuarios y roles', ruta: '/usuarios', icono: 'user-cog', permiso: 'usuarios.ver' });
+    }
+    if (permisos.has('auditoria.ver')) {
+      opciones.push({ etiqueta: 'Auditoria', ruta: '/auditoria', icono: 'scroll', permiso: 'auditoria.ver' });
+    }
+    // Salir siempre esta disponible si hay sesion
+    opciones.push({ etiqueta: 'Salir', ruta: '', icono: 'log-out', permiso: '' });
+    
+    return opciones;
+  });
+
+  /** Verifica si el usuario tiene permisos para ver el dropdown de Sistema */
+  readonly puedeVerSistema = computed(() => {
+    const permisos = new Set(this.sesion.perfil()?.permisos ?? []);
+    return permisos.has('usuarios.ver') || permisos.has('auditoria.ver');
+  });
 
   /** Cierra el menu de lado al elegir un modulo: en un celular tapar la pantalla es lo esperado. */
   cerrarMenu(): void {
     this.menuAbierto.set(false);
+  }
+
+  /** Alterna el estado colapsado del sidebar */
+  alternarSidebar(): void {
+    this.sidebarColapsado.update(v => !v);
+  }
+
+  /** Alterna el dropdown del menu Sistema */
+  alternarSistemaDropdown(): void {
+    this.sistemaDropdownAbierto.update(v => !v);
+  }
+
+  /** Cierra el dropdown del menu Sistema */
+  cerrarSistemaDropdown(): void {
+    this.sistemaDropdownAbierto.set(false);
+  }
+
+  /** Navega a una opcion del menu Sistema y cierra el dropdown */
+  async irAOpcion(opcion: { etiqueta: string; ruta: string; icono: string; permiso: string }): Promise<void> {
+    this.cerrarSistemaDropdown();
+    if (opcion.ruta === '') {
+      await this.salir();
+    } else {
+      await this.router.navigate([opcion.ruta]);
+    }
   }
 
   /** Alterna un grupo colapsable */

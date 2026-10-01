@@ -10,11 +10,14 @@
   mas chicos arriba, que es lo que se usa en un mostrador.
 -->
 <section class="pos">
+  <!--
+    La cabecera va en UNA linea: el titulo y la frase que lo explica, sobre la
+    misma base. Eran dos lineas y en una pantalla de mostrador, que se mira de
+    pie, esa segunda linea es aire que empuja la captura hacia abajo.
+  -->
   <header class="cabecera">
-    <div>
-      <h1>Nota de remision</h1>
-      <p class="subtitulo">El cliente y el producto van primero: el precio depende del cliente.</p>
-    </div>
+    <h1>Nota de remision</h1>
+    <p class="subtitulo">El precio depende del cliente, asi que el cliente va primero.</p>
   </header>
 
   @if (error(); as mensaje) {
@@ -659,7 +662,7 @@
                               </button>
                             }
                           </div>
-                          <p class="cuenta">
+                          <p class="contador">
                             {{ foliosDetalle().length }} de {{ totalFoliosDetalle() }} folios
                           </p>
                         }
@@ -1017,7 +1020,7 @@
             Anterior
           </button>
 
-          <span class="cuenta">
+          <span class="contador">
             {{ rangoDePagina() }}
             <span class="tenue">&middot; pagina {{ pagina() }} de {{ paginasTotales() }}</span>
           </span>

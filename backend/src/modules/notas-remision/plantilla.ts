@@ -97,3 +97,121 @@ export function fechaCorta(fecha: string): string {
   const anioTexto = String(anio).slice(2);
   return `${diaTexto}-${mesCorto}-${anioTexto}`;
 }
+
+/**
+ * Las letras con las que se dibuja el papel.
+ *
+ * La plantilla esta compuesta con DOS: Bahnschrift Light (312 celdas) y Arial
+ * Black (31). pdfkit solo trae las cuatro estandar de PDF, que son mas anchas,
+ * y con esas el membrete se encogia a 3.6 puntos por no caber en su celda: un
+ * papel correcto en sus medidas y con la letra ilegible no es un papel correcto.
+ *
+ * Se buscan en dos sitios, en este orden:
+ *
+ *   1. `plantillas/`, por si alguien deja un `.ttf` de la variante CONDENSADA.
+ *      Bahnschrift es de Microsoft y no se versiona aqui (lo mismo que la
+ *      plantilla real), asi que ese archivo no se exige, se busca.
+ *   2. Las carpetas de fuentes del sistema. En la maquina donde se imprime
+ *      esto casi siempre estan, y entonces el papel sale con la letra de
+ *      verdad y se ve igual que el Excel.
+ *
+ * Si no se encuentra ninguna, se dibuja con Helvetica y el papel sigue
+ * saliendo: es un cascada a proposito, porque el papel es un documento de
+ * negocio y no vale la pena que falte entero por una letra.
+ */
+const NOMBRES_EN_PLANTILLAS: { patron: RegExp; archivos: string[] }[] = [
+  {
+    patron: /arial\s*black/i,
+    archivos: ['plantillas/papel-negro.ttf', 'plantillas/ArialBlack.ttf'],
+  },
+  {
+    patron: /bahn/i,
+    archivos: [
+      'plantillas/papel-condensada.ttf',
+      'plantillas/papel.ttf',
+      'plantillas/BahnschriftCondensed.ttf',
+      'plantillas/bahnschrift-condensed.ttf',
+    ],
+  },
+];
+
+/** Que archivos tiene cada fuente en las carpetas del sistema. */
+const ARCHIVOS_EN_EL_SISTEMA: { patron: RegExp; archivos: string[] }[] = [
+  { patron: /arial\s*black/i, archivos: ['ariblk.ttf', 'Arial_Black.ttf'] },
+  { patron: /bahn/i, archivos: ['bahnschrift.ttf', 'Bahnschrift.ttf'] },
+];
+
+/** Donde mira el sistema las fuentes. */
+const CARPETAS_DE_FUENTES = [
+  'C:/Windows/Fonts',
+  '/usr/share/fonts',
+  '/usr/local/share/fonts',
+  '/Library/Fonts',
+  '/System/Library/Fonts',
+];
+
+/** La ruta de un archivo de fuente, si existe en el primer sitio donde aparezca. */
+const buscarFuente = async (archivos: string[]): Promise<string | null> => {
+  for (const nombre of archivos) {
+    try {
+      await readFile(join(RAIZ, nombre));
+      return join(RAIZ, nombre);
+    } catch (falla) {
+      if ((falla as NodeJS.ErrnoException).code !== 'ENOENT') throw falla;
+    }
+  }
+  for (const carpeta of CARPETAS_DE_FUENTES) {
+    for (const nombre of archivos) {
+      const ruta = `${carpeta}/${nombre}`;
+      try {
+        await readFile(ruta);
+        return ruta;
+      } catch (falla) {
+        if ((falla as NodeJS.ErrnoException).code !== 'ENOENT') throw falla;
+      }
+    }
+  }
+  return null;
+};
+
+/**
+ * Registra en el documento las letras de la plantilla que encuentre, y devuelve
+ * como preguntar por cada celda cual toca.
+ *
+ * El comparador se construye aqui y no en quien dibuja, por una razon concreta:
+ * la lista de patrones se guardaba como TEXTO (`.source`, que es lo que se
+ * puede usar de clave en un mapa) y eso tira la bandera `i`. Se acababa buscando
+ * "bahn" en "Bahnschrift", sin mayuscula, y ninguna celda encontraba su letra:
+ * el papel salia entero con Helvetica sin que nadie se enterara.
+ *
+ * Por eso se devuelve una FUNCION con los patrones ya cerrados dentro, y quien
+ * dibuja solo tiene que preguntar "que letra va en esta celda".
+ */
+export async function registrarLetrasDelPapel(
+  registrar: (nombre: string, ruta: string) => void,
+): Promise<(familia: string, negrita: boolean) => string> {
+  const encontradas = new Map<RegExp, string>();
+  let numero = 0;
+  for (const grupo of [...NOMBRES_EN_PLANTILLAS, ...ARCHIVOS_EN_EL_SISTEMA]) {
+    if ([...encontradas.keys()].some((ya) => ya.source === grupo.patron.source)) continue;
+    const ruta = await buscarFuente(grupo.archivos);
+    if (ruta === null) continue;
+    numero += 1;
+    const nombre = `papel${numero}`;
+    try {
+      registrar(nombre, ruta);
+    } catch {
+      // Una fuente que no se puede registrar no es motivo para tirar el papel:
+      // esa celda se dibuja con la letra de pdfkit.
+      continue;
+    }
+    encontradas.set(grupo.patron, nombre);
+  }
+
+  return (familia: string, negrita: boolean): string => {
+    for (const [patron, nombre] of encontradas) {
+      if (patron.test(familia)) return nombre;
+    }
+    return negrita ? 'Helvetica-Bold' : 'Helvetica';
+  };
+}

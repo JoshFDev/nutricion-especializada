@@ -431,9 +431,15 @@ revisar('ruta inexistente -> 404', rutaMala.status === 404);
 console.log('');
 console.log('--- acceso directo de desarrollo ---');
 
+// `body` va como TEXTO, no como objeto. `fetch` solo acepta texto y convierte
+// lo demas con `String()`, asi que un objeto aqui llegaba al servidor como la
+// cadena "[object Object]", la ruta no encontraba ningun rol y caia al
+// valor por defecto. Esta prueba pasaba, pero por el motivo equivocado: no
+// estaba entrando como Administrador, estaba entrando sin rol.
 const accesoDirecto = await pedir('/api/auth/dev/entrar-como', null, {
   method: 'POST',
-  body: { rol: 'Administrador' },
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rol: 'Administrador' }),
 });
 revisar('acceso directo -> 200', accesoDirecto.status === 200, String(accesoDirecto.status));
 revisar(
@@ -461,7 +467,8 @@ revisar('y alcanza para operar de verdad', conAccesoDirecto.status === 200);
 
 const accesoRolInexistente = await pedir('/api/auth/dev/entrar-como', null, {
   method: 'POST',
-  body: { rol: 'Emperor' },
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rol: 'Emperor' }),
 });
 revisar(
   'un rol que no existe no entra a nada -> 404',
@@ -1393,7 +1400,13 @@ const limpiarPagosComprasProveedoresDePrueba = async () => {
  */
 const limpiarFoliosPago = async () => {
   const f = await sqlDirecto(`DELETE FROM pos.folios WHERE serie = 'PGO'`);
-  return f.rowCount;
+  // El tramo sin prefijo (7000-7004) que carga la prueba de la serie vacia. Sin
+  // esto se queda en la base y la segunda corrida del suite recibe un 409 de
+  // "ya cargado" en vez del 201 que espera.
+  const sinPrefijo = await sqlDirecto(
+    `DELETE FROM pos.folios WHERE serie = '' AND folio_numero BETWEEN 7000 AND 7004`,
+  );
+  return f.rowCount + sinPrefijo.rowCount;
 };
 
 /**
@@ -2987,13 +3000,6 @@ revisar(
   JSON.stringify(recargarTodo.cuerpo),
 );
 
-const serieSinCargar = await pedir('/api/notas-remision/folios', tokenAdmin, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ serie: '', desde: 1, hasta: 5 }),
-});
-revisar('serie vacia -> 400', serieSinCargar.status === 400, JSON.stringify(serieSinCargar.cuerpo));
-
 // ------------------------------------------------------- alta y autofill
 
 // Sin precio vigente no hay nota: una venta no se puede capturar a ciegas.
@@ -3047,6 +3053,62 @@ revisar(
   notaBase.cuerpo?.folio,
 );
 revisar('queda en pendiente', notaBase.cuerpo?.estatus === 'pendiente', notaBase.cuerpo?.estatus);
+
+/**
+ * La serie VACIA es un formato valido, no un error, y hay tres cosas que lo
+ * dicen: `crearTalonarioEsquema` la deja en '' por defecto, la pantalla del
+ * talonario pone "Vacio = solo numeros" en el campo, y la semilla del
+ * proyecto entrega folios sin serie.
+ *
+ * Este caso NO crea una nota, y es a proposito. Una nota de mas aqui movia el
+ * stock y hacia fallar, mas abajo, la prueba que cuenta los kilos que se
+ * vendieron: el papel de la serie vacia ya se puede comprobar sin tocar nada.
+ */
+const serieSinPrefijo = await pedir('/api/notas-remision/folios', tokenAdmin, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ serie: '', desde: 7000, hasta: 7004 }),
+});
+revisar(
+  'serie vacia -> 201 (es el formato de puros numeros)',
+  serieSinPrefijo.status === 201,
+  JSON.stringify(serieSinPrefijo.cuerpo),
+);
+
+// Como se ESCRIBE ese folio: sin guion delante. El listado lo armaba a mano
+// con `${serie}-${numero}`, asi que una nota de serie vacia salia "-2704" con
+// el guion colgando, mientras el detalle de esa misma nota decia "2704". Si el
+// papel dice 2704 y la pantalla dice -2704, es la misma nota con dos numeros.
+const foliosSinPrefijo = await pedir('/api/notas-remision/folios?limite=200', tokenAdmin);
+const losDePrueba = (foliosSinPrefijo.cuerpo?.datos ?? []).filter((f) =>
+  /^(7000|7001|7002|7003|7004)$/.test(String(f.folio_numero ?? f.numero ?? '')),
+);
+revisar(
+  'y los folios se escriben SOLO con el numero',
+  losDePrueba.length === 5 &&
+    losDePrueba.every((f) => f.completo !== undefined && !String(f.completo).startsWith('-')),
+  JSON.stringify(losDePrueba.map((f) => f.completo)),
+);
+
+// La nota de la semilla ya vive sobre folios sin serie: se usa para comprobar
+// que el listado y el detalle arman el folio IGUAL, sin crear nada.
+const conNotaSinPrefijo = (
+  await pedir('/api/notas-remision?limite=200', tokenAdmin)
+).cuerpo?.datos?.find((n) => /^\d+$/.test(n.folio ?? ''));
+revisar(
+  'la nota sin prefijo sale sin guion en el listado',
+  conNotaSinPrefijo !== undefined,
+  'no hay ninguna nota de serie vacia para comparar',
+);
+if (conNotaSinPrefijo !== undefined) {
+  revisar(
+    'y el detalle dice EXACTAMENTE lo mismo, sin guion colgando',
+    (await pedir(`/api/notas-remision/${conNotaSinPrefijo.id}`, tokenAdmin)).cuerpo?.folio ===
+      conNotaSinPrefijo.folio,
+    'el detalle y el listado arman el folio distinto',
+  );
+}
+
 revisar(
   'el vendedor sale de la sesion, no del cuerpo',
   notaBase.cuerpo?.vendedor === 'Administrador',

@@ -9,6 +9,7 @@ import {
   PRIMERA_FILA_DETALLE,
   fechaCorta,
   leerPlantilla,
+  registrarLetrasDelPapel,
 } from './plantilla.js';
 import type { ClienteImprimible, Nota } from './modelo.js';
 
@@ -89,20 +90,41 @@ interface ExcelJSConLoad {
   load: (datos: ArrayBuffer) => Promise<unknown>;
 }
 
-/** Una celda ya resuelta: donde esta, que ocupa y que dice. */
+/**
+ * El borde de un lado de la celda.
+ *
+ * La plantilla NO tiene una rejilla uniforme: 294 celdas con borde y 49 sin
+ * ninguno, y ademas cada celda tiene los suyos propios (algunas solo arriba y
+ * a los lados, otras solo la derecha). Dibujarle a todas un rectangulo entero,
+ * como hacia la primera version, ponia lineas donde la plantilla no tiene
+ * ninguna: el papel salia con una cuadricula mas pesada que el Excel.
+ */
+interface Borde {
+  estilo: string | undefined;
+  color: string | undefined;
+}
+
+/** Una celda ya resuelta: donde esta, que ocupa, que dice y que lados tiene. */
 interface Casilla {
   /** La celda principal del bloque combinado; para una celda suelta, ella misma. */
   maestro: string;
   x: number;
   y: number;
   ancho: number;
+  /** El ancho disponible para el TEXTO: el de la caja, o mas si se desborda. */
+  anchoTexto: number;
   alto: number;
   texto: string;
   tamano: number;
   negrita: boolean;
   rojo: boolean;
+  /** El nombre de la fuente que pide la plantilla (Bahnschrift Light, etc.). */
+  familia: string;
+  /** El color de fondo de la celda, si la plantilla le pone uno. */
+  fondo: string | undefined;
   alineacion: 'left' | 'center' | 'right';
   centroVertical: boolean;
+  bordes: { arriba: Borde; abajo: Borde; izquierda: Borde; derecha: Borde };
 }
 
 /** La plantilla, ya medida. */
@@ -110,6 +132,8 @@ interface Papel {
   casillas: Casilla[];
   ancho: number;
   alto: number;
+  /** La paleta del tema del `.xlsx`, para resolver los rellenos. */
+  tema: string[];
 }
 
 /** Que dice el estilo de una celda, sea texto plano, formula o texto con formato. */
@@ -134,6 +158,121 @@ const textoDe = (valor: unknown): string => {
  * papel queda del mismo tamano que en Excel, que es lo que importa. Si se
  * cambian, el PDF se descuadra del Excel sin que nada avise.
  */
+/**
+ * El orden de los colores de tema que usa Excel dentro de `fgColor.theme`.
+ *
+ * No es el orden en que salen en el XML (alli empieza por dk2): el indice que
+ * trae la celda cuenta 0=lt1, 1=dk1, 2=lt2, 3=dk2, 4=accent1... hasta el 9.
+ * La plantilla usa el 6 (accent3, un verde) con tinte claro para las
+ * cabeceras, y el 0 (blanco) para los renglones.
+ */
+const ORDEN_TEMA = [
+  'lt1',
+  'dk1',
+  'lt2',
+  'dk2',
+  'accent1',
+  'accent2',
+  'accent3',
+  'accent4',
+  'accent5',
+  'accent6',
+  'hlink',
+  'folHlink',
+] as const;
+
+/**
+ * Los canales de un color de Excel (`ARGB` de ocho hex) en 0-255.
+ */
+const canales = (argb: string): [number, number, number] => {
+  const limpio = argb.length === 8 ? argb.slice(2) : argb;
+  return [
+    parseInt(limpio.slice(0, 2), 16),
+    parseInt(limpio.slice(2, 4), 16),
+    parseInt(limpio.slice(4, 6), 16),
+  ];
+};
+
+/**
+ * El tinte de Excel, que es aclarar u oscurecer una fraccion del color.
+ *
+ * Un tinte de +0.8 NO es "80% mas claro": es mover el canal un 80% de lo que
+ * falta para llegar a blanco. Sin esto, las cabeceras de la plantilla (accent3
+ * con tinte 0.8) saldarian del verde puro y el papel no se pareceria al Excel.
+ */
+const conTinte = (color: string, tinte: number): string => {
+  const [r, g, b] = canales(color);
+  const mover = (valor: number): number =>
+    Math.round(tinte < 0 ? valor * (1 + tinte) : valor + (255 - valor) * tinte);
+  const hex = (valor: number): string =>
+    Math.max(0, Math.min(255, valor)).toString(16).padStart(2, '0');
+  return `#${hex(mover(r))}${hex(mover(g))}${hex(mover(b))}`;
+};
+
+/**
+ * Saca la paleta del tema del archivo, para poder resolver los rellenos.
+ *
+ * Vive en un XML aparte dentro del `.xlsx` y ExcelJS lo deja en `_themes`. Si
+ * no esta, se devuelve la paleta de Office por defecto, que es con la que se
+ * hizo esta plantilla.
+ */
+const leerTema = (libro: ExcelJS.Workbook): string[] => {
+  const porDefecto = [
+    'FFFFFF',
+    '000000',
+    'E8E8E8',
+    '0E2841',
+    '156082',
+    'E97132',
+    '196B24',
+    '0F9ED5',
+    'A02B93',
+    '4EA72E',
+    '0563C1',
+    '954F72',
+  ];
+  const temas = (libro as unknown as { _themes?: Record<string, string> })._themes;
+  const xml = temas?.theme1;
+  if (xml === undefined) return porDefecto;
+
+  const paleta: string[] = [];
+  for (const clave of ORDEN_TEMA) {
+    const bloque = new RegExp(`<a:${clave}>.*?val="([0-9A-Fa-f]{6})"`, 's').exec(xml);
+    paleta.push(bloque?.[1]?.toUpperCase() ?? '000000');
+  }
+  // En el XML, lt1 y dk1 estan al reves del indice que usa la celda.
+  const lt1 = paleta[2] ?? 'FFFFFF';
+  const dk1 = paleta[1] ?? '000000';
+  paleta[0] = lt1;
+  paleta[1] = dk1;
+  return paleta;
+};
+
+/**
+ * El color de fondo de una celda, o `undefined` si no lleva relleno.
+ *
+ * El `tint` no esta en los tipos de ExcelJS (que solo declara `argb`, `theme` e
+ * `indexed`), asi que el color se lee como un objeto con la forma real que
+ * trae el archivo. El `tint` es lo que hace que las cabeceras salgan en un
+ * verde clarito y no en el verde de la marca.
+ */
+interface ColorDeExcel {
+  argb?: string;
+  theme?: number;
+  tint?: number;
+}
+
+/** El color de fondo de una celda, o `undefined` si no lleva relleno. */
+const colorDeRelleno = (relleno: ExcelJS.Fill | undefined, tema: string[]): string | undefined => {
+  if (relleno?.type !== 'pattern') return undefined;
+  if (relleno.pattern === undefined || relleno.pattern === 'none') return undefined;
+  const frente = relleno.fgColor as ColorDeExcel | undefined;
+  if (frente === undefined) return undefined;
+  if (frente.argb !== undefined) return conTinte(frente.argb, frente.tint ?? 0);
+  if (frente.theme !== undefined) return conTinte(tema[frente.theme] ?? 'FFFFFF', frente.tint ?? 0);
+  return undefined;
+};
+
 const medirPlantilla = async (): Promise<Papel> => {
   const libro = new ExcelJS.Workbook();
   // `load` cuelga de `libro.xlsx`, igual que en `excel.ts`. El buffer es el
@@ -167,13 +306,36 @@ const medirPlantilla = async (): Promise<Papel> => {
   }
   const alto = y;
 
+  // Que celdas tienen algo escrito. Hace falta para saber HASTA donde puede
+  // desbordarse un texto: Excel lo deja salir hacia las celdas VACIAS de al
+  // lado, y lo que encuentra con algo escrito lo corta.
+  const tema = leerTema(libro);
+  const ocupada = new Set<string>();
+  for (let f = 1; f <= FILAS_PAPEL; f += 1) {
+    for (let c = 1; c <= COLUMNAS_PAPEL.length; c += 1) {
+      const celda = hoja.getCell(f, c);
+      if (textoDe(celda.value) !== '') ocupada.add(`${f}:${c}`);
+      // El maestro de un bloque combinado ocupa todas sus columnas.
+      if (celda.master.address === celda.address) {
+        const rango = celda.master.address.includes(':') ? celda.master.address.split(':') : [];
+        const filaFin = /\d+/.exec(rango[1] ?? '');
+        const colFin = /[A-Z]+/.exec(rango[1] ?? '');
+        if (filaFin !== null && colFin !== null) {
+          for (let cc = c; cc <= colFin[0].charCodeAt(0) - 65; cc += 1) {
+            ocupada.add(`${f}:${cc}`);
+          }
+        }
+      }
+    }
+  }
+
   const casillas: Casilla[] = [];
   const vistas = new Set<string>();
   for (let f = 1; f <= FILAS_PAPEL; f += 1) {
     for (let c = 1; c <= COLUMNAS_PAPEL.length; c += 1) {
       const celda = hoja.getCell(f, c);
       // El maestro de una celda combinada trae el rango entero; de ahi salen las
-      // medidas de la caja. Una celda suelta es un rango de una.
+      // medidas de la caja. Una celda suelta no tiene.
       const maestro = celda.master;
       const clave = maestro.address;
       if (vistas.has(clave)) continue;
@@ -200,27 +362,68 @@ const medirPlantilla = async (): Promise<Papel> => {
           ? (finDeFila[ultimaFila.number - 1] ?? y)
           : (finDeFila[f - 1] ?? y);
 
+      /*
+       * El ancho REAL del texto, que no es el de la celda.
+       *
+       * El membrete esta pensado para desbordarse: "SUR 7, CUENCA LECHERA DE
+       * TIZAYUCA, HIDALGO." esta en B2, que no esta combinada y mide 126
+       * puntos, pero el texto mide unos 371. En Excel eso no se encoge: se sale
+       * de la celda hacia las de la derecha mientras esten VACIAS, y por eso
+       * C2..G2 no tienen nada escrito. Asi esta hecho el papel.
+       *
+       * Sin esto el texto se encerraba en 126 puntos y la letra bajaba a 3.6,
+       * que no se lee. Solo se desborda lo que va alineado a la izquierda: un
+       * numero o un titulo centrado en su celda nunca se sale de ella.
+       */
+      let ancho = x1 - x0;
+      const alinear = celda.alignment?.horizontal;
+      if (maestro.address === celda.address && (alinear === undefined || alinear === 'left')) {
+        for (let siguiente = c + 1; siguiente <= COLUMNAS_PAPEL.length; siguiente += 1) {
+          if (ocupada.has(`${f}:${siguiente}`)) break;
+          ancho = (finDeColumna[siguiente - 1] ?? x1) - x0;
+        }
+      }
+
       const fuente = celda.font ?? {};
       const alineacion = celda.alignment ?? {};
       const horizontal = alineacion.horizontal;
+      const borde = celda.border ?? {};
+      const de = (lado: 'top' | 'bottom' | 'left' | 'right'): Borde => {
+        const dato = borde[lado] as { style?: string; color?: { argb?: string } } | undefined;
+        return {
+          estilo: dato?.style,
+          color: dato?.color?.argb === 'FF000000' ? '#000000' : undefined,
+        };
+      };
 
       casillas.push({
         maestro: clave,
         x: x0,
         y: y0,
         ancho: x1 - x0,
+        // El ancho con el que se mide el TEXTO, que puede ser mayor que el de la
+        // caja cuando el texto se desborda hacia las celdas de al lado.
+        anchoTexto: ancho,
         alto: y1 - y0,
         texto: textoDe(celda.value),
         tamano: typeof fuente.size === 'number' ? fuente.size : 12,
         negrita: fuente.bold === true,
+        familia: fuente.name ?? '',
         rojo: fuente.color?.argb === 'FFFF0000' || fuente.color?.argb === 'FFB00020',
+        fondo: colorDeRelleno(celda.fill, tema),
         alineacion: horizontal === 'center' || horizontal === 'right' ? horizontal : 'left',
         centroVertical: alineacion.vertical === 'middle' || alineacion.vertical === 'bottom',
+        bordes: {
+          arriba: de('top'),
+          abajo: de('bottom'),
+          izquierda: de('left'),
+          derecha: de('right'),
+        },
       });
     }
   }
 
-  return { casillas, ancho, alto };
+  return { casillas, ancho, alto, tema: leerTema(libro) };
 };
 
 /**
@@ -262,20 +465,71 @@ const aBuffer = (doc: PDFKit.PDFDocument): Promise<Buffer> =>
     doc.end();
   });
 
-/** El recuadro de una celda. */
-const recuadro = (
-  doc: PDFKit.PDFDocument,
-  caja: { x: number; y: number; ancho: number; alto: number },
-): void => {
-  doc
-    .save()
-    .lineWidth(0.6)
-    .strokeColor(GRIS_LINEA)
-    .rect(caja.x, caja.y, caja.ancho, caja.alto)
-    .stroke()
-    .restore();
+/**
+ * El grosor de un trazo segun el estilo de borde de Excel.
+ *
+ * `medium` y `thick` son los que Excel usa para el marco del papel y para las
+ * separaciones que separan de verdad; `thin` es la linea de cada celda. Se
+ *InitialsTranslate: el papel se ve igual de pesado que en el Excel.
+ */
+const GROSOR: Record<string, number> = {
+  hair: 0.2,
+  thin: 0.5,
+  dotted: 0.5,
+  dashed: 0.5,
+  medium: 1.1,
+  mediumDashed: 1.1,
+  thick: 2,
+  double: 0.9,
 };
 
+/** Un lado de la celda, si la plantilla dice que lo tiene. */
+const lado = (
+  doc: PDFKit.PDFDocument,
+  borde: Borde,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): void => {
+  if (borde.estilo === undefined) return;
+  doc.save();
+  doc.lineWidth(GROSOR[borde.estilo] ?? 0.5);
+  doc.strokeColor(borde.color ?? GRIS_LINEA);
+  if (
+    borde.estilo.toLowerCase().includes('dashed') ||
+    borde.estilo.toLowerCase().includes('dotted')
+  ) {
+    doc.dash(1.5, { space: 1.5 });
+  }
+  doc.moveTo(x1, y1).lineTo(x2, y2).stroke();
+  doc.restore();
+};
+
+/**
+ * Los cuatro lados de una celda, cada uno solo si la plantilla lo trae.
+ *
+ * Las celdas contiguas comparten su borde y Excel lo guarda en las dos, asi que
+ * se dibuja dos veces: no pasa nada, y dibujar la mitad de los lados (la que
+ * "es" de cada celda) dejaria huecos en la rejilla.
+ */
+const bordesDeCelda = (doc: PDFKit.PDFDocument, casilla: Casilla): void => {
+  const { x, y, ancho, alto, bordes } = casilla;
+  lado(doc, bordes.arriba, x, y, x + ancho, y);
+  lado(doc, bordes.abajo, x, y + alto, x + ancho, y + alto);
+  lado(doc, bordes.izquierda, x, y, x, y + alto);
+  lado(doc, bordes.derecha, x + ancho, y, x + ancho, y + alto);
+};
+
+/**
+ * El nombre de la fuente con la que se dibuja una celda.
+ *
+ * Se registra la letra del papel con el nombre `papel` si alguien dejo el
+ * archivo en `plantillas/` (ver `rutaDeLaLetra`), y se usa esa. Sin archivo,
+ * la Helvetica de pdfkit. Las dos miden casi igual de ancho, asi que el tamano
+ * y el desborde salen igual; lo unico que cambia es la FORMA de las letras, que
+ * solo se parece al Excel si se usa la fuente de la plantilla.
+ */
 /**
  * El texto de una celda, con la misma letra y el mismo lado que en el Excel.
  *
@@ -293,15 +547,24 @@ const recuadro = (
  * todas las celdas de la plantilla son de altura triple y su texto va al medio,
  * que es lo que dice `vertical: middle`.
  */
-const textoDeCelda = (doc: PDFKit.PDFDocument, caja: Casilla): void => {
+const textoDeCelda = (
+  doc: PDFKit.PDFDocument,
+  caja: Casilla,
+  letraDe: (familia: string, negrita: boolean) => string,
+): void => {
   if (caja.texto === '') return;
-  doc.font(caja.negrita ? 'Helvetica-Bold' : 'Helvetica').fillColor(caja.rojo ? ROJO : '#000000');
+  doc.font(letraDe(caja.familia, caja.negrita)).fillColor(caja.rojo ? ROJO : '#000000');
 
   const texto = textoSeguro(caja.texto);
-  const disponible = caja.ancho - RELLENO * 2;
+  const disponible = caja.anchoTexto - RELLENO * 2;
   const anchoNecesario = doc.fontSize(caja.tamano).widthOfString(texto);
+  // El piso de 6 puntos importa: por debajo la letra ya no se lee, y es mejor
+  // que el texto se salga un poco de su celda (que es lo que haria Excel) que
+  // imprimir algo ilegible.
   const tamano =
-    anchoNecesario > disponible ? (caja.tamano * disponible) / anchoNecesario : caja.tamano;
+    anchoNecesario > disponible
+      ? Math.max(6, (caja.tamano * disponible) / anchoNecesario)
+      : caja.tamano;
   doc.fontSize(tamano);
 
   const altoLinea = doc.currentLineHeight();
@@ -348,23 +611,40 @@ const tachar = (doc: PDFKit.PDFDocument, caja: Casilla): void => {
  */
 const selloDeCancelacion = (doc: PDFKit.PDFDocument, nota: Nota, papel: Papel): void => {
   if (nota.estatus !== 'cancelada') return;
-  const izquierda = papel.ancho * 0.1;
-  const ancho = papel.ancho * 0.8;
-  const alto = papel.alto * 0.1;
+  const izquierda = papel.ancho * 0.08;
+  const ancho = papel.ancho * 0.84;
+  const alto = papel.alto * 0.12;
+  const centroX = papel.ancho / 2;
+  const centroY = papel.alto / 2;
 
   doc.save();
-  doc.translate(papel.ancho / 2, papel.alto / 2);
-  doc.rotate(-12);
-  doc.translate(-papel.ancho / 2, -papel.alto / 2);
+  doc.translate(centroX, centroY);
+  doc.rotate(-14);
+  doc.translate(-centroX, -centroY);
+
+  // Fondo semitransparente rojo
   doc
-    .lineWidth(3)
-    .strokeColor(ROJO)
-    .rect(izquierda, papel.alto / 2 - alto / 2, ancho, alto)
-    .stroke()
-    .font('Helvetica-Bold')
-    .fontSize(26)
+    .save()
     .fillColor(ROJO)
-    .text(textoSeguro('CANCELADA'), izquierda, papel.alto / 2 - 13, {
+    .opacity(0.08)
+    .rect(izquierda, centroY - alto / 2, ancho, alto)
+    .fill()
+    .opacity(1)
+    .restore();
+
+  // Marco rojo
+  doc
+    .lineWidth(2.5)
+    .strokeColor(ROJO)
+    .rect(izquierda, centroY - alto / 2, ancho, alto)
+    .stroke();
+
+  // Texto CANCELADA
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(28)
+    .fillColor(ROJO)
+    .text(textoSeguro('CANCELADA'), izquierda, centroY - 14, {
       width: ancho,
       align: 'center',
       lineBreak: false,
@@ -374,9 +654,9 @@ const selloDeCancelacion = (doc: PDFKit.PDFDocument, nota: Nota, papel: Papel): 
   if (nota.motivo_cancelacion !== null && nota.motivo_cancelacion !== '') {
     doc
       .font('Helvetica')
-      .fontSize(9)
+      .fontSize(10)
       .fillColor(ROJO)
-      .text(`Motivo: ${textoSeguro(nota.motivo_cancelacion)}`, izquierda, papel.alto * 0.62, {
+      .text(`Motivo: ${textoSeguro(nota.motivo_cancelacion)}`, izquierda, papel.alto * 0.65, {
         width: ancho,
         align: 'center',
       });
@@ -394,6 +674,7 @@ export async function pdfNotaRemision(
   nota: Nota,
   cliente: ClienteImprimible,
   empresa: DatosEmpresa,
+  esCopia = false,
 ): Promise<Buffer> {
   const papel = await medirPlantilla();
 
@@ -417,6 +698,10 @@ export async function pdfNotaRemision(
   // El total de la nota, el de la base, no el de sumar la hoja.
   escribir(papel, 'E40', montoComoTexto(nota.subtotal));
 
+  // Marca COPIA/ORIGINAL en la plantilla (celda G7 si existe, o en el membrete)
+  const marca = esCopia ? 'COPIA' : 'ORIGINAL';
+  escribir(papel, 'G7', marca);
+
   const doc = new PDFDocument({
     size: [PAGINA.ancho, PAGINA.alto],
     // Margenes EN CERO a proposito. Si se le pasa un numero a `margin`, pdfkit
@@ -431,7 +716,17 @@ export async function pdfNotaRemision(
     info: {
       Title: `Nota de remision ${nota.folio}`,
       Author: empresa.nombre,
+      Subject: `${marca} - ${nota.estatus.toUpperCase()}`,
+      Keywords: 'nota de remision, entrega, nutricion especializada',
+      CreationDate: new Date(),
     },
+  });
+
+  // Las letras de la plantilla, si estan en la maquina. Bahnschrift es de
+  // Microsoft y no se versiona aqui, asi que se buscan y no se exigen: sin ellas
+  // el papel sale con la Helvetica de pdfkit, que es mas ancha.
+  const letraDe = await registrarLetrasDelPapel((nombre, ruta) => {
+    doc.registerFont(nombre, ruta);
   });
 
   doc.addPage();
@@ -457,8 +752,20 @@ export async function pdfNotaRemision(
   const altoDeLaHoja = doc.page.height;
   doc.page.height = altoDeLaHoja + papel.alto + 40;
 
-  for (const casilla of papel.casillas) recuadro(doc, casilla);
-  for (const casilla of papel.casillas) textoDeCelda(doc, casilla);
+  // El fondo va PRIMERO, antes que los bordes y que el texto. Un borde que se
+  // dibuja encima de su propio relleno se ve cortado, y el texto nunca debe
+  // quedar debajo de un fondo.
+  for (const casilla of papel.casillas) {
+    if (casilla.fondo === undefined) continue;
+    doc
+      .save()
+      .fillColor(casilla.fondo)
+      .rect(casilla.x, casilla.y, casilla.ancho, casilla.alto)
+      .fill()
+      .restore();
+  }
+  for (const casilla of papel.casillas) bordesDeCelda(doc, casilla);
+  for (const casilla of papel.casillas) textoDeCelda(doc, casilla, letraDe);
 
   // La diagonal de los bloques vacios, encima de su propio texto.
   for (let i = 0; i < MAX_RENGLONES; i += 1) {
@@ -472,11 +779,38 @@ export async function pdfNotaRemision(
 
   selloDeCancelacion(doc, nota, papel);
 
+  // Marca de agua COPIA en diagonal (solo si es copia)
+  if (esCopia) {
+    marcaDeCopia(doc, papel);
+  }
+
   doc.restore();
   doc.page.height = altoDeLaHoja;
 
   return aBuffer(doc);
 }
+
+/**
+ * Marca de agua "COPIA" en diagonal para distinguir la copia del original.
+ */
+const marcaDeCopia = (doc: PDFKit.PDFDocument, papel: Papel): void => {
+  doc.save();
+  doc.translate(papel.ancho / 2, papel.alto / 2);
+  doc.rotate(-35);
+  doc.translate(-papel.ancho / 2, -papel.alto / 2);
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(72)
+    .fillColor('#000000')
+    .opacity(0.06)
+    .text('COPIA', 0, papel.alto / 2 - 36, {
+      width: papel.ancho,
+      align: 'center',
+      lineBreak: false,
+    })
+    .opacity(1)
+    .restore();
+};
 
 /** Cuantos renglones de la nota NO caben en el papel, igual que en el Excel. */
 export const renglonesFuera = (nota: Nota): number =>

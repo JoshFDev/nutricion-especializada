@@ -444,18 +444,49 @@ Sale con el mismo permiso que `GET /:id` (`notas.ver`): imprimir no es una
 operación distinta de ver, y un permiso aparte solo serviría para que
 alguien se quede sin poder imprimir su propia nota.
 
-| Variable            | Para qué                                              |
-| ------------------- | ----------------------------------------------------- |
-| `EMPRESA_NOMBRE`    | Título del membrete. Es la única obligatoria         |
-| `EMPRESA_RFC`       | Sale bajo el nombre; vacío = no se imprime            |
-| `EMPRESA_DIRECCION` | Ídem                                                 |
-| `EMPRESA_TELEFONO`  | Ídem                                                 |
+#### Es la plantilla del Excel, no una maqueta parecida
 
-El membrete va en el entorno y no en una tabla porque no es dato del
-negocio: es el membrete, y cambia cuando cambias de domicilio, no cuando
-llega una venta. Meterlo en el código obliga a tocar y redesplegar la app
-para corregir un teléfono mal escrito; meterlo en la base obliga a migrar
-datos que no cambian.
+El papel se dibuja leyendo `backend/plantillas/nota-remision.xlsx`: la
+geometría, los rótulos, las celdas combinadas y los bordes salen de ahí. Si
+el día de mañana cambia una fila en la hoja del negocio, el PDF cambia con
+ella y no hay que tocar el código.
+
+Consecuencias que no son obvias:
+
+- **Los datos van en las mismas celdas donde los pone el Excel.** Para
+  escribir el folio hay que escribir en la celda que en la hoja dice `folio`,
+  no en la que "le taste": por eso `plantilla.ts` es el que resuelve dónde
+  cae cada dato y el que se comparte con `excel.ts`.
+- **El texto se desborda sobre las celdas vacías de al lado**, igual que
+  en la hoja. Un nombre de producto largo ocupa las columnas siguientes
+  mientras estén vacías, y se recorta en cuanto hay algo al lado.
+- **El papel tiene nueve renglones.** Los que no caben no se pierden ni se
+  parten a la mitad: se cuentan y se devuelven en la cabecera
+  `X-Renglones-Fuera`, para que el papel no dé la impresión de estar
+  completo cuando no lo está.
+- **Los sombreados son los de la hoja.** Se leen del tema del `.xlsx` y se
+  traducen a los colores que usa pdfkit (`d1e1d3` en los títulos de
+  columna, `e8e8e8` en el membrete). El papel sale con los bloques
+  pintados, no con las líneas peladas.
+- **La tipografía también es la de la hoja.** La plantilla pide
+  Bahnschrift y Arial Black, y el papel las usa de verdad, incrustadas.
+  Sin esas fuentes en el sistema (otro equipo, un servidor en Linux) se
+  registra la variante más cercana; si tampoco hay ninguna, se dibuja con
+  las de pdfkit: el papel sale igual de bien en medidas, con otra forma de
+  letra, y nunca a medias.
+
+#### Vertical, una nota por hoja
+
+El PDF es una sola hoja vertical con una nota, como la hoja del papel
+impreso. **Las dos copias se sacan del diálogo de impresión** ("2 páginas
+por hoja"), no del servidor: el backend no tiene que dibujar dos y el
+papel no se parte en dos impresos con medio nota en cada lado.
+
+El membrete sale del membrete de la plantilla, no de variables de
+entorno: la hoja del negocio ya trae el nombre de la empresa que la usa, y
+duplicarlo en el entorno era una forma de que se pusieran a desfasar. Las
+variables `EMPRESA_*` se siguen leyendo, pero ya no dibujan nada: solo
+llenan el metadato `Author` del archivo.
 
 Tres cosas del render que no son obvias y que están comentadas en
 `src/modules/notas-remision/pdf.ts`:
@@ -467,28 +498,42 @@ Tres cosas del render que no son obvias y que están comentadas en
   como PDF. Armando el buffer primero, un fallo es un fallo de verdad y el
   cliente recibe el mismo JSON que en cualquier otra ruta. Una nota son
   decenas de renglones: el buffer pesa unos cuantos kilobytes.
-- **Los saltos de página son a mano.** `doc.text` con coordenadas
-  absolutas no pagina solo (eso solo pasa con el flujo normal), así que
-  cada bloque pregunta si cabe, y al saltar se redibujan los títulos de
-  la tabla. El pie va con `margins.bottom = 0`, porque si no pdfkit le
-  agrega una página por debajo a cada hoja real.
 - **El texto se normaliza a NFC antes de imprimirse.** Un nombre tecleado
   en macOS llega descompuesto (la vocal y el acento por separado) y
   sin eso el acento se pierde en el papel. Lo que no existe en WinAnsi
   se cambia por `?` a propósito: un `?` en el papel se ve y se pregunta.
+- **Ninguna letra se encoge para que quepa.** Si el texto no cabe en su
+  celda se desborda (como en la hoja) y el tamaño de letra nunca baja de
+  ocho puntos: un papel correcto en sus medidas y con la letra a tres
+  puntos no es un papel correcto.
 
 El importe que sale es el `subtotal` de la nota, **no** la suma de los
 renglones: es el que mantiene `fn_recalcular_subtotal_nota` y el que usa
 la base para el saldo del cliente. Bultos y kilos sí se suman, porque no
 hay ninguna columna que los traiga.
 
-`tests/unit/notas.pdf.test.ts` comprueba el render sin base de datos: que
-salga un PDF válido, que el folio, el cliente y los importes estén en el
-papel, que una nota larga salte de página repitiendo los títulos, y que
-una nota cancelada avise con su motivo. Para leer el texto de un PDF hay
-que descomprimir sus flujos: el helper del test va por el `/Length` de
-cada objeto porque los datos comprimidos pueden contener literalmente los
-bytes `stream` y `endstream` dentro.
+#### Las pruebas del papel
+
+`tests/unit/notas.pdf.test.ts` corre sin base de datos: que salga un PDF
+válido de una sola hoja, que el folio, el cliente y los importes estén en
+el papel, que las tipografías y los sombreados sean los de la plantilla,
+y que una nota cancelada avise con su motivo.
+
+Leer el texto de un PDF no es leer su contenido como texto plano, y vale
+la pena decir por qué, porque es lo que más ruido da:
+
+- Los flujos van comprimidos, así que hay que descomprimirlos, y se van
+  por el `/Length` de cada objeto: los datos comprimidos pueden contener
+  literalmente los bytes `stream` y `endstream` dentro.
+- Con una letra incrustada, el PDF ya **no guarda los caracteres**: guarda
+  el índice del glifo de un subconjunto, y el glifo 42 puede ser una `a` o
+  un `$` según la fuente. Cada fuente trae su `/ToUnicode`, que es
+  justamente el mapa que dice qué letra es cada glifo, y el test lo lee.
+- Cada código ocupa los bytes que declara el `codespacerange` de su
+  fuente, y no siempre son dos: una fuente de un byte escribe `CA` como
+  `<43>` y otra como `<4341>`. Con el tamaño equivocado, las letras se
+  emparejan de dos en dos y el texto sale partido.
+- Los rellenos de pdfkit van en `scn` o en `rg`; los trazos, en `SCN`.
 
 ### 3. Frontend
 

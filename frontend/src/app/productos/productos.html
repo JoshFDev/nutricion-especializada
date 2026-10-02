@@ -31,7 +31,7 @@
         }
       </button>
 
-      <form id="editor-form" class="editor-inline" [formGroup]="forma" (ngSubmit)="guardar()">
+      <form id="editor-form" class="editor-inline" [formGroup]="forma">
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h2>
         </div>
@@ -117,7 +117,7 @@
 
         <div class="acciones">
           <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
-          <button type="submit" class="primario" [disabled]="guardando()" (click)="onSubmitClick($event)">
+          <button type="button" class="primario" [disabled]="guardando()" (click)="guardar()">
             {{ guardando() ? 'Guardando...' : (esAlta() ? 'Crear' : 'Guardar') }}
           </button>
         </div>

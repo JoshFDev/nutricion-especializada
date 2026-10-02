@@ -907,10 +907,27 @@ button:not(:disabled):active {
   box-shadow: 0 1px 2px rgb(27 31 36 / 6%);
 }
 
+/*
+ * El hover del primario.
+ *
+ * Antes estas tres lineas repetian exactamente lo que ya decia
+ * `button.primario`, asi que no hacian NADA: el boton no cambiaba al pasar
+ * el cursor. Ahora baja a `--acento-texto`, el azul mas oscuro de la
+ * paleta, que es el mismo hover que usan `Nuevo producto` y `Exportar Excel`
+ * en Productos y el boton de alta en Categorias y Especies.
+ */
 button.primario:not(:disabled):hover {
   color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+}
+
+/* El primario se hunde al apretarlo: sin esto queda siempre en el aire, y
+   con la transicion de 0.12s de la regla de `button` el efecto se ve. */
+button.primario:not(:disabled):active {
+  background: var(--acento-texto);
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 button.primario {
@@ -963,9 +980,20 @@ button.chico {
   }
 }
 
+/*
+ * El boton de peligro se enciende en rojo al pasar el cursor, como los
+ * demas: sin esto se queda en el tono apagado para siempre y no se sabe
+ * que es pulsable.
+ */
 button.peligro {
   color: var(--peligro-texto);
   border-color: var(--peligro);
+}
+
+button.peligro:not(:disabled):hover {
+  background: var(--peligro);
+  border-color: var(--peligro);
+  color: var(--sobre-peligro);
 }
 
 .oculto {
@@ -1159,9 +1187,21 @@ button.peligro {
   font-weight: 600;
 }
 
+/*
+ * El hover de Exportar va a `--acento-texto` y no a un `#1d4ed8` escrito a
+ * mano con un `var(--acento-hover, ...)` de respaldo. Ese azul es MAS
+ * CLARO que `--acento` (#1d4ed8 vs #1e40af), y un boton que se pone mas
+ * claro al pasar el cursor se lee como que se apagó. Ahora va al azul mas
+ * oscuro, igual que todos los demas primarios.
+ */
 .filtros .filtro.exportar:hover:not(:disabled) {
-  background: var(--acento-hover, #1d4ed8);
-  border-color: var(--acento-hover, #1d4ed8);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  color: var(--sobre-acento);
+}
+
+.filtros .filtro.exportar:active:not(:disabled) {
+  background: var(--acento-texto);
 }
 
 .filtros .filtro.exportar:disabled {
@@ -1631,6 +1671,15 @@ button.cobrar {
   color: var(--acento-texto);
   border-color: var(--acento);
   font-weight: 600;
+}
+
+/* Al pasar el cursor se vuelve azul solido, como cualquier otro boton de
+   accion: es la accion que cierra el flujo y tiene que leerse como la
+   principal del renglon, no como un etiqueta. */
+button.cobrar:not(:disabled):hover {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--sobre-acento);
 }
 
 /* El cobro va en UNA SOLA LINEA: de quien es, el monto, el metodo y los dos

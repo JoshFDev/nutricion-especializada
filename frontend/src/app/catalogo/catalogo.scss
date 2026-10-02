@@ -14,8 +14,10 @@
 }
 
 h1 {
-  margin: 0 0 1rem;
+  margin: 0;
   font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--texto);
 }
 
 /* ------------------------------------------------------------- la cabecera */
@@ -25,30 +27,61 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 /* --------------------------------------------------------------- la tabla */
 
+/*
+ * La tabla va dentro de un contenedor con esquinas redondeadas, igual que en
+ * Productos. Poner el borde y el radio en el `<table>` directamente no
+ * alcanza: en la mayoria de navegadores el radio se ignora sobre las
+ * celdas, y el resultado son esquinas vivas con las filas pegadas.
+ */
+.tabla-wrapper {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+}
+
 .tabla {
   width: 100%;
-  margin-bottom: 1rem;
   border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
+  font-size: 0.875rem;
 }
 
 th,
 td {
-  padding: 0.5rem 0.625rem;
-  text-align: left;
+  padding: 0.625rem 0.75rem;
+  text-align: center;
+  vertical-align: middle;
   border-bottom: 1px solid var(--borde);
 }
 
 th {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--texto-suave);
+  background: var(--fondo);
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+th:last-child,
+td:last-child {
+  width: 12rem;
+}
+
+tbody tr {
+  transition: background-color 0.12s;
+}
+
+tbody tr:hover {
   background: var(--fondo);
 }
 
@@ -65,9 +98,31 @@ tbody tr:last-child td {
   text-align: right;
 }
 
+.acciones-fila {
+  display: inline-flex;
+  gap: 0.375rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* El estado vacio lleva borde y fondo para que se lea como una tarjeta y no
+   como un texto suelto pegado debajo del titulo. */
 .vacio {
-  margin: 0;
+  margin: 0.5rem 0 1rem;
+  padding: 2.5rem 1.5rem;
   color: var(--texto-tenue);
+  text-align: center;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+/* "Cargando..." no es un estado vacio: es una espera. Sin tarjeta y sin los
+   2.5rem de alto, para que no salte el alto de la pagina al entrar. */
+.cargando {
+  margin: 0.5rem 0 1rem;
+  color: var(--texto-tenue);
+  text-align: center;
 }
 
 /* -------------------------------------------------------------- el editor */
@@ -112,20 +167,67 @@ tbody tr:last-child td {
 
 /* ------------------------------------------------------------- los botones */
 
+/*
+ * El mismo esquema que Productos y Notas, para que el boton de alta se
+ * sienta igual en toda la app.
+ *
+ * Esta pantalla no tenia NINGUNA regla de hover: los botones se veian
+ * igual al puntero encima o no, y eso hace que un control poco pulsable se
+ * lea como texto. Ahora todos se encienden.
+ */
 button {
   padding: 0.5rem 0.875rem;
   font: inherit;
+  font-weight: 500;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
   cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.06s,
+    box-shadow 0.12s;
 }
 
+button:hover:not(:disabled) {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+  color: var(--acento-texto);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  background: var(--borde);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+/* El primario va en azul solido y al pasar el cursor baja al azul mas
+   oscuro de la paleta, el mismo hover que en Productos y Notas. */
 button.primario {
   color: var(--sobre-acento);
   background: var(--acento);
   border-color: var(--acento);
+  font-weight: 600;
+}
+
+button.primario:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
+}
+
+button.primario:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 button.primario:disabled {
@@ -136,13 +238,23 @@ button.primario:disabled {
 }
 
 button.chico {
-  padding: 0.25rem 0.5rem;
+  padding: 0.3125rem 0.625rem;
   font-size: 0.8125rem;
+}
+
+button.chico:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 button.peligro {
   color: var(--peligro-texto);
   border-color: var(--peligro);
+}
+
+button.peligro:hover:not(:disabled) {
+  background: var(--peligro);
+  border-color: var(--peligro);
+  color: var(--sobre-peligro);
 }
 
 .oculto {

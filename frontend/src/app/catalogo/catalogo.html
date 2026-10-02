@@ -48,7 +48,7 @@
     }
 
     @if (cargando() && filas().length === 0) {
-      <p class="vacio">Cargando...</p>
+      <p class="cargando">Cargando...</p>
     }
 
     @if (filas().length === 0 && !cargando()) {
@@ -56,31 +56,35 @@
     }
 
     @if (filas().length > 0) {
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Nombre</th>
-            <th scope="col">Usada en</th>
-            <th scope="col"><span class="oculto">Acciones</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of filas(); track fila.id) {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>{{ fila.nombre }}</td>
-              <td class="tenue">—</td>
-              <td class="acciones-celda">
-                <button type="button" class="chico" (click)="renombrar(fila)">Renombrar</button>
-                @if (puedeEliminar()) {
-                  <button type="button" class="chico peligro" (click)="eliminar(fila)">
-                    Eliminar
-                  </button>
-                }
-              </td>
+              <th scope="col">Nombre</th>
+              <th scope="col">Usada en</th>
+              <th scope="col"><span class="oculto">Acciones</span></th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (fila of filas(); track fila.id) {
+              <tr>
+                <td>{{ fila.nombre }}</td>
+                <td class="tenue">—</td>
+                <td class="acciones-celda">
+                  <div class="acciones-fila">
+                    <button type="button" class="chico" (click)="renombrar(fila)">Renombrar</button>
+                    @if (puedeEliminar()) {
+                      <button type="button" class="chico peligro" (click)="eliminar(fila)">
+                        Eliminar
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   }
 </section>

@@ -46,6 +46,14 @@ h2 {
  * Excel`) porque el `button:hover:not(:disabled)` generico pesa mas que un
  * `.clase:hover` y terminaba pintando el fondo claro de la pagina.
  */
+/*
+ * El boton que despliega el editor. Comparte el hover con los demas
+ * primarios (`.primario`), asi que los dos se encienden igual.
+ *
+ * El selector lleva el elemento delante a proposito: el `button:hover`
+ * generico de mas abajo pesa mas que un `.clase:hover` y terminaba
+ * pintando el fondo claro de la pagina.
+ */
 button.toggle-editor {
   display: inline-flex;
   align-items: center;
@@ -54,25 +62,29 @@ button.toggle-editor {
   padding: 0.5rem 0.875rem;
   font: inherit;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   color: var(--sobre-acento);
   background: var(--acento);
   border: 1px solid var(--acento);
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.06s, box-shadow 0.12s;
 }
 
 button.toggle-editor:hover:not(:disabled) {
   background: var(--acento-texto);
   border-color: var(--acento-texto);
   color: var(--sobre-acento);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
 }
 
 button.toggle-editor:active:not(:disabled) {
   background: var(--acento-texto);
   border-color: var(--acento-texto);
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 button.toggle-editor:focus-visible {
@@ -446,22 +458,56 @@ button {
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
+/*
+ * El boton de a secas (Cancelar, Limpiar) se enciende con el borde del
+ * acento, no con el fondo de la pagina: pintar el fondo dejaba el boton
+ * plano y con menos contraste que el texto que tiene al lado.
+ */
 button:hover:not(:disabled) {
-  background: var(--fondo);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+  color: var(--acento-texto);
 }
 
 button:active:not(:disabled) {
   background: var(--borde);
 }
 
+/*
+ * El boton primario.
+ *
+ * El hover va a un azul MAS OSCURO y no a uno mas claro: `brightness(1.05)`
+ * sobre `#1e40af` lo dejaba practicamente igual, y el boton no daba ninguna
+ * señal de que el puntero estaba encima. Ahora el hover se ve, y es el
+ * mismo tono que usa `Nuevo producto`, `Exportar Excel` y `Crear el
+ * primero`, para que los tres se sientan el mismo boton.
+ *
+ * El `translateY` y la sombra van solo en el hover, y el `:active` los
+ * quita: es lo que hace que el boton se sienta hundido al apretarlo.
+ */
 button.primario {
   color: var(--sobre-acento);
   background: var(--acento);
   border-color: var(--acento);
+  font-weight: 600;
 }
 
 button.primario:hover:not(:disabled) {
-  filter: brightness(1.05);
+  color: var(--sobre-acento);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
+}
+
+button.primario:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+button.primario:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
 }
 
 button.primario:disabled {
@@ -482,8 +528,9 @@ button.peligro {
 }
 
 button.peligro:hover:not(:disabled) {
-  background: var(--peligro-suave);
+  background: var(--peligro);
   border-color: var(--peligro);
+  color: var(--sobre-peligro);
 }
 
 .oculto {

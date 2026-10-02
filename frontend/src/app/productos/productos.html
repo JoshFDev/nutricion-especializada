@@ -117,7 +117,7 @@
 
         <div class="acciones">
           <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
-          <button type="submit" class="primario" [disabled]="guardando()">
+          <button type="submit" class="primario" [disabled]="guardando()" (click)="onSubmitClick($event)">
             {{ guardando() ? 'Guardando...' : (esAlta() ? 'Crear' : 'Guardar') }}
           </button>
         </div>

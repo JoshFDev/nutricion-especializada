@@ -230,6 +230,12 @@ export class Productos {
     this.editorVisible.set(false);
   }
 
+  /** Manejador de click en botón submit (fallback por si ngSubmit no dispara) */
+  onSubmitClick(event: Event): void {
+    event.preventDefault();
+    this.guardar();
+  }
+
   /** Alta o edicion. El `activo` se manda solo en la edicion. */
   async guardar(): Promise<void> {
     if (this.guardando() || this.forma.invalid) return;

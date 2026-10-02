@@ -11,6 +11,25 @@
     </button>
 
     <!--
+      El boton del sidebar va a la IZQUIERDA, junto a la marca, y no donde
+      estaba antes (en el extremo derecho, junto al usuario). El control de
+      algo va del lado de lo que controla: el menu del que habla este boton
+      esta a la izquierda, y a la derecha el boton activaba algo que la
+      persona no veia. En celular no se dibuja, porque ahi el menu lo abre la
+      hamburguesa.
+    -->
+    <button
+      type="button"
+      class="sidebar-toggle"
+      (click)="alternarSidebar()"
+      [attr.aria-expanded]="!sidebarColapsado()"
+      aria-label="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
+      title="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
+    >
+      <span class="toggle-icon" [innerHTML]="icono(sidebarColapsado() ? 'chevronRight' : 'chevronLeft')"></span>
+    </button>
+
+    <!--
       El logo va en una placa blanca y no suelto sobre el azul de la barra:
       el archivo tiene partes en azul marino (rgb 0,32,128) que sobre
       `--acento` (#1e40af) se perderian, y partes blancas que sobre el azul
@@ -25,18 +44,6 @@
 
     <div class="usuario">
       <span class="nombre-usuario">{{ nombre() }}</span>
-
-      <!-- Botón para colapsar/expandir sidebar -->
-      <button
-        type="button"
-        class="sidebar-toggle"
-        (click)="alternarSidebar()"
-        [attr.aria-expanded]="!sidebarColapsado()"
-        aria-label="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
-        title="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
-      >
-        <span class="toggle-icon" [innerHTML]="icono(sidebarColapsado() ? 'chevronRight' : 'chevronLeft')"></span>
-      </button>
 
       <!-- Dropdown Sistema (solo para usuarios con permisos de admin) -->
       @if (puedeVerSistema()) {
@@ -98,7 +105,7 @@
       ></button>
     }
 
-    <nav class="lateral" [class.abierto]="menuAbierto()" [class.colapsado]="sidebarColapsado()">
+    <nav class="lateral" [class.abierto]="menuAbierto()" [class.colapsado]="sidebarColapsado()" aria-label="Menu principal">
       @for (grupo of menu(); track grupo.titulo) {
         @if (grupo.titulo !== 'Sistema') {
         @if (grupo.colapsable) {
@@ -106,19 +113,20 @@
             <button
               type="button"
               class="grupo-header"
-              (click)="alternarGrupo(grupo.titulo)"
-              [attr.aria-expanded]="!estaColapsado(grupo.titulo)"
+              (click)="alternarGrupo(grupo)"
+              [attr.aria-expanded]="!estaColapsado(grupo)"
             >
               <span class="grupo-titulo">{{ grupo.titulo }}</span>
-              <span class="grupo-chevron" [innerHTML]="icono(estaColapsado(grupo.titulo) ? 'chevronRight' : 'chevronDown')"></span>
+              <span class="grupo-chevron" [innerHTML]="icono(estaColapsado(grupo) ? 'chevronRight' : 'chevronDown')"></span>
             </button>
-            @if (!estaColapsado(grupo.titulo)) {
+            @if (!estaColapsado(grupo)) {
               <ul class="grupo-lista">
                 @for (modulo of grupo.modulos; track modulo.ruta) {
                   <li>
                     <a
                       [routerLink]="'/' + modulo.ruta"
                       routerLinkActive="activo"
+                      ariaCurrentWhenActive="page"
                       (click)="cerrarMenu()"
                       [title]="sidebarColapsado() ? modulo.etiqueta : ''"
                     >
@@ -139,6 +147,7 @@
                   <a
                     [routerLink]="'/' + modulo.ruta"
                     routerLinkActive="activo"
+                    ariaCurrentWhenActive="page"
                     (click)="cerrarMenu()"
                     [title]="sidebarColapsado() ? modulo.etiqueta : ''"
                   >
@@ -157,5 +166,6 @@
     <main class="contenido">
       <router-outlet />
     </main>
+    <app-toast-container />
   </div>
 </div>

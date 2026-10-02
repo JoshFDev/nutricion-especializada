@@ -3,6 +3,8 @@ import { contar, consultar, consultarUno } from '../../db/transaccion.js';
 import type { FilaProducto } from './modelo.js';
 import type { ListarProductos } from './esquemas.js';
 
+type FiltroListar = ListarProductos;
+
 /**
  * SQL de productos.
  *
@@ -67,7 +69,7 @@ const ORDEN = `ORDER BY p.codigo COLLATE pos.es_es ASC`;
  * cuela de cacherlo en un modulo. Si se decide instalarla, este es el
  * unico predicado que hay que tocar.
  */
-const construirFiltro = (q: ListarProductos) => {
+const construirFiltro = (q: FiltroListar) => {
   const valores: unknown[] = [];
   const condiciones: string[] = [];
 
@@ -83,6 +85,16 @@ const construirFiltro = (q: ListarProductos) => {
     condiciones.push(`p.activo = TRUE`);
   } else if (q.activo === 'inactivos') {
     condiciones.push(`p.activo = FALSE`);
+  }
+
+  if (q.categoria_id !== undefined) {
+    valores.push(q.categoria_id);
+    condiciones.push(`p.categoria_id = $${valores.length}`);
+  }
+
+  if (q.especie_id !== undefined) {
+    valores.push(q.especie_id);
+    condiciones.push(`p.especie_id = $${valores.length}`);
   }
 
   return {

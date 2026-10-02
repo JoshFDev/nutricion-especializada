@@ -99,6 +99,8 @@ export class ProductosApi {
   async listar(opciones: {
     buscar?: string;
     activo?: 'todos' | 'activos' | 'inactivos';
+    categoria_id?: number;
+    especie_id?: number;
     limite?: number;
     offset?: number;
   }): Promise<ListaProductos> {
@@ -108,6 +110,8 @@ export class ProductosApi {
       activo: opciones.activo ?? 'activos',
     };
     if (opciones.buscar) params['buscar'] = opciones.buscar;
+    if (opciones.categoria_id !== undefined) params['categoria_id'] = opciones.categoria_id;
+    if (opciones.especie_id !== undefined) params['especie_id'] = opciones.especie_id;
     return firstValueFrom(this.http.get<ListaProductos>(`${API}/productos`, { params }));
   }
 
@@ -147,5 +151,37 @@ export class ProductosApi {
   async especies(): Promise<Catalogo[]> {
     const respuesta = await firstValueFrom(this.http.get<{ datos: Catalogo[] }>(`${API}/especies`));
     return respuesta.datos;
+  }
+
+  /** Exporta la lista de productos a Excel. */
+  async exportarExcel(filtro: {
+    buscar?: string;
+    activo?: 'todos' | 'activos' | 'inactivos';
+    categoria_id?: number;
+    especie_id?: number;
+  }): Promise<void> {
+    const params: Record<string, string | number> = {
+      activo: filtro.activo ?? 'activos',
+    };
+    if (filtro.buscar) params['buscar'] = filtro.buscar;
+    if (filtro.categoria_id !== undefined) params['categoria_id'] = filtro.categoria_id;
+    if (filtro.especie_id !== undefined) params['especie_id'] = filtro.especie_id;
+
+    const respuesta = await firstValueFrom(
+      this.http.get(`${API}/productos/exportar/excel`, {
+        params,
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+
+    const url = URL.createObjectURL(respuesta.body as Blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    const contentDisposition = respuesta.headers.get('content-disposition');
+    const nombre = /filename="([^"]+)"/.exec(contentDisposition ?? '')?.[1] ?? 'productos.xlsx';
+    enlace.download = nombre;
+    enlace.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 }

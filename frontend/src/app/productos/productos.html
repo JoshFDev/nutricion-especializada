@@ -1,134 +1,217 @@
 <!--
-  Productos: listado + editor.
+  Productos: listado + editor inline colapsable.
 
   El listado trae por omision los productos ACTIVOS (el filtro decide), y el
   boton del estado en la fila alterna `activo` con un PATCH que no abre el
   editor (ver `alternaActivo`). La casilla de "Activo" del editor solos aparece
   en la EDICION, porque el esquema de alta no la acepta.
+
+  Dos filtros que conviene no confundir: el del LISTADO (`activo` suelto en
+  `productos/esquemas.ts`) y el del EDITOR (`activo` dentro del PATCH). El
+  primero decide que filas se ven; el segundo, si el producto se ofrece a la
+  venta.
+
+  El editor vive ANTES de la tabla (inline) y es colapsable.
 -->
 <section class="productos">
-  @if (editorAbierto()) {
-    <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
-      <h1>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h1>
-
-      @if (errorEditor(); as mensaje) {
-        <p class="error" role="alert">{{ mensaje }}</p>
-      }
-
-      <div class="campos">
-        <div class="campo">
-          <label for="codigo">Codigo</label>
-          <input
-            id="codigo"
-            type="text"
-            formControlName="codigo"
-            maxlength="40"
-            autocomplete="off"
-            placeholder="clave"
-          />
-        </div>
-
-        <div class="campo">
-          <label for="nombre">Nombre</label>
-          <input
-            id="nombre"
-            type="text"
-            formControlName="nombre"
-            maxlength="100"
-            autocomplete="off"
-          />
-        </div>
-
-        <div class="campo">
-          <label for="presentacion_kg">Presentacion (kg)</label>
-          <input
-            id="presentacion_kg"
-            type="text"
-            formControlName="presentacion_kg"
-            inputmode="decimal"
-            maxlength="10"
-            placeholder="25.000"
-          />
-        </div>
-
-        <div class="campo">
-          <label for="categoria_id">Categoria</label>
-          <select id="categoria_id" formControlName="categoria_id">
-            <option value="">Sin categoria</option>
-            @for (categoria of categorias(); track categoria.id) {
-              <option [value]="categoria.id">{{ categoria.nombre }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="campo">
-          <label for="especie_id">Especie</label>
-          <select id="especie_id" formControlName="especie_id">
-            <option value="">Sin especie</option>
-            @for (especie of especies(); track especie.id) {
-              <option [value]="especie.id">{{ especie.nombre }}</option>
-            }
-          </select>
-        </div>
-      </div>
-
-      <div class="acciones">
-        <button type="submit" class="primario" [disabled]="guardando()">
-          {{ guardando() ? 'Guardando...' : 'Guardar' }}
-        </button>
-        <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
-      </div>
-    </form>
-  } @else {
-    <div class="cabecera">
-      <h1>Productos</h1>
-      @if (puedeEditar()) {
-        <button type="button" class="primario" (click)="nuevo()">Nuevo producto</button>
-      }
-    </div>
-
-    <div class="filtros">
-      <input
-        type="search"
-        autocomplete="off"
-        placeholder="Buscar por codigo o nombre"
-        (input)="buscar($any($event.target).value)"
-      />
-      <select
-        class="filtro"
-        [value]="filtroActivo()"
-        (change)="filtrar($any($event.target).value)"
-        aria-label="Filtrar por estado"
+  <!-- Editor inline (nuevo/editar) - colapsable arriba de la tabla -->
+  @if (puedeEditar()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
+      <button
+        type="button"
+        class="toggle-editor"
+        (click)="toggleEditor()"
+        [attr.aria-expanded]="editorVisible()"
+        aria-controls="editor-form"
       >
-        <option value="activos">Activos</option>
-        <option value="inactivos">De baja</option>
-        <option value="todos">Todos</option>
-      </select>
+        @if (editorVisible()) {
+          <span class="icono">▲</span> Ocultar formulario
+        } @else {
+          <span class="icono">▼</span> Nuevo producto
+        }
+      </button>
+
+      <form id="editor-form" class="editor-inline" [formGroup]="forma" (ngSubmit)="guardar()" [hidden]="!editorVisible()">
+        <div class="editor-cabecera">
+          <h2>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h2>
+        </div>
+
+        @if (errorEditor(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+
+        <div class="campos">
+          <div class="campo">
+            <label for="codigo">Codigo</label>
+            <input
+              id="codigo"
+              type="text"
+              formControlName="codigo"
+              maxlength="40"
+              autocomplete="off"
+              placeholder="clave"
+              [class.error]="forma.controls.codigo.invalid && (forma.controls.codigo.dirty || forma.controls.codigo.touched)"
+            />
+            @if (forma.controls.codigo.hasError('required') && (forma.controls.codigo.dirty || forma.controls.codigo.touched)) {
+              <span class="error-texto">El codigo es obligatorio</span>
+            }
+            @if (forma.controls.codigo.hasError('duplicado')) {
+              <span class="error-texto">Ya existe un producto con ese codigo</span>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="nombre">Nombre</label>
+            <input
+              id="nombre"
+              type="text"
+              formControlName="nombre"
+              maxlength="100"
+              autocomplete="off"
+              [class.error]="forma.controls.nombre.invalid && (forma.controls.nombre.dirty || forma.controls.nombre.touched)"
+            />
+            @if (forma.controls.nombre.hasError('required') && (forma.controls.nombre.dirty || forma.controls.nombre.touched)) {
+              <span class="error-texto">El nombre es obligatorio</span>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="presentacion_kg">Presentacion (kg)</label>
+            <input
+              id="presentacion_kg"
+              type="text"
+              formControlName="presentacion_kg"
+              inputmode="decimal"
+              maxlength="10"
+              placeholder="25.000"
+              [class.error]="forma.controls.presentacion_kg.invalid && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)"
+            />
+            @if (forma.controls.presentacion_kg.hasError('required') && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)) {
+              <span class="error-texto">La presentacion es obligatoria</span>
+            }
+            @if (forma.controls.presentacion_kg.hasError('pattern') && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)) {
+              <span class="error-texto">Formato invalido (ej: 25.000)</span>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="categoria_id">Categoria</label>
+            <select id="categoria_id" formControlName="categoria_id">
+              <option value="">Sin categoria</option>
+              @for (categoria of categorias(); track categoria.id) {
+                <option [value]="categoria.id">{{ categoria.nombre }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="especie_id">Especie</label>
+            <select id="especie_id" formControlName="especie_id">
+              <option value="">Sin especie</option>
+              @for (especie of especies(); track especie.id) {
+                <option [value]="especie.id">{{ especie.nombre }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="acciones">
+          <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
+          <button type="submit" class="primario" [disabled]="guardando()">
+            {{ guardando() ? 'Guardando...' : (esAlta() ? 'Crear' : 'Guardar') }}
+          </button>
+        </div>
+      </form>
     </div>
+  }
 
-    @if (error(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
+  <!-- Cabecera con titulo -->
+  <div class="cabecera">
+    <h1>Productos</h1>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filtros">
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Buscar por codigo o nombre"
+      (input)="buscar($any($event.target).value)"
+      [value]="buscador()"
+    />
+
+    <select
+      class="filtro"
+      [value]="filtroActivo()"
+      (change)="filtrar($any($event.target).value)"
+      aria-label="Filtrar por estado"
+    >
+      <option value="activos">Activos</option>
+      <option value="inactivos">De baja</option>
+      <option value="todos">Todos</option>
+    </select>
+
+    <select
+      class="filtro"
+      [value]="filtroCategoria() ?? ''"
+      (change)="filtrarCategoria($any($event.target).value)"
+      aria-label="Filtrar por categoria"
+    >
+      <option value="">Todas las categorias</option>
+      @for (categoria of categorias(); track categoria.id) {
+        <option [value]="categoria.id">{{ categoria.nombre }}</option>
+      }
+    </select>
+
+    <select
+      class="filtro"
+      [value]="filtroEspecie() ?? ''"
+      (change)="filtrarEspecie($any($event.target).value)"
+      aria-label="Filtrar por especie"
+    >
+      <option value="">Todas las especies</option>
+      @for (especie of especies(); track especie.id) {
+        <option [value]="especie.id">{{ especie.nombre }}</option>
+      }
+    </select>
+
+    @if (hayFiltrosActivos()) {
+      <button type="button" class="chico" (click)="limpiarFiltros()" aria-label="Limpiar filtros">
+        Limpiar
+      </button>
     }
 
-    @if (buscando() && filas().length === 0) {
-      <p class="vacio">Buscando...</p>
+    @if (puedeEditar()) {
+      <button type="button" class="primario" (click)="exportarExcel()" [disabled]="exportando()">
+        {{ exportando() ? 'Exportando...' : 'Exportar Excel' }}
+      </button>
     }
+  </div>
 
-    @if (filas().length === 0 && !buscando()) {
-      <p class="vacio">No hay productos que mostrar.</p>
-    }
+  @if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
 
-    @if (filas().length > 0) {
+  @if (buscando() && filas().length === 0) {
+    <p class="vacio">Buscando...</p>
+  }
+
+  @if (filas().length === 0 && !buscando()) {
+    <p class="vacio">No hay productos que mostrar.</p>
+  }
+
+  @if (filas().length > 0) {
+    <div class="tabla-wrapper">
       <table class="tabla">
         <thead>
           <tr>
             <th scope="col">Codigo</th>
             <th scope="col">Nombre</th>
-            <th scope="col">Presentacion</th>
+            <th scope="col">Presentacion (kg)</th>
             <th scope="col">Categoria</th>
             <th scope="col">Especie</th>
             <th scope="col">Estado</th>
-            <th scope="col"><span class="oculto">Acciones</span></th>
+            <th scope="col">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -136,7 +219,7 @@
             <tr>
               <td>{{ producto.codigo }}</td>
               <td>{{ producto.nombre }}</td>
-              <td class="num">{{ kilosComoTexto(producto.presentacion_kg) }}</td>
+              <td class="centro">{{ kilosComoTexto(producto.presentacion_kg) }} kg</td>
               <td>{{ producto.categoria ?? '—' }}</td>
               <td>{{ producto.especie ?? '—' }}</td>
               <td>
@@ -146,28 +229,35 @@
               </td>
               <td class="acciones-celda">
                 @if (puedeEditar()) {
-                  <button type="button" class="chico" (click)="editar(producto)">Editar</button>
-                  <button type="button" class="chico" (click)="alternaActivo(producto)">
-                    {{ producto.activo ? 'Dar de baja' : 'Activar' }}
-                  </button>
-                  <button type="button" class="chico peligro" (click)="eliminar(producto)">
-                    Eliminar
-                  </button>
+                  <div class="acciones-fila">
+                    <button type="button" class="chico accion-editar" (click)="editar(producto)" title="Editar">
+                      Editar
+                    </button>
+                    <button type="button" class="chico accion-estado" (click)="alternaActivo(producto)" [title]="producto.activo ? 'Dar de baja' : 'Activar'">
+                      {{ producto.activo ? 'Baja' : 'Activar' }}
+                    </button>
+                    <button type="button" class="chico accion-eliminar" (click)="eliminar(producto)" title="Eliminar">
+                      Eliminar
+                    </button>
+                  </div>
                 }
               </td>
             </tr>
           }
         </tbody>
       </table>
+    </div>
 
-      @if (hayMas()) {
-        <div class="paginacion">
-          <button type="button" class="chico" [disabled]="buscando()" (click)="cargarMas()">
-            Cargar mas
-          </button>
-          <span class="cuenta">{{ filas().length }} de {{ total() }}</span>
-        </div>
-      }
+    @if (hayMas()) {
+      <div class="paginacion">
+        <button type="button" class="chico" [disabled]="buscando()" (click)="cargarMas()">
+          Cargar mas
+        </button>
+        <span class="cuenta">{{ filas().length }} de {{ total() }}</span>
+      </div>
     }
   }
 </section>
+
+<!-- Modal de confirmación -->
+<app-confirm-modal />

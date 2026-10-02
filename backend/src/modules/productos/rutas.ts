@@ -68,3 +68,10 @@ rutasProductos.delete(
   validarParams(idProductoEsquema),
   ctrl.borrar,
 );
+
+rutasProductos.get(
+  '/exportar/excel',
+  requierePermiso('productos.ver'),
+  validarQuery(listarProductosEsquema),
+  ctrl.exportarExcel,
+);

@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { kilosComoTexto } from '../nucleo/cifras';
 import { ProductosApi, cuerpoDeProducto, type Catalogo, type Producto } from './productos-api';
+import { ConfirmModal } from './confirm-modal';
 
 /**
  * La pantalla de productos.
@@ -23,7 +24,7 @@ import { ProductosApi, cuerpoDeProducto, type Catalogo, type Producto } from './
   selector: 'app-productos',
   templateUrl: './productos.html',
   styleUrl: './productos.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Productos {
@@ -39,6 +40,9 @@ export class Productos {
   readonly error = signal<string | null>(null);
   readonly buscador = signal('');
   readonly filtroActivo = signal<'todos' | 'activos' | 'inactivos'>('activos');
+  readonly filtroCategoria = signal<number | null>(null);
+  readonly filtroEspecie = signal<number | null>(null);
+  readonly exportando = signal(false);
 
   readonly categorias = signal<Catalogo[]>([]);
   readonly especies = signal<Catalogo[]>([]);
@@ -49,6 +53,7 @@ export class Productos {
   readonly editando = signal<Producto | null>(null);
   readonly guardando = signal(false);
   readonly errorEditor = signal<string | null>(null);
+  readonly editorVisible = signal(false);
 
   readonly editorAbierto = computed(() => this.editando() !== null);
   readonly esAlta = computed(() => this.editando()?.id === undefined);
@@ -66,9 +71,31 @@ export class Productos {
 
   kilosComoTexto = kilosComoTexto;
 
+  readonly confirmModal = viewChild.required(ConfirmModal);
+
   constructor() {
     void this.cargarCatalogos();
     void this.recargar();
+  }
+
+  toggleEditor(): void {
+    this.editorVisible.update((v) => !v);
+    if (!this.editorVisible()) {
+      this.cancelar();
+    }
+  }
+
+  nuevo(): void {
+    this.forma.reset({
+      codigo: '',
+      nombre: '',
+      presentacion_kg: '',
+      categoria_id: '',
+      especie_id: '',
+    });
+    this.errorEditor.set(null);
+    this.editando.set({} as Producto);
+    this.editorVisible.set(true);
   }
 
   /** Categoria y especie se cargan una sola vez: el catalogo no cambia entre ediciones. */
@@ -101,6 +128,28 @@ export class Productos {
     void this.recargar();
   }
 
+  filtrarCategoria(categoriaId: string): void {
+    this.filtroCategoria.set(categoriaId === '' ? null : Number(categoriaId));
+    void this.recargar();
+  }
+
+  filtrarEspecie(especieId: string): void {
+    this.filtroEspecie.set(especieId === '' ? null : Number(especieId));
+    void this.recargar();
+  }
+
+  limpiarFiltros(): void {
+    this.filtroCategoria.set(null);
+    this.filtroEspecie.set(null);
+    this.filtroActivo.set('activos');
+    this.buscador.set('');
+    void this.recargar();
+  }
+
+  hayFiltrosActivos(): boolean {
+    return this.filtroActivo() !== 'activos' || this.filtroCategoria() !== null || this.filtroEspecie() !== null || this.buscador().trim().length >= 2;
+  }
+
   private async recargar(): Promise<void> {
     this.buscando.set(true);
     this.error.set(null);
@@ -109,6 +158,8 @@ export class Productos {
       const resultado = await this.api.listar({
         buscar: buscar.length >= 2 ? buscar : undefined,
         activo: this.filtroActivo(),
+        categoria_id: this.filtroCategoria() ?? undefined,
+        especie_id: this.filtroEspecie() ?? undefined,
       });
       this.filas.set(resultado.datos);
       this.total.set(resultado.total);
@@ -128,6 +179,8 @@ export class Productos {
       const resultado = await this.api.listar({
         buscar: buscar.length >= 2 ? buscar : undefined,
         activo: this.filtroActivo(),
+        categoria_id: this.filtroCategoria() ?? undefined,
+        especie_id: this.filtroEspecie() ?? undefined,
         offset: this.offset() + this.filas().length,
       });
       this.filas.update((actuales) => [...actuales, ...resultado.datos]);
@@ -139,19 +192,24 @@ export class Productos {
     }
   }
 
-  // -------------------------------------------------------------- el editor
-
-  nuevo(): void {
-    this.forma.reset({
-      codigo: '',
-      nombre: '',
-      presentacion_kg: '',
-      categoria_id: '',
-      especie_id: '',
-    });
-    this.errorEditor.set(null);
-    this.editando.set({} as Producto);
+  async exportarExcel(): Promise<void> {
+    if (this.exportando()) return;
+    this.exportando.set(true);
+    try {
+      await this.api.exportarExcel({
+        buscar: this.buscador().trim().length >= 2 ? this.buscador().trim() : undefined,
+        activo: this.filtroActivo(),
+        categoria_id: this.filtroCategoria() ?? undefined,
+        especie_id: this.filtroEspecie() ?? undefined,
+      });
+    } catch (falla) {
+      this.error.set(errorLegible(falla).mensaje);
+    } finally {
+      this.exportando.set(false);
+    }
   }
+
+  // -------------------------------------------------------------- el editor
 
   editar(producto: Producto): void {
     this.forma.setValue({
@@ -163,11 +221,13 @@ export class Productos {
     });
     this.errorEditor.set(null);
     this.editando.set(producto);
+    this.editorVisible.set(true);
   }
 
   cancelar(): void {
     this.editando.set(null);
     this.errorEditor.set(null);
+    this.editorVisible.set(false);
   }
 
   /** Alta o edicion. El `activo` se manda solo en la edicion. */
@@ -202,6 +262,17 @@ export class Productos {
   /** Alterna el `activo` desde la fila, sin abrir el editor. */
   async alternaActivo(producto: Producto): Promise<void> {
     if (this.guardando()) return;
+
+    const accion = producto.activo ? 'dar de baja' : 'activar';
+    const confirmado = await this.confirmModal().abrir({
+      titulo: accion.charAt(0).toUpperCase() + accion.slice(1) + ' producto',
+      mensaje: `¿${accion.charAt(0).toUpperCase() + accion.slice(1)} "${producto.nombre}"?`,
+      textoConfirmar: accion.charAt(0).toUpperCase() + accion.slice(1),
+      variante: producto.activo ? 'advertencia' : 'normal',
+    });
+
+    if (!confirmado) return;
+
     this.guardando.set(true);
     this.error.set(null);
     try {
@@ -224,11 +295,15 @@ export class Productos {
   }
 
   async eliminar(producto: Producto): Promise<void> {
-    if (
-      !window.confirm(`Eliminar ${producto.nombre}? Esto falla si el producto tiene historial.`)
-    ) {
-      return;
-    }
+    const confirmado = await this.confirmModal().abrir({
+      titulo: 'Eliminar producto',
+      mensaje: `Eliminar "${producto.nombre}"? Esto falla si el producto tiene historial.`,
+      textoConfirmar: 'Eliminar',
+      variante: 'peligro',
+    });
+
+    if (!confirmado) return;
+
     this.error.set(null);
     try {
       await this.api.eliminar(producto.id);

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { consulta, cuerpo, parametros } from '../../core/validacion.js';
 import type { ActualizarProducto, CrearProducto, ListarProductos } from './esquemas.js';
 import * as servicio from './servicio.js';
+import * as excel from './excel.js';
 
 /**
  * Capa HTTP de productos.
@@ -39,4 +40,18 @@ const borrar: Resp = async (req, res) => {
   res.status(204).end();
 };
 
-export const controladorProductos = { listar, obtener, crear, actualizar, borrar };
+const exportarExcel: Resp = async (req, res) => {
+  const query = consulta<ListarProductos>(req);
+  const { datos } = await servicio.listar(req.db, {
+    ...query,
+    limite: 10000,
+    offset: 0,
+  });
+  const buffer = await excel.excelListaProductos(datos);
+  const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="productos-${fecha}.xlsx"`);
+  res.send(buffer);
+};
+
+export const controladorProductos = { listar, obtener, crear, actualizar, borrar, exportarExcel };

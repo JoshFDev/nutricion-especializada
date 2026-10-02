@@ -1,9 +1,9 @@
 /*
  * La pantalla de productos.
  *
- * Misma familia que clientes.scss: las columnas, los botones y el editor son
- * los mismos, solo cambia que aqui hay una columna mas (la categoria) y que
- * el estado se alterna con un boton en la fila.
+ * El editor ahora vive inline (arriba de la tabla) en vez de modal.
+ * Se agregan filtros por categoria y especie, y boton de exportar Excel.
+ * El editor es colapsable.
  */
 
 :host {
@@ -13,6 +13,12 @@
 h1 {
   margin: 0 0 1rem;
   font-size: 1.25rem;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------------- la cabecera */
@@ -25,58 +31,226 @@ h1 {
   margin-bottom: 1rem;
 }
 
+/* ---------------------------------------------------- editor colapsable */
+
+.editor-wrapper {
+  margin-bottom: 0.75rem;
+}
+
+.editor-wrapper.colapsado .editor-inline {
+  display: none;
+}
+
+.toggle-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-weight: 500;
+  color: var(--acento);
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  width: 100%;
+  justify-content: center;
+}
+
+.toggle-editor:hover {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+
+.toggle-editor .icono {
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.editor-wrapper:not(.colapsado) .toggle-editor .icono {
+  transform: rotate(180deg);
+}
+
+.editor-inline {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.editor-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem 0.75rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+}
+
+.campo label {
+  margin-bottom: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--texto-suave);
+  font-weight: 500;
+}
+
+.campo input,
+.campo select {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+}
+
+.campo input:focus,
+.campo select:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
+}
+
+.campo input.error,
+.campo select.error {
+  border-color: var(--peligro);
+  box-shadow: 0 0 0 2px var(--peligro-suave);
+}
+
+.error-texto {
+  font-size: 0.7rem;
+  color: var(--peligro-texto);
+  margin-top: 0.125rem;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--borde);
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------- los filtros */
+
 .filtros {
   display: flex;
-  gap: 0.625rem;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  align-items: center;
 }
 
 .filtros input[type='search'] {
   flex: 1;
-  padding: 0.5rem 0.625rem;
+  min-width: 180px;
+  padding: 0.375rem 0.5rem;
   font: inherit;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 4px;
+}
+
+.filtros input[type='search']:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
 .filtro {
-  padding: 0.5rem 0.625rem;
+  padding: 0.375rem 0.5rem;
   font: inherit;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 4px;
+  min-width: 140px;
+  font-size: 0.875rem;
+}
+
+.filtro:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
 /* --------------------------------------------------------------- la tabla */
 
+.tabla-wrapper {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+}
+
 .tabla {
   width: 100%;
-  margin-bottom: 1rem;
   border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
+  font-size: 0.875rem;
 }
 
 th,
 td {
-  padding: 0.5rem 0.625rem;
+  padding: 0.375rem 0.5rem;
   text-align: left;
   border-bottom: 1px solid var(--borde);
 }
 
 th {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--texto-suave);
   background: var(--fondo);
+  white-space: nowrap;
+}
+
+th:nth-child(3) {
+  min-width: 140px;
 }
 
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.centro {
+  text-align: center;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  min-width: 120px;
+}
+
+tbody tr:hover {
+  background: var(--fondo);
 }
 
 tbody tr:last-child td {
@@ -92,6 +266,49 @@ tbody tr:last-child td {
   text-align: right;
 }
 
+.acciones-fila {
+  display: inline-flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.acciones-fila button {
+  white-space: nowrap;
+}
+
+.accion-editar {
+  color: var(--acento);
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+
+.accion-editar:hover:not(:disabled) {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+
+.accion-estado {
+  color: var(--advertencia-texto);
+  border-color: var(--advertencia);
+  background: var(--advertencia-suave);
+}
+
+.accion-estado:hover:not(:disabled) {
+  background: var(--advertencia);
+  color: var(--sobre-advertencia);
+}
+
+.accion-eliminar {
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+  background: var(--peligro-suave);
+}
+
+.accion-eliminar:hover:not(:disabled) {
+  background: var(--peligro);
+  color: var(--sobre-peligro);
+}
+
 .paginacion {
   display: flex;
   align-items: center;
@@ -105,66 +322,40 @@ tbody tr:last-child td {
 }
 
 .vacio {
-  margin: 0;
+  margin: 1rem 0;
   color: var(--texto-tenue);
-}
-
-/* -------------------------------------------------------------- el editor */
-
-.editor {
-  max-width: 46rem;
-}
-
-.campos {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.875rem 1rem;
-}
-
-.campo.ancho {
-  grid-column: 1 / -1;
-}
-
-.campo label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-.campo input,
-.campo select {
-  width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.acciones {
-  display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
+  text-align: center;
 }
 
 /* ------------------------------------------------------------- los botones */
 
 button {
-  padding: 0.5rem 0.875rem;
+  padding: 0.375rem 0.625rem;
   font: inherit;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--fondo);
+}
+
+button:active:not(:disabled) {
+  background: var(--borde);
 }
 
 button.primario {
   color: var(--sobre-acento);
   background: var(--acento);
   border-color: var(--acento);
+}
+
+button.primario:hover:not(:disabled) {
+  filter: brightness(1.05);
 }
 
 button.primario:disabled {
@@ -175,12 +366,17 @@ button.primario:disabled {
 }
 
 button.chico {
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.4rem;
   font-size: 0.8125rem;
 }
 
 button.peligro {
   color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+button.peligro:hover:not(:disabled) {
+  background: var(--peligro-suave);
   border-color: var(--peligro);
 }
 

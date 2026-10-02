@@ -181,6 +181,8 @@ export const listarProductosEsquema = z.strictObject({
     (valor) => ({ true: 'activos', false: 'inactivos' })[String(valor)] ?? valor,
     z.enum(['todos', 'activos', 'inactivos']).default('activos'),
   ),
+  categoria_id: z.coerce.number().int().positive().max(32767).optional(),
+  especie_id: z.coerce.number().int().positive().max(32767).optional(),
 });
 
 export type ListarProductos = z.infer<typeof listarProductosEsquema>;

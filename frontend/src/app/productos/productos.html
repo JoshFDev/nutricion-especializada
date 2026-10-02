@@ -31,7 +31,7 @@
         }
       </button>
 
-      <form id="editor-form" class="editor-inline" [formGroup]="forma" (ngSubmit)="guardar()" [hidden]="!editorVisible()">
+      <form id="editor-form" class="editor-inline" [formGroup]="forma" (ngSubmit)="guardar()">
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h2>
         </div>

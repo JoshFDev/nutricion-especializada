@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { kilosComoTexto } from '../nucleo/cifras';
 import { ProductosApi, cuerpoDeProducto, type Catalogo, type Producto } from './productos-api';
 import { ConfirmModal } from './confirm-modal';
+import { ToastService } from '../nucleo/toast.service';
 
 /**
  * La pantalla de productos.
@@ -26,11 +28,29 @@ import { ConfirmModal } from './confirm-modal';
   styleUrl: './productos.scss',
   imports: [ReactiveFormsModule, ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    trigger('filasAnimation', [
+      transition('* => *', [
+        query(':enter', [
+          style({ opacity: 0, transform: 'translateY(-10px)' }),
+          stagger(50, [
+            animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
+          ]),
+        ], { optional: true }),
+        query(':leave', [
+          stagger(50, [
+            animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
+          ]),
+        ], { optional: true }),
+      ]),
+    ]),
+  ],
 })
 export class Productos {
   private readonly api = inject(ProductosApi);
   private readonly fb = inject(FormBuilder);
   private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
 
   // ------------------------------------------------------------- el listado
   readonly filas = signal<Producto[]>([]);
@@ -54,6 +74,7 @@ export class Productos {
   readonly guardando = signal(false);
   readonly errorEditor = signal<string | null>(null);
   readonly editorVisible = signal(false);
+  readonly hayCambiosSinGuardar = signal(false);
 
   readonly editorAbierto = computed(() => this.editando() !== null);
   readonly esAlta = computed(() => this.editando()?.id === undefined);
@@ -72,14 +93,30 @@ export class Productos {
   kilosComoTexto = kilosComoTexto;
 
   readonly confirmModal = viewChild.required(ConfirmModal);
+  private codigoInicial = '';
 
   constructor() {
     void this.cargarCatalogos();
     void this.recargar();
+
+    // Detectar cambios en el formulario para advertir al salir
+    effect(() => {
+      if (this.editorVisible() && this.editando()) {
+        this.forma.valueChanges.subscribe(() => {
+          this.hayCambiosSinGuardar.set(this.forma.dirty);
+        });
+      } else {
+        this.hayCambiosSinGuardar.set(false);
+      }
+    });
   }
 
   toggleEditor(): void {
     const abrir = !this.editorVisible();
+    if (abrir && this.hayCambiosSinGuardar()) {
+      // Si hay cambios sin guardar, no cerrar directamente
+      return;
+    }
     this.editorVisible.set(abrir);
     if (abrir) {
       this.nuevo();
@@ -97,8 +134,14 @@ export class Productos {
       especie_id: '',
     });
     this.errorEditor.set(null);
+    this.hayCambiosSinGuardar.set(false);
     this.editando.set({} as Producto);
     this.editorVisible.set(true);
+    // Focus al primer campo después de que el DOM se actualice
+    setTimeout(() => {
+      const input = document.getElementById('codigo') as HTMLInputElement;
+      input?.focus();
+    }, 0);
   }
 
   /** Categoria y especie se cargan una sola vez: el catalogo no cambia entre ediciones. */
@@ -228,6 +271,10 @@ export class Productos {
   }
 
   cancelar(): void {
+    if (this.hayCambiosSinGuardar()) {
+      // Se podría agregar confirmación aquí si se desea
+      this.hayCambiosSinGuardar.set(false);
+    }
     this.editando.set(null);
     this.errorEditor.set(null);
     this.editorVisible.set(false);
@@ -235,7 +282,10 @@ export class Productos {
 
   /** Alta o edicion. El `activo` se manda solo en la edicion. */
   async guardar(): Promise<void> {
-    if (this.guardando() || this.forma.invalid) return;
+    if (this.guardando()) return;
+
+    this.forma.markAllAsTouched();
+    if (this.forma.invalid) return;
 
     this.guardando.set(true);
     this.errorEditor.set(null);
@@ -246,10 +296,13 @@ export class Productos {
       if (actual === null) return;
       if (actual.id === undefined) {
         await this.api.crear(cuerpo);
+        this.toast.exito('Producto creado con éxito');
       } else {
         await this.api.actualizar(actual.id, cuerpo, actual.activo);
+        this.toast.exito('Producto guardado con éxito');
       }
       await this.recargar();
+      this.hayCambiosSinGuardar.set(false);
       this.cancelar();
     } catch (falla) {
       console.error('[guardar] ERROR:', falla);
@@ -260,6 +313,17 @@ export class Productos {
       this.errorEditor.set(legible.mensaje);
     } finally {
       this.guardando.set(false);
+    }
+  }
+
+  /** Maneja atajos de teclado en el editor */
+  onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      this.guardar();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelar();
     }
   }
 
@@ -291,6 +355,7 @@ export class Productos {
       });
       await this.api.actualizar(producto.id, cuerpo, !producto.activo);
       await this.recargar();
+      this.toast.exito(`Producto ${producto.activo ? 'dado de baja' : 'activado'} con éxito`);
     } catch (falla) {
       this.error.set(errorLegible(falla).mensaje);
     } finally {
@@ -301,7 +366,7 @@ export class Productos {
   async eliminar(producto: Producto): Promise<void> {
     const confirmado = await this.confirmModal().abrir({
       titulo: 'Eliminar producto',
-      mensaje: `Eliminar "${producto.nombre}"? Esto falla si el producto tiene historial.`,
+      mensaje: `¿Eliminar "${producto.nombre}"? Esta acción es irreversible.\n\nSi el producto tiene compras, ventas o movimientos asociados, no se podrá eliminar. En ese caso, se recomienda darlo de baja para dejar de venderlo sin perder el historial.`,
       textoConfirmar: 'Eliminar',
       variante: 'peligro',
     });
@@ -312,8 +377,14 @@ export class Productos {
     try {
       await this.api.eliminar(producto.id);
       await this.recargar();
+      this.toast.exito('Producto eliminado con éxito');
     } catch (falla) {
-      this.error.set(errorLegible(falla).mensaje);
+      const legible = errorLegible(falla);
+      if (legible.codigo === 'EN_USO') {
+        this.toast.advertencia(legible.mensaje);
+      } else {
+        this.error.set(legible.mensaje);
+      }
     }
   }
 }

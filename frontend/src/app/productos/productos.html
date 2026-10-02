@@ -31,7 +31,7 @@
         }
       </button>
 
-      <form id="editor-form" class="editor-inline" [formGroup]="forma">
+      <form id="editor-form" class="editor-inline" [formGroup]="forma" (keydown)="onKeydown($event)">
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h2>
         </div>
@@ -42,7 +42,7 @@
 
         <div class="campos">
           <div class="campo">
-            <label for="codigo">Codigo</label>
+            <label for="codigo">Código <span class="requerido" aria-hidden="true">*</span></label>
             <input
               id="codigo"
               type="text"
@@ -51,17 +51,19 @@
               autocomplete="off"
               placeholder="clave"
               [class.error]="forma.controls.codigo.invalid && (forma.controls.codigo.dirty || forma.controls.codigo.touched)"
+              [attr.aria-invalid]="forma.controls.codigo.invalid && (forma.controls.codigo.dirty || forma.controls.codigo.touched)"
+              [attr.aria-describedby]="forma.controls.codigo.hasError('required') ? 'codigo-error' : (forma.controls.codigo.hasError('duplicado') ? 'codigo-duplicado' : null)"
             />
             @if (forma.controls.codigo.hasError('required') && (forma.controls.codigo.dirty || forma.controls.codigo.touched)) {
-              <span class="error-texto">El codigo es obligatorio</span>
+              <span class="error-texto" id="codigo-error">El código es obligatorio</span>
             }
             @if (forma.controls.codigo.hasError('duplicado')) {
-              <span class="error-texto">Ya existe un producto con ese codigo</span>
+              <span class="error-texto" id="codigo-duplicado">Ya existe un producto con ese código</span>
             }
           </div>
 
           <div class="campo">
-            <label for="nombre">Nombre</label>
+            <label for="nombre">Nombre <span class="requerido" aria-hidden="true">*</span></label>
             <input
               id="nombre"
               type="text"
@@ -69,14 +71,16 @@
               maxlength="100"
               autocomplete="off"
               [class.error]="forma.controls.nombre.invalid && (forma.controls.nombre.dirty || forma.controls.nombre.touched)"
+              [attr.aria-invalid]="forma.controls.nombre.invalid && (forma.controls.nombre.dirty || forma.controls.nombre.touched)"
+              [attr.aria-describedby]="forma.controls.nombre.hasError('required') ? 'nombre-error' : null"
             />
             @if (forma.controls.nombre.hasError('required') && (forma.controls.nombre.dirty || forma.controls.nombre.touched)) {
-              <span class="error-texto">El nombre es obligatorio</span>
+              <span class="error-texto" id="nombre-error">El nombre es obligatorio</span>
             }
           </div>
 
           <div class="campo">
-            <label for="presentacion_kg">Presentacion (kg)</label>
+            <label for="presentacion_kg">Presentación (kg) <span class="requerido" aria-hidden="true">*</span></label>
             <input
               id="presentacion_kg"
               type="text"
@@ -85,19 +89,21 @@
               maxlength="10"
               placeholder="25.000"
               [class.error]="forma.controls.presentacion_kg.invalid && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)"
+              [attr.aria-invalid]="forma.controls.presentacion_kg.invalid && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)"
+              [attr.aria-describedby]="forma.controls.presentacion_kg.hasError('required') ? 'presentacion-error' : (forma.controls.presentacion_kg.hasError('pattern') ? 'presentacion-pattern' : null)"
             />
             @if (forma.controls.presentacion_kg.hasError('required') && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)) {
-              <span class="error-texto">La presentacion es obligatoria</span>
+              <span class="error-texto" id="presentacion-error">La presentación es obligatoria</span>
             }
             @if (forma.controls.presentacion_kg.hasError('pattern') && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)) {
-              <span class="error-texto">Formato invalido (ej: 25.000)</span>
+              <span class="error-texto" id="presentacion-pattern">Formato inválido (ej: 25.000)</span>
             }
           </div>
 
           <div class="campo">
-            <label for="categoria_id">Categoria</label>
+            <label for="categoria_id">Categoría</label>
             <select id="categoria_id" formControlName="categoria_id">
-              <option value="">Sin categoria</option>
+              <option value="">Sin categoría</option>
               @for (categoria of categorias(); track categoria.id) {
                 <option [value]="categoria.id">{{ categoria.nombre }}</option>
               }
@@ -116,9 +122,16 @@
         </div>
 
         <div class="acciones">
-          <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
+          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
           <button type="button" class="primario" [disabled]="guardando()" (click)="guardar()">
-            {{ guardando() ? 'Guardando...' : (esAlta() ? 'Crear' : 'Guardar') }}
+            @if (guardando()) {
+              <span class="spinner" aria-hidden="true"></span>
+              Guardando...
+            } @else if (esAlta()) {
+              Crear
+            } @else {
+              Guardar
+            }
           </button>
         </div>
       </form>
@@ -135,9 +148,10 @@
     <input
       type="search"
       autocomplete="off"
-      placeholder="Buscar por codigo o nombre"
+      placeholder="Buscar por código o nombre"
       (input)="buscar($any($event.target).value)"
       [value]="buscador()"
+      aria-label="Buscar productos"
     />
 
     <select
@@ -155,9 +169,9 @@
       class="filtro"
       [value]="filtroCategoria() ?? ''"
       (change)="filtrarCategoria($any($event.target).value)"
-      aria-label="Filtrar por categoria"
+      aria-label="Filtrar por categoría"
     >
-      <option value="">Todas las categorias</option>
+      <option value="">Todas las categorías</option>
       @for (categoria of categorias(); track categoria.id) {
         <option [value]="categoria.id">{{ categoria.nombre }}</option>
       }
@@ -197,7 +211,15 @@
   }
 
   @if (filas().length === 0 && !buscando()) {
-    <p class="vacio">No hay productos que mostrar.</p>
+    <div class="estado-vacio">
+      <svg class="icono-vacio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+      <p>No hay productos que mostrar</p>
+      @if (puedeEditar()) {
+        <button type="button" class="primario" (click)="toggleEditor()">Crear el primero</button>
+      }
+    </div>
   }
 
   @if (filas().length > 0) {
@@ -205,16 +227,16 @@
       <table class="tabla">
         <thead>
           <tr>
-            <th scope="col">Codigo</th>
+            <th scope="col">Código</th>
             <th scope="col">Nombre</th>
-            <th scope="col">Presentacion (kg)</th>
-            <th scope="col">Categoria</th>
+            <th scope="col">Presentación (kg)</th>
+            <th scope="col">Categoría</th>
             <th scope="col">Especie</th>
             <th scope="col">Estado</th>
             <th scope="col">Acciones</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody [@filasAnimation]>
           @for (producto of filas(); track producto.id) {
             <tr>
               <td>{{ producto.codigo }}</td>
@@ -222,21 +244,21 @@
               <td class="centro">{{ kilosComoTexto(producto.presentacion_kg) }} kg</td>
               <td>{{ producto.categoria ?? '—' }}</td>
               <td>{{ producto.especie ?? '—' }}</td>
-              <td>
-                <span [class.inactivo]="!producto.activo">{{
-                  producto.activo ? 'Activo' : 'De baja'
-                }}</span>
+              <td class="centro">
+                <span class="badge" [class.badge-inactivo]="!producto.activo">
+                  {{ producto.activo ? 'Activo' : 'De baja' }}
+                </span>
               </td>
               <td class="acciones-celda">
                 @if (puedeEditar()) {
                   <div class="acciones-fila">
-                    <button type="button" class="chico accion-editar" (click)="editar(producto)" title="Editar">
+                    <button type="button" class="chico accion-editar" (click)="editar(producto)" title="Editar" aria-label="Editar {{ producto.nombre }}">
                       Editar
                     </button>
-                    <button type="button" class="chico accion-estado" (click)="alternaActivo(producto)" [title]="producto.activo ? 'Dar de baja' : 'Activar'">
+                    <button type="button" class="chico accion-estado" (click)="alternaActivo(producto)" [title]="producto.activo ? 'Dar de baja' : 'Activar'" [aria-label]="producto.activo ? 'Dar de baja ' + producto.nombre : 'Activar ' + producto.nombre">
                       {{ producto.activo ? 'Baja' : 'Activar' }}
                     </button>
-                    <button type="button" class="chico accion-eliminar" (click)="eliminar(producto)" title="Eliminar">
+                    <button type="button" class="chico accion-eliminar" (click)="eliminar(producto)" title="Eliminar" aria-label="Eliminar {{ producto.nombre }}">
                       Eliminar
                     </button>
                   </div>
@@ -251,7 +273,7 @@
     @if (hayMas()) {
       <div class="paginacion">
         <button type="button" class="chico" [disabled]="buscando()" (click)="cargarMas()">
-          Cargar mas
+          Cargar más
         </button>
         <span class="cuenta">{{ filas().length }} de {{ total() }}</span>
       </div>

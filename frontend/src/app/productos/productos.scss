@@ -11,8 +11,10 @@
 }
 
 h1 {
-  margin: 0 0 1rem;
+  margin: 0 0 0.5rem;
   font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--texto);
 }
 
 h2 {
@@ -28,13 +30,15 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--borde);
 }
 
 /* ---------------------------------------------------- editor colapsable */
 
 .editor-wrapper {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .editor-wrapper.colapsado .editor-inline {
@@ -100,12 +104,19 @@ h2 {
   margin-bottom: 0.5rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--borde);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.requerido {
+  color: var(--peligro);
+  margin-left: 0.125rem;
 }
 
 .campos {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 0.5rem 0.75rem;
+  gap: 0.75rem 1rem;
 }
 
 .campo {
@@ -114,7 +125,7 @@ h2 {
 }
 
 .campo label {
-  margin-bottom: 0.125rem;
+  margin-bottom: 0.25rem;
   font-size: 0.75rem;
   color: var(--texto-suave);
   font-weight: 500;
@@ -122,12 +133,13 @@ h2 {
 
 .campo input,
 .campo select {
-  padding: 0.375rem 0.5rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 4px;
+  border-radius: 6px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .campo input:focus,
@@ -152,8 +164,8 @@ h2 {
 .acciones {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding-top: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--borde);
   justify-content: flex-end;
 }
@@ -166,17 +178,23 @@ h2 {
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
 }
 
 .filtros input[type='search'] {
   flex: 1;
   min-width: 180px;
-  padding: 0.375rem 0.5rem;
+  padding: 0.5rem 0.75rem;
   font: inherit;
+  font-size: 0.875rem;
   color: var(--texto);
-  background: var(--superficie);
+  background: var(--fondo);
   border: 1px solid var(--borde);
-  border-radius: 4px;
+  border-radius: 6px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .filtros input[type='search']:focus {
@@ -186,14 +204,15 @@ h2 {
 }
 
 .filtro {
-  padding: 0.375rem 0.5rem;
+  padding: 0.5rem 0.75rem;
   font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 4px;
-  min-width: 140px;
   font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  min-width: 140px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .filtro:focus {
@@ -216,13 +235,17 @@ h2 {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+  table-layout: fixed;
 }
 
 th,
 td {
-  padding: 0.375rem 0.5rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   border-bottom: 1px solid var(--borde);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 th {
@@ -230,12 +253,15 @@ th {
   font-weight: 600;
   color: var(--texto-suave);
   background: var(--fondo);
-  white-space: nowrap;
 }
 
-th:nth-child(3) {
-  min-width: 140px;
-}
+th:nth-child(1) { width: 10%; min-width: 80px; }  /* Código */
+th:nth-child(2) { width: 25%; min-width: 150px; } /* Nombre */
+th:nth-child(3) { width: 15%; min-width: 120px; text-align: center; } /* Presentación */
+th:nth-child(4) { width: 15%; min-width: 120px; } /* Categoría */
+th:nth-child(5) { width: 15%; min-width: 120px; } /* Especie */
+th:nth-child(6) { width: 10%; min-width: 90px; text-align: center; } /* Estado */
+th:nth-child(7) { width: 10%; min-width: 120px; text-align: right; } /* Acciones */
 
 .num {
   text-align: right;
@@ -244,9 +270,8 @@ th:nth-child(3) {
 
 .centro {
   text-align: center;
-  padding-left: 2rem;
-  padding-right: 2rem;
-  min-width: 120px;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 tbody tr:hover {
@@ -264,6 +289,24 @@ tbody tr:last-child td {
 .acciones-celda {
   white-space: nowrap;
   text-align: right;
+  padding-right: 0.5rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--exito-suave);
+  color: var(--exito-texto);
+  border: 1px solid var(--exito-texto);
+}
+
+.badge-inactivo {
+  background: var(--peligro-suave);
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
 }
 
 .acciones-fila {
@@ -274,6 +317,11 @@ tbody tr:last-child td {
 
 .acciones-fila button {
   white-space: nowrap;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .accion-editar {
@@ -325,6 +373,53 @@ tbody tr:last-child td {
   margin: 1rem 0;
   color: var(--texto-tenue);
   text-align: center;
+}
+
+/* Estado vacío mejorado */
+.estado-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--texto-tenue);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.icono-vacio {
+  width: 48px;
+  height: 48px;
+  color: var(--borde);
+  opacity: 0.6;
+}
+
+.estado-vacio p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.estado-vacio .primario {
+  margin-top: 0.5rem;
+}
+
+/* Spinner para botón guardando */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 0.375rem;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ------------------------------------------------------------- los botones */

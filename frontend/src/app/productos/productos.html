@@ -11,12 +11,15 @@
   primero decide que filas se ven; el segundo, si el producto se ofrece a la
   venta.
 
-  El editor vive ANTES de la tabla (inline) y es colapsable.
+  El editor vive ANTES de la tabla (inline) y es colapsable. El boton que lo
+  despliega va en la cabecera, junto al titulo.
 -->
 <section class="productos">
-  <!-- Editor inline (nuevo/editar) - colapsable arriba de la tabla -->
-  @if (puedeEditar()) {
-    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
+  <!-- Cabecera: titulo a la izquierda, accion principal a la derecha -->
+  <div class="cabecera">
+    <h1>Productos</h1>
+
+    @if (puedeEditar()) {
       <button
         type="button"
         class="toggle-editor"
@@ -27,10 +30,15 @@
         @if (editorVisible()) {
           <span class="icono">▲</span> Ocultar formulario
         } @else {
-          <span class="icono">▼</span> Nuevo producto
+          <span class="icono">＋</span> Nuevo producto
         }
       </button>
+    }
+  </div>
 
+  <!-- Editor inline (nuevo/editar) - colapsable arriba de la tabla -->
+  @if (puedeEditar()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
       <form id="editor-form" class="editor-inline" [formGroup]="forma" (keydown)="onKeydown($event)">
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h2>
@@ -137,11 +145,6 @@
       </form>
     </div>
   }
-
-  <!-- Cabecera con titulo -->
-  <div class="cabecera">
-    <h1>Productos</h1>
-  </div>
 
   <!-- Filtros -->
   <div class="filtros">

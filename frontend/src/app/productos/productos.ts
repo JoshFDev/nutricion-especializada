@@ -238,11 +238,20 @@ export class Productos {
 
   /** Alta o edicion. El `activo` se manda solo en la edicion. */
   async guardar(): Promise<void> {
-    if (this.guardando() || this.forma.invalid) return;
+    console.log('[guardar] llamado', { guardando: this.guardando(), valid: this.forma.valid, value: this.forma.getRawValue() });
+    if (this.guardando()) return;
+    
+    // Marcar todos los campos como touched para mostrar errores
+    if (this.forma.invalid) {
+      this.forma.markAllAsTouched();
+      console.log('[guardar] formulario inválido', this.forma.errors, this.forma.controls);
+      return;
+    }
 
     this.guardando.set(true);
     this.errorEditor.set(null);
     const cuerpo = cuerpoDeProducto(this.forma.getRawValue());
+    console.log('[guardar] enviando cuerpo', cuerpo);
 
     try {
       const actual = this.editando();

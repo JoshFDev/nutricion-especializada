@@ -79,8 +79,11 @@ export class Productos {
   }
 
   toggleEditor(): void {
-    this.editorVisible.update((v) => !v);
-    if (!this.editorVisible()) {
+    const abrir = !this.editorVisible();
+    this.editorVisible.set(abrir);
+    if (abrir) {
+      this.nuevo();
+    } else {
       this.cancelar();
     }
   }
@@ -246,9 +249,10 @@ export class Productos {
       } else {
         await this.api.actualizar(actual.id, cuerpo, actual.activo);
       }
-      this.editando.set(null);
       await this.recargar();
+      this.cancelar();
     } catch (falla) {
+      console.error('[guardar] ERROR:', falla);
       const legible = errorLegible(falla);
       if (legible.codigo === 'CODIGO_DUPLICADO') {
         this.forma.controls.codigo.setErrors({ duplicado: true });

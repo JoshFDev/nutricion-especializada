@@ -25,9 +25,9 @@
           aria-controls="editor-form"
         >
           @if (editorVisible()) {
-            <span class="icono">▲</span> Ocultar formulario
+            <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg> Ocultar formulario
           } @else {
-            <span class="icono">＋</span> Nueva {{ singular() }}
+            <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva {{ singular() }}
           }
         </button>
       }
@@ -38,9 +38,9 @@
         [disabled]="exportando()"
       >
         @if (exportando()) {
-          <span class="spinner" aria-hidden="true"></span> Exportando…
+          <svg class="icono spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg> Exportando…
         } @else {
-          <span class="icono">⬇</span> Exportar Excel
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Exportar Excel
         }
       </button>
     </div>
@@ -59,7 +59,9 @@
         (keydown.escape)="limpiarFiltros()"
       />
       @if (buscador()) {
-        <button type="button" class="chico" (click)="limpiarFiltros()" title="Limpiar búsqueda">✕</button>
+        <button type="button" class="chico" (click)="limpiarFiltros()" title="Limpiar búsqueda">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       }
     </div>
   </div>
@@ -123,12 +125,14 @@
       sin datos, crear la primera; con datos, no hay nada que crear.
     -->
     <div class="vacio">
-      <div class="vacio-icono" aria-hidden="true">📋</div>
+      <div class="vacio-icono" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
       @if (puedeCrear()) {
         <h2>Aún no hay {{ titulo() | lowercase }}</h2>
         <p>Crea la primera para empezar a usarlas en los productos.</p>
         <button type="button" class="primario" (click)="alternarEditor()">
-          <span class="icono">＋</span> Crear la primera
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Crear la primera
         </button>
       } @else {
         <h2>No hay {{ titulo() | lowercase }}</h2>
@@ -137,12 +141,14 @@
     </div>
   } @else if (filasVisibles().length === 0) {
     <div class="vacio">
-      <div class="vacio-icono" aria-hidden="true">🔍</div>
+      <div class="vacio-icono" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
       <h2>Sin coincidencias</h2>
       <p>No hay {{ titulo() | lowercase }} que contengan «{{ buscador() }}».</p>
-      <button type="button" class="primario" (click)="limpiarFiltros()">
-        <span class="icono">✕</span> Limpiar búsqueda
-      </button>
+<button type="button" class="primario" (click)="limpiarFiltros()">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Limpiar búsqueda
+        </button>
     </div>
   } @else {
     <div class="tabla-wrapper">

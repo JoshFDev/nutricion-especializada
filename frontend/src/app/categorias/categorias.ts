@@ -13,7 +13,7 @@ import { Catalogo } from '../catalogo/catalogo';
 @Component({
   selector: 'app-categorias',
   imports: [Catalogo],
-  template: `<app-catalogo recurso="categorias" titulo="Categorias" />`,
+  template: `<app-catalogo recurso="categorias" titulo="Categorias" singular="Categoría" />`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Categorias {}

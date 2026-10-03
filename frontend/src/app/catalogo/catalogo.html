@@ -1,90 +1,147 @@
 <!--
-  El catalogo compartido de Especies y Categorias.
+  Catalogo: listado + editor inline colapsable.
 
-  Igual que el backend construye las dos rutas con la misma fabrica, esta
-  pantalla sirve para las dos tablas: el `recurso` y el `titulo` llegan por
-  Input desde el wrapper de cada ruta. Es una lista pequena (una docena de
-  filas) y por eso no hay filtros ni paginacion: se trae entera y se pinta.
+  Es la MISMA pantalla para categorias y especies: lo unico que cambia son
+  el `recurso`, el `titulo` y el `singular`, que llegan por @Input desde los
+  wrappers de cada ruta.
+
+  El editor vive ANTES de la tabla (inline) y es colapsable, igual que en
+  productos: el listado se queda debajo, para no perder de vista sobre que
+  se esta Laplacando el nombre. El boton que lo despliega va en la cabecera,
+  junto al titulo.
 -->
 <section class="catalogo">
-  @if (editorAbierto()) {
-    <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
-      <h1>{{ esAlta() ? 'Nueva ' + titulo() : 'Renombrar ' + titulo() }}</h1>
+  <!-- Cabecera: titulo a la izquierda, accion principal a la derecha -->
+  <div class="cabecera">
+    <h1>{{ titulo() }}</h1>
 
-      @if (errorEditor(); as mensaje) {
-        <p class="error" role="alert">{{ mensaje }}</p>
-      }
+    @if (puedeCrear()) {
+      <button
+        type="button"
+        class="toggle-editor"
+        (click)="alternarEditor()"
+        [attr.aria-expanded]="editorVisible()"
+        aria-controls="editor-form"
+      >
+        @if (editorVisible()) {
+          <span class="icono">▲</span> Ocultar formulario
+        } @else {
+          <span class="icono">＋</span> Nueva {{ singular() }}
+        }
+      </button>
+    }
+  </div>
 
-      <div class="campos">
-        <div class="campo">
-          <label for="nombre">Nombre</label>
-          <input
-            id="nombre"
-            type="text"
-            formControlName="nombre"
-            maxlength="100"
-            autocomplete="off"
-          />
+  <!-- Editor inline (alta/renombrado) - colapsable arriba de la tabla -->
+  @if (puedeCrear()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
+      <form id="editor-form" class="editor-inline" [formGroup]="forma">
+        <div class="editor-cabecera">
+          <h2>{{ esAlta() ? 'Nueva ' + singular() : 'Renombrar ' + singular().toLowerCase() }}</h2>
         </div>
-      </div>
 
-      <div class="acciones">
-        <button type="submit" class="primario" [disabled]="guardando()">
-          {{ guardando() ? 'Guardando...' : 'Guardar' }}
-        </button>
-        <button type="button" class="chico" (click)="cancelar()">Cancelar</button>
-      </div>
-    </form>
-  } @else {
-    <div class="cabecera">
-      <h1>{{ titulo() }}</h1>
+        @if (errorEditor(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+
+        <div class="campos">
+          <div class="campo">
+            <label for="nombre">Nombre <span class="requerido" aria-hidden="true">*</span></label>
+            <input
+              id="nombre"
+              type="text"
+              formControlName="nombre"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="Nombre"
+              [attr.aria-invalid]="forma.controls.nombre.hasError('duplicado')"
+              aria-describedby="nombre-duplicado"
+            />
+            @if (forma.controls.nombre.hasError('duplicado')) {
+              <span class="ayuda" id="nombre-duplicado">Ya existe con ese nombre</span>
+            }
+          </div>
+        </div>
+
+        <div class="acciones">
+          <button
+            type="button"
+            class="primario"
+            (click)="guardar()"
+            [disabled]="forma.invalid || guardando()"
+          >
+            {{ guardando() ? 'Guardando…' : esAlta() ? 'Crear' : 'Guardar' }}
+          </button>
+          <button type="button" (click)="cancelar()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  }
+
+  @if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (cargando() && filas().length === 0) {
+    <p class="cargando">Cargando...</p>
+  } @else if (filas().length === 0) {
+    <!--
+      Estado vacio. Se distingue el caso "todavia no hay ninguna" del
+      "no coincide con el filtro" offerendo la accion que lo resuelve:
+      sin datos, crear la primera; con datos, no hay nada que crear.
+    -->
+    <div class="vacio">
+      <div class="vacio-icono" aria-hidden="true">📋</div>
       @if (puedeCrear()) {
-        <button type="button" class="primario" (click)="abrirNuevo()">Nueva {{ titulo() }}</button>
+        <h2>Aún no hay {{ titulo() | lowercase }}</h2>
+        <p>Crea la primera para empezar a usarlas en los productos.</p>
+        <button type="button" class="primario" (click)="alternarEditor()">
+          <span class="icono">＋</span> Crear la primera
+        </button>
+      } @else {
+        <h2>No hay {{ titulo() | lowercase }}</h2>
+        <p>Todavía no se ha creado ninguna.</p>
       }
     </div>
-
-    @if (error(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    @if (cargando() && filas().length === 0) {
-      <p class="cargando">Cargando...</p>
-    }
-
-    @if (filas().length === 0 && !cargando()) {
-      <p class="vacio">No hay {{ titulo() }} que mostrar.</p>
-    }
-
-    @if (filas().length > 0) {
-      <div class="tabla-wrapper">
-        <table class="tabla">
-          <thead>
+  } @else {
+    <div class="tabla-wrapper">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Nombre</th>
+            <th scope="col" class="acciones-celda">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of filas(); track fila.id) {
             <tr>
-              <th scope="col">Nombre</th>
-              <th scope="col">Usada en</th>
-              <th scope="col"><span class="oculto">Acciones</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (fila of filas(); track fila.id) {
-              <tr>
-                <td>{{ fila.nombre }}</td>
-                <td class="tenue">—</td>
-                <td class="acciones-celda">
-                  <div class="acciones-fila">
+              <td class="celda-nombre">{{ fila.nombre }}</td>
+              <td class="acciones-celda">
+                <div class="acciones">
+                  @if (puedeCrear()) {
                     <button type="button" class="chico" (click)="renombrar(fila)">Renombrar</button>
-                    @if (puedeEliminar()) {
-                      <button type="button" class="chico peligro" (click)="eliminar(fila)">
-                        Eliminar
-                      </button>
-                    }
-                  </div>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
+                  }
+                  @if (puedeEliminar()) {
+                    <button
+                      type="button"
+                      class="chico peligro"
+                      (click)="eliminar(fila)"
+                    >
+                      Eliminar
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="paginacion">
+      <span class="cuenta">{{ filas().length }} {{ titulo() | lowercase }}</span>
+    </div>
   }
 </section>
+
+<app-confirm-modal />

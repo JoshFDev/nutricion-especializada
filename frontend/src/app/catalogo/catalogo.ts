@@ -5,11 +5,15 @@ import {
   inject,
   input,
   signal,
+  viewChild,
   type OnInit,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { LowerCasePipe } from '@angular/common';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
+import { ToastService } from '../nucleo/toast.service';
+import { ConfirmModal } from '../productos/confirm-modal';
 import {
   CatalogoApi,
   cuerpoDeCatalogo,
@@ -38,17 +42,26 @@ import {
   selector: 'app-catalogo',
   templateUrl: './catalogo.html',
   styleUrl: './catalogo.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConfirmModal, LowerCasePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Catalogo implements OnInit {
   /** `'especies'` o `'categorias'`. Lo decide el wrapper de cada ruta. */
   readonly recurso = input.required<ClaveRecurso>();
   readonly titulo = input.required<string>();
+  /**
+   * El nombre en singular, para los mensajes.
+   *
+   * Va aparte del `titulo` porque los mensajes necesitan concordar
+   * ("Categoría creada", no "Categorias creada") y `titulo` llega en
+   * plural. Los dos son femeninos, asi que el genero no hace falta.
+   */
+  readonly singular = input.required<string>();
 
   private readonly api = inject(CatalogoApi);
   private readonly fb = inject(FormBuilder);
   private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
 
   // ------------------------------------------------------------- el listado
   readonly filas = signal<FilaCatalogo[]>([]);
@@ -60,9 +73,20 @@ export class Catalogo implements OnInit {
   readonly guardando = signal(false);
   readonly errorEditor = signal<string | null>(null);
 
-  readonly editorAbierto = computed(() => this.editando() !== null);
+  /**
+   * Si el editor esta desplegado, separado de que fila se esta editando.
+   *
+   * El boton de la cabecera es el que lo alterna, igual que en productos: el
+   * listado se queda debajo y no desaparece, para no perder de vista lo que
+   * se esta Laplacando.
+   */
+  readonly editorVisible = signal(false);
+
+  readonly editorAbierto = computed(() => this.editorVisible());
   /** Alta o renombrado: el id dice cual. */
   readonly esAlta = computed(() => this.editando()?.id === undefined);
+
+  readonly confirmModal = viewChild.required(ConfirmModal);
 
   /** El boton de borrar solo se dibuja con el permiso, como en clientes. */
   readonly puedeEliminar = computed(() => this.sesion.puede(permisoDe(this.recurso(), 'eliminar')));
@@ -106,17 +130,37 @@ export class Catalogo implements OnInit {
     this.forma.reset({ nombre: '' });
     this.errorEditor.set(null);
     this.editando.set({} as FilaCatalogo);
+    this.editorVisible.set(true);
   }
 
   renombrar(fila: FilaCatalogo): void {
     this.forma.setValue({ nombre: fila.nombre });
     this.errorEditor.set(null);
     this.editando.set(fila);
+    this.editorVisible.set(true);
+  }
+
+  /**
+   * El boton de la cabecera.
+   *
+   * Desplegar siempre abre un alta, no el renombrado de lo que hubiera
+   * quedado a medias: si el usuario cierra el editor a medias y vuelve a
+   * pulsar, lo espera es un formulario limpio, no el nombre a medias con el
+   * que se equivoco antes.
+   */
+  alternarEditor(): void {
+    if (this.editorVisible()) {
+      this.cancelar();
+      return;
+    }
+    this.abrirNuevo();
   }
 
   cancelar(): void {
     this.editando.set(null);
+    this.editorVisible.set(false);
     this.errorEditor.set(null);
+    this.forma.reset({ nombre: '' });
   }
 
   /** Alta o renombrado, lo decide `esAlta`. */
@@ -132,10 +176,14 @@ export class Catalogo implements OnInit {
       if (actual === null) return;
       if (actual.id === undefined) {
         await this.api.crear(this.recurso(), nombre);
+        this.toast.exito(`${this.singular()} creada con éxito`);
       } else {
         await this.api.renombrar(this.recurso(), actual.id, nombre);
+        this.toast.exito(`${this.singular()} guardada con éxito`);
       }
       this.editando.set(null);
+      this.editorVisible.set(false);
+      this.forma.reset({ nombre: '' });
       await this.recargar();
     } catch (falla) {
       const legible = errorLegible(falla);
@@ -148,22 +196,36 @@ export class Catalogo implements OnInit {
     }
   }
 
-  /**
+/**
    * Borra.
    *
    * El backend no deja borrar lo que ya se uso (los FK no tienen ON
    * DELETE) y responde 409 EN_USO con el detalle de quién la usa. Se
    * confirma primero porque no hay "dar de baja" en estas tablas: o se
    * borra o no se toca.
+   *
+   * La confirmacion va por el modal, no por `window.confirm`: el del
+   * navegador no se puede estilar, no cabe el texto largo que devuelve el
+   * 409 y en una pantalla de mostrador se pierde detras de otra ventana.
    */
   async eliminar(fila: FilaCatalogo): Promise<void> {
-    if (!window.confirm(`Eliminar "${fila.nombre}"? No se puede si ya la usan.`)) return;
+    const confirmado = await this.confirmModal().abrir({
+      titulo: `Eliminar ${this.singular().toLowerCase()}`,
+      mensaje: `¿Eliminar "${fila.nombre}"? No se puede si ya se está usando.`,
+      textoConfirmar: 'Eliminar',
+      variante: 'peligro',
+    });
+    if (!confirmado) return;
+
     this.error.set(null);
     try {
       await this.api.eliminar(this.recurso(), fila.id);
+      this.toast.exito(`${this.singular()} eliminada con éxito`);
       await this.recargar();
     } catch (falla) {
-      this.error.set(errorLegible(falla).mensaje);
+      const legible = errorLegible(falla);
+      this.error.set(legible.mensaje);
+      this.toast.error(legible.mensaje);
     }
   }
 }

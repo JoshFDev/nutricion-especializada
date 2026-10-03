@@ -1,12 +1,9 @@
 /*
- * La pantalla del catalogo: especies y categorias juntas.
+ * Catalogo (categorias y especies).
  *
- * Es la misma familia que clientes.scss y productos.scss, pero sin la
- * columna de estatus: la unica columna a la izquierda es el nombre, y en
- * la derecha van las acciones. El "Usada en" se queda en un guion a
- * proposito: cuantos productos la usan lo dice el backend SOLO al intentar
- * borrar y mandar un 409 EN_USO, y traer ese conteo haria una consulta por
- * fila que aqui no aporta.
+ * Comparte el diseño con productos: cabecera con la acción principal a la
+ * derecha, editor inline colapsable arriba de la tabla y tabla con wrapper.
+ * Son listas chicas, sin filtros ni paginacion real.
  */
 
 :host {
@@ -20,6 +17,12 @@ h1 {
   color: var(--texto);
 }
 
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------- la cabecera */
 
 .cabecera {
@@ -30,14 +33,82 @@ h1 {
   margin-bottom: 0.75rem;
 }
 
+/* ------------------------------------------------------ el editor inline */
+
+.editor-wrapper {
+  margin-bottom: 0.75rem;
+}
+
+/* Colapsado no es "oculto": el wrapper conserva su alto minimo para que el
+   listado no salte de golpe al plegarse. */
+.editor-wrapper.colapsado .editor-inline {
+  display: none;
+}
+
+.editor-inline {
+  padding: 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px var(--acento-suave);
+}
+
+.editor-cabecera {
+  margin-bottom: 0.75rem;
+}
+
+.requerido {
+  color: var(--peligro-texto);
+}
+
+.campo label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.campo input {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.campo input:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
+}
+
+/* El backend marca el nombre duplicado: se pinta el borde, no solo el texto
+   de ayuda, porque el campo es lo que hay que corregir. */
+.campo input.ng-invalid.ng-touched,
+.campo input[aria-invalid='true'] {
+  border-color: var(--peligro);
+}
+
+.ayuda {
+  display: block;
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--borde);
+  justify-content: flex-end;
+}
+
 /* --------------------------------------------------------------- la tabla */
 
-/*
- * La tabla va dentro de un contenedor con esquinas redondeadas, igual que en
- * Productos. Poner el borde y el radio en el `<table>` directamente no
- * alcanza: en la mayoria de navegadores el radio se ignora sobre las
- * celdas, y el resultado son esquinas vivas con las filas pegadas.
- */
 .tabla-wrapper {
   overflow-x: auto;
   margin-bottom: 1rem;
@@ -55,9 +126,23 @@ h1 {
 th,
 td {
   padding: 0.625rem 0.75rem;
-  text-align: center;
+  text-align: left;
   vertical-align: middle;
   border-bottom: 1px solid var(--borde);
+}
+
+/* El nombre es lo unico que hay: se queda a la izquierda y toma el ancho. */
+.celda-nombre {
+  text-align: left;
+  font-weight: 500;
+}
+
+th:first-child {
+  width: 70%;
+}
+
+th:last-child {
+  width: 30%;
 }
 
 th {
@@ -65,16 +150,6 @@ th {
   font-weight: 600;
   color: var(--texto-suave);
   background: var(--fondo);
-}
-
-th:first-child,
-td:first-child {
-  text-align: left;
-}
-
-th:last-child,
-td:last-child {
-  width: 12rem;
 }
 
 tbody tr {
@@ -89,15 +164,12 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.tenue {
-  color: var(--texto-tenue);
-}
-
 .acciones-celda {
   white-space: nowrap;
   text-align: right;
 }
 
+/* Los botones de la fila van juntos y centrados, igual que en productos. */
 .acciones-fila {
   display: inline-flex;
   gap: 0.375rem;
@@ -105,164 +177,53 @@ tbody tr:last-child td {
   justify-content: flex-end;
 }
 
-/* El estado vacio lleva borde y fondo para que se lea como una tarjeta y no
-   como un texto suelto pegado debajo del titulo. */
+/* --------------------------------------------------------- el estado vacio */
+
+/* Tarjeta, no un texto suelto: el estado vacio es la pantalla entera cuando
+   la tabla no tiene nada, y se lee mejor enmarcado. */
 .vacio {
-  margin: 0.5rem 0 1rem;
   padding: 2.5rem 1.5rem;
-  color: var(--texto-tenue);
   text-align: center;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 8px;
+  border-radius: 6px;
+  margin-bottom: 1rem;
 }
 
-/* "Cargando..." no es un estado vacio: es una espera. Sin tarjeta y sin los
-   2.5rem de alto, para que no salte el alto de la pagina al entrar. */
+.vacio-icono {
+  font-size: 2.25rem;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+}
+
+.vacio h2 {
+  margin-bottom: 0.25rem;
+}
+
+.vacio p {
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+/* "Cargando..." no lleva tarjeta: es una espera, no un hueco, y con el
+   alto del estado vacio la pagina saltaria al entrar. */
 .cargando {
   margin: 0.5rem 0 1rem;
   color: var(--texto-tenue);
   text-align: center;
 }
 
-/* -------------------------------------------------------------- el editor */
-
-.editor {
-  max-width: 46rem;
-}
-
-.campos {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.875rem 1rem;
-}
-
-.campo.ancho {
-  grid-column: 1 / -1;
-}
-
-.campo label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-.campo input,
-.campo select {
-  width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.acciones {
+.paginacion {
   display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
 }
 
-/* ------------------------------------------------------------- los botones */
-
-/*
- * El mismo esquema que Productos y Notas, para que el boton de alta se
- * sienta igual en toda la app.
- *
- * Esta pantalla no tenia NINGUNA regla de hover: los botones se veian
- * igual al puntero encima o no, y eso hace que un control poco pulsable se
- * lea como texto. Ahora todos se encienden.
- */
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  font-weight: 500;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    border-color 0.15s,
-    color 0.15s,
-    transform 0.06s,
-    box-shadow 0.12s;
-}
-
-button:hover:not(:disabled) {
-  background: var(--acento-suave);
-  border-color: var(--acento);
-  color: var(--acento-texto);
-}
-
-button:active:not(:disabled) {
-  transform: translateY(0);
-  background: var(--borde);
-}
-
-button:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
-}
-
-/* El primario va en azul solido y al pasar el cursor baja al azul mas
-   oscuro de la paleta, el mismo hover que en Productos y Notas. */
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-  font-weight: 600;
-}
-
-button.primario:hover:not(:disabled) {
-  color: var(--sobre-acento);
-  background: var(--acento-texto);
-  border-color: var(--acento-texto);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
-}
-
-button.primario:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
-}
-
-button.chico {
-  padding: 0.3125rem 0.625rem;
+.cuenta {
   font-size: 0.8125rem;
-}
-
-button.chico:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-button.peligro {
-  color: var(--peligro-texto);
-  border-color: var(--peligro);
-}
-
-button.peligro:hover:not(:disabled) {
-  background: var(--peligro);
-  border-color: var(--peligro);
-  color: var(--sobre-peligro);
-}
-
-.oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+  color: var(--texto-tenue);
 }
 
 .error {
@@ -272,4 +233,65 @@ button.peligro:hover:not(:disabled) {
   background: var(--peligro-suave);
   border: 1px solid var(--peligro);
   border-radius: 6px;
+}
+
+/* ------------------------------------------------------------- los botones */
+
+button {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+button:hover:not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+button.primario,
+button.toggle-editor {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+  font-weight: 600;
+}
+
+button.primario:hover:not(:disabled),
+button.toggle-editor:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+}
+
+button:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+}
+
+button.chico {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+button.chico.peligro {
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+button.chico.peligro:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--peligro-texto);
+  border-color: var(--peligro-texto);
+}
+
+.icono {
+  font-size: 0.875em;
 }

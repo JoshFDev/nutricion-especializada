@@ -1,184 +1,40 @@
-<h1>Precios</h1>
+<!--
+  Precios: listado + editor inline colapsable.
 
-@if (editorAbierto()) {
-  <!-- ------------------------------------------------------ el editor -->
-  <div class="editor">
-    <div class="cabecera">
-      <h2>{{ editando() === null ? 'Nuevo precio' : 'Editar precio' }}</h2>
-      <button (click)="cerrarEditor()">Cancelar</button>
-    </div>
+  A diferencia de antes, el listado NO desaparece cuando se abre el editor.
+  Antes era un `@if / @else`: al darle a "Nuevo precio" se iba la tabla
+  entera y, si te arrepentias, tenias que acordarte de lo que habias
+  filtrado. Aqui el editor se despliega ARRIBA y la tabla se queda debajo,
+  como en productos.
 
-    @if (errorEditor(); as error) {
-      <p class="error" role="alert">{{ error }}</p>
-    }
+  Hay dos formularios, el de alta/edicion y el de cierre. Son excluyentes:
+  `pedirCierre` cierra el editor antes de abrirse, para que no queden los
+  dos superpuestos y se guarde el equivocado.
 
-    <div class="campos">
-      @if (esClientes()) {
-        <div class="campo ancho">
-          <label for="cliente">Cliente</label>
-          @if (editando()?.cliente_nombre; as nombre) {
-            <div class="elegido">{{ nombre }}</div>
-          } @else if (cliente(); as cliente) {
-            <button class="cambiar" (click)="quitarClienteEditor()">{{ cliente.nombre }}</button>
-          } @else {
-            <input
-              id="cliente"
-              type="search"
-              autocomplete="off"
-              placeholder="Busca al cliente por nombre…"
-              [value]="buscadorCliente.texto()"
-              (input)="buscadorCliente.escribir($any($event.target).value)"
-              (focus)="buscadorCliente.alEntrar()"
-              (focusout)="buscadorCliente.alSalir($event)"
-              (keydown.escape)="buscadorCliente.cerrar()"
-            />
-            @if (buscadorCliente.lista()) {
-              <ul class="resultados">
-                @for (opcion of buscadorCliente.opciones(); track opcion.id) {
-                  <li>
-                    <button (click)="buscadorCliente.elegir(opcion)">{{ opcion.nombre }}</button>
-                  </li>
-                }
-              </ul>
-            }
-            @if (buscadorCliente.sinNada(); as aviso) {
-              <p class="aviso">{{ aviso }}</p>
-            }
-          }
-        </div>
-      }
-
-      <div class="campo ancho">
-        <label for="producto">Producto</label>
-        @if (editando(); as fila) {
-          <div class="elegido">{{ fila.producto_codigo }} · {{ fila.producto_nombre }}</div>
-        } @else if (producto(); as producto) {
-          <button class="cambiar" (click)="quitarProductoEditor()">
-            {{ producto.codigo }} · {{ producto.nombre }}
-          </button>
-        } @else {
-          <input
-            id="producto"
-            type="search"
-            autocomplete="off"
-            placeholder="Busca el producto por codigo o nombre…"
-            [value]="buscadorProducto.texto()"
-            (input)="buscadorProducto.escribir($any($event.target).value)"
-            (focus)="buscadorProducto.alEntrar()"
-            (focusout)="buscadorProducto.alSalir($event)"
-            (keydown.escape)="buscadorProducto.cerrar()"
-          />
-          @if (buscadorProducto.lista()) {
-            <ul class="resultados">
-              @for (opcion of buscadorProducto.opciones(); track opcion.id) {
-                <li>
-                  <button (click)="buscadorProducto.elegir(opcion)">
-                    {{ opcion.codigo }} · {{ opcion.nombre }}
-                  </button>
-                </li>
-              }
-            </ul>
-          }
-          @if (buscadorProducto.sinNada(); as aviso) {
-            <p class="aviso">{{ aviso }}</p>
-          }
-        }
-      </div>
-
-      <div class="campo">
-        <label for="precio">Precio por kilo ($)</label>
-        <input
-          id="precio"
-          type="text"
-          inputmode="decimal"
-          [attr.value]="precioKg()"
-          (input)="precioKg.set($any($event.target).value)"
-        />
-        @if (problemaDePrecio(precioKg()); as problema) {
-          <p class="ayuda">{{ problema }}</p>
-        }
-      </div>
-
-      <div class="campo">
-        <label for="hasta">Cerrado por fin de vigencia</label>
-        <input
-          id="hasta"
-          type="date"
-          [attr.value]="vigenteHasta()"
-          (change)="vigenteHasta.set($any($event.target).value)"
-        />
-        <p class="ayuda">Vacío = sigue vigente hasta cerrarlo.</p>
-      </div>
-
-      <div class="campo">
-        <label for="desde">Vigente desde</label>
-        <input
-          id="desde"
-          type="date"
-          [attr.value]="vigenteDesde()"
-          (change)="vigenteDesde.set($any($event.target).value)"
-        />
-        @if (problemaDeVigencia(vigenteDesde(), vigenteHasta()); as problema) {
-          <p class="ayuda">{{ problema }}</p>
-        }
-      </div>
-    </div>
-
-    <div class="acciones">
-      <button class="primario" (click)="guardar()" [disabled]="!puedeGuardar()">
-        {{ guardando() ? 'Guardando…' : 'Guardar precio' }}
-      </button>
-    </div>
-  </div>
-} @else if (cerrando(); as fila) {
-  <!-- ------------------------------------------------------ el cierre -->
-  <div class="editor">
-    <div class="cabecera">
-      <h2>Cerrar precio de {{ fila.producto_nombre }}</h2>
-      <button (click)="cancelarCierre()">Cancelar</button>
-    </div>
-
-    @if (errorEditor(); as error) {
-      <p class="error" role="alert">{{ error }}</p>
-    }
-
-    <p class="cierre-nota">
-      El precio no se borra: se le pone una fecha de fin para que deje de aplicarse desde ahí. La
-      fila se queda en el historial.
-    </p>
-
-    <div class="campos">
-      <div class="campo">
-        <label for="cierre-fecha">Vigente hasta</label>
-        <input
-          id="cierre-fecha"
-          type="date"
-          [attr.value]="hastaCierre()"
-          (change)="hastaCierre.set($any($event.target).value)"
-        />
-      </div>
-    </div>
-
-    <div class="acciones">
-      <button class="primario" (click)="cerrar()" [disabled]="cerrandoPrecio()">
-        {{ cerrandoPrecio() ? 'Cerrando…' : 'Cerrar precio' }}
-      </button>
-    </div>
-  </div>
-} @else {
-  <!-- ---------------------------------------------------- el listado -->
+  Los buscadores (producto y cliente) se apoyan en `.campo`, que es
+  `position: relative`: sin eso el desplegable se mide contra la pagina
+  entera y sale por debajo del borde de la pantalla (ver `.resultados`).
+-->
+<section class="precios">
+  <!-- Cabecera: pestanas a la izquierda, accion principal a la derecha -->
   <div class="cabecera">
     <div class="pestanas" role="tablist">
       <button
+        type="button"
+        role="tab"
         class="pestana"
         [class.activa]="vista() === 'publicos'"
+        [attr.aria-selected]="vista() === 'publicos'"
         (click)="cambiarVista('publicos')"
       >
         Precio de lista
       </button>
       <button
+        type="button"
+        role="tab"
         class="pestana"
         [class.activa]="vista() === 'clientes'"
+        [attr.aria-selected]="vista() === 'clientes'"
         (click)="cambiarVista('clientes')"
       >
         Precio de cliente
@@ -186,13 +42,210 @@
     </div>
 
     @if (puedeEditar()) {
-      <button class="primario" (click)="nuevo()">Nuevo precio</button>
+      <button
+        type="button"
+        class="toggle-editor"
+        (click)="alternarEditor()"
+        [attr.aria-expanded]="editorAbierto()"
+        aria-controls="editor-form"
+      >
+        @if (editorAbierto()) {
+          <span class="icono">▲</span> Ocultar formulario
+        } @else {
+          <span class="icono">＋</span> Nuevo precio
+        }
+      </button>
     }
   </div>
 
+  <!-- ------------------------------------------------- el editor inline -->
+  @if (puedeEditar()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorAbierto()">
+      <form id="editor-form" class="editor-inline">
+        <div class="editor-cabecera">
+          <h2>{{ editando() === null ? 'Nuevo precio' : 'Editar precio' }}</h2>
+        </div>
+
+        @if (errorEditor() && cerrando() === null; as error) {
+          <p class="error" role="alert">{{ error }}</p>
+        }
+
+        <div class="campos">
+          @if (esClientes()) {
+            <div class="campo ancho">
+              <label for="cliente">Cliente</label>
+              @if (editando()?.cliente_nombre; as nombre) {
+                <div class="elegido">{{ nombre }}</div>
+              } @else if (cliente(); as elegido) {
+                <button type="button" class="cambiar" (click)="quitarClienteEditor()">
+                  {{ elegido.nombre }}
+                </button>
+              } @else {
+                <input
+                  id="cliente"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Busca al cliente por nombre…"
+                  [value]="buscadorCliente.texto()"
+                  (input)="buscadorCliente.escribir($any($event.target).value)"
+                  (focus)="buscadorCliente.alEntrar()"
+                  (focusout)="buscadorCliente.alSalir($event)"
+                  (keydown.escape)="buscadorCliente.cerrar()"
+                />
+                @if (buscadorCliente.lista()) {
+                  <ul class="resultados">
+                    @for (opcion of buscadorCliente.opciones(); track opcion.id) {
+                      <li>
+                        <button type="button" (click)="buscadorCliente.elegir(opcion)">
+                          {{ opcion.nombre }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (buscadorCliente.sinNada(); as aviso) {
+                  <p class="aviso">{{ aviso }}</p>
+                }
+              }
+            </div>
+          }
+
+          <div class="campo ancho">
+            <label for="producto">Producto</label>
+            @if (editando(); as fila) {
+              <div class="elegido">{{ fila.producto_codigo }} · {{ fila.producto_nombre }}</div>
+            } @else if (producto(); as elegido) {
+              <button type="button" class="cambiar" (click)="quitarProductoEditor()">
+                {{ elegido.codigo }} · {{ elegido.nombre }}
+              </button>
+            } @else {
+              <input
+                id="producto"
+                type="search"
+                autocomplete="off"
+                placeholder="Busca el producto por codigo o nombre…"
+                [value]="buscadorProducto.texto()"
+                (input)="buscadorProducto.escribir($any($event.target).value)"
+                (focus)="buscadorProducto.alEntrar()"
+                (focusout)="buscadorProducto.alSalir($event)"
+                (keydown.escape)="buscadorProducto.cerrar()"
+              />
+              @if (buscadorProducto.lista()) {
+                <ul class="resultados">
+                  @for (opcion of buscadorProducto.opciones(); track opcion.id) {
+                    <li>
+                      <button type="button" (click)="buscadorProducto.elegir(opcion)">
+                        {{ opcion.codigo }} · {{ opcion.nombre }}
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+              @if (buscadorProducto.sinNada(); as aviso) {
+                <p class="aviso">{{ aviso }}</p>
+              }
+            }
+          </div>
+
+          <div class="campo">
+            <label for="precio">Precio por kilo ($)</label>
+            <input
+              id="precio"
+              type="text"
+              inputmode="decimal"
+              [attr.value]="precioKg()"
+              (input)="precioKg.set($any($event.target).value)"
+            />
+            @if (problemaDePrecio(precioKg()); as problema) {
+              <p class="ayuda">{{ problema }}</p>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="desde">Vigente desde</label>
+            <input
+              id="desde"
+              type="date"
+              [attr.value]="vigenteDesde()"
+              (change)="vigenteDesde.set($any($event.target).value)"
+            />
+            @if (problemaDeVigencia(vigenteDesde(), vigenteHasta()); as problema) {
+              <p class="ayuda">{{ problema }}</p>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="hasta">Cerrado por fin de vigencia</label>
+            <input
+              id="hasta"
+              type="date"
+              [attr.value]="vigenteHasta()"
+              (change)="vigenteHasta.set($any($event.target).value)"
+            />
+            <p class="ayuda-suave">Vacío = sigue vigente hasta cerrarlo.</p>
+          </div>
+        </div>
+
+        <div class="acciones">
+          <button
+            type="button"
+            class="primario"
+            (click)="guardar()"
+            [disabled]="!puedeGuardar()"
+          >
+            {{ guardando() ? 'Guardando…' : 'Guardar precio' }}
+          </button>
+          <button type="button" (click)="cerrarEditor()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- ------------------------------------------- el cierre, tambien inline -->
+  @if (cerrando(); as fila) {
+    <div class="editor-wrapper">
+      <div class="editor-inline cierre">
+        <div class="editor-cabecera">
+          <h2>Cerrar precio de {{ fila.producto_nombre }}</h2>
+        </div>
+
+        @if (errorEditor(); as error) {
+          <p class="error" role="alert">{{ error }}</p>
+        }
+
+        <p class="cierre-nota">
+          El precio no se borra: se le pone una fecha de fin para que deje de aplicarse desde ahí.
+          La fila se queda en el historial.
+        </p>
+
+        <div class="campos">
+          <div class="campo">
+            <label for="cierre-fecha">Vigente hasta</label>
+            <input
+              id="cierre-fecha"
+              type="date"
+              [attr.value]="hastaCierre()"
+              (change)="hastaCierre.set($any($event.target).value)"
+            />
+          </div>
+        </div>
+
+        <div class="acciones">
+          <button type="button" class="primario" (click)="cerrar()" [disabled]="cerrandoPrecio()">
+            {{ cerrandoPrecio() ? 'Cerrando…' : 'Cerrar precio' }}
+          </button>
+          <button type="button" (click)="cancelarCierre()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ------------------------------------------------------------ filtros -->
   <div class="filtros">
     <span class="controles">
+      <label class="etiqueta-filtro" for="filtro-vigencia">Vigencia</label>
       <select
+        id="filtro-vigencia"
         class="filtro"
         [attr.value]="vigencia()"
         (change)="aVigencia($any($event.target).value)"
@@ -203,8 +256,8 @@
       </select>
 
       @if (filtroProducto(); as filtro) {
-        <button class="filtro-elegido" (click)="quitarFiltroProducto()">
-          {{ filtro.codigo }} · {{ filtro.nombre }} ✕
+        <button type="button" class="filtro-elegido" (click)="quitarFiltroProducto()">
+          {{ filtro.codigo }} · {{ filtro.nombre }} <span class="cerrar-filtro">✕</span>
         </button>
       } @else {
         <input
@@ -222,7 +275,7 @@
           <ul class="resultados">
             @for (opcion of buscadorFiltroProducto.opciones(); track opcion.id) {
               <li>
-                <button (click)="elegirFiltroProducto(opcion)">
+                <button type="button" (click)="elegirFiltroProducto(opcion)">
                   {{ opcion.codigo }} · {{ opcion.nombre }}
                 </button>
               </li>
@@ -236,8 +289,8 @@
 
       @if (esClientes()) {
         @if (filtroCliente(); as filtro) {
-          <button class="filtro-elegido" (click)="quitarFiltroCliente()">
-            {{ filtro.nombre }} ✕
+          <button type="button" class="filtro-elegido" (click)="quitarFiltroCliente()">
+            {{ filtro.nombre }} <span class="cerrar-filtro">✕</span>
           </button>
         } @else {
           <input
@@ -255,7 +308,9 @@
             <ul class="resultados">
               @for (opcion of buscadorFiltroCliente.opciones(); track opcion.id) {
                 <li>
-                  <button (click)="elegirFiltroCliente(opcion)">{{ opcion.nombre }}</button>
+                  <button type="button" (click)="elegirFiltroCliente(opcion)">
+                    {{ opcion.nombre }}
+                  </button>
                 </li>
               }
             </ul>
@@ -268,57 +323,94 @@
     </span>
   </div>
 
-  @if (error(); as error) {
-    <p class="error" role="alert">{{ error }}</p>
+  @if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
   }
 
-  @if (cargando()) {
-    <p class="vacio">Buscando precios…</p>
+  <!-- ------------------------------------------------------- el listado -->
+  @if (cargando() && filas().length === 0) {
+    <p class="cargando">Buscando precios…</p>
   } @else if (filas().length === 0) {
-    <p class="vacio">No hay precios que mostrar.</p>
-  } @else {
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th>Producto</th>
-          @if (esClientes()) {
-            <th>Cliente</th>
-          }
-          <th class="num">Precio/kg</th>
-          <th>Desde</th>
-          <th>Hasta</th>
-          <th class="acciones-celda"></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (fila of filas(); track fila.id) {
-          <tr>
-            <td>
-              <span class="codigo">{{ fila.producto_codigo }}</span>
-              {{ fila.producto_nombre }}
-            </td>
-            @if (esClientes()) {
-              <td>{{ fila.cliente_nombre }}</td>
-            }
-            <td class="num">{{ montoComoTexto(fila.precio_kg) }}</td>
-            <td>{{ fila.vigente_desde }}</td>
-            <td>{{ fila.vigente_hasta ?? '—' }}</td>
-            <td class="acciones-celda">
-              @if (puedeEditar()) {
-                <button class="chico" (click)="editar(fila)">Editar</button>
-                <button class="chico" (click)="pedirCierre(fila)">Cerrar</button>
-              }
-            </td>
-          </tr>
+    <!--
+      Estado vacio con dos lecturas: si no hay precios en la vista, se ofrece
+      crear el primero; si los hay pero el filtro los dejo todos fuera, el
+      problema es el filtro y la accion es quitarlo, no crear otro.
+    -->
+    <div class="vacio">
+      <div class="vacio-icono" aria-hidden="true">💲</div>
+      @if (hayFiltros()) {
+        <h2>Ningún precio coincide</h2>
+        <p>Prueba con otra vigencia o quita los filtros aplicados.</p>
+        <button type="button" (click)="aVigencia('todos')">Ver todos los precios</button>
+      } @else {
+        <h2>Aún no hay precios</h2>
+        <p>Registra el precio por kilo de un producto para empezar a cobrarlo.</p>
+        @if (puedeEditar()) {
+          <button type="button" class="primario" (click)="alternarEditor()">
+            <span class="icono">＋</span> Crear el primero
+          </button>
         }
-      </tbody>
-    </table>
+      }
+    </div>
+  } @else {
+    <div class="tabla-wrapper">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Producto</th>
+            @if (esClientes()) {
+              <th scope="col">Cliente</th>
+            }
+            <th scope="col" class="num">Precio/kg</th>
+            <th scope="col">Desde</th>
+            <th scope="col">Hasta</th>
+            <th scope="col" class="acciones-celda">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of filas(); track fila.id) {
+            <tr [class.historico]="fila.vigente_hasta !== null">
+              <td class="celda-producto">
+                <span class="codigo">{{ fila.producto_codigo }}</span>
+                {{ fila.producto_nombre }}
+              </td>
+              @if (esClientes()) {
+                <td class="centro">{{ fila.cliente_nombre }}</td>
+              }
+              <td class="num">{{ montoComoTexto(fila.precio_kg) }}</td>
+              <td class="centro">{{ fila.vigente_desde }}</td>
+              <td class="centro">
+                @if (fila.vigente_hasta !== null) {
+                  {{ fila.vigente_hasta }}
+                } @else {
+                  <span class="badge-vigente">Vigente</span>
+                }
+              </td>
+              <td class="acciones-celda">
+                @if (puedeEditar()) {
+                  <div class="acciones-fila">
+                    <button type="button" class="chico" (click)="editar(fila)">Editar</button>
+                    <button type="button" class="chico cerrar" (click)="pedirCierre(fila)">
+                      Cerrar
+                    </button>
+                  </div>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
 
     <div class="paginacion">
-      <button (click)="cargarMas()" [disabled]="!hayMas() || buscandoMas()">
+      <button
+        type="button"
+        (click)="cargarMas()"
+        [disabled]="!hayMas() || buscandoMas()"
+      >
         {{ buscandoMas() ? 'Buscando…' : 'Cargar más' }}
       </button>
       <span class="cuenta">{{ filas().length }} de {{ total() }} precios</span>
     </div>
   }
-}
+</section>

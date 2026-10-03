@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
+import { ToastService } from '../nucleo/toast.service';
 import { crearBuscador } from '../nucleo/buscador';
 import { montoComoTexto } from '../nucleo/cifras';
 import {
@@ -61,6 +62,7 @@ interface FilaPrecio {
 export class Precios {
   private readonly api = inject(PreciosApi);
   private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
 
   readonly puedeEditar = computed(() => this.sesion.puede('precios.editar'));
 
@@ -79,6 +81,23 @@ export class Precios {
   readonly filtroCliente = signal<OpcionFiltro | null>(null);
 
   readonly hayMas = computed(() => this.filas().length < this.total());
+
+  /**
+   * Si el listado lleva filtros puestos.
+   *
+   * Distingue "no hay precios" de "el filtro se los ha llevado todos": en el
+   * primer caso lo que hace falta es crear uno, y en el segundo quitar el
+   * filtro. `total` no sirve para esto porque ya viene filtrado: con un
+   * filtro que no coincide da 0 igual que cuando la tabla esta vacia de
+   * verdad. `vigentes` es lo que se ve por defecto, asi que no cuenta como
+   * filtro.
+   */
+  readonly hayFiltros = computed(
+    () =>
+      this.vigencia() !== 'vigentes' ||
+      this.filtroProducto() !== null ||
+      this.filtroCliente() !== null,
+  );
   readonly esClientes = computed(() => this.vista() === 'clientes');
 
   /** El listado se pide al entrar: sin esto la tabla sale en vacio. */
@@ -237,12 +256,28 @@ export class Precios {
   }
 
   // -------------------------------------------------------- el editor
-  nuevo(): void {
+  /** Alta limpia. La abre el boton de la cabecera (ver `alternarEditor`). */
+  private nuevo(): void {
     this.abrirEditor(null);
   }
 
   editar(fila: FilaPrecio): void {
     this.abrirEditor(fila);
+  }
+
+  /**
+   * El boton de la cabecera.
+   *
+   * Desplegar siempre abre un alta, no el precio a medias con el que se
+   * quedo la vez anterior: si el usuario cierra el editor a medias y vuelve
+   * a pulsar, lo espera es el formulario limpio.
+   */
+  alternarEditor(): void {
+    if (this.editorAbierto()) {
+      this.cerrarEditor();
+      return;
+    }
+    this.nuevo();
   }
 
   private abrirEditor(fila: FilaPrecio | null): void {
@@ -312,20 +347,33 @@ export class Precios {
     if (!this.puedeGuardar()) return;
     this.guardando.set(true);
     this.errorEditor.set(null);
+    const esAlta = this.editando() === null;
     try {
       const cuerpo = cuerpoDePrecio(this.precioKg(), this.vigenteDesde(), this.vigenteHasta());
       await this.guardarCuerpo(cuerpo);
       this.cerrarEditor();
+      this.toast.exito(`Precio ${esAlta ? 'creado' : 'guardado'} con éxito`);
       await this.recargar();
     } catch (falla) {
-      this.errorEditor.set(errorLegible(falla).mensaje);
+      const legible = errorLegible(falla);
+      this.errorEditor.set(legible.mensaje);
+      this.toast.error(legible.mensaje);
     } finally {
       this.guardando.set(false);
     }
   }
 
   // ------------------------------------------------------------ el cierre
+  /**
+   * Pedir el cierre de un precio.
+   *
+   * Cierra el editor antes: son dos formularios sobre la misma pantalla y no
+   * pueden quedar los dos abiertos a la vez, porque el segundo tapa al
+   * primero y se guardaria el equivocado.
+   */
   pedirCierre(fila: FilaPrecio): void {
+    this.editorAbierto.set(false);
+    this.editando.set(null);
     this.cerrando.set(fila);
     this.hastaCierre.set(hoyComoTexto());
     this.errorEditor.set(null);
@@ -348,9 +396,12 @@ export class Precios {
         await this.api.cerrarCliente(fila.id, hasta);
       }
       this.cerrando.set(null);
+      this.toast.exito('Precio cerrado con éxito');
       await this.recargar();
     } catch (falla) {
-      this.errorEditor.set(errorLegible(falla).mensaje);
+      const legible = errorLegible(falla);
+      this.errorEditor.set(legible.mensaje);
+      this.toast.error(legible.mensaje);
     } finally {
       this.cerrandoPrecio.set(false);
     }

@@ -258,9 +258,11 @@ export async function excelListaNotas(
     // Formato de números
     row.getCell('subtotal').numFmt = '#,##0.00';
     row.getCell('kg_total').numFmt = '#,##0.000';
-    row.getCell('fecha').alignment = { horizontal: 'center' };
-    row.getCell('subtotal').alignment = { horizontal: 'right' };
-    row.getCell('kg_total').alignment = { horizontal: 'right' };
+
+    // Todas las celdas de datos centradas (Folio, Cliente, Fecha, Total, Estatus, Kg).
+    for (let c = 1; c <= 6; c++) {
+      row.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
+    }
   }
 
   // Filtro automático

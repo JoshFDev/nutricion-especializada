@@ -231,16 +231,16 @@ export async function excelListaNotas(
     { header: 'Kg', key: 'kg_total', width: 12 },
   ];
 
-  // Estilo de cabecera: solo negrita y alineacion; sin relleno azul solido
-  // que imprime como un bloque macizo y se extiende mas alla de la columna F.
-  hoja.getRow(1).font = { bold: true };
-  hoja.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
-  // Fondo muy suave solo en las celdas A1:F1 (las 6 columnas reales).
+  // Estilo de cabecera: azul del boton Excel (#1E40AF) solo en A1:F1,
+  // texto blanco centrado. No se pinta mas alla de la columna F.
   for (let c = 1; c <= 6; c++) {
-    hoja.getRow(1).getCell(c).fill = {
+    const cell = hoja.getRow(1).getCell(c);
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FFE8EDF5' }, // azul muy claro, legible en impresion
+      fgColor: { argb: 'FF1E40AF' },
     };
   }
 

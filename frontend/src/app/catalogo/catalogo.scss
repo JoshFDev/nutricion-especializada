@@ -254,19 +254,65 @@ button:hover:not(:disabled) {
   border-color: var(--acento);
 }
 
-button.primario,
-button.toggle-editor {
+button.primario {
   color: var(--sobre-acento);
   background: var(--acento);
   border-color: var(--acento);
   font-weight: 600;
 }
 
-button.primario:hover:not(:disabled),
-button.toggle-editor:hover:not(:disabled) {
+button.primario:hover:not(:disabled) {
   color: var(--sobre-acento);
   background: var(--acento-texto);
   border-color: var(--acento-texto);
+}
+
+/*
+ * Botón que despliega el editor ("Nueva Categoría" / "Nueva Especie").
+ * Igual que en productos: flex centrado, gap icono-texto, nowrap,
+ * y hover/active/focus con transform y sombra.
+ */
+button.toggle-editor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.06s, box-shadow 0.12s;
+}
+
+button.toggle-editor:hover:not(:disabled) {
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  color: var(--sobre-acento);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
+}
+
+button.toggle-editor:active:not(:disabled) {
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+button.toggle-editor:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.toggle-editor .icono {
+  font-size: 0.8125rem;
+  line-height: 1;
 }
 
 button:disabled {

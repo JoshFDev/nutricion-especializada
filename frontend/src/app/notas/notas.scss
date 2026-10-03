@@ -501,11 +501,66 @@ select,
   color: var(--texto-suave);
 }
 
-/* "Cambiar" no lleva caja: es una accion secundaria y un boton con borde al
-   lado del cliente y el nombre compiten por el espacio, que es lo que hace que
-   el nombre se corte. */
+/*
+ * "Cambiar" dentro del cliente ya elegido.
+ *
+ * Antes era un enlace pelado: `padding: 0`, subrayado y sin caja. Sobre el
+ * papel un enlace, pero esta pantalla se toca con el dedo y `padding: 0` deja
+ * un blanco de un texto de alto — facil de fallar. Y el hover solo pasaba de
+ * `--acento-texto` a `--acento`, dos azules casi iguales: en la practica no se
+ * notaba que habia algo pulsable ahi.
+ *
+ * Ahora es una pastilla DISCRETA: borde suave, sin el azul de la pastilla que
+ * hubo antes (esa competia con el boton de guardar, que es la unica accion de
+ * verdad de la nota), con icono de intercambio y un area de toque real. El
+ * nombre del cliente sigue teniendo prioridad: por eso `flex-shrink: 0` y el
+ * nombre es lo unico que se parte.
+ */
 .elegido .enlace {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
   flex-shrink: 0;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--texto-suave);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.elegido .enlace:hover:not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+.elegido .enlace:active:not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento-texto);
+  transform: translateY(1px);
+}
+
+/* Con el borde siempre presente el foco por teclado no se ve. */
+.elegido .enlace:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 1px;
+}
+
+.icono-cambiar {
+  font-size: 0.9375rem;
+  line-height: 1;
 }
 
 /* ---------------------------------------------------------- los resultados */
@@ -645,16 +700,47 @@ tbody tr:last-child td {
   font-size: 0.75rem;
 }
 
-/* El contador que queda bajo los bultos: cuantos hay, y cuantos quedan
+/*
+ * El input de bultos y el contador de disponibilidad, en la misma linea.
+ *
+ * El contador estaba como bloque dentro de la celda del input, asi que caia
+ * debajo y se partia en dos lineas: "12 disp." al lado del input y "quedan 3"
+ * debajo, y el renglon se leia como si el contador fuera un dato aparte del
+ * campo en vez de su disponibilidad. Con `display: flex` los dos van en fila y
+ * la columna no se estira mas de lo que necesita.
+ */
+.celda-bultos {
+  /* La columna es la unica con dos cosas en el renglon. Sin un ancho minimo la
+     tabla la reparte y el contador es lo primero que se parte. */
+  min-width: 12rem;
+}
+
+.bultos-celda {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* El input no cede su ancho: si no, el contador lo aplasta al repartirse la
+   celda y queda ilegible. */
+.bultos-celda input[type='number'] {
+  flex: 0 0 auto;
+}
+
+/* El contador que va al lado de los bultos: cuantos hay, y cuantos quedan
    despues de lo escrito. Es verde cuando alcanza y de peligro cuando se
    pide mas de lo que hay: "faltan N" es la senal de que hay que repartir
    la venta en dos envios o avisarle al cliente. */
 .disponibles {
-  display: block;
-  margin-top: 0.1875rem;
+  margin: 0;
   font-size: 0.6875rem;
+  line-height: 1.2;
   color: var(--exito-texto);
   font-variant-numeric: tabular-nums;
+  /* En una sola linea. Partido en dos, "quedan 3" caia bajo el input y se
+     confundia con otra cosa. */
+  white-space: nowrap;
 }
 
 .disponibles.falta {

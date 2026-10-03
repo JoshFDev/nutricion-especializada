@@ -95,7 +95,7 @@
                 (click)="cambiarCliente()"
                 [attr.aria-label]="'Cambiar el cliente ' + elegido.nombre"
               >
-                Cambiar
+                <span class="icono-cambiar" aria-hidden="true">↻</span> Cambiar
               </button>
             </div>
           } @else {
@@ -373,28 +373,41 @@
                     }
                   </span>
                 </td>
-                <td>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    inputmode="numeric"
-                    [value]="linea.cantidad_bultos"
-                    (input)="ponerCantidad(linea.uid, $any($event.target).value)"
-                    [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
-                  />
-                  @if (linea.disponible_bultos !== undefined) {
-                    <span class="disponibles" [class.falta]="(restanteDeLinea(linea) ?? 0) < 0">
-                      {{ linea.disponible_bultos }} disp.
-                      @if (restanteDeLinea(linea); as restante) {
-                        @if (restante < 0) {
-                          &middot; faltan {{ restante * -1 }}
-                        } @else {
-                          &middot; quedan {{ restante }}
+                <!--
+                  El input de bultos y el contador de disponibilidad van en la
+                  MISMA linea, uno al lado del otro.
+
+                  Antes el contador era un bloque (`.disponibles { display:
+                  block }`) dentro de la misma celda, asi que caia DEBAJO del
+                  input y se partia en dos lineas: con "12 disp." a la izquierda
+                  del input y "quedan 3" debajo, el renglon se leia como si el
+                  contador fuera otro renglon y no su disponibilidad. Ahora es
+                  una fila de dos, que es lo que es.
+                -->
+                <td class="celda-bultos">
+                  <span class="bultos-celda">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputmode="numeric"
+                      [value]="linea.cantidad_bultos"
+                      (input)="ponerCantidad(linea.uid, $any($event.target).value)"
+                      [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
+                    />
+                    @if (linea.disponible_bultos !== undefined) {
+                      <span class="disponibles" [class.falta]="(restanteDeLinea(linea) ?? 0) < 0">
+                        {{ linea.disponible_bultos }} disp.
+                        @if (restanteDeLinea(linea); as restante) {
+                          @if (restante < 0) {
+                            &middot; faltan {{ restante * -1 }}
+                          } @else {
+                            &middot; quedan {{ restante }}
+                          }
                         }
-                      }
-                    </span>
-                  }
+                      </span>
+                    }
+                  </span>
                 </td>
                 <td>
                   <input

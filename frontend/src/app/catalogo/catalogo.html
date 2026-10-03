@@ -15,21 +15,53 @@
   <div class="cabecera">
     <h1>{{ titulo() }}</h1>
 
-    @if (puedeCrear()) {
+    <div class="acciones-cabecera">
+      @if (puedeCrear()) {
+        <button
+          type="button"
+          class="toggle-editor"
+          (click)="alternarEditor()"
+          [attr.aria-expanded]="editorVisible()"
+          aria-controls="editor-form"
+        >
+          @if (editorVisible()) {
+            <span class="icono">▲</span> Ocultar formulario
+          } @else {
+            <span class="icono">＋</span> Nueva {{ singular() }}
+          }
+        </button>
+      }
       <button
         type="button"
-        class="toggle-editor"
-        (click)="alternarEditor()"
-        [attr.aria-expanded]="editorVisible()"
-        aria-controls="editor-form"
+        class="secundario"
+        (click)="exportarExcel()"
+        [disabled]="exportando()"
       >
-        @if (editorVisible()) {
-          <span class="icono">▲</span> Ocultar formulario
+        @if (exportando()) {
+          <span class="spinner" aria-hidden="true"></span> Exportando…
         } @else {
-          <span class="icono">＋</span> Nueva {{ singular() }}
+          <span class="icono">⬇</span> Exportar Excel
         }
       </button>
-    }
+    </div>
+  </div>
+
+  <!-- Buscador + paginación -->
+  <div class="filtros">
+    <div class="filtros-grupo">
+      <label for="buscador" class="sr-only">Buscar {{ singular() | lowercase }}</label>
+      <input
+        id="buscador"
+        type="search"
+        placeholder="Buscar {{ singular() | lowercase }}…"
+        [value]="buscador()"
+        (input)="buscar($any($event.target).value)"
+        (keydown.escape)="limpiarFiltros()"
+      />
+      @if (buscador()) {
+        <button type="button" class="chico" (click)="limpiarFiltros()" title="Limpiar búsqueda">✕</button>
+      }
+    </div>
   </div>
 
   <!-- Editor inline (alta/renombrado) - colapsable arriba de la tabla -->
@@ -82,7 +114,7 @@
     <p class="error" role="alert">{{ mensaje }}</p>
   }
 
-  @if (cargando() && filas().length === 0) {
+  @if (cargando() && filasVisibles().length === 0 && filas().length === 0) {
     <p class="cargando">Cargando...</p>
   } @else if (filas().length === 0) {
     <!--
@@ -103,6 +135,15 @@
         <p>Todavía no se ha creado ninguna.</p>
       }
     </div>
+  } @else if (filasVisibles().length === 0) {
+    <div class="vacio">
+      <div class="vacio-icono" aria-hidden="true">🔍</div>
+      <h2>Sin coincidencias</h2>
+      <p>No hay {{ titulo() | lowercase }} que contengan «{{ buscador() }}».</p>
+      <button type="button" class="primario" (click)="limpiarFiltros()">
+        <span class="icono">✕</span> Limpiar búsqueda
+      </button>
+    </div>
   } @else {
     <div class="tabla-wrapper">
       <table class="tabla">
@@ -113,7 +154,7 @@
           </tr>
         </thead>
         <tbody [@filasAnimation]>
-          @for (fila of filas(); track fila.id) {
+          @for (fila of filasVisibles(); track fila.id) {
             <tr>
               <td class="celda-nombre">{{ fila.nombre }}</td>
               <td class="acciones-celda">
@@ -139,7 +180,40 @@
     </div>
 
     <div class="paginacion">
-      <span class="cuenta">{{ filas().length }} {{ titulo() | lowercase }}</span>
+      <span class="cuenta">
+        {{ offset() + 1 }}–{{ min(offset() + limite(), total()) }} de {{ total() }} {{ titulo() | lowercase }}
+      </span>
+      <div class="paginas">
+        <button
+          type="button"
+          class="chico"
+          (click)="irPagina(paginaActual() - 1)"
+          [disabled]="paginaActual() === 1"
+          aria-label="Página anterior"
+        >
+          ‹ Anterior
+        </button>
+        @for (p of paginasVisibles(); track p) {
+          <button
+            type="button"
+            class="chico"
+            [class.activa]="p === paginaActual()"
+            (click)="irPagina(p)"
+            [attr.aria-current]="p === paginaActual() ? 'page' : null"
+          >
+            {{ p }}
+          </button>
+        }
+        <button
+          type="button"
+          class="chico"
+          (click)="irPagina(paginaActual() + 1)"
+          [disabled]="paginaActual() === paginasTotales()"
+          aria-label="Página siguiente"
+        >
+          Siguiente ›
+        </button>
+      </div>
     </div>
   }
 </section>

@@ -4,6 +4,11 @@ import type { FilaCatalogo } from './modelo.js';
 import { mapeoFila } from './modelo.js';
 import * as repo from './repositorio.js';
 import type { ClaveRecurso, DefinicionRecurso } from './repositorio.js';
+import ExcelJS from 'exceljs';
+
+/** Nombre del recurso en la URL (para nombres de archivo). */
+export const rutaDe = (clave: ClaveRecurso): string =>
+  clave === 'categorias' ? 'categorias-producto' : 'especies';
 
 /**
  * Reglas del catalogo.
@@ -120,4 +125,51 @@ export async function borrar(db: PoolClient, clave: ClaveRecurso, id: number): P
   }
 
   await db.query(`DELETE FROM ${def.tabla} WHERE id = $1`, [id]);
+}
+
+/**
+ * Exporta el catalogo a Excel.
+ *
+ * Solo dos columnas: ID y Nombre. El encabezado lleva el azul corporativo
+ * y letra blanca centrada, limitado a las dos columnas de datos para que
+ * no sangre al imprimir.
+ */
+export async function exportarExcel(
+  db: PoolClient,
+  clave: ClaveRecurso,
+): Promise<Buffer> {
+  const filas = await repo.listar(db, definicion(clave));
+  const datos = filas.map(mapeoFila);
+
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet(definicion(clave).plural);
+
+  libro.title = `Listado de ${definicion(clave).plural}`;
+  libro.creator = 'Nutricion Especializada';
+
+  hoja.columns = [
+    { header: 'ID', key: 'id', width: 8 },
+    { header: 'Nombre', key: 'nombre', width: 40 },
+  ];
+
+  // Cabecera: azul corporativo, blanco, centrado — solo A1:B1
+  for (let c = 1; c <= 2; c++) {
+    const cell = hoja.getRow(1).getCell(c);
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E40AF' },
+    };
+  }
+
+  for (const fila of datos) {
+    hoja.addRow({ id: fila.id, nombre: fila.nombre });
+  }
+
+  hoja.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 2 } };
+  hoja.views = [{ state: 'frozen', ySplit: 1 }];
+
+  return Buffer.from(await libro.xlsx.writeBuffer());
 }

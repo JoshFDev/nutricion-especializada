@@ -22,6 +22,14 @@ export const controladorCatalogo = (clave: ClaveRecurso) => {
     res.json(await servicio.listar(req.db, clave));
   };
 
+  const exportarExcel: Resp = async (req, res) => {
+    const bytes = await servicio.exportarExcel(req.db, clave);
+    res
+      .setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .setHeader('Content-Disposition', `attachment; filename="${servicio.rutaDe(clave)}.xlsx"`)
+      .send(bytes);
+  };
+
   const obtener: Resp = async (req, res) => {
     const { id } = parametros<{ id: number }>(req);
     res.json(await servicio.obtener(req.db, clave, id));
@@ -32,7 +40,7 @@ export const controladorCatalogo = (clave: ClaveRecurso) => {
     const fila = await servicio.crear(req.db, clave, nombre);
     res
       .status(201)
-      .location(`/api/${rutaDe(clave)}/${fila.id}`)
+      .location(`/api/${servicio.rutaDe(clave)}/${fila.id}`)
       .json(fila);
   };
 
@@ -48,9 +56,5 @@ export const controladorCatalogo = (clave: ClaveRecurso) => {
     res.status(204).end();
   };
 
-  return { listar, obtener, crear, renombrar, borrar };
+  return { listar, exportarExcel, obtener, crear, renombrar, borrar };
 };
-
-/** Como se llama el recurso en la URL. */
-const rutaDe = (clave: ClaveRecurso): string =>
-  clave === 'categorias' ? 'categorias-producto' : 'especies';

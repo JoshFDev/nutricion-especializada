@@ -241,6 +241,44 @@ export class PreciosApi {
       }),
     );
   }
+
+  /** Exporta los precios de lista (publicos) a Excel. */
+  async exportarExcelPublicos(criterios: Criterios): Promise<void> {
+    const params = paramsDe(criterios);
+    const resp = await firstValueFrom(
+      this.http.get(`${API}/precios/publicos/exportar`, {
+        params,
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+    const blob = resp.body!;
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'precios-lista.xlsx';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  /** Exporta los precios de cliente a Excel. */
+  async exportarExcelClientes(criterios: Criterios): Promise<void> {
+    const params = paramsDe(criterios);
+    const resp = await firstValueFrom(
+      this.http.get(`${API}/precios/clientes/exportar`, {
+        params,
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+    const blob = resp.body!;
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'precios-cliente.xlsx';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
 }
 
 /**

@@ -74,10 +74,24 @@ rutasPrecios.get(
 );
 
 rutasPrecios.get(
+  '/publicos/exportar',
+  requierePermiso('precios.ver'),
+  validarQuery(listarPreciosPublicosEsquema),
+  ctrl.exportarExcelPublicos,
+);
+
+rutasPrecios.get(
   '/clientes',
   requierePermiso('precios.ver'),
   validarQuery(listarPreciosClienteEsquema),
   ctrl.listarClientes,
+);
+
+rutasPrecios.get(
+  '/clientes/exportar',
+  requierePermiso('precios.ver'),
+  validarQuery(listarPreciosClienteEsquema),
+  ctrl.exportarExcelClientes,
 );
 
 rutasPrecios.post(

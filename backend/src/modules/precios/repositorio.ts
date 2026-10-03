@@ -194,6 +194,34 @@ export async function listarClientes(
   return { filas, total };
 }
 
+/** Versión sin paginación para exportar Excel: todos los resultados con los mismos filtros. */
+export async function listarTodosPublicos(
+  cliente: PoolClient,
+  q: ListarPreciosPublicos,
+): Promise<{ filas: FilaPrecioPublico[] }> {
+  const { valores, donde } = construirFiltroPublico(q);
+  const filas = await consultar<FilaPrecioPublico>(
+    cliente,
+    `SELECT ${COLUMNAS_PUBLICO} ${FROM_PUBLICO} ${donde} ${ORDEN_PUBLICO}`,
+    valores,
+  );
+  return { filas };
+}
+
+/** Versión sin paginación para exportar Excel: todos los resultados con los mismos filtros. */
+export async function listarTodosClientes(
+  cliente: PoolClient,
+  q: ListarPreciosCliente,
+): Promise<{ filas: FilaPrecioCliente[] }> {
+  const { valores, donde } = construirFiltroCliente(q);
+  const filas = await consultar<FilaPrecioCliente>(
+    cliente,
+    `SELECT ${COLUMNAS_CLIENTE} ${FROM_CLIENTE} ${donde} ${ORDEN_CLIENTE}`,
+    valores,
+  );
+  return { filas };
+}
+
 export async function obtenerPublicoPorId(
   cliente: PoolClient,
   id: number,

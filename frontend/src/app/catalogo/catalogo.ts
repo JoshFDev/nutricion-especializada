@@ -29,6 +29,7 @@ import {
   type ClaveRecurso,
   type FilaCatalogo,
 } from './catalogo-api';
+import { montoComoTexto } from '../nucleo/cifras';
 
 /**
  * La pantalla de Especies y Categorias.
@@ -90,8 +91,15 @@ export class Catalogo implements OnInit {
 
   // ------------------------------------------------------------- el listado
   readonly filas = signal<FilaCatalogo[]>([]);
+  readonly total = signal(0);
+  readonly limite = signal(50);
+  readonly offset = signal(0);
+  readonly buscador = signal('');
   readonly cargando = signal(false);
+  readonly exportando = signal(false);
   readonly error = signal<string | null>(null);
+
+  readonly hayMas = computed(() => this.filas().length < this.total());
 
   // -------------------------------------------------------------- el editor
   readonly editando = signal<FilaCatalogo | null>(null);
@@ -141,11 +149,82 @@ export class Catalogo implements OnInit {
     this.cargando.set(true);
     this.error.set(null);
     try {
-      this.filas.set(await this.api.listar(this.recurso()));
+      const datos = await this.api.listar(this.recurso());
+      this.total.set(datos.length);
+      this.offset.set(0);
+      this.aplicarFiltro();
     } catch (falla) {
       this.error.set(errorLegible(falla).mensaje);
     } finally {
       this.cargando.set(false);
+    }
+  }
+
+  /** Filtra localmente por nombre y pagina. */
+  private aplicarFiltro(): void {
+    const texto = this.buscador().trim().toLowerCase();
+    const filtradas = texto
+      ? this.filas().filter((f) => f.nombre.toLowerCase().includes(texto))
+      : this.filas();
+    this.total.set(filtradas.length);
+    const inicio = this.offset();
+    const fin = inicio + this.limite();
+    this.filasVisibles.set(filtradas.slice(inicio, fin));
+  }
+
+  /** Texto de busqueda (debounced en el input). */
+  buscar(texto: string): void {
+    this.buscador.set(texto);
+    this.offset.set(0);
+    this.aplicarFiltro();
+  }
+
+  /** Limpia busqueda y vuelve a la primera pagina. */
+  limpiarFiltros(): void {
+    this.buscador.set('');
+    this.offset.set(0);
+    this.aplicarFiltro();
+  }
+
+  /** Cambia de pagina. */
+  irPagina(pagina: number): void {
+    this.offset.set((pagina - 1) * this.limite());
+    this.aplicarFiltro();
+  }
+
+  /** Numero total de paginas. */
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+
+  /** Pagina actual (1-indexed). */
+  readonly paginaActual = computed(() => Math.floor(this.offset() / this.limite()) + 1);
+
+  /** Ventana de paginas visibles alrededor de la actual (max 5). */
+  readonly paginasVisibles = computed(() => {
+    const total = this.paginasTotales();
+    const actual = this.paginaActual();
+    const inicio = Math.max(1, actual - 2);
+    const fin = Math.min(total, inicio + 4);
+    return Array.from({ length: fin - inicio + 1 }, (_, i) => inicio + i);
+  });
+
+  /** Resto visible actual. */
+  readonly filasVisibles = signal<FilaCatalogo[]>([]);
+
+  /** Helper para Math.min en template. */
+  min = Math.min;
+
+  /** Exporta a Excel. */
+  async exportarExcel(): Promise<void> {
+    if (this.exportando()) return;
+    this.exportando.set(true);
+    try {
+      await this.api.exportarExcel(this.recurso());
+      this.toast.exito(`${this.titulo()} exportado a Excel`);
+    } catch (falla) {
+      const legible = errorLegible(falla);
+      this.toast.error(legible.mensaje);
+    } finally {
+      this.exportando.set(false);
     }
   }
 

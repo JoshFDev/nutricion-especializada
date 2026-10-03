@@ -78,6 +78,22 @@ const cerrarCliente: Resp = async (req, res) => {
   );
 };
 
+const exportarExcelPublicos: Resp = async (req, res) => {
+  const bytes = await servicio.exportarExcelPublicos(req.db, consulta<ListarPreciosPublicos>(req));
+  res
+    .setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .setHeader('Content-Disposition', 'attachment; filename="precios-lista.xlsx"')
+    .send(bytes);
+};
+
+const exportarExcelClientes: Resp = async (req, res) => {
+  const bytes = await servicio.exportarExcelClientes(req.db, consulta<ListarPreciosCliente>(req));
+  res
+    .setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .setHeader('Content-Disposition', 'attachment; filename="precios-cliente.xlsx"')
+    .send(bytes);
+};
+
 const efectivo: Resp = async (req, res) => {
   res.json(await servicio.efectivo(req.db, consulta<PrecioEfectivo>(req)));
 };
@@ -94,4 +110,6 @@ export const controladorPrecios = {
   cerrarPublico,
   cerrarCliente,
   efectivo,
+  exportarExcelPublicos,
+  exportarExcelClientes,
 };

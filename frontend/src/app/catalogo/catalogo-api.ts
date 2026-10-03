@@ -83,4 +83,24 @@ export class CatalogoApi {
   async eliminar(recurso: ClaveRecurso, id: number): Promise<void> {
     await firstValueFrom(this.http.delete(`${API}/${rutaDe(recurso)}/${id}`));
   }
+
+  /** Exporta el catalogo a Excel. */
+  async exportarExcel(recurso: ClaveRecurso): Promise<void> {
+    const resp = await firstValueFrom(
+      this.http.get(`${API}/${rutaDe(recurso)}/exportar`, {
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+    const blob = resp.body!;
+    const disposition = resp.headers.get('Content-Disposition');
+    const match = disposition?.match(/filename="?([^"]+)"?/);
+    const filename = match?.[1] || `${recurso}.xlsx`;
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
 }

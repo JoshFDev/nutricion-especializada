@@ -30,6 +30,7 @@ function construir(clave: ClaveRecurso, moduloPermiso: string): Router {
   router.use(requiereSesion);
 
   router.get('/', requierePermiso(`${moduloPermiso}.ver`), ctrl.listar);
+  router.get('/exportar', requierePermiso(`${moduloPermiso}.ver`), ctrl.exportarExcel);
   router.get(
     '/:id',
     requierePermiso(`${moduloPermiso}.ver`),

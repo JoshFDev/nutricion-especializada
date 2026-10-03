@@ -17,6 +17,7 @@ import type {
 } from './modelo.js';
 import { mapeoPrecioCliente, mapeoPrecioPublico } from './modelo.js';
 import * as repo from './repositorio.js';
+import ExcelJS from 'exceljs';
 
 /**
  * Reglas de precios.
@@ -414,4 +415,117 @@ async function revisarProducto(db: PoolClient, productoId: number): Promise<void
 async function revisarCliente(db: PoolClient, clienteId: number): Promise<void> {
   const existe = await repo.existeCliente(db, clienteId);
   if (!existe) throw new ErrorValidacion(`El cliente ${clienteId} no existe`);
+}
+
+/**
+ * Exporta los precios PUBLICOS a Excel.
+ *
+ * Incluye: Producto (codigo + nombre), Precio/kg, Vigente desde, Vigente hasta.
+ * Solo se usan los filtros que el usuario haya puesto (sin paginacion).
+ */
+export async function exportarExcelPublicos(
+  db: PoolClient,
+  q: ListarPreciosPublicos,
+): Promise<Buffer> {
+  const { filas } = await repo.listarTodosPublicos(db, q);
+  const datos = filas.map(mapeoPrecioPublico);
+
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet('Precios de lista');
+
+  libro.title = 'Listado de precios de lista';
+  libro.creator = 'Nutricion Especializada';
+
+  hoja.columns = [
+    { header: 'Producto', key: 'producto', width: 40 },
+    { header: 'Precio/kg', key: 'precio_kg', width: 14 },
+    { header: 'Vigente desde', key: 'vigente_desde', width: 14 },
+    { header: 'Vigente hasta', key: 'vigente_hasta', width: 14 },
+  ];
+
+  for (let c = 1; c <= 4; c++) {
+    const cell = hoja.getRow(1).getCell(c);
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E40AF' },
+    };
+  }
+
+  for (const p of datos) {
+    hoja.addRow({
+      producto: `${p.producto_codigo} ${p.producto_nombre}`,
+      precio_kg: p.precio_kg,
+      vigente_desde: p.vigente_desde,
+      vigente_hasta: p.vigente_hasta ?? '',
+    });
+  }
+
+  hoja.getColumn('precio_kg').numFmt = '#,##0.00';
+  hoja.getColumn('vigente_desde').alignment = { horizontal: 'center' };
+  hoja.getColumn('vigente_hasta').alignment = { horizontal: 'center' };
+
+  hoja.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 4 } };
+  hoja.views = [{ state: 'frozen', ySplit: 1 }];
+
+  return Buffer.from(await libro.xlsx.writeBuffer());
+}
+
+/**
+ * Exporta los precios DE CLIENTE a Excel.
+ *
+ * Incluye: Cliente, Producto (codigo + nombre), Precio/kg, Vigente desde, Vigente hasta.
+ */
+export async function exportarExcelClientes(
+  db: PoolClient,
+  q: ListarPreciosCliente,
+): Promise<Buffer> {
+  const { filas } = await repo.listarTodosClientes(db, q);
+  const datos = filas.map(mapeoPrecioCliente);
+
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet('Precios de cliente');
+
+  libro.title = 'Listado de precios de cliente';
+  libro.creator = 'Nutricion Especializada';
+
+  hoja.columns = [
+    { header: 'Cliente', key: 'cliente', width: 30 },
+    { header: 'Producto', key: 'producto', width: 40 },
+    { header: 'Precio/kg', key: 'precio_kg', width: 14 },
+    { header: 'Vigente desde', key: 'vigente_desde', width: 14 },
+    { header: 'Vigente hasta', key: 'vigente_hasta', width: 14 },
+  ];
+
+  for (let c = 1; c <= 5; c++) {
+    const cell = hoja.getRow(1).getCell(c);
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E40AF' },
+    };
+  }
+
+  for (const p of datos) {
+    hoja.addRow({
+      cliente: p.cliente_nombre,
+      producto: `${p.producto_codigo} ${p.producto_nombre}`,
+      precio_kg: p.precio_kg,
+      vigente_desde: p.vigente_desde,
+      vigente_hasta: p.vigente_hasta ?? '',
+    });
+  }
+
+  hoja.getColumn('precio_kg').numFmt = '#,##0.00';
+  hoja.getColumn('vigente_desde').alignment = { horizontal: 'center' };
+  hoja.getColumn('vigente_hasta').alignment = { horizontal: 'center' };
+
+  hoja.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 } };
+  hoja.views = [{ state: 'frozen', ySplit: 1 }];
+
+  return Buffer.from(await libro.xlsx.writeBuffer());
 }

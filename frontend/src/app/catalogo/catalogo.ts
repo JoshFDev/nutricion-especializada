@@ -8,6 +8,14 @@ import {
   viewChild,
   type OnInit,
 } from '@angular/core';
+import {
+  trigger,
+  transition,
+  style,
+  animate,
+  query,
+  stagger,
+} from '@angular/animations';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LowerCasePipe } from '@angular/common';
 import { errorLegible } from '../nucleo/api';
@@ -44,6 +52,23 @@ import {
   styleUrl: './catalogo.scss',
   imports: [ReactiveFormsModule, ConfirmModal, LowerCasePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    trigger('filasAnimation', [
+      transition('* => *', [
+        query(':enter', [
+          style({ opacity: 0, transform: 'translateY(-10px)' }),
+          stagger(50, [
+            animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
+          ]),
+        ], { optional: true }),
+        query(':leave', [
+          stagger(50, [
+            animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
+          ]),
+        ], { optional: true }),
+      ]),
+    ]),
+  ],
 })
 export class Catalogo implements OnInit {
   /** `'especies'` o `'categorias'`. Lo decide el wrapper de cada ruta. */

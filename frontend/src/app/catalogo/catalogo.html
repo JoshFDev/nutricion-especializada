@@ -112,7 +112,7 @@
             <th scope="col" class="acciones-celda">Acciones</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody [@filasAnimation]>
           @for (fila of filas(); track fila.id) {
             <tr>
               <td class="celda-nombre">{{ fila.nombre }}</td>

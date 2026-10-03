@@ -40,10 +40,10 @@ clientes y proveedores, y flujo de caja/bancos.
 - [x] Login + endpoint de permisos (usar `fn_tiene_permiso`)
 - [x] Generación de PDF de notas de remisión
 - [x] Frontend en Angular: sesion, login, cambio de contrasena, marco con
-      menu por permisos y los 14 modulos enrutados (las pantallas todavia
-      no estan)
-- [ ] Pantallas del negocio (el POS es el primero, con su lista de notas,
-      direcciones de entrega, devoluciones al editarlas y cancelaciones)
+      menu por permisos y los 14 modulos enrutados
+- [x] Pantallas del negocio: los 14 modulos tienen pantalla (ver
+      `frontend/README.md`). El POS es el mas grande: cliente, renglones,
+      direcciones de entrega, totales e impresion del PDF
 - [ ] Modulo de reportes (las vistas ya existen, no hay endpoints)
 - [ ] Deploy (base de datos + backend + frontend)
 
@@ -79,7 +79,8 @@ nutricion-especializada-pos/
 │   │   ├── 0008_notas_bloqueo_estado.sql
 │   │   ├── 0009_compras_motivo_cancelacion.sql
 │   │   ├── 0010_facturas_auditoria_permisos.sql
-│   │   └── 0011_direcciones_entrega.sql        # lista de direcciones del POS
+│   │   ├── 0011_direcciones_entrega.sql        # lista de direcciones del POS
+│   │   └── 0012_folios_formato_serie_activa.sql # serie del talonario puede ir vacia
 │   ├── seeds/
 │   │   └── seed_demo.sql                  # datos de prueba (no reales)
 │   └── tests/                             # pruebas en SQL puro
@@ -101,13 +102,15 @@ nutricion-especializada-pos/
 │   └── tests/
 │       ├── api.test.mjs                   # 841 pruebas contra la API real
 │       └── unit/                          # pruebas de esquemas y servicios
-└── frontend/                              # Angular 22: sesion, login y marco
+└── frontend/                              # Angular 22: sesion, login, marco
+│                                         #   y las 14 pantallas del negocio
 ```
 
-> `frontend/` ya tiene la base (sesión, login, marco con menú y rutas de los
-> 14 módulos) pero ninguna pantalla de negocio. Abriendo un módulo sale un
-> aviso de "pantalla pendiente": las rutas existen de verdad para que el menú
-> no ofrezca nada que dé 404.
+> El frontend ya tiene las catorce pantallas y ninguna con el aviso de
+> "pantalla pendiente". El menu y las rutas salen de la MISMA tabla
+> (`frontend/src/app/nucleo/menu.ts`), filtrada por permisos, asi que sigue
+> sin poder existir un enlace a una pantalla que no haya. Lo que cada
+> pantalla hace y lo que todavia no hace esta en `frontend/README.md`.
 
 ## Cómo levantar lo que ya existe
 
@@ -126,7 +129,7 @@ Con eso, desde `backend/`:
 
 ```bash
 pnpm install
-pnpm migrar        # aplica 0001..0010 en orden, cada una en su transacción
+pnpm migrar        # aplica 0001..0012 en orden, cada una en su transacción
 pnpm migrar:seed   # datos de demostración (opcional)
 ```
 
@@ -541,6 +544,7 @@ la pena decir por qué, porque es lo que más ruido da:
 cd frontend
 pnpm install
 pnpm start       # ng serve, en http://localhost:4200
+pnpm verificar   # formato + lint + build + pruebas, todo junto
 ```
 
 Ver `frontend/README.md` para lo que ya esta y lo que no. Lo importante de
@@ -565,3 +569,9 @@ produccion la peticion cae en el 404 del final. Para quitarlo: borrar
 - Los datos reales de clientes **nunca** se suben al repositorio
   (ver `.gitignore`); solo se usan datos de `seed_demo.sql` para
   pruebas.
+- En el frontend, dos pantallas que solo cambian recursos no se copian:
+  se envuelven. `/categorias` y `/especies` son el mismo componente
+  `Catalogo` con el recurso ya cerrado, igual que el backend construye
+  ambas rutas con la misma fabrica (`construir(clave)` en
+  `catalogo/rutas.ts`).
+- El frontend es zoneless, con signals y sin NgModules.

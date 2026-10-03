@@ -243,6 +243,44 @@ export class PreciosApi {
   }
 }
 
+/**
+ * Los query params de una vista, quitando lo que esa vista no acepta.
+ *
+ * Existe por el `cliente_id`. Los dos listados validan sus query params con
+ * `strictObject` (`backend/src/modules/precios/esquemas.ts`): el de precios de
+ * lista NO tiene `cliente_id` entre sus claves, asi que mandarselo no lo
+ * ignora, lo rechaza con un 400 y deja la pantalla en blanco. Antes se armaba
+ * un solo objeto de criterios con `cliente_id` puesto siempre que hubiera
+ * filtro de cliente, y como ese filtro no se quitaba al cambiar de pestana,
+ * filtrar por un cliente y pasar a "Precio de lista" rompia el listado.
+ *
+ * Aqui se decide por vista, que es donde se sabe que key manda cada una.
+ *
+ * El `offset` sale de la pagina y del limite, no se pasa: un numero de pagina
+ * guardado seria un `offset` guardado, que envejece en cuanto cambia el filtro.
+ */
+export function criteriosDe(
+  vista: 'publicos' | 'clientes',
+  filtros: {
+    productoId?: number;
+    clienteId?: number;
+    vigencia: Vigencia;
+    limite: number;
+    pagina: number;
+  },
+): Criterios {
+  const criterios: Criterios = {
+    vigencia: filtros.vigencia,
+    limite: filtros.limite,
+    offset: (filtros.pagina - 1) * filtros.limite,
+  };
+  if (filtros.productoId !== undefined) criterios.producto_id = filtros.productoId;
+  if (vista === 'clientes' && filtros.clienteId !== undefined) {
+    criterios.cliente_id = filtros.clienteId;
+  }
+  return criterios;
+}
+
 /** Los criterios que si van, y el vigencia siempre para que el backend decida. */
 function paramsDe(criterios: Criterios): Record<string, string | number> {
   const params: Record<string, string | number> = {

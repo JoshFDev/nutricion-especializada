@@ -61,7 +61,7 @@
   <!-- ------------------------------------------------- el editor inline -->
   @if (puedeEditar()) {
     <div class="editor-wrapper" [class.colapsado]="!editorAbierto()">
-      <form id="editor-form" class="editor-inline">
+      <form id="editor-form" class="editor-inline" (keydown)="onKeydown($event)">
         <div class="editor-cabecera">
           <h2>{{ editando() === null ? 'Nuevo precio' : 'Editar precio' }}</h2>
         </div>
@@ -220,18 +220,41 @@
 
         <div class="campos">
           <div class="campo">
-            <label for="cierre-fecha">Vigente hasta</label>
+            <!--
+              Se dice de cuando es el rango que se esta cerrando: sin esto hay
+              que ir a la tabla a buscarlo, y la fecha que se teclea se
+              comprueba contra ese inicio.
+            -->
+            <span class="rango-actual">
+              Vigente desde <strong>{{ fila.vigente_desde }}</strong> hasta ahora
+            </span>
+
+            <label for="cierre-fecha">Cerrar el día</label>
             <input
               id="cierre-fecha"
               type="date"
+              [min]="fila.vigente_desde"
               [attr.value]="hastaCierre()"
+              [attr.aria-invalid]="problemaCierre() !== null"
+              aria-describedby="cierre-ayuda"
               (change)="hastaCierre.set($any($event.target).value)"
             />
+            @if (problemaCierre(); as problema) {
+              <span class="ayuda" id="cierre-ayuda">{{ problema }}</span>
+            } @else {
+              <span class="ayuda-suave" id="cierre-ayuda">
+                El último día que se aplica es el que escribes.
+              </span>
+            }
+
+            <button type="button" class="chico hoy" (click)="hastaCierre.set(hoy())">
+              Cerrar hoy
+            </button>
           </div>
         </div>
 
         <div class="acciones">
-          <button type="button" class="primario" (click)="cerrar()" [disabled]="cerrandoPrecio()">
+          <button type="button" class="primario" (click)="cerrar()" [disabled]="!puedeCerrar()">
             {{ cerrandoPrecio() ? 'Cerrando…' : 'Cerrar precio' }}
           </button>
           <button type="button" (click)="cancelarCierre()">Cancelar</button>
@@ -241,20 +264,50 @@
   }
 
   <!-- ------------------------------------------------------------ filtros -->
-  <div class="filtros">
-    <span class="controles">
-      <label class="etiqueta-filtro" for="filtro-vigencia">Vigencia</label>
-      <select
-        id="filtro-vigencia"
-        class="filtro"
-        [attr.value]="vigencia()"
-        (change)="aVigencia($any($event.target).value)"
-      >
-        <option value="vigentes">Vigentes</option>
-        <option value="todos">Todos</option>
-        <option value="historicos">Historicos</option>
-      </select>
+  <div class="filtros" role="group" aria-label="Filtros del listado">
+    <!--
+      La vigencia va como botones y no como desplegable: son solo tres
+      opciones y son el filtro que se cambia a menudo. En un `select` hay
+      que abrirlo para ver que esta puesto, y el valor por defecto ("Vigentes")
+      es justo el que hace que las otras dos no se ven.
+    -->
+    <div class="vigencia" role="radiogroup" aria-label="Vigencia del precio">
+      <span class="etiqueta-filtro">Vigencia</span>
+      <div class="segmentos">
+        <button
+          type="button"
+          role="radio"
+          class="segmento"
+          [class.activo]="vigencia() === 'vigentes'"
+          [attr.aria-checked]="vigencia() === 'vigentes'"
+          (click)="aVigencia('vigentes')"
+        >
+          Vigentes
+        </button>
+        <button
+          type="button"
+          role="radio"
+          class="segmento"
+          [class.activo]="vigencia() === 'todos'"
+          [attr.aria-checked]="vigencia() === 'todos'"
+          (click)="aVigencia('todos')"
+        >
+          Todos
+        </button>
+        <button
+          type="button"
+          role="radio"
+          class="segmento"
+          [class.activo]="vigencia() === 'historicos'"
+          [attr.aria-checked]="vigencia() === 'historicos'"
+          (click)="aVigencia('historicos')"
+        >
+          Históricos
+        </button>
+      </div>
+    </div>
 
+    <span class="controles">
       @if (filtroProducto(); as filtro) {
         <button type="button" class="filtro-elegido" (click)="quitarFiltroProducto()">
           {{ filtro.codigo }} · {{ filtro.nombre }} <span class="cerrar-filtro">✕</span>
@@ -264,6 +317,7 @@
           class="filtro"
           type="search"
           autocomplete="off"
+          aria-label="Filtrar por producto"
           placeholder="Producto…"
           [value]="buscadorFiltroProducto.texto()"
           (input)="buscadorFiltroProducto.escribir($any($event.target).value)"
@@ -297,6 +351,7 @@
             class="filtro"
             type="search"
             autocomplete="off"
+            aria-label="Filtrar por cliente"
             placeholder="Cliente…"
             [value]="buscadorFiltroCliente.texto()"
             (input)="buscadorFiltroCliente.escribir($any($event.target).value)"
@@ -319,6 +374,12 @@
             <p class="aviso">{{ aviso }}</p>
           }
         }
+      }
+
+      @if (hayFiltros()) {
+        <button type="button" class="quitar-filtros" (click)="quitarFiltros()">
+          <span aria-hidden="true">✕</span> Quitar filtros
+        </button>
       }
     </span>
   </div>
@@ -353,64 +414,126 @@
       }
     </div>
   } @else {
-    <div class="tabla-wrapper">
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Producto</th>
-            @if (esClientes()) {
-              <th scope="col">Cliente</th>
-            }
-            <th scope="col" class="num">Precio/kg</th>
-            <th scope="col">Desde</th>
-            <th scope="col">Hasta</th>
-            <th scope="col" class="acciones-celda">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of filas(); track fila.id) {
-            <tr [class.historico]="fila.vigente_hasta !== null">
-              <td class="celda-producto">
-                <span class="codigo">{{ fila.producto_codigo }}</span>
-                {{ fila.producto_nombre }}
-              </td>
+    <div class="tabla-precios" [attr.aria-busy]="cargando()">
+      <div class="tabla-wrapper" [class.cargando]="cargando()">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Producto</th>
               @if (esClientes()) {
-                <td class="centro">{{ fila.cliente_nombre }}</td>
+                <th scope="col">Cliente</th>
               }
-              <td class="num">{{ montoComoTexto(fila.precio_kg) }}</td>
-              <td class="centro">{{ fila.vigente_desde }}</td>
-              <td class="centro">
-                @if (fila.vigente_hasta !== null) {
-                  {{ fila.vigente_hasta }}
-                } @else {
-                  <span class="badge-vigente">Vigente</span>
-                }
-              </td>
-              <td class="acciones-celda">
-                @if (puedeEditar()) {
-                  <div class="acciones-fila">
-                    <button type="button" class="chico" (click)="editar(fila)">Editar</button>
-                    <button type="button" class="chico cerrar" (click)="pedirCierre(fila)">
-                      Cerrar
-                    </button>
-                  </div>
-                }
-              </td>
+              <th scope="col" class="num">Precio/kg</th>
+              <th scope="col">Desde</th>
+              <th scope="col">Hasta</th>
+              <th scope="col" class="acciones-celda">Acciones</th>
             </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            @for (fila of filas(); track fila.id) {
+              <tr [class.historico]="fila.vigente_hasta !== null">
+                <td class="celda-producto">
+                  <span class="codigo">{{ fila.producto_codigo }}</span>
+                  {{ fila.producto_nombre }}
+                </td>
+                @if (esClientes()) {
+                  <td class="centro">{{ fila.cliente_nombre }}</td>
+                }
+                <td class="num">{{ montoComoTexto(fila.precio_kg) }}</td>
+                <td class="centro">{{ fila.vigente_desde }}</td>
+                <td class="centro">
+                  @if (fila.vigente_hasta !== null) {
+                    {{ fila.vigente_hasta }}
+                  } @else {
+                    <span class="badge-vigente">Vigente</span>
+                  }
+                </td>
+                <td class="acciones-celda">
+                  @if (puedeEditar()) {
+                    <div class="acciones-fila">
+                      <button type="button" class="chico" (click)="editar(fila)">Editar</button>
+                      <!--
+                        Cerrar y reabrir son las dos caras de lo mismo: solo se
+                        ofrece la que toca. Un precio ya cerrado no se vuelve a
+                        cerrar (el backend no lo pide y no cambia nada), y uno
+                        abierto no se reabre.
+                      -->
+                      @if (fila.vigente_hasta === null) {
+                        <button
+                          type="button"
+                          class="chico cerrar"
+                          [disabled]="cerrandoPrecio()"
+                          (click)="pedirCierre(fila)"
+                        >
+                          Cerrar
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="chico reabrir"
+                          [disabled]="cerrandoPrecio()"
+                          (click)="reabrir(fila)"
+                        >
+                          Reabrir
+                        </button>
+                      }
+                    </div>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
 
-    <div class="paginacion">
-      <button
-        type="button"
-        (click)="cargarMas()"
-        [disabled]="!hayMas() || buscandoMas()"
-      >
-        {{ buscandoMas() ? 'Buscando…' : 'Cargar más' }}
-      </button>
-      <span class="cuenta">{{ filas().length }} de {{ total() }} precios</span>
+      <!--
+        Paginacion de verdad, no un "cargar mas" que pegaba filas al final:
+        con 100 o mas precios eso era una tabla de tres pantallas, y para
+        llegar al precio de un producto del mes pasado habia que bajar y bajar.
+
+        El tamano tambien se elige, porque cada quien revisa distinto: el que
+        busca el precio de un producto lo quiere abierto, y el que revisa el
+        historico entero lo quiere de 100 en 100.
+      -->
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irAPagina(pagina() - 1)"
+        >
+          Anterior
+        </button>
+
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">&middot; página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irAPagina(pagina() + 1)"
+        >
+          Siguiente
+        </button>
+
+        <label class="oculto" for="tamano-pagina-precios">Precios por página</label>
+        <select
+          id="tamano-pagina-precios"
+          class="filtro tamano-pagina"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+          <option value="200">200 por página</option>
+        </select>
+      </div>
     </div>
   }
 </section>
+
+<app-confirm-modal />

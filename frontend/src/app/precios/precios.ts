@@ -1,11 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
 import { crearBuscador } from '../nucleo/buscador';
 import { montoComoTexto } from '../nucleo/cifras';
+import { ConfirmModal } from '../productos/confirm-modal';
 import {
   cuerpoDePrecio,
+  criteriosDe,
   hoyComoTexto,
   problemaDePrecio,
   problemaDeVigencia,
@@ -57,12 +59,15 @@ interface FilaPrecio {
   selector: 'app-precios',
   templateUrl: './precios.html',
   styleUrl: './precios.scss',
+  imports: [ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Precios {
   private readonly api = inject(PreciosApi);
   private readonly sesion = inject(Sesion);
   private readonly toast = inject(ToastService);
+
+  readonly confirmModal = viewChild.required(ConfirmModal);
 
   readonly puedeEditar = computed(() => this.sesion.puede('precios.editar'));
 
@@ -71,33 +76,60 @@ export class Precios {
 
   readonly filas = signal<FilaPrecio[]>([]);
   readonly total = signal(0);
-  readonly limite = 50;
+
+  /**
+   * Cuantos precios se ven por pagina, y la pagina que se esta viendo.
+   *
+   * Antes esto era un "cargar mas" que pegaba las siguientes al final de la
+   * tabla. Con 50, 100 o mas precios eso es una tabla de tres pantallas, y
+   * para llegar al precio de un producto del mes pasado habia que bajar y
+   * bajar. Con paginas la tabla tiene alto fijo: se sabe cuantas hay, se sabe
+   * en cual se esta, y se llega en un clic.
+   *
+   * La pagina se elige en SALTOS y se traduce a `offset` al pedir, porque un
+   * numero de pagina guardado seria un `offset` guardado, que se queda viejo
+   * en cuanto cambia el filtro.
+   */
+  readonly limite = signal(50);
+  readonly pagina = signal(1);
   readonly cargando = signal(false);
-  readonly buscandoMas = signal(false);
   readonly error = signal<string | null>(null);
+
+  /** Cuantas paginas hay en total, con el tamano de pagina elegido. */
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Que se ve en la barra: "1-50 de 340". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.total();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
 
   readonly vigencia = signal<Vigencia>('vigentes');
   readonly filtroProducto = signal<OpcionFiltro | null>(null);
   readonly filtroCliente = signal<OpcionFiltro | null>(null);
 
-  readonly hayMas = computed(() => this.filas().length < this.total());
-
-  /**
-   * Si el listado lleva filtros puestos.
-   *
-   * Distingue "no hay precios" de "el filtro se los ha llevado todos": en el
-   * primer caso lo que hace falta es crear uno, y en el segundo quitar el
-   * filtro. `total` no sirve para esto porque ya viene filtrado: con un
-   * filtro que no coincide da 0 igual que cuando la tabla esta vacia de
-   * verdad. `vigentes` es lo que se ve por defecto, asi que no cuenta como
-   * filtro.
-   */
-  readonly hayFiltros = computed(
-    () =>
-      this.vigencia() !== 'vigentes' ||
-      this.filtroProducto() !== null ||
-      this.filtroCliente() !== null,
-  );
+/**
+ * Si el listado lleva filtros puestos.
+ *
+ * Distingue "no hay precios" de "el filtro se los ha llevado todos": en el
+ * primer caso lo que hace falta es crear uno, y en el segundo quitar el
+ * filtro. `total` no sirve para esto porque ya viene filtrado: con un
+ * filtro que no coincide da 0 igual que cuando la tabla esta vacia de
+ * verdad. `vigentes` es lo que se ve por defecto, asi que no cuenta como
+ * filtro.
+ */
+readonly hayFiltros = computed(
+  () =>
+    this.vigencia() !== 'vigentes' ||
+    this.filtroProducto() !== null ||
+    this.filtroCliente() !== null,
+);
   readonly esClientes = computed(() => this.vista() === 'clientes');
 
   /** El listado se pide al entrar: sin esto la tabla sale en vacio. */
@@ -147,6 +179,34 @@ export class Precios {
   readonly hastaCierre = signal(hoyComoTexto());
   readonly cerrandoPrecio = signal(false);
 
+  /**
+   * Por que no se puede cerrar todavia, o null si la fecha sirve.
+   *
+   * El backend rechaza estas tres cosas (`servicio.ts`), pero solo DESPUES de
+   * haber enviado la peticion, y con un 400 que llega cuando el usuario ya
+   * esta esperando: "no se puede cerrar un precio con una fecha que ya
+   * paso", "la vigencia no puede terminar antes de empezar". Se comprueba
+   * aqui para que el boton se apague y el motivo se lea junto al campo.
+   *
+   * La fecha de cierre no puede estar en el pasado porque `hoy()` es el
+   * corte del servidor: un cierre con fecha de ayer dejaria el precio
+   * vigente hoy, que es justo lo contrario de cerrarlo.
+   */
+  readonly problemaCierre = computed(() => {
+    const fila = this.cerrando();
+    if (fila === null) return null;
+
+    const hasta = this.hastaCierre().trim();
+    if (hasta === '') return 'Elige hasta cuando aplica este precio.';
+    if (problemaDeVigencia(fila.vigente_desde, hasta) !== null) {
+      return `No puede cerrarse antes de que empiece (${fila.vigente_desde}).`;
+    }
+    if (hasta < hoyComoTexto()) return 'No se puede cerrar con una fecha que ya pasó.';
+    return null;
+  });
+
+  readonly puedeCerrar = computed(() => !this.cerrandoPrecio() && this.problemaCierre() === null);
+
   readonly puedeGuardar = computed(() => {
     if (!this.puedeEditar() || this.guardando()) return false;
     const editando = this.editando();
@@ -178,79 +238,157 @@ export class Precios {
 
   elegirFiltroProducto(opcion: OpcionFiltro): void {
     this.filtroProducto.set(opcion);
-    this.recargar();
+    void this.recargar();
   }
 
   elegirFiltroCliente(opcion: OpcionFiltro): void {
     this.filtroCliente.set(opcion);
-    this.recargar();
+    void this.recargar();
   }
 
   quitarFiltroProducto(): void {
     this.filtroProducto.set(null);
     this.buscadorFiltroProducto.limpiar();
-    this.recargar();
+    void this.recargar();
   }
 
   quitarFiltroCliente(): void {
     this.filtroCliente.set(null);
     this.buscadorFiltroCliente.limpiar();
-    this.recargar();
+    void this.recargar();
+  }
+
+  /**
+   * Quita todos los filtros de golpe.
+   *
+   * Sin esto hay que quitar la vigencia y cada busqueda por separado, y el
+   * filtro de cliente solo se quita si se esta en su pestana: puesto en la
+   * de precios de lista no hay ni chip que pulsarlo.
+   */
+  quitarFiltros(): void {
+    this.vigencia.set('vigentes');
+    this.filtroProducto.set(null);
+    this.filtroCliente.set(null);
+    this.buscadorFiltroProducto.limpiar();
+    this.buscadorFiltroCliente.limpiar();
+    void this.recargar();
   }
 
   aVigencia(valor: string): void {
     this.vigencia.set(valor as Vigencia);
-    this.recargar();
+    void this.recargar();
   }
 
+  /**
+   * Cambia de pestana.
+   *
+   * El filtro de cliente se quita al salir de su pestana porque el listado de
+   * precios de lista no lo acepta: lo rechaza con un 400. Antes se quedaba
+   * puesto a oscuras y la pantalla se caia al volver.
+   */
   cambiarVista(vista: 'publicos' | 'clientes'): void {
     this.vista.set(vista);
     this.cerrarEditor();
-    this.recargar();
+    if (vista === 'publicos') {
+      this.filtroCliente.set(null);
+      this.buscadorFiltroCliente.limpiar();
+    }
+    void this.recargar();
   }
 
   // ------------------------------------------------------------- el listado
-  async recargar(): Promise<void> {
+  /**
+   * Carga una pagina del listado.
+   *
+   * Es la UNICA forma de pedir precios. Antes habia dos (`recargar` y
+   * `cargarMas`) que pegaba filas al final de la tabla; con paginacion hay
+   * una sola, y `recargar()` es esta con la pagina 1.
+   *
+   * `total` se pone a 0 tambien cuando la llamada falla: si no, el contador
+   * de abajo se queda diciendo "0 de 340 precios" sobre una tabla vacia que
+   * fallo por red, que es peor que no decir nada.
+   */
+  private async cargarPagina(pagina: number): Promise<void> {
     this.cargando.set(true);
     this.error.set(null);
     try {
-      const [filas, total] = await this.paginar(0);
+      const [filas, total] = await this.pedir(pagina);
       this.filas.set(filas);
       this.total.set(total);
+      this.pagina.set(pagina);
     } catch (falla) {
       this.filas.set([]);
+      this.total.set(0);
       this.error.set(errorLegible(falla).mensaje);
     } finally {
       this.cargando.set(false);
     }
   }
 
-  async cargarMas(): Promise<void> {
-    if (!this.hayMas() || this.buscandoMas()) return;
-    this.buscandoMas.set(true);
-    try {
-      const [filas] = await this.paginar(this.filas().length);
-      this.filas.update((ya) => [...ya, ...filas]);
-    } catch (falla) {
-      this.error.set(errorLegible(falla).mensaje);
-    } finally {
-      this.buscandoMas.set(false);
-    }
+  /** Vuelve a la primera pagina, con el filtro que se tenga puesto. */
+  async recargar(): Promise<void> {
+    await this.cargarPagina(1);
   }
 
-  /** Pide una página del recurso que esté abierto y la mapea a la fila. */
-  private async paginar(offset: number): Promise<[FilaPrecio[], number]> {
-    const criterios = {
-      producto_id: this.filtroProducto()?.id,
-      cliente_id: this.filtroCliente()?.id,
+  /**
+   * Cambia de pagina y sube la tabla a la vista.
+   *
+   * El scroll se queda donde estaba, y como la tabla esta mas abajo el
+   * cambio de pagina no se ve: solo se mueve el numero de la barra, que puede
+   * estar fuera de pantalla.
+   */
+  async irAPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+    await this.cargarPagina(pagina);
+    this.subirTabla();
+  }
+
+  /**
+   * El tamano de pagina como texto, para el `[value]` del desplegable.
+   *
+   * En las plantillas de Angular no hay `String` global (si `JSON`, si
+   * `Math`, pero no `String`), y `[value]` necesita texto: con un numero, el
+   * `value` del `select` no coincide con ninguna opcion y sale vacio.
+   */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  /**
+   * Cambia cuantos precios se ven por pagina.
+   *
+   * Vuelve SIEMPRE a la pagina 1: quedarse en la 7 y pasar de 50 a 100 filas
+   * es quedarse en un `offset` que ya no quiere decir nada.
+   */
+  async aTamanoDePagina(valor: string): Promise<void> {
+    this.limite.set(Number(valor));
+    await this.cargarPagina(1);
+  }
+
+  private subirTabla(): void {
+    document.querySelector('.tabla-precios')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * Pide una pagina del recurso que este abierto y la mapea a la fila.
+   *
+   * Los criteria se arman con `criteriosDe`, que es quien sabe que key acepta
+   * cada listado: el de precios de lista rechaza `cliente_id` con un 400.
+   */
+  private async pedir(pagina: number): Promise<[FilaPrecio[], number]> {
+    const criterios = criteriosDe(this.vista(), {
+      productoId: this.filtroProducto()?.id,
+      clienteId: this.filtroCliente()?.id,
       vigencia: this.vigencia(),
-      limite: this.limite,
-      offset,
-    };
+      limite: this.limite(),
+      pagina,
+    });
+
     if (this.vista() === 'publicos') {
       const r = await this.api.listarPublicos(criterios);
       return [r.datos.map((p) => filaDePublico(p)), r.total];
     }
+
     const r = await this.api.listarClientes(criterios);
     return [r.datos.map((p) => filaDeCliente(p)), r.total];
   }
@@ -385,7 +523,7 @@ export class Precios {
 
   async cerrar(): Promise<void> {
     const fila = this.cerrando();
-    if (fila === null || this.cerrandoPrecio()) return;
+    if (fila === null || !this.puedeCerrar()) return;
     this.cerrandoPrecio.set(true);
     this.errorEditor.set(null);
     try {
@@ -396,7 +534,7 @@ export class Precios {
         await this.api.cerrarCliente(fila.id, hasta);
       }
       this.cerrando.set(null);
-      this.toast.exito('Precio cerrado con éxito');
+      this.toast.exito(`Precio de "${fila.producto_nombre}" cerrado con éxito`);
       await this.recargar();
     } catch (falla) {
       const legible = errorLegible(falla);
@@ -407,10 +545,70 @@ export class Precios {
     }
   }
 
+  /**
+   * Vuelve a aplicar un precio cerrado, quitándole la fecha de fin.
+   *
+   * Sin esto un precio cerrado por error se queda asi para siempre: no hay
+   * boton de borrar, y el unico camino era el editor, donde "cerrado por fin
+   * de vigencia" se vacia a mano. Aqui la fecha se manda en `null`, que en el
+   * PATCH significa "abrir de nuevo" y no "no lo mandes" (`precios-api.ts`).
+   *
+   * Si al reabrirlo choca con otro precio que ocupa esas fechas, el backend
+   * responde 409 `VIGENCIA_TRASLAPADA` y el mensaje dice que se cierre el
+   * anterior: es lo correcto, no se puede aplicar dos precios a la vez.
+   */
+  async reabrir(fila: FilaPrecio): Promise<void> {
+    if (this.cerrandoPrecio()) return;
+
+    const confirmado = await this.confirmModal().abrir({
+      titulo: 'Reabrir precio',
+      mensaje: `¿Volver a aplicar el precio de "${fila.producto_nombre}"? Se le quita la fecha de fin.`,
+      textoConfirmar: 'Reabrir',
+      variante: 'normal',
+    });
+    if (!confirmado) return;
+
+    this.cerrandoPrecio.set(true);
+    this.error.set(null);
+    try {
+      // El precio y el inicio se mandan tal cual: reabrir es quitarle solo
+      // la fecha de fin, no cambiar el monto ni cuando empezo a valer.
+      const cuerpo = cuerpoDePrecio(montoComoTexto(fila.precio_kg), fila.vigente_desde, '');
+      if (this.vista() === 'publicos') {
+        await this.api.actualizarPublico(fila.id, cuerpo);
+      } else {
+        await this.api.actualizarCliente(fila.id, cuerpo);
+      }
+      this.toast.exito(`Precio de "${fila.producto_nombre}" reabierto`);
+      await this.recargar();
+    } catch (falla) {
+      const legible = errorLegible(falla);
+      this.error.set(legible.mensaje);
+      this.toast.error(legible.mensaje);
+    } finally {
+      this.cerrandoPrecio.set(false);
+    }
+  }
+
+  /** Enter guarda el editor, Escape lo cierra. Como en productos. */
+  onKeydown(evento: KeyboardEvent): void {
+    if (evento.key === 'Escape' && this.editorAbierto()) {
+      evento.preventDefault();
+      this.cerrarEditor();
+      return;
+    }
+    if (evento.key === 'Enter' && this.editorAbierto() && this.puedeGuardar()) {
+      evento.preventDefault();
+      void this.guardar();
+    }
+  }
+
   // --------------------------------------------------------------- atajos
   montoComoTexto = montoComoTexto;
   problemaDePrecio = problemaDePrecio;
   problemaDeVigencia = problemaDeVigencia;
+  /** "Hoy", para el atajo de cerrar y para el valor por defecto. */
+  hoy = hoyComoTexto;
 }
 
 function filaDePublico(p: PrecioPublico): FilaPrecio {

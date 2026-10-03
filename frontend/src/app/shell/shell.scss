@@ -230,7 +230,16 @@
 }
 
 .lateral {
-  width: 15.5rem;
+  /*
+   * 13rem y no mas: la etiqueta mas larga del menu es "Notas de remision" (y
+   * "Usuarios y roles"), que a 0.8125rem ocupa del orden de 105px. Con el
+   * lateral en 15.5rem sobraban unas 90px de aire a la derecha de CADA
+   * boton, y como el renglon es una barra de ancho completo, ese aire se veia
+   * como un boton inflado con la palabra colgando a la izquierda. A 13rem
+   * todavia quedan ~35px de holgura para la etiqueta mas larga, asi que
+   * ninguna sale con puntos suspensivos.
+   */
+  width: 13rem;
   flex: 0 0 auto;
   padding: 0.875rem 0.5rem 2rem;
   background: var(--superficie);
@@ -454,9 +463,19 @@
       }
     }
 
-    /* Texto del menu */
+    /*
+     * Texto del menu.
+     *
+     * `flex: 0 1 auto` y no `flex: 1`: el texto toma lo que necesita en vez de
+     * estirarse hasta el borde del boton. Estirado no cambiaba la posicion de
+     * la palabra (esa se dibuja a la izquierda igual), solo hacia que el
+     * renglon se llenara de espacio vacio a la derecha. Lo que si hace falta es
+     * que pueda ENCOGER, y de ahi el `flex-shrink: 1` con `min-width: 0`: sin
+     * eso una etiqueta larga empujaria al icono y al borde en vez de salirse
+     * con puntos suspensivos.
+     */
     .menu-texto {
-      flex: 1;
+      flex: 0 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -741,7 +760,9 @@ a:hover .menu-icon,
     bottom: 0;
     left: 0;
     z-index: 20;
-    width: 15rem;
+    /* El mismo 13rem del lateral de escritorio, por la misma razon: el ancho
+       lo fija la etiqueta mas larga, no el espacio que sobre. */
+    width: 13rem;
     transform: translateX(-100%);
     transition: transform 0.2s ease-out;
 

@@ -231,15 +231,18 @@ export async function excelListaNotas(
     { header: 'Kg', key: 'kg_total', width: 12 },
   ];
 
-  // Estilo de cabecera
+  // Estilo de cabecera: solo negrita y alineacion; sin relleno azul solido
+  // que imprime como un bloque macizo y se extiende mas alla de la columna F.
   hoja.getRow(1).font = { bold: true };
-  hoja.getRow(1).fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF1E3A8A' },
-  };
-  hoja.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   hoja.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+  // Fondo muy suave solo en las celdas A1:F1 (las 6 columnas reales).
+  for (let c = 1; c <= 6; c++) {
+    hoja.getRow(1).getCell(c).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE8EDF5' }, // azul muy claro, legible en impresion
+    };
+  }
 
   // Datos
   for (const nota of notas) {

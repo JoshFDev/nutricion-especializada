@@ -303,15 +303,23 @@ export function criteriosDe(
     productoId?: number;
     clienteId?: number;
     vigencia: Vigencia;
-    limite: number;
-    pagina: number;
+    /**
+     * Opcionales a proposito: el listado los necesita, el export no.
+     *
+     * Sin ellos no se manda `limite` ni `offset` y el backend exporta todo
+     * lo que encaja en el filtro (`listarTodosPublicos`, que quita la
+     * paginacion). Un Excel con los 50 de la pagina parece completo y no
+     * lo esta, que es peor que no exportar.
+     */
+    limite?: number;
+    pagina?: number;
   },
 ): Criterios {
-  const criterios: Criterios = {
-    vigencia: filtros.vigencia,
-    limite: filtros.limite,
-    offset: (filtros.pagina - 1) * filtros.limite,
-  };
+  const criterios: Criterios = { vigencia: filtros.vigencia };
+  if (filtros.limite !== undefined) criterios.limite = filtros.limite;
+  if (filtros.limite !== undefined && filtros.pagina !== undefined) {
+    criterios.offset = (filtros.pagina - 1) * filtros.limite;
+  }
   if (filtros.productoId !== undefined) criterios.producto_id = filtros.productoId;
   if (vista === 'clientes' && filtros.clienteId !== undefined) {
     criterios.cliente_id = filtros.clienteId;

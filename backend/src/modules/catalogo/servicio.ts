@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import { Conflicto, NoEncontrado } from '../../core/errores.js';
-import type { FilaCatalogo } from './modelo.js';
-import { mapeoFila } from './modelo.js';
+import type { FilaCatalogo, FilaCatalogoConUsos } from './modelo.js';
+import { mapeoFila, mapeoFilaConUsos } from './modelo.js';
 import * as repo from './repositorio.js';
 import type { ClaveRecurso, DefinicionRecurso } from './repositorio.js';
 import ExcelJS from 'exceljs';
@@ -38,13 +38,18 @@ const definicion = (clave: ClaveRecurso): DefinicionRecurso => repo.RECURSOS[cla
  * Estas tablas son chicas y podrian devolver un arreglo pelado, pero
  * entonces el frontend necesita un componente de lista aparte solo para
  * el catalogo. Uniformar la forma sale mas barato que mantener dos.
+ *
+ * A diferencia de `obtener`/`crear`/`renombrar`, aqui cada fila trae
+ * `usos`: cuantos productos (y clientes, en el caso de las especies) la
+ * apuntan. Es lo que permite el filtro "En uso / Sin uso" de la pantalla,
+ * y de paso responde antes de tener que llega al 409 del borrado.
  */
 export async function listar(
   db: PoolClient,
   clave: ClaveRecurso,
-): Promise<{ datos: FilaCatalogo[]; total: number }> {
+): Promise<{ datos: FilaCatalogoConUsos[]; total: number }> {
   const filas = await repo.listar(db, definicion(clave));
-  const datos = filas.map(mapeoFila);
+  const datos = filas.map(mapeoFilaConUsos);
   return { datos, total: datos.length };
 }
 

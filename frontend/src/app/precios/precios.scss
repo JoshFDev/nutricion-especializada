@@ -1,42 +1,27 @@
 /*
  * La pantalla de precios.
  *
- * Comparte el diseño con productos: cabecera con la acción principal a la
- * derecha, editor inline colapsable arriba de la tabla (el listado no
- * desaparece) y tabla con wrapper para las esquinas redondeadas.
+ * El diseño —cabecera, botones, barra de filtros, tabla, estado vacío,
+ * paginación y animaciones— sale de `nucleo/pantallas.scss`, el MISMO
+ * partial que usan productos, categorías y especies.
  *
- * Lo propio de aquí son las dos pestañas, los filtros con selectores y el
- * editor con buscadores, mas la vista de cierre en vez de una de borrado.
+ * Lo que queda aquí es lo que NO es igual en ninguna otra pantalla: las
+ * dos pestañas, la vigencia como botones de segmento, los desplegables de
+ * búsqueda de producto y cliente, y el editor con su rejilla y el cierre.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--texto);
-}
+/* ------------------------------------------------------------- las pestañas */
 
-h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-/* ------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-/* Las pestañas van a la izquierda y la acción principal a la derecha. */
+/*
+ * Las pestañas van a la izquierda y la acción principal a la derecha, en la
+ * misma cabecera que en las otras pantallas.
+ */
 .pestanas {
   display: flex;
   gap: 0.375rem;
@@ -44,53 +29,33 @@ h2 {
 
 .pestana {
   padding: 0.5rem 0.875rem;
-  font: inherit;
   font-weight: 500;
   color: var(--texto-suave);
   background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.pestana:hover:not(.activa) {
-  color: var(--acento-texto);
-  background: var(--acento-suave);
-  border-color: var(--acento);
 }
 
 .pestana.activa {
   color: var(--sobre-acento);
   background: var(--acento);
   border-color: var(--acento);
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------ el editor inline */
 
-.editor-wrapper {
-  margin-bottom: 0.75rem;
-}
-
-.editor-wrapper.colapsado .editor-inline {
-  display: none;
-}
-
 .editor-inline {
-  padding: 1rem;
-  background: var(--superficie);
-  border: 1px solid var(--acento);
-  border-radius: 6px;
-  box-shadow: 0 0 0 2px var(--acento-suave);
+  position: relative;
 }
 
-.editor-cabecera {
-  margin-bottom: 0.75rem;
-}
-
+/*
+ * Rejilla que se adapta sola: producto y cliente ocupan la fila entera y los
+ * tres campos cortos se reparten lo que queda. Con `repeat(5, 1fr)` fijo de
+ * productos, aquí el precio y las dos fechas quedaban en una sexta parte y
+ * las fechas, que son más anchas que un número, se veían cortadas.
+ */
 .campos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: 0.875rem 1rem;
 }
 
@@ -98,10 +63,12 @@ h2 {
   grid-column: 1 / -1;
 }
 
-/* El buscador se abre pegado a SU campo, y eso lo da el `position` del
-   contenedor. Sin el, el `top: 100%` de `.resultados` se mide contra la
-   pagina entera y la lista sale por debajo del borde de la pantalla, donde
-   no se ve: el buscador parece no existir. */
+/*
+ * El buscador se abre pegado a SU campo, y eso lo da el `position` del
+ * contenedor. Sin el, el `top: 100%` de `.resultados` se mide contra la
+ * pagina entera y la lista sale por debajo del borde de la pantalla, donde
+ * no se ve: el buscador parece no existir.
+ */
 .campo {
   position: relative;
 }
@@ -109,19 +76,21 @@ h2 {
 .campo label {
   display: block;
   margin-bottom: 0.25rem;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--texto-suave);
 }
 
 .campo input:not([type='checkbox']),
 .campo select {
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .campo input:focus,
@@ -133,7 +102,8 @@ h2 {
 
 /* Lo ya elegido: no es un campo editable, asi que se lee como etiqueta. */
 .elegido {
-  padding: 0.5rem 0.625rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
   color: var(--texto);
   background: var(--fondo);
   border: 1px solid var(--borde);
@@ -142,30 +112,24 @@ h2 {
 
 .campo .cambiar {
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
   text-align: left;
+  justify-content: flex-start;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  cursor: pointer;
 }
 
-.campo .cambiar:hover:not(:disabled) {
-  color: var(--acento-texto);
-  background: var(--acento-suave);
-  border-color: var(--acento);
-}
-
+/* Lo que no es un error: solo explica el modo de uso del campo, asi que no
+   debe verse en rojo como si el usuario hubiera hecho algo mal. */
 .ayuda {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   color: var(--peligro-texto);
 }
 
-/* Lo que no es un error: solo explica el modo de uso del campo, asi que no
-   debe verse en rojo como si el usuario hubiera hecho algo mal. */
 .ayuda-suave {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
@@ -201,40 +165,30 @@ h2 {
   margin-top: 0.5rem;
 }
 
-.acciones {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--borde);
-  justify-content: flex-end;
-}
-
 /* ------------------------------------------------------------- los filtros */
 
-/* Los filtros van en una fila con borde, como en productos: son un bloque,
-   no un par de campos sueltos pegados al titulo. */
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem 0.625rem;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-/* La vigencia como botones: son tres opciones y es el filtro que mas se
-   cambia. Los activos van en azul, como la pestana, para que se vea de un
-   vistazo por donde se esta mirando. */
+/*
+ * El filtro de producto y de cliente NO son desplegables, son buscadores con
+ * desplegable: hay decenas de productos y cientos de clientes, y una lista
+ * que hay que recorrer para encontrar uno es peor que escribir las tres
+ * letras del codigo. Por eso viven aparte, con su propio bloque.
+ */
 .vigencia {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
+.etiqueta-filtro {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--texto-suave);
+}
+
+/* La vigencia como botones y no como desplegable: son solo tres opciones y es
+   el filtro que mas se cambia. En un `select` hay que abrirlo para ver que
+   esta puesto, y el valor por defecto ("Vigentes") es justo el que hace que
+   las otras dos no se ven. */
 .segmentos {
   display: inline-flex;
   padding: 2px;
@@ -252,11 +206,6 @@ h2 {
   border-radius: 4px;
 }
 
-.segmento:hover:not(.activo) {
-  color: var(--acento-texto);
-  background: var(--acento-suave);
-}
-
 .segmento.activo {
   color: var(--sobre-acento);
   background: var(--acento);
@@ -271,70 +220,26 @@ h2 {
   gap: 0.5rem;
 }
 
-.etiqueta-filtro {
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-.filtro {
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
+/* Los buscadores de filtro, con el mismo alto que el resto de la barra y
+   sin estirarse: el `flex: 1` de la barra es para el buscador principal, y
+   aquí cada uno ocupa lo que necesita su texto. */
+.controles .filtro {
+  min-width: 11rem;
 }
 
 .controles input[type='search'] {
-  min-width: 12rem;
+  flex: 0 0 auto;
+  min-width: 11rem;
 }
 
-.filtro:focus {
-  outline: none;
-  border-color: var(--acento);
-  box-shadow: 0 0 0 2px var(--acento-suave);
-}
+/* ---------------------------------------------------------- los resultados */
 
-/* El filtro puesto se lee como etiqueta: se ve que es un chip y que se
-   quita con la ✕, no parece un campo de busqueda esperando texto. */
-.filtro-elegido {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--acento-texto);
-  background: var(--acento-suave);
-  border: 1px solid var(--acento);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.cerrar-filtro {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-
-/* Quitar todo de golpe. Antes habia que pulsar la ✕ de cada filtro, y el de
-   cliente solo se quitaba estando en su pestana. */
-.quitar-filtros {
-  padding: 0.375rem 0.625rem;
-  font-size: 0.8125rem;
-  color: var(--texto-suave);
-  background: transparent;
-  border: 1px dashed var(--borde);
-  cursor: pointer;
-}
-
-.quitar-filtros:hover:not(:disabled) {
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border-color: var(--peligro);
-  border-style: solid;
-}
-
-/* ------------------------------------------------------- los resultados */
-
+/*
+ * La lista de coincidencias se abre pegada a SU campo. Por eso `.controles`
+ * y `.campo` llevan `position: relative`: sin eso el `top: 100%` se mide
+ * contra la pagina entera y la lista sale por debajo del borde de la
+ * pantalla.
+ */
 .resultados,
 .aviso {
   position: absolute;
@@ -369,20 +274,12 @@ h2 {
 }
 
 .resultados button {
-  display: block;
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  text-align: left;
+  justify-content: flex-start;
+  font-size: 0.875rem;
   color: var(--texto);
   background: transparent;
   border: 0;
-  cursor: pointer;
-}
-
-.resultados button:hover {
-  color: var(--acento-texto);
-  background: var(--acento-suave);
 }
 
 /* --------------------------------------------------------------- la tabla */
@@ -395,14 +292,6 @@ h2 {
   scroll-margin-top: 1rem;
 }
 
-.tabla-wrapper {
-  overflow-x: auto;
-  margin-bottom: 0.5rem;
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  background: var(--superficie);
-}
-
 /* Al cambiar de pagina la tabla se atenua en vez de desaparecer: si no, la
    pantalla vacia durante la llamada hace dudar de si se aplico el filtro. */
 .tabla-wrapper.cargando {
@@ -410,53 +299,10 @@ h2 {
   pointer-events: none;
 }
 
-.tabla {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-th,
-td {
-  padding: 0.625rem 0.75rem;
-  text-align: center;
-  vertical-align: middle;
-  border-bottom: 1px solid var(--borde);
-}
-
-th {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--texto-suave);
-  background: var(--fondo);
-}
-
-tbody tr {
-  transition: background-color 0.12s;
-}
-
-tbody tr:hover {
-  background: var(--fondo);
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
 /* Producto y cliente identifican la fila: a la izquierda, no centrados. */
 .celda-producto {
   text-align: left;
   font-weight: 500;
-}
-
-.centro {
-  text-align: center;
-}
-
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
 }
 
 /* Un precio historico sigue en la tabla pero ya no aplica: se apaga para
@@ -466,188 +312,8 @@ tbody tr:last-child td {
 }
 
 .codigo {
+  margin-right: 0.25rem;
   color: var(--texto-tenue);
   font-family: var(--fuente-mono, monospace);
-}
-
-.badge-vigente {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--exito-suave);
-  color: var(--exito-texto);
-  border: 1px solid var(--exito-texto);
-}
-
-.acciones-celda {
-  white-space: nowrap;
-  text-align: right;
-}
-
-.acciones-fila {
-  display: inline-flex;
-  gap: 0.375rem;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-/* La paginacion va PEGADA abajo de la tabla, no con aire: es el final de la
-   lista, no un bloque mas. */
-.paginacion {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin: 0.625rem 0 1.25rem;
-}
-
-.contador {
-  margin-right: auto;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-  font-variant-numeric: tabular-nums;
-}
-
-.contador .tenue {
-  color: var(--texto-tenue);
-  opacity: 0.8;
-}
-
-.tamano-pagina {
-  font-size: 0.8125rem;
-  color: var(--texto-suave);
-}
-
-/* --------------------------------------------------------- el estado vacio */
-
-.vacio {
-  padding: 2.5rem 1.5rem;
-  text-align: center;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-
-.vacio-icono {
-  font-size: 2.25rem;
-  line-height: 1;
-  margin-bottom: 0.75rem;
-}
-
-.vacio h2 {
-  margin-bottom: 0.25rem;
-}
-
-.vacio p {
-  margin: 0 0 1rem;
-  color: var(--texto-suave);
-  font-size: 0.875rem;
-}
-
-/* "Buscando precios…" no lleva tarjeta: es una espera, no un hueco, y con
-   el alto del estado vacio la pagina saltaria al cambiar de filtro. */
-.cargando {
-  margin: 0.5rem 0 1rem;
-  color: var(--texto-tenue);
-  text-align: center;
-}
-
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
-}
-
-/* ------------------------------------------------------------- los botones */
-
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-button:hover:not(:disabled) {
-  color: var(--acento-texto);
-  background: var(--acento-suave);
-  border-color: var(--acento);
-}
-
-button.primario,
-button.toggle-editor {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-  font-weight: 600;
-}
-
-button.primario:hover:not(:disabled),
-button.toggle-editor:hover:not(:disabled) {
-  color: var(--sobre-acento);
-  background: var(--acento-texto);
-  border-color: var(--acento-texto);
-}
-
-button:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
-}
-
-button.chico {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8125rem;
-}
-
-/* Cerrar un precio es una accion destructiva (deja de aplicarse) aunque no
-   borre nada: se pinta en el tono de aviso para que no se pulse por inercia
-   al lado de "Editar". */
-button.chico.cerrar {
-  color: var(--advertencia-texto);
-  border-color: var(--advertencia);
-}
-
-button.chico.cerrar:hover:not(:disabled) {
-  color: var(--texto);
-  background: var(--advertencia-suave);
-  border-color: var(--advertencia-texto);
-}
-
-/* Reabrir es lo contrario: devuelve a aplicar el precio, asi que va en el
-   verde de "exito" para que no se lea como otra cosa objectionable. */
-button.chico.reabrir {
-  color: var(--exito-texto);
-  border-color: var(--exito-texto);
-}
-
-button.chico.reabrir:hover:not(:disabled) {
-  color: var(--sobre-acento);
-  background: var(--exito-texto);
-  border-color: var(--exito-texto);
-}
-
-.icono {
-  font-size: 0.875em;
-}
-
-/* Etiqueta solo para el lector de pantalla: el desplegable del tamano de
-   pagina se explica solo ("50 por pagina"), pero sin etiqueta no tiene nombre
-   accesible. */
-.oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+  font-weight: 400;
 }

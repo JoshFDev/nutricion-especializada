@@ -33,10 +33,18 @@ export interface Producto {
   actualizado_en: string;
 }
 
-/** `catalogo/modelo.ts` -> `Especie` y `CategoriaProducto`, misma forma. */
+/**
+ * `catalogo/modelo.ts` -> `Especie` y `CategoriaProducto`, misma forma.
+ *
+ * `usos` lo trae solo el listado del catalogo (`FilaCatalogoConUsos`): son
+ * las filas que lo apuntan. Aqui no se usa —el desplegable del editor solo
+ * necesita el nombre— pero viene en la misma respuesta y asi el tipo de las
+ * dos pantallas no se contradice.
+ */
 export interface Catalogo {
   id: number;
   nombre: string;
+  usos?: number;
 }
 
 /** La envoltura del listado de productos (`productos/servicio.ts`). */

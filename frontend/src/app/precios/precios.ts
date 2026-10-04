@@ -1,4 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  trigger,
+  transition,
+  style,
+  animate,
+  query,
+  stagger,
+} from '@angular/animations';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
@@ -61,6 +69,26 @@ interface FilaPrecio {
   styleUrl: './precios.scss',
   imports: [ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    // Las mismas filas de entrada que en productos y en el catalogo. Antes
+    // esta tabla salia de golpe al cambiar de pagina, y al pasar de esta
+    // pantalla a las otras dos se notaba el salto de una a otra.
+    trigger('filasAnimation', [
+      transition('* => *', [
+        query(':enter', [
+          style({ opacity: 0, transform: 'translateY(-10px)' }),
+          stagger(50, [
+            animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
+          ]),
+        ], { optional: true }),
+        query(':leave', [
+          stagger(50, [
+            animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
+          ]),
+        ], { optional: true }),
+      ]),
+    ]),
+  ],
 })
 export class Precios {
   private readonly api = inject(PreciosApi);
@@ -93,6 +121,7 @@ export class Precios {
   readonly limite = signal(50);
   readonly pagina = signal(1);
   readonly cargando = signal(false);
+  readonly exportando = signal(false);
   readonly error = signal<string | null>(null);
 
   /** Cuantas paginas hay en total, con el tamano de pagina elegido. */
@@ -604,6 +633,41 @@ readonly hayFiltros = computed(
   }
 
   // --------------------------------------------------------------- atajos
+  /**
+   * Exporta a Excel lo que se esta viendo.
+   *
+   * Se exporta con los MISMOS criterios que hay en pantalla, sin el
+   * `limite`/`pagina`: el archivo lleva todos los precios que encajan en el
+   * filtro, no los 50 de la pagina que casualmente se esta mirando. Un
+   * Excel de una pagina es peor que no tener Excel, porque parece
+   * completo y no lo esta.
+   */
+  async exportarExcel(): Promise<void> {
+    if (this.exportando() || !this.puedeEditar()) return;
+
+    this.exportando.set(true);
+    this.error.set(null);
+    try {
+      const criterios = criteriosDe(this.vista(), {
+        productoId: this.filtroProducto()?.id,
+        clienteId: this.filtroCliente()?.id,
+        vigencia: this.vigencia(),
+      });
+      if (this.vista() === 'publicos') {
+        await this.api.exportarExcelPublicos(criterios);
+      } else {
+        await this.api.exportarExcelClientes(criterios);
+      }
+      this.toast.exito(`${this.vista() === 'publicos' ? 'Precios de lista' : 'Precios de cliente'} exportados`);
+    } catch (falla) {
+      const legible = errorLegible(falla);
+      this.error.set(legible.mensaje);
+      this.toast.error(legible.mensaje);
+    } finally {
+      this.exportando.set(false);
+    }
+  }
+
   montoComoTexto = montoComoTexto;
   problemaDePrecio = problemaDePrecio;
   problemaDeVigencia = problemaDeVigencia;

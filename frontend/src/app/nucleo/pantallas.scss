@@ -1,0 +1,633 @@
+/*
+ * El diseño de las pantallas de listado, en un solo lugar.
+ *
+ * Productos, precios, categorías y especies son la misma pantalla con
+ * distinta forma: cabecera con la acción principal, editor inline
+ * colapsable, barra de filtros, tabla y paginación. Antes cada una traía
+ * su propia copia de estos estilos y se fueron separando (botones de dos
+ * tamaños, el estado vacío de dos maneras, cuatro paginaciones
+ * distintas), así que arreglar algo había que arreglarlo cuatro veces y
+ * casi nunca en todas.
+ *
+ * Este archivo se `@use`a desde el `.scss` de cada pantalla. Ojo: Angular
+ * mete el partial dentro del estilo del componente, así que lo que se
+ * escriba aquí solo aplica a las pantallas que lo importen. No es un
+ * estilo global.
+ *
+ * Lo que cambia entre pantallas se queda en su propio `.scss`: los
+ * desplegables de búsqueda de precios, las pestañas, la rejilla de campos
+ * del editor. Aquí va solo lo que es literalmente igual en todas.
+ */
+
+/* ---------------------------------------------------------- tipografía */
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------- cabecera */
+
+/*
+ * El título a la izquierda y la acción principal a la derecha.
+ *
+ * `flex-wrap` para que en una pantalla angosta el botón baje a su propia
+ * línea en vez de aplastar el título: en un mostrador con tablet se usa
+ * así.
+ */
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Las acciones de la cabecera (nueva, exportar) van juntas y pegadas. */
+.acciones-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ------------------------------------------------------- editor inline */
+
+/*
+ * El editor vive arriba de la tabla y el listado no desaparece, para no
+ * perder de vista sobre qué se está Laplacando.
+ *
+ * Colapsado NO es "oculto con display: none" en el wrapper: el wrapper es
+ * el quereserve el hueco, y el `display: none` va en el form. Si se
+ * colapsara el wrapper, el listado saltaría de golpe al plegarse.
+ */
+.editor-wrapper {
+  margin-bottom: 0.75rem;
+}
+
+.editor-wrapper.colapsado .editor-inline {
+  display: none;
+}
+
+.editor-inline {
+  padding: 1rem 1.25rem;
+  background: var(--superficie);
+  border: 1px solid var(--acento);
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--acento-suave);
+  animation: slideDown 0.2s ease-out;
+}
+
+.editor-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.requerido {
+  color: var(--peligro-texto);
+}
+
+/* Botones del editor, a la derecha y con su regla arriba. */
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--borde);
+  justify-content: flex-end;
+}
+
+/* -------------------------------------------------------------- filtros */
+
+/*
+ * Una barra con borde, no campos sueltos pegados al título: los filtros
+ * son un bloque y se leen como uno.
+ */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+/* El buscador toma el espacio que sobra; los desplegables un mínimo. */
+.filtros input[type='search'] {
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.filtros input[type='search']:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
+}
+
+/* Los desplegables de filtro: mismo alto y mismo radio que el buscador,
+   para que la barra se lea como una sola cosa. */
+.filtro {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  min-width: 9rem;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.filtro:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
+}
+
+/* El filtro ya puesto se lee como etiqueta y no como un select con un
+   valor dentro: se ve que es un chip y que se quita. */
+.filtro-elegido {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cerrar-filtro {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* Quitar todos los filtros de golpe. */
+.quitar-filtros {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+  background: transparent;
+  border: 1px dashed var(--borde);
+  cursor: pointer;
+}
+
+.quitar-filtros:hover:not(:disabled) {
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-color: var(--peligro);
+  border-style: solid;
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+.tabla-wrapper {
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--superficie);
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+th,
+td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+  white-space: nowrap;
+}
+
+tbody tr {
+  transition: background-color 0.12s;
+}
+
+tbody tr:hover {
+  background: var(--fondo);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.centro {
+  text-align: center;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------- estado vacío */
+
+/*
+ * El hueco cuando no hay nada que mostrar.
+ *
+ * SIN ICONO. Se probó con un SVG grande encima y lo que pasó es que se
+ * comía la pantalla y, peor, cada pantalla lo dibujaba de un tamaño
+ * distinto (2.25rem en unas, 48px en otras), así que se leía como
+ * pantallas diferentes. El mensaje y el botón ya dicen lo mismo, y en una
+ * pantalla de mostrador lo que se necesita es el botón, no un dibujo.
+ */
+.estado-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  color: var(--texto-tenue);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+.estado-vacio h2 {
+  color: var(--texto);
+}
+
+.estado-vacio p {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.estado-vacio .primario {
+  margin-top: 0.5rem;
+}
+
+/* "Cargando..." no lleva tarjeta: es una espera, no un hueco, y con el
+   alto del estado vacío la página saltaría al entrar. */
+.cargando {
+  margin: 0.5rem 0 1rem;
+  color: var(--texto-tenue);
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+/* ----------------------------------------------------------- paginación */
+
+/* Va PEGADA abajo de la tabla: es el final de la lista, no un bloque más. */
+.paginacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.contador {
+  margin-right: auto;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
+}
+
+.contador .tenue {
+  color: var(--texto-tenue);
+  opacity: 0.8;
+}
+
+.tamano-pagina {
+  min-width: auto;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+}
+
+/* --------------------------------------------------------------- avisos */
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 6px;
+}
+
+/* -------------------------------------------------------------- botones */
+
+/*
+ * Los botones: UN solo tamaño y un solo color.
+ *
+ * Antes cada pantalla traía su propio `padding` y su propio `border-radius`
+ * (0.5rem/0.875rem en unas, 0.375rem/0.625rem en otras) y por eso
+ * "Nuevo producto", "Nuevo precio" y "Nueva categoría" se veían como
+ * tres botones distintos. Ahora el tamaño sale de aquí, y lo único que
+ * cambia entre pantallas es el ancho del desplegable o de la tabla.
+ */
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.06s,
+    box-shadow 0.12s;
+}
+
+/*
+ * El botón de a secas (Cancelar, Limpiar, Editar) se enciende con el
+ * borde del acento, no con el fondo de la página: pintar el fondo lo
+ * dejaba plano y con menos contraste que el texto que tiene al lado.
+ */
+button:hover:not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/*
+ * El botón principal: azul sólido.
+ *
+ * `Nuevo producto`, `Nuevo precio`, `Nueva categoría`, `Guardar`,
+ * `Exportar Excel` y `Crear el primero` son TODOS este mismo azul, y por
+ * eso comparten la misma clase y no se distinguen entre sí. Antes cada
+ * pantalla pintaba el suyo y el acento se veía más o menos oscuro según
+ * dónde se mirara.
+ *
+ * El hover va a un azul MÁS OSCURO (`--acento-texto`) y no a uno más
+ * claro: sobre `#1e40af` un claro casi no se ve y el botón no daba
+ * ninguna señal de que el puntero estaba encima.
+ */
+button.primario {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+  font-weight: 600;
+}
+
+button.primario:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
+}
+
+button.primario:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+button.primario:focus-visible,
+button.toggle-editor:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+/*
+ * El botón que despliega el editor.
+ *
+ * Comparte color y hover con `.primario` a propósito: es la misma acción
+ * ("crear algo") y tiene que verse igual. Lo que lo distingue del resto de
+ * los primarios es que lleva icono, y por eso es un poco más alto.
+ */
+button.toggle-editor {
+  padding: 0.5rem 0.875rem;
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+  font-weight: 600;
+}
+
+button.toggle-editor:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--acento-texto);
+  border-color: var(--acento-texto);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
+}
+
+button.toggle-editor:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Los botones de la fila: más chicos que los de la barra. */
+button.chico {
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+button:disabled {
+  color: var(--texto-tenue);
+  background: var(--fondo);
+  border-color: var(--borde);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Icono dentro de un botón: hereda el tamaño del texto. */
+.icono {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+
+/* --------------------------------------------------------- acciones fila */
+
+/* Los botones de la fila van juntos y a la derecha, en una sola línea. */
+.acciones-celda {
+  text-align: right;
+}
+
+.acciones-fila {
+  display: inline-flex;
+  gap: 0.375rem;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+/*
+ * Las acciones de la fila llevan su propio tono, igual que en productos:
+ * editar en azul, cambiar de estado en ámbar, borrar en rojo. Así el
+ * botón destructivo no está al lado del que no lo es.
+ */
+.acciones-fila .accion-editar {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+.acciones-fila .accion-editar:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+/* Cerrar un precio es destructor aunque no borre: deja de aplicarse. */
+.acciones-fila .accion-estado,
+.acciones-fila .accion-cerrar {
+  color: var(--advertencia-texto);
+  background: var(--advertencia-suave);
+  border-color: var(--advertencia);
+}
+
+.acciones-fila .accion-estado:hover:not(:disabled),
+.acciones-fila .accion-cerrar:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--advertencia-texto);
+  border-color: var(--advertencia-texto);
+}
+
+/* Reabrir es lo contrario: devuelve a aplicar el precio. */
+.acciones-fila .accion-reabrir {
+  color: var(--exito-texto);
+  background: var(--exito-suave);
+  border-color: var(--exito-texto);
+}
+
+.acciones-fila .accion-reabrir:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--exito-texto);
+  border-color: var(--exito-texto);
+}
+
+.acciones-fila .accion-eliminar {
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-color: var(--peligro);
+}
+
+.acciones-fila .accion-eliminar:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--peligro);
+  border-color: var(--peligro);
+}
+
+/* --------------------------------------------------------------- badges */
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--exito-suave);
+  color: var(--exito-texto);
+  border: 1px solid var(--exito-texto);
+}
+
+.badge-apagado {
+  background: var(--peligro-suave);
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+.badge-neutro {
+  background: var(--fondo);
+  color: var(--texto-tenue);
+  border-color: var(--borde);
+}
+
+/* --------------------------------------------------- utilidades varias */
+
+/* Etiqueta solo para el lector de pantalla: un elemento que se explica
+   solo pero necesita nombre accesible. */
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* El spinner de "Guardando…", dentro del propio botón. */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 0.875em;
+  height: 0.875em;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Al desplegarse el editor, baja desde arriba en vez de aparecer de golpe. */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

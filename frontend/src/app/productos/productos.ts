@@ -55,7 +55,6 @@ export class Productos {
   // ------------------------------------------------------------- el listado
   readonly filas = signal<Producto[]>([]);
   readonly total = signal(0);
-  readonly offset = signal(0);
   readonly buscando = signal(false);
   readonly error = signal<string | null>(null);
   readonly buscador = signal('');
@@ -67,7 +66,32 @@ export class Productos {
   readonly categorias = signal<Catalogo[]>([]);
   readonly especies = signal<Catalogo[]>([]);
 
-  readonly hayMas = computed(() => this.filas().length < this.total());
+  /**
+   * Cuantos productos se ven por pagina, y la pagina que se esta viendo.
+   *
+   * Antes esto era un "Cargar más" que pegaba las siguientes al final. Con
+   * 50 o mas productos eso es una tabla de tres pantallas, y no hay forma
+   * de volver arriba ni de saber en cuanto se esta. Con paginas la tabla
+   * tiene alto fijo y el mismo control que precios y el catalogo.
+   *
+   * La pagina se elige en SALTOS y se traduce a `offset` al pedir, porque
+   * un `offset` guardado se queda viejo en cuanto cambia un filtro.
+   */
+  readonly limite = signal(50);
+  readonly pagina = signal(1);
+
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Que se ve en la barra: "1-50 de 340". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.total();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
 
   // -------------------------------------------------------------- el editor
   readonly editando = signal<Producto | null>(null);
@@ -196,7 +220,19 @@ export class Productos {
     return this.filtroActivo() !== 'activos' || this.filtroCategoria() !== null || this.filtroEspecie() !== null || this.buscador().trim().length >= 2;
   }
 
-  private async recargar(): Promise<void> {
+  /**
+   * Vuelve a la primera pagina con el filtro que se tenga puesto.
+   *
+   * Todo cambio de filtro pasa por aqui y no por la pagina: quedarse en la
+   * 4 y cambiar de categoría es quedarse en un `offset` que ya no quiere
+   * decir nada, y sale una tabla vacia sin que se entienda por que.
+   */
+  async recargar(): Promise<void> {
+    await this.cargarPagina(1);
+  }
+
+  /** Carga una pagina. Es la UNICA forma de pedir productos. */
+  private async cargarPagina(pagina: number): Promise<void> {
     this.buscando.set(true);
     this.error.set(null);
     try {
@@ -206,36 +242,54 @@ export class Productos {
         activo: this.filtroActivo(),
         categoria_id: this.filtroCategoria() ?? undefined,
         especie_id: this.filtroEspecie() ?? undefined,
+        limite: this.limite(),
+        offset: (pagina - 1) * this.limite(),
       });
       this.filas.set(resultado.datos);
       this.total.set(resultado.total);
-      this.offset.set(resultado.offset);
+      this.pagina.set(pagina);
     } catch (falla) {
+      this.filas.set([]);
+      this.total.set(0);
       this.error.set(errorLegible(falla).mensaje);
     } finally {
       this.buscando.set(false);
     }
   }
 
-  async cargarMas(): Promise<void> {
-    if (this.buscando()) return;
-    this.buscando.set(true);
-    try {
-      const buscar = this.buscador().trim();
-      const resultado = await this.api.listar({
-        buscar: buscar.length >= 2 ? buscar : undefined,
-        activo: this.filtroActivo(),
-        categoria_id: this.filtroCategoria() ?? undefined,
-        especie_id: this.filtroEspecie() ?? undefined,
-        offset: this.offset() + this.filas().length,
-      });
-      this.filas.update((actuales) => [...actuales, ...resultado.datos]);
-      this.total.set(resultado.total);
-    } catch (falla) {
-      this.error.set(errorLegible(falla).mensaje);
-    } finally {
-      this.buscando.set(false);
-    }
+  /**
+   * Cambia de pagina y sube la tabla a la vista.
+   *
+   * El scroll se queda donde estaba, y como la tabla esta mas abajo el
+   * cambio de pagina no se ve: solo se mueve el numero de la barra, que
+   * puede estar fuera de pantalla.
+   */
+  async irAPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+    await this.cargarPagina(pagina);
+    document.querySelector('.tabla-wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * El tamano de pagina como texto, para el `[value]` del desplegable.
+   *
+   * En las plantillas de Angular no hay `String` global (si `JSON`, si
+   * `Math`, pero no `String`), y `[value]` necesita texto: con un numero, el
+   * `value` del `select` no coincide con ninguna opcion y sale vacio.
+   */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  /**
+   * Cambia cuantos productos se ven por pagina.
+   *
+   * Vuelve SIEMPRE a la pagina 1: quedarse en la 7 y pasar de 50 a 100
+   * filas es quedarse en un `offset` que ya no quiere decir nada.
+   */
+  async aTamanoDePagina(valor: string): Promise<void> {
+    this.limite.set(Number(valor));
+    await this.cargarPagina(1);
   }
 
   async exportarExcel(): Promise<void> {

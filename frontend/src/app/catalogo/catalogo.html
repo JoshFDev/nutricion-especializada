@@ -9,67 +9,37 @@
   productos: el listado se queda debajo, para no perder de vista sobre que
   se esta Laplacando el nombre. El boton que lo despliega va en la cabecera,
   junto al titulo.
+
+  El diseño sale de `nucleo/pantallas.scss`: el MISMO que usan productos y
+  precios. Lo unico propio de aqui es la columna de uso, que no tiene
+  equivalente en las otras dos pantallas.
 -->
 <section class="catalogo">
   <!-- Cabecera: titulo a la izquierda, accion principal a la derecha -->
   <div class="cabecera">
     <h1>{{ titulo() }}</h1>
 
-    <div class="acciones-cabecera">
-      @if (puedeCrear()) {
-        <button
-          type="button"
-          class="toggle-editor"
-          (click)="alternarEditor()"
-          [attr.aria-expanded]="editorVisible()"
-          aria-controls="editor-form"
-        >
-          @if (editorVisible()) {
-            <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg> Ocultar formulario
-          } @else {
-            <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva {{ singular() }}
-          }
-        </button>
-      }
+    @if (puedeCrear()) {
       <button
         type="button"
-        class="secundario"
-        (click)="exportarExcel()"
-        [disabled]="exportando()"
+        class="toggle-editor"
+        (click)="alternarEditor()"
+        [attr.aria-expanded]="editorVisible()"
+        aria-controls="editor-form"
       >
-        @if (exportando()) {
-          <svg class="icono spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg> Exportando…
+        @if (editorVisible()) {
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg> Ocultar formulario
         } @else {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Exportar Excel
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva {{ singular() }}
         }
       </button>
-    </div>
-  </div>
-
-  <!-- Buscador + paginación -->
-  <div class="filtros">
-    <div class="filtros-grupo">
-      <label for="buscador" class="sr-only">Buscar {{ singular() | lowercase }}</label>
-      <input
-        id="buscador"
-        type="search"
-        placeholder="Buscar {{ singular() | lowercase }}…"
-        [value]="buscador()"
-        (input)="buscar($any($event.target).value)"
-        (keydown.escape)="limpiarFiltros()"
-      />
-      @if (buscador()) {
-        <button type="button" class="chico" (click)="limpiarFiltros()" title="Limpiar búsqueda">
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      }
-    </div>
+    }
   </div>
 
   <!-- Editor inline (alta/renombrado) - colapsable arriba de la tabla -->
   @if (puedeCrear()) {
     <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
-      <form id="editor-form" class="editor-inline" [formGroup]="forma">
+      <form id="editor-form" class="editor-inline" [formGroup]="forma" (keydown)="onKeydown($event)">
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nueva ' + singular() : 'Renombrar ' + singular().toLowerCase() }}</h2>
         </div>
@@ -98,57 +68,100 @@
         </div>
 
         <div class="acciones">
+          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
           <button
             type="button"
             class="primario"
             (click)="guardar()"
             [disabled]="forma.invalid || guardando()"
           >
-            {{ guardando() ? 'Guardando…' : esAlta() ? 'Crear' : 'Guardar' }}
+            @if (guardando()) {
+              <span class="spinner" aria-hidden="true"></span> Guardando…
+            } @else {
+              {{ esAlta() ? 'Crear' : 'Guardar' }}
+            }
           </button>
-          <button type="button" (click)="cancelar()">Cancelar</button>
         </div>
       </form>
     </div>
   }
 
+  <!-- Filtros: la misma barra que en productos y precios -->
+  <div class="filtros">
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Buscar {{ singular() | lowercase }}…"
+      aria-label="Buscar {{ singular() | lowercase }}"
+      [value]="buscador()"
+      (input)="buscar($any($event.target).value)"
+      (keydown.escape)="limpiarFiltros()"
+    />
+
+    <!--
+      El filtro de uso. Es el unico que tiene sentido en estas tablas, y
+      esta al lado del buscador y no escondido: el catalogo se abre para dos
+      cosas opuestas, dar de alta lo que falta y quitar lo que sobra, y esto
+      es lo que separa las dos.
+    -->
+    <select
+      class="filtro"
+      aria-label="Filtrar por uso"
+      [value]="filtroUso()"
+      (change)="filtrarUso($any($event.target).value)"
+    >
+      <option value="todas">Todas</option>
+      <option value="en-uso">En uso</option>
+      <option value="sin-uso">Sin uso</option>
+    </select>
+
+    @if (hayFiltros()) {
+      <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
+    }
+
+    <button
+      type="button"
+      class="primario"
+      (click)="exportarExcel()"
+      [disabled]="exportando()"
+    >
+      @if (exportando()) {
+        <span class="spinner" aria-hidden="true"></span> Exportando…
+      } @else {
+        exportar excel
+      }
+    </button>
+  </div>
+
   @if (error(); as mensaje) {
     <p class="error" role="alert">{{ mensaje }}</p>
   }
 
-  @if (cargando() && filasVisibles().length === 0 && filas().length === 0) {
-    <p class="cargando">Cargando...</p>
-  } @else if (filas().length === 0) {
+  @if (cargando() && filas().length === 0) {
+    <p class="cargando">Cargando…</p>
+  } @else if (filasVisibles().length === 0) {
     <!--
-      Estado vacio. Se distingue el caso "todavia no hay ninguna" del
-      "no coincide con el filtro" offerendo la accion que lo resuelve:
-      sin datos, crear la primera; con datos, no hay nada que crear.
+      El estado vacío, igual en las cuatro pantallas y SIN icono.
+
+      Se distinguen los dos casos que antes iban en dos bloques distintos con
+      el mismo nombre: no hay nada (lo resuelve crear el primero) o el filtro
+      no dejó nada (lo resuelve limpiarlo). Se separan porque la accion que
+      sirve es distinta, y ofrecer "Crear la primera" con un filtro puesto
+      invita a crear un duplicado.
     -->
-    <div class="vacio">
-      <div class="vacio-icono" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      </div>
-      @if (puedeCrear()) {
+    <div class="estado-vacio">
+      @if (hayFiltros()) {
+        <h2>Ninguna {{ singular() | lowercase }} coincide</h2>
+        <p>Prueba con otro nombre o quita el filtro de uso.</p>
+        <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else if (puedeCrear()) {
         <h2>Aún no hay {{ titulo() | lowercase }}</h2>
-        <p>Crea la primera para empezar a usarlas en los productos.</p>
-        <button type="button" class="primario" (click)="alternarEditor()">
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Crear la primera
-        </button>
+        <p>Crea la primera para empezar a usarla en los productos.</p>
+        <button type="button" class="primario" (click)="alternarEditor()">Crear la primera</button>
       } @else {
         <h2>No hay {{ titulo() | lowercase }}</h2>
         <p>Todavía no se ha creado ninguna.</p>
       }
-    </div>
-  } @else if (filasVisibles().length === 0) {
-    <div class="vacio">
-      <div class="vacio-icono" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      </div>
-      <h2>Sin coincidencias</h2>
-      <p>No hay {{ titulo() | lowercase }} que contengan «{{ buscador() }}».</p>
-<button type="button" class="primario" (click)="limpiarFiltros()">
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Limpiar búsqueda
-        </button>
     </div>
   } @else {
     <div class="tabla-wrapper">
@@ -156,23 +169,38 @@
         <thead>
           <tr>
             <th scope="col">Nombre</th>
-            <th scope="col" class="acciones-celda">Acciones</th>
+            <th scope="col">Uso</th>
+            <th scope="col">Acciones</th>
           </tr>
         </thead>
         <tbody [@filasAnimation]>
           @for (fila of filasVisibles(); track fila.id) {
             <tr>
-              <td class="celda-nombre">{{ fila.nombre }}</td>
+              <td>{{ fila.nombre }}</td>
+              <!--
+                La columna de uso no es un adorno: es lo que dice si el
+                botón de eliminar va a funcionar. Lo que tiene algo detrás no
+                se puede borrar (el backend responde 409 EN_USO), y verlo aqui
+                evita el intento y la sorpresa.
+              -->
+              <td class="centro">
+                @if (fila.usos > 0) {
+                  <span class="badge">{{ usoDe(fila) }}</span>
+                } @else {
+                  <span class="badge badge-neutro">Sin uso</span>
+                }
+              </td>
               <td class="acciones-celda">
-                <div class="acciones">
+                <div class="acciones-fila">
                   @if (puedeCrear()) {
-                    <button type="button" class="chico" (click)="renombrar(fila)">Renombrar</button>
+                    <button type="button" class="accion-editar" (click)="renombrar(fila)">Renombrar</button>
                   }
                   @if (puedeEliminar()) {
                     <button
                       type="button"
-                      class="chico peligro"
+                      class="accion-eliminar"
                       (click)="eliminar(fila)"
+                      [attr.aria-label]="'Eliminar ' + fila.nombre"
                     >
                       Eliminar
                     </button>
@@ -186,40 +214,41 @@
     </div>
 
     <div class="paginacion">
-      <span class="cuenta">
-        {{ offset() + 1 }}–{{ min(offset() + limite(), total()) }} de {{ total() }} {{ titulo() | lowercase }}
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaAnterior()"
+        (click)="irPagina(pagina() - 1)"
+      >
+        ‹ Anterior
+      </button>
+
+      <span class="contador">
+        {{ rangoDePagina() }}
+        <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
       </span>
-      <div class="paginas">
-        <button
-          type="button"
-          class="chico"
-          (click)="irPagina(paginaActual() - 1)"
-          [disabled]="paginaActual() === 1"
-          aria-label="Página anterior"
-        >
-          ‹ Anterior
-        </button>
-        @for (p of paginasVisibles(); track p) {
-          <button
-            type="button"
-            class="chico"
-            [class.activa]="p === paginaActual()"
-            (click)="irPagina(p)"
-            [attr.aria-current]="p === paginaActual() ? 'page' : null"
-          >
-            {{ p }}
-          </button>
-        }
-        <button
-          type="button"
-          class="chico"
-          (click)="irPagina(paginaActual() + 1)"
-          [disabled]="paginaActual() === paginasTotales()"
-          aria-label="Página siguiente"
-        >
-          Siguiente ›
-        </button>
-      </div>
+
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaSiguiente()"
+        (click)="irPagina(pagina() + 1)"
+      >
+        Siguiente ›
+      </button>
+
+      <label class="oculto" for="tamano-pagina-catalogo">{{ titulo() }} por página</label>
+      <select
+        id="tamano-pagina-catalogo"
+        class="filtro tamano-pagina"
+        aria-label="Filtrar por cantidad de registros por página"
+        [value]="limiteComoTexto()"
+        (change)="aTamanoDePagina($any($event.target).value)"
+      >
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100">100 por página</option>
+      </select>
     </div>
   }
 </section>

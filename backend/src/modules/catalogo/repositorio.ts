@@ -1,17 +1,18 @@
 import type { PoolClient } from 'pg';
 import { consultar, consultarUno } from '../../db/transaccion.js';
-import type { FilaCatalogo } from './modelo.js';
+import type { FilaCatalogo, FilaCatalogoConUsos } from './modelo.js';
 
 /**
  * SQL del catalogo.
  *
- * IMPORTANTISIMO: la tabla se recibe como parametro, NUNCA viene de la
- * peticion. No hay forma de inyectarla en un string: el unico origen
- * posible es la tabla RECURSOS de abajo, que es una constante del
- * codigo. Si alguna vez se acepta una tabla desde fuera, esto deja de
- * ser una lectura y se convierte en un DROP TABLE.
+ * IMPORTANTE: los identificadores de tabla y columna se reciben como
+ * parametro, NUNCA vienen de la peticion. No hay forma de inyectarlos en
+ * un string: el unico origen posible son las constantes de RECURSOS y de
+ * la tabla de migraciones. Si alguna vez se acepta una tabla desde fuera,
+ * esto deja de ser una lectura y se convierte en un DROP TABLE.
  *
- * Por lo demas es SQL boring: id + nombre, sin joins ni agregados.
+ * Por lo demas es SQL boring: id + nombre, sin joins, mas un conteo de
+ * usos que es un subquery por tabla referenciante.
  */
 
 export interface DefinicionRecurso {
@@ -60,14 +61,41 @@ export type ClaveRecurso = keyof typeof RECURSOS;
  * La colacion pos.es_es la crea la migracion 0004 con ICU, no con la
  * locale del sistema operativo, para que el orden sea el mismo en
  * cualquier maquina donde se instale esto.
+ *
+ * La tabla va con alias porque `nombre` solo, sin calificar, es ambiguo
+ * en cuanto el conteo de usos mete un subquery en la misma consulta.
  */
-const ORDEN = `ORDER BY nombre COLLATE pos.es_es ASC`;
+const ORDEN = `ORDER BY c.nombre COLLATE pos.es_es ASC`;
+
+/**
+ * El conteo de usos como una sola expresion SQL.
+ *
+ * Un subquery por tabla referenciante, sumando. Se hace asi y no con un
+ * JOIN + GROUP BY porque cada recurso tiene un numero distinto de tablas
+ * que lo apuntan (una la categoria, dos la especie) y porque el JOIN
+ * obligaria a mirar dos veces la misma fila: con el subquery, listar las
+ * doce categorias del catalogo son doce conteos y no doce filas de join.
+ *
+ * Los identificadores salen de `RECURSOS`, que es una constante del
+ * codigo (ver la nota de seguridad de este archivo).
+ */
+function usosDe(recurso: DefinicionRecurso): string {
+  const partes = recurso.usos.map(
+    (uso) => `(SELECT count(*)::int FROM ${uso.tabla} WHERE ${uso.columna} = c.id)`,
+  );
+  return partes.length > 0 ? partes.join(' + ') : '0';
+}
 
 export async function listar(
   cliente: PoolClient,
   recurso: DefinicionRecurso,
-): Promise<FilaCatalogo[]> {
-  return consultar<FilaCatalogo>(cliente, `SELECT id, nombre FROM ${recurso.tabla} ${ORDEN}`);
+): Promise<FilaCatalogoConUsos[]> {
+  return consultar<FilaCatalogoConUsos>(
+    cliente,
+    `SELECT c.id, c.nombre, ${usosDe(recurso)} AS usos
+       FROM ${recurso.tabla} c
+       ${ORDEN}`,
+  );
 }
 
 export async function obtener(

@@ -13,6 +13,11 @@
 
   El editor vive ANTES de la tabla (inline) y es colapsable. El boton que lo
   despliega va en la cabecera, junto al titulo.
+
+  El diseño (botones, barra de filtros, tabla, estado vacío y paginación) es el
+  de `nucleo/pantallas.scss`, el MISMO que usan precios, categorías y especies.
+  Aquí solo queda lo propio de productos: la rejilla del editor y el ancho de
+  las columnas.
 -->
 <section class="productos">
   <!-- Cabecera: titulo a la izquierda, accion principal a la derecha -->
@@ -152,16 +157,17 @@
       type="search"
       autocomplete="off"
       placeholder="Buscar por código o nombre"
-      (input)="buscar($any($event.target).value)"
-      [value]="buscador()"
       aria-label="Buscar productos"
+      [value]="buscador()"
+      (input)="buscar($any($event.target).value)"
+      (keydown.escape)="limpiarFiltros()"
     />
 
     <select
       class="filtro"
+      aria-label="Filtrar por estado"
       [value]="filtroActivo()"
       (change)="filtrar($any($event.target).value)"
-      aria-label="Filtrar por estado"
     >
       <option value="activos">Activos</option>
       <option value="inactivos">De baja</option>
@@ -170,9 +176,9 @@
 
     <select
       class="filtro"
+      aria-label="Filtrar por categoría"
       [value]="filtroCategoria() ?? ''"
       (change)="filtrarCategoria($any($event.target).value)"
-      aria-label="Filtrar por categoría"
     >
       <option value="">Todas las categorías</option>
       @for (categoria of categorias(); track categoria.id) {
@@ -182,9 +188,9 @@
 
     <select
       class="filtro"
+      aria-label="Filtrar por especie"
       [value]="filtroEspecie() ?? ''"
       (change)="filtrarEspecie($any($event.target).value)"
-      aria-label="Filtrar por especie"
     >
       <option value="">Todas las especies</option>
       @for (especie of especies(); track especie.id) {
@@ -193,14 +199,16 @@
     </select>
 
     @if (hayFiltrosActivos()) {
-      <button type="button" class="chico" (click)="limpiarFiltros()" aria-label="Limpiar filtros">
-        Limpiar
-      </button>
+      <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
     }
 
     @if (puedeEditar()) {
       <button type="button" class="primario" (click)="exportarExcel()" [disabled]="exportando()">
-        {{ exportando() ? 'Exportando...' : 'Exportar Excel' }}
+        @if (exportando()) {
+          <span class="spinner" aria-hidden="true"></span> Exportando...
+        } @else {
+          exportar excel
+        }
       </button>
     }
   </div>
@@ -210,17 +218,29 @@
   }
 
   @if (buscando() && filas().length === 0) {
-    <p class="vacio">Buscando...</p>
+    <p class="cargando">Cargando…</p>
   }
 
+  <!--
+    El estado vacío, igual en las cuatro pantallas y SIN icono.
+
+    Se distinguen los dos casos que antes iban juntos: no hay productos
+    (lo resuelve crear uno) o los filtros no dejaron ninguno (lo resuelve
+    quitarlos). Con un solo mensaje, el que acababa de filtrar leia
+    "No hay productos que mostrar" y pensaba que se le habian perdido.
+  -->
   @if (filas().length === 0 && !buscando()) {
     <div class="estado-vacio">
-      <svg class="icono-vacio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-      </svg>
-      <p>No hay productos que mostrar</p>
-      @if (puedeEditar()) {
-        <button type="button" class="primario" (click)="toggleEditor()">Crear el primero</button>
+      @if (hayFiltrosActivos()) {
+        <h2>Ningún producto coincide</h2>
+        <p>Prueba con otra búsqueda o quita los filtros aplicados.</p>
+        <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else {
+        <h2>Aún no hay productos</h2>
+        <p>Registra el primer producto para empezar a venderlo.</p>
+        @if (puedeEditar()) {
+          <button type="button" class="primario" (click)="toggleEditor()">Crear el primero</button>
+        }
       }
     </div>
   }
@@ -248,20 +268,20 @@
               <td>{{ producto.categoria ?? '—' }}</td>
               <td>{{ producto.especie ?? '—' }}</td>
               <td class="centro">
-                <span class="badge" [class.badge-inactivo]="!producto.activo">
+                <span class="badge" [class.badge-apagado]="!producto.activo">
                   {{ producto.activo ? 'Activo' : 'De baja' }}
                 </span>
               </td>
               <td class="acciones-celda">
                 @if (puedeEditar()) {
                   <div class="acciones-fila">
-                    <button type="button" class="chico accion-editar" (click)="editar(producto)" title="Editar" aria-label="Editar {{ producto.nombre }}">
+                    <button type="button" class="accion-editar" (click)="editar(producto)" title="Editar" [attr.aria-label]="'Editar ' + producto.nombre">
                       Editar
                     </button>
-                    <button type="button" class="chico accion-estado" (click)="alternaActivo(producto)" [title]="producto.activo ? 'Dar de baja' : 'Activar'" [aria-label]="producto.activo ? 'Dar de baja ' + producto.nombre : 'Activar ' + producto.nombre">
+                    <button type="button" class="accion-estado" (click)="alternaActivo(producto)" [title]="producto.activo ? 'Dar de baja' : 'Activar'" [attr.aria-label]="(producto.activo ? 'Dar de baja ' : 'Activar ') + producto.nombre">
                       {{ producto.activo ? 'Baja' : 'Activar' }}
                     </button>
-                    <button type="button" class="chico accion-eliminar" (click)="eliminar(producto)" title="Eliminar" aria-label="Eliminar {{ producto.nombre }}">
+                    <button type="button" class="accion-eliminar" (click)="eliminar(producto)" title="Eliminar" [attr.aria-label]="'Eliminar ' + producto.nombre">
                       Eliminar
                     </button>
                   </div>
@@ -273,14 +293,34 @@
       </table>
     </div>
 
-    @if (hayMas()) {
-      <div class="paginacion">
-        <button type="button" class="chico" [disabled]="buscando()" (click)="cargarMas()">
-          Cargar más
-        </button>
-        <span class="cuenta">{{ filas().length }} de {{ total() }}</span>
-      </div>
-    }
+    <div class="paginacion">
+      <button type="button" class="chico" [disabled]="!hayPaginaAnterior() || buscando()" (click)="irAPagina(pagina() - 1)">
+        ‹ Anterior
+      </button>
+
+      <span class="contador">
+        {{ rangoDePagina() }}
+        <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+      </span>
+
+      <button type="button" class="chico" [disabled]="!hayPaginaSiguiente() || buscando()" (click)="irAPagina(pagina() + 1)">
+        Siguiente ›
+      </button>
+
+      <label class="oculto" for="tamano-pagina-productos">Productos por página</label>
+      <select
+        id="tamano-pagina-productos"
+        class="filtro tamano-pagina"
+        aria-label="Productos por página"
+        [value]="limiteComoTexto()"
+        (change)="aTamanoDePagina($any($event.target).value)"
+      >
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100">100 por página</option>
+        <option value="200">200 por página</option>
+      </select>
+    </div>
   }
 </section>
 

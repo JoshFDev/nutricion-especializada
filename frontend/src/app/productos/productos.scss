@@ -1,138 +1,30 @@
 /*
  * La pantalla de productos.
  *
- * El editor ahora vive inline (arriba de la tabla) en vez de modal.
- * Se agregan filtros por categoria y especie, y boton de exportar Excel.
- * El editor es colapsable.
+ * El diseño —cabecera, botones, barra de filtros, tabla, estado vacío,
+ * paginación y animaciones— sale de `nucleo/pantallas.scss`, que es el
+ * MISMO partial que usan precios, categorías y especies. Importarlo aquí
+ * es lo que hace que "Nuevo producto", "Nuevo precio" y "Nueva categoría"
+ * se vean como el mismo botón.
+ *
+ * Lo que queda en este archivo es lo que NO es igual en todas: la
+ * rejilla de cinco columnas del editor y el ancho de cada columna de la
+ * tabla, que dependen de cuántas columnas tiene productos.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--texto);
-}
-
-h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-/* ------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.editor-wrapper {
-  margin-bottom: 0.75rem;
-}
-
-.editor-wrapper.colapsado .editor-inline {
-  display: none;
-}
+/* ------------------------------------------------------- el editor inline */
 
 /*
- * El boton que despliega el editor. Va en azul solido (como `Exportar
- * Excel`) porque el `button:hover:not(:disabled)` generico pesa mas que un
- * `.clase:hover` y terminaba pintando el fondo claro de la pagina.
+ * Cinco campos en una fila: son todos cortos (un código, un nombre, una
+ * cantidad y dos desplegables) y meterlos en una rejilla que se adapta
+ * sola los deja en dos filas de cuatro y una, que se ve descoyuntada.
  */
-/*
- * El boton que despliega el editor. Comparte el hover con los demas
- * primarios (`.primario`), asi que los dos se encienden igual.
- *
- * El selector lleva el elemento delante a proposito: el `button:hover`
- * generico de mas abajo pesa mas que un `.clase:hover` y terminaba
- * pintando el fondo claro de la pagina.
- */
-button.toggle-editor {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border: 1px solid var(--acento);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, transform 0.06s, box-shadow 0.12s;
-}
-
-button.toggle-editor:hover:not(:disabled) {
-  background: var(--acento-texto);
-  border-color: var(--acento-texto);
-  color: var(--sobre-acento);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
-}
-
-button.toggle-editor:active:not(:disabled) {
-  background: var(--acento-texto);
-  border-color: var(--acento-texto);
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-button.toggle-editor:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
-}
-
-.toggle-editor .icono {
-  font-size: 0.8125rem;
-  line-height: 1;
-}
-
-.editor-inline {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  animation: slideDown 0.2s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.editor-cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--borde);
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.requerido {
-  color: var(--peligro);
-  margin-left: 0.125rem;
-}
-
 .campos {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -147,8 +39,8 @@ button.toggle-editor:focus-visible {
 .campo label {
   margin-bottom: 0.25rem;
   font-size: 0.75rem;
-  color: var(--texto-suave);
   font-weight: 500;
+  color: var(--texto-suave);
 }
 
 .campo input,
@@ -169,6 +61,8 @@ button.toggle-editor:focus-visible {
   box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
+/* El error va en el campo, no solo arriba: lo que hay que corregir es el
+   campo, y un mensaje suelto obliga a buscar cuál de los cinco es. */
 .campo input.error,
 .campo select.error {
   border-color: var(--peligro);
@@ -176,376 +70,36 @@ button.toggle-editor:focus-visible {
 }
 
 .error-texto {
+  margin-top: 0.125rem;
   font-size: 0.7rem;
   color: var(--peligro-texto);
-  margin-top: 0.125rem;
-}
-
-.acciones {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--borde);
-  justify-content: flex-end;
-}
-
-/* ------------------------------------------------------------- los filtros */
-
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.filtros input[type='search'] {
-  flex: 1;
-  min-width: 180px;
-  padding: 0.5rem 0.75rem;
-  font: inherit;
-  font-size: 0.875rem;
-  color: var(--texto);
-  background: var(--fondo);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.filtros input[type='search']:focus {
-  outline: none;
-  border-color: var(--acento);
-  box-shadow: 0 0 0 2px var(--acento-suave);
-}
-
-.filtro {
-  padding: 0.5rem 0.75rem;
-  font: inherit;
-  font-size: 0.875rem;
-  color: var(--texto);
-  background: var(--fondo);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  min-width: 140px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.filtro:focus {
-  outline: none;
-  border-color: var(--acento);
-  box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
 /* --------------------------------------------------------------- la tabla */
 
-.tabla-wrapper {
-  overflow-x: auto;
-  margin-bottom: 1rem;
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  background: var(--superficie);
-}
-
+/*
+ * Anchos fijos por columna.
+ *
+ * Con `table-layout: fixed` el navegador reparte el ancho segun esta
+ * tabla en vez de segun el contenido, y el resultado es el mismo en
+ * todas las pantallas: la columna de codigo no crece con un codigo largo
+ * ni la de acciones se estrecha y parte los botones en dos lineas.
+ */
 .tabla {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
   table-layout: fixed;
 }
 
 th,
 td {
-  padding: 0.625rem 0.75rem;
-  text-align: center;
-  vertical-align: middle;
-  border-bottom: 1px solid var(--borde);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-th {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--texto-suave);
-  background: var(--fondo);
-}
-
-th:nth-child(1) { width: 10%; }  /* Código */
+th:nth-child(1) { width: 10%; } /* Código */
 th:nth-child(2) { width: 22%; } /* Nombre */
 th:nth-child(3) { width: 14%; } /* Presentación */
 th:nth-child(4) { width: 14%; } /* Categoría */
 th:nth-child(5) { width: 14%; } /* Especie */
 th:nth-child(6) { width: 10%; } /* Estado */
 th:nth-child(7) { width: 16%; } /* Acciones */
-
-.num {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.centro {
-  text-align: center;
-}
-
-tbody tr {
-  transition: background-color 0.12s;
-}
-
-tbody tr:hover {
-  background: var(--fondo);
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.inactivo {
-  color: var(--texto-tenue);
-}
-
-.acciones-celda {
-  white-space: nowrap;
-  text-align: center;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--exito-suave);
-  color: var(--exito-texto);
-  border: 1px solid var(--exito-texto);
-}
-
-.badge-inactivo {
-  background: var(--peligro-suave);
-  color: var(--peligro-texto);
-  border-color: var(--peligro);
-}
-
-.acciones-fila {
-  display: inline-flex;
-  gap: 0.375rem;
-  align-items: center;
-  justify-content: center;
-}
-
-.acciones-fila button {
-  white-space: nowrap;
-  padding: 0.3125rem 0.625rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  border-radius: 5px;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.accion-editar {
-  color: var(--acento);
-  border-color: var(--acento);
-  background: var(--acento-suave);
-}
-
-.accion-editar:hover:not(:disabled) {
-  background: var(--acento);
-  color: var(--sobre-acento);
-}
-
-.accion-estado {
-  color: var(--advertencia-texto);
-  border-color: var(--advertencia);
-  background: var(--advertencia-suave);
-}
-
-.accion-estado:hover:not(:disabled) {
-  background: var(--advertencia);
-  color: var(--sobre-advertencia);
-}
-
-.accion-eliminar {
-  color: var(--peligro-texto);
-  border-color: var(--peligro);
-  background: var(--peligro-suave);
-}
-
-.accion-eliminar:hover:not(:disabled) {
-  background: var(--peligro);
-  color: var(--sobre-peligro);
-}
-
-.paginacion {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.cuenta {
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
-
-.vacio {
-  margin: 1rem 0;
-  color: var(--texto-tenue);
-  text-align: center;
-}
-
-/* Estado vacío mejorado */
-.estado-vacio {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 3rem 1.5rem;
-  text-align: center;
-  color: var(--texto-tenue);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-  margin: 1rem 0;
-}
-
-.icono-vacio {
-  width: 48px;
-  height: 48px;
-  color: var(--borde);
-  opacity: 0.6;
-}
-
-.estado-vacio p {
-  margin: 0;
-  font-size: 0.875rem;
-}
-
-.estado-vacio .primario {
-  margin-top: 0.5rem;
-}
-
-/* Spinner para botón guardando */
-.spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 0.375rem;
-  border: 2px solid transparent;
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ------------------------------------------------------------- los botones */
-
-button {
-  padding: 0.375rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-/*
- * El boton de a secas (Cancelar, Limpiar) se enciende con el borde del
- * acento, no con el fondo de la pagina: pintar el fondo dejaba el boton
- * plano y con menos contraste que el texto que tiene al lado.
- */
-button:hover:not(:disabled) {
-  background: var(--acento-suave);
-  border-color: var(--acento);
-  color: var(--acento-texto);
-}
-
-button:active:not(:disabled) {
-  background: var(--borde);
-}
-
-/*
- * El boton primario.
- *
- * El hover va a un azul MAS OSCURO y no a uno mas claro: `brightness(1.05)`
- * sobre `#1e40af` lo dejaba practicamente igual, y el boton no daba ninguna
- * señal de que el puntero estaba encima. Ahora el hover se ve, y es el
- * mismo tono que usa `Nuevo producto`, `Exportar Excel` y `Crear el
- * primero`, para que los tres se sientan el mismo boton.
- *
- * El `translateY` y la sombra van solo en el hover, y el `:active` los
- * quita: es lo que hace que el boton se sienta hundido al apretarlo.
- */
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-  font-weight: 600;
-}
-
-button.primario:hover:not(:disabled) {
-  color: var(--sobre-acento);
-  background: var(--acento-texto);
-  border-color: var(--acento-texto);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgb(30 64 175 / 25%);
-}
-
-button.primario:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-button.primario:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
-}
-
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
-}
-
-button.chico {
-  padding: 0.2rem 0.4rem;
-  font-size: 0.8125rem;
-}
-
-button.peligro {
-  color: var(--peligro-texto);
-  border-color: var(--peligro);
-}
-
-button.peligro:hover:not(:disabled) {
-  background: var(--peligro);
-  border-color: var(--peligro);
-  color: var(--sobre-peligro);
-}
-
-.oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
-}

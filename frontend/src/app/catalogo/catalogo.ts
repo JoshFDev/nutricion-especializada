@@ -29,7 +29,6 @@ import {
   type ClaveRecurso,
   type FilaCatalogo,
 } from './catalogo-api';
-import { montoComoTexto } from '../nucleo/cifras';
 
 /**
  * La pantalla de Especies y Categorias.
@@ -46,6 +45,15 @@ import { montoComoTexto } from '../nucleo/cifras';
  * tabla (id + nombre), y el nombre debe ser unico: el backend responde
  * `NOMBRE_DUPLICADO` y eso se pega al campo, como el codigo en clientes.
  */
+
+/**
+ * El filtro de uso del listado.
+ *
+ * `todas` es lo que sale por defecto; los otros dos ya contestan la
+ * pregunta que uno se hace al abrir el catalogo, que es "de esto, ¿que
+ * puedo quitar?".
+ */
+type FiltroUso = 'todas' | 'en-uso' | 'sin-uso';
 
 @Component({
   selector: 'app-catalogo',
@@ -92,14 +100,41 @@ export class Catalogo implements OnInit {
   // ------------------------------------------------------------- el listado
   readonly filas = signal<FilaCatalogo[]>([]);
   readonly total = signal(0);
-  readonly limite = signal(50);
-  readonly offset = signal(0);
+  readonly limite = signal(25);
+  readonly pagina = signal(1);
   readonly buscador = signal('');
   readonly cargando = signal(false);
   readonly exportando = signal(false);
   readonly error = signal<string | null>(null);
 
-  readonly hayMas = computed(() => this.filas().length < this.total());
+  /**
+   * El filtro de uso: cuales de las entradas se ven.
+   *
+   * `todas` es lo que sale por defecto. Es el filtro que mas se usa de los
+   * dos, porque el catalogo tiene dos trabajos distintos: dar de alta lo
+   * que falta, y quitar lo que sobra. Para lo segundo lo primero que hay
+   * que saber es si algo lo esta usando, y eso no se deduce del nombre.
+   */
+  readonly filtroUso = signal<FiltroUso>('todas');
+
+  /** Cuantas paginas hay, con el tamano de pagina elegido. */
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Que se ve en la barra: "1-25 de 40". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.total();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
+
+  /** Si el listado lleva algo puesto, para poder ofrecer "Limpiar". */
+  readonly hayFiltros = computed(
+    () => this.buscador().trim() !== '' || this.filtroUso() !== 'todas',
+  );
 
   // -------------------------------------------------------------- el editor
   readonly editando = signal<FilaCatalogo | null>(null);
@@ -150,8 +185,9 @@ export class Catalogo implements OnInit {
     this.error.set(null);
     try {
       const datos = await this.api.listar(this.recurso());
+      this.filas.set(datos);
       this.total.set(datos.length);
-      this.offset.set(0);
+      this.pagina.set(1);
       this.aplicarFiltro();
     } catch (falla) {
       this.error.set(errorLegible(falla).mensaje);
@@ -160,58 +196,107 @@ export class Catalogo implements OnInit {
     }
   }
 
-  /** Filtra localmente por nombre y pagina. */
+  /**
+   * Filtra y pagina en el cliente.
+   *
+   * El catalogo se trae ENTERO y se filtra aqui, no en el backend: son una
+   * docena de filas y el backend no acepta filtros en estas rutas
+   * (`catalogo/rutas.ts`). Con ese tamaño, filtrar en el navegador es
+   * instantáneo y no se pierde nada.
+   */
   private aplicarFiltro(): void {
     const texto = this.buscador().trim().toLowerCase();
-    const filtradas = texto
-      ? this.filas().filter((f) => f.nombre.toLowerCase().includes(texto))
-      : this.filas();
+    const uso = this.filtroUso();
+
+    const filtradas = this.filas().filter((f) => {
+      if (texto !== '' && !f.nombre.toLowerCase().includes(texto)) return false;
+      if (uso === 'en-uso') return f.usos > 0;
+      if (uso === 'sin-uso') return f.usos === 0;
+      return true;
+    });
+
     this.total.set(filtradas.length);
-    const inicio = this.offset();
-    const fin = inicio + this.limite();
-    this.filasVisibles.set(filtradas.slice(inicio, fin));
+
+    // Si el filtro deja menos paginas de las que estabas viendo, se baja a
+    // la ultima que queda: si no, "Página 4 de 1" y una tabla vacia.
+    const ultima = Math.max(1, Math.ceil(filtradas.length / this.limite()));
+    const pagina = Math.min(this.pagina(), ultima);
+    this.pagina.set(pagina);
+
+    const inicio = (pagina - 1) * this.limite();
+    this.filasVisibles.set(filtradas.slice(inicio, inicio + this.limite()));
   }
 
-  /** Texto de busqueda (debounced en el input). */
+  /** Texto de busqueda (va con retardo, como en productos). */
   buscar(texto: string): void {
+    clearTimeout(this.temporizador);
     this.buscador.set(texto);
-    this.offset.set(0);
+    this.temporizador = setTimeout(() => {
+      this.pagina.set(1);
+      this.aplicarFiltro();
+    }, 250);
+  }
+
+  /** Cambia el filtro de uso. */
+  filtrarUso(valor: string): void {
+    this.filtroUso.set(valor as FiltroUso);
+    this.pagina.set(1);
     this.aplicarFiltro();
   }
 
-  /** Limpia busqueda y vuelve a la primera pagina. */
+  /** Quita busqueda y filtro de golpe, y vuelve a la primera pagina. */
   limpiarFiltros(): void {
+    clearTimeout(this.temporizador);
     this.buscador.set('');
-    this.offset.set(0);
+    this.filtroUso.set('todas');
+    this.pagina.set(1);
     this.aplicarFiltro();
   }
 
   /** Cambia de pagina. */
-  irPagina(pagina: number): void {
-    this.offset.set((pagina - 1) * this.limite());
+  async irPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+    this.pagina.set(pagina);
     this.aplicarFiltro();
+    document.querySelector('.catalogo .tabla-wrapper')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
   }
 
-  /** Numero total de paginas. */
-  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+  /**
+   * El tamano de pagina como texto, para el `[value]` del desplegable.
+   *
+   * En las plantillas de Angular no hay `String` global (si `JSON`, si
+   * `Math`, pero no `String`), y `[value]` necesita texto: con un numero, el
+   * `value` del `select` no coincide con ninguna opcion y sale vacio.
+   */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
 
-  /** Pagina actual (1-indexed). */
-  readonly paginaActual = computed(() => Math.floor(this.offset() / this.limite()) + 1);
-
-  /** Ventana de paginas visibles alrededor de la actual (max 5). */
-  readonly paginasVisibles = computed(() => {
-    const total = this.paginasTotales();
-    const actual = this.paginaActual();
-    const inicio = Math.max(1, actual - 2);
-    const fin = Math.min(total, inicio + 4);
-    return Array.from({ length: fin - inicio + 1 }, (_, i) => inicio + i);
-  });
+  /** Cambia cuantos registros se ven por pagina. */
+  async aTamanoDePagina(valor: string): Promise<void> {
+    this.limite.set(Number(valor));
+    this.pagina.set(1);
+    this.aplicarFiltro();
+  }
 
   /** Resto visible actual. */
   readonly filasVisibles = signal<FilaCatalogo[]>([]);
 
-  /** Helper para Math.min en template. */
-  min = Math.min;
+  private temporizador: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * El conteo de usos en texto: "3 usos", "1 uso".
+   *
+   * Va como texto y no con un numero suelto porque el número solo no dice
+   * de qué: parece un precio o una cantidad de productos, que es
+   * justamente lo que el operador cree que está viendo.
+   */
+  usoDe(fila: FilaCatalogo): string {
+    return fila.usos === 1 ? '1 uso' : `${fila.usos} usos`;
+  }
 
   /** Exporta a Excel. */
   async exportarExcel(): Promise<void> {
@@ -265,6 +350,23 @@ export class Catalogo implements OnInit {
     this.editorVisible.set(false);
     this.errorEditor.set(null);
     this.forma.reset({ nombre: '' });
+  }
+
+  /**
+   * Enter guarda el editor, Escape lo cierra. Igual que en productos y
+   * precios: son las dos teclas de un formulario de un solo campo, y sin
+   * esto hay que llegar al ratón para confirmar.
+   */
+  onKeydown(evento: KeyboardEvent): void {
+    if (evento.key === 'Escape' && this.editorVisible()) {
+      evento.preventDefault();
+      this.cancelar();
+      return;
+    }
+    if (evento.key === 'Enter' && this.editorVisible() && !this.guardando()) {
+      evento.preventDefault();
+      void this.guardar();
+    }
   }
 
   /** Alta o renombrado, lo decide `esAlta`. */

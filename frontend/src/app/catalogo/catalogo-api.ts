@@ -21,6 +21,16 @@ import { API } from '../nucleo/api';
 export interface FilaCatalogo {
   id: number;
   nombre: string;
+  /**
+   * Cuantas filas la apuntan (productos, y clientes en las especies).
+   *
+   * Lo trae el listado (`FilaCatalogoConUsos` en el backend) y es lo que
+   * permite el filtro "En uso / Sin uso". Sin el, el unico filtro posible
+   * seria el nombre, y el nombre no dice si esa categoria la usan tres
+   * productos o ninguno — que es justo lo que uno quiere saber antes de
+   * intentar borrarla y comerse el 409 EN_USO.
+   */
+  usos: number;
 }
 
 /** Las dos tablas del catalogo. `ClaveRecurso` en `catalogo/repositorio.ts`. */

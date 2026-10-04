@@ -22,6 +22,7 @@ const COLUMNAS_EDITABLES = new Set([
   'apellido_materno',
   'puesto',
   'activo',
+  'fondo_login',
 ]);
 
 /**

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { esClaveFondo } from './fondos-login.js';
 
 /**
  * Esquemas del modulo de usuarios.
@@ -92,6 +93,10 @@ export const actualizarUsuarioEsquema = z
     apellido_materno: z.string().trim().max(120).nullish(),
     puesto: z.string().trim().max(120).nullish(),
     activo: z.boolean().optional(),
+    // null = quitar la eleccion y volver al fondo por defecto. Se valida
+    // contra la misma lista que usa el CHECK de 0013, para que el error
+    // llegue como mensaje de zod y no como error de Postgres.
+    fondo_login: z.string().trim().min(1).refine(esClaveFondo, 'Ese fondo no existe').nullish(),
   })
   .refine((d) => Object.keys(d).length > 0, {
     message: 'No enviaste ningun campo para actualizar',

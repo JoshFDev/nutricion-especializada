@@ -6,6 +6,8 @@
  * el borde (mapeoUsuarioAbajo) antes de salir del servicio.
  */
 
+import { fondoDe, type FondoLogin } from './fondos-login.js';
+
 export interface RolFila {
   id: number;
   nombre: string;
@@ -30,6 +32,8 @@ export interface UsuarioFila {
   ultimo_acceso: Date | null;
   creado_en: Date;
   actualizado_en: Date;
+  /** Clave del fondo de login, o null si no eligio ninguno. */
+  fondo_login: string | null;
   /** json_agg de los roles, o null si el usuario no tiene ninguno. */
   roles: RolFila[] | null;
 }
@@ -52,6 +56,15 @@ export interface Usuario {
   ultimo_acceso: string | null;
   creado_en: string;
   actualizado_en: string;
+  /**
+   * El fondo que esta persona vera al entrar, ya resuelto a su `url`.
+   *
+   * Va resuelto y no como la clave cruda a proposito: el frontend no tiene por
+   * que saber quantas imagenes hay ni como se llaman. Si maniara la clave,
+   * cada vez que se agrega una foto habria que tocar el frontend tambien, y
+   * es una decision que pertenece al backend (ver `fondos-login.ts`).
+   */
+  fondo: FondoLogin;
   roles: RolFila[];
 }
 
@@ -96,5 +109,6 @@ export const mapeoUsuario = (fila: UsuarioFila): Usuario => ({
   ultimo_acceso: fila.ultimo_acceso?.toISOString() ?? null,
   creado_en: fila.creado_en.toISOString(),
   actualizado_en: fila.actualizado_en.toISOString(),
+  fondo: fondoDe(fila.fondo_login),
   roles: (fila.roles ?? []).map(mapeoRol),
 });

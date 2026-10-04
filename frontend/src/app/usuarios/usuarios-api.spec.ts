@@ -35,6 +35,7 @@ function usuario(extra: Partial<Usuario> = {}): Usuario {
     creado_en: '2020-01-01T00:00:00.000Z',
     actualizado_en: '2020-01-01T00:00:00.000Z',
     roles: [],
+    fondo: { clave: 'vacaLengua', etiqueta: 'Vaca con lengua', url: '/fondos/vacaLengua.jpg' },
     ...extra,
   };
 }

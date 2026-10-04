@@ -153,6 +153,47 @@
         </p>
       }
 
+      <!--
+        El fondo del login. Es lo unico decorativo de esta pantalla y por eso
+        va al final, aparte de los datos: no identifica a la persona ni cambia
+        ningun permiso.
+
+        Va con miniaturas y no con un `<select>` porque el fondo es una imagen y
+        su nombre ("Vaca con lengua") no dice de que se trata. Verla es la
+        unica forma de elegir bien.
+
+        Es la unica preference que se edita aqui y no en la ficha, y a
+        proposito: no toca permisos ni cierra sesiones, asi que no tiene por
+        que ir en su propio PUT.
+      -->
+      @if (fondos().length > 0) {
+        <div class="bloque">
+          <h2>Fondo del login</h2>
+          <p class="pista">Es lo que esta persona verá al entrar. No cambia nada de su cuenta.</p>
+          <div class="fondos" role="radiogroup" aria-label="Fondo del login">
+            @for (fondo of fondos(); track fondo.clave) {
+              <button
+                type="button"
+                class="fondo"
+                role="radio"
+                [attr.aria-checked]="fondoElegido() === fondo.clave"
+                [class.elegido]="fondoElegido() === fondo.clave"
+                (click)="elegirFondo(fondo.clave)"
+                [title]="fondo.etiqueta"
+              >
+                <img [src]="fondo.url" [alt]="fondo.etiqueta" />
+                <span>{{ fondo.etiqueta }}</span>
+              </button>
+            }
+            @if (fondoElegido() !== null) {
+              <button type="button" class="fondo quitar" (click)="elegirFondo(fondoElegido()!)">
+                Quitar el fondo
+              </button>
+            }
+          </div>
+        </div>
+      }
+
       <div class="acciones">
         <button type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
         <button

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { cuerpo, consulta, parametros } from '../../core/validacion.js';
 import type { ActualizarUsuario, AsignarRoles, CrearUsuario, ListarUsuarios } from './esquemas.js';
+import { FONDOS_LOGIN } from './fondos-login.js';
 import * as servicio from './servicio.js';
 
 /**
@@ -24,6 +25,18 @@ export const obtener = async (req: Request, res: Response): Promise<void> => {
 
 export const listarRoles = async (req: Request, res: Response): Promise<void> => {
   res.json(await servicio.roles(req.db));
+};
+
+/**
+ * Los fondos de login que se pueden elegir.
+ *
+ * No consulta la base: es la constante de `fondos-login.ts`. Va como endpoint y
+ * no como algo fijo en el frontend porque la lista cambia con una migracion, y
+ * duplicarla en el cliente seria tener dos verdades que se desincronizan sin
+ * que nada avise.
+ */
+export const listarFondos = async (_req: Request, res: Response): Promise<void> => {
+  res.json({ datos: FONDOS_LOGIN });
 };
 
 export const crear = async (req: Request, res: Response): Promise<void> => {

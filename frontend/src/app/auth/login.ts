@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../environments/environment';
 import { errorLegible } from '../nucleo/api';
+import { leerFondo } from '../nucleo/fondo-login';
 import { Sesion } from '../nucleo/sesion';
 
 /**
@@ -34,7 +35,7 @@ export class Login {
    * El acceso directo de desarrollo.
    *
    * `environment.produccion` vale `true` en el archivo de produccion y
-   * `false` en el de desarrollo (los dos se说不te intercambian con
+   * `false` en el de desarrollo (los dos se intercambian con
    * `fileReplacements` en `angular.json`), asi que este boton se dibuja
    * unicamente con `ng serve`.
    *
@@ -50,6 +51,21 @@ export class Login {
     correo: ['', [Validators.required, Validators.email]],
     contrasena: ['', [Validators.required]],
   });
+
+  /**
+   * El fondo, ya envuelto en `url()`.
+   *
+   * Se lee UNA vez, al construir el componente, y como propiedad normal y no
+   * como signal. Suena raro, pero es lo que evita el destello: si fuera un
+   * signal que arranca vacio, el primer render tendria el fondo por defecto y
+   * al siguiente cuadro saltaria al de la preferencia. Con esto ya nace con el
+   * valor final y no hay nada que replaces.
+   *
+   * La fuente de verdad de la preferencia vive en el servidor (columna
+   * `usuarios.fondo_login`); esta es la copia local, porque aqui todavia no
+   * hay sesion de la cual leerla. Ver `nucleo/fondo-login.ts`.
+   */
+  readonly imagenFondo = `url('${leerFondo()}')`;
 
   /** El error de la API, ya en texto para pintar. */
   readonly error = signal<string | null>(null);

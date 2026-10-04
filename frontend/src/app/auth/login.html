@@ -1,85 +1,92 @@
-<main class="pantalla">
-  <section class="tarjeta">
-    <!--
-      El logo arriba del titulo, que es donde tiene que estar: es lo unico de
-      la app que se ve sin sesion, y sin el el login es un formulario en
-      blanco que no dice de que sistema es.
-
-      Aqui va a tamano grande y SIN placa, porque la tarjeta ya es blanca y el
-      dibujo se lee completo. `alt` vacio porque el nombre lo dice el `h1` de
-      abajo: dos veces el mismo texto es ruido para el lector de pantalla.
-    -->
-    <img class="logo" src="logo-nutricion.png" alt="" />
-    <h1>Nutricion Especializada</h1>
-    <p class="sub">Captura de remisiones, cartera y almacen</p>
-
-    @if (avisoSesionCerrada()) {
-      <p class="aviso aviso-info">Tu sesion se cerro. Vuelve a entrar para continuar.</p>
-    }
-
-    <form [formGroup]="form" (ngSubmit)="entrar()">
-      <label for="correo">Correo</label>
-      <input
-        id="correo"
-        type="email"
-        formControlName="correo"
-        autocomplete="username"
-        autofocus
-        [class.invalido]="tocado('correo')"
-      />
-      @if (tocado('correo')) {
-        <p class="campo-error">Escribe un correo con formato valido.</p>
-      }
-
-      <label for="contrasena">Contrasena</label>
-      <input
-        id="contrasena"
-        type="password"
-        formControlName="contrasena"
-        autocomplete="current-password"
-        [class.invalido]="tocado('contrasena')"
-      />
-      @if (tocado('contrasena')) {
-        <p class="campo-error">La contrasena no puede ir vacia.</p>
-      }
-
-      @if (error()) {
-        <p class="aviso aviso-error" role="alert">{{ error() }}</p>
-      }
-
+<main class="pantalla" [style.--fondo-login]="imagenFondo">
+  <section class="panel">
+    <div class="tarjeta">
       <!--
-        El boton se deshabilita mientras viaja la peticion. Un doble clic
-        manda dos logins, y el segundo error (de sesion ya usada) se come el
-        mensaje del primero. Tambien dice "Entrando..." para que se vea que
-        algo paso: sin eso, en una red lenta parece que el clic no entro.
-      -->
-      <button type="submit" [disabled]="enviando()">
-        {{ enviando() ? 'Entrando...' : 'Entrar' }}
-      </button>
-    </form>
+        La cabecera va en su propio bloque, separada del formulario por una
+        linea: sin ella, el campo de correo parece el primer campo de algo que
+        empieza mas abajo de donde empieza, y no se distingue donde acaba la
+        identidad de la app y donde empiezan las credenciales.
 
-    @if (esDesarrollo) {
-      <!--
-        Acceso directo de desarrollo. Solo aparece con `ng serve`, y el
-        backend lo rechaza con 404 en produccion (ver `app.ts` y
-        `auth/rutas-dev.ts`), asi que el candado no depende de que este
-        boton este escondido.
-
-        Se separa del formulario y no es un `type="submit"` mas: es una
-        peticion distinta, a otra ruta, con otro cuerpo, y mezclarla en el
-        mismo form haria que el submit normal lo mandara.
+        El logo va arriba del titulo porque es lo unico de la app que se ve sin
+        sesion: sin el, el login es un formulario en blanco que no dice de que
+        sistema es. Sin placa porque la tarjeta ya es clara y el dibujo se lee
+        entero. `alt` vacio porque el nombre lo dice el `h1` de abajo: dos
+        veces el mismo texto es ruido para el lector de pantalla.
       -->
-      <div class="desarrollo">
-        <button
-          type="button"
-          class="atajo"
-          (click)="entrarComoAdministrador()"
-          [disabled]="enviando()"
-        >
-          Entrar como administrador
+      <header class="cabecera">
+        <img class="logo" src="logo-nutricion.png" alt="" />
+        <h1>Nutricion Especializada</h1>
+        <p class="sub">Captura de remisiones, cartera y almacen</p>
+      </header>
+
+      @if (avisoSesionCerrada()) {
+        <p class="aviso aviso-info">Tu sesion se cerro. Vuelve a entrar para continuar.</p>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="entrar()">
+        <label for="correo">Correo</label>
+        <input
+          id="correo"
+          type="email"
+          formControlName="correo"
+          autocomplete="username"
+          autofocus
+          [class.invalido]="tocado('correo')"
+        />
+        @if (tocado('correo')) {
+          <p class="campo-error">Escribe un correo con formato valido.</p>
+        }
+
+        <label for="contrasena">Contrasena</label>
+        <input
+          id="contrasena"
+          type="password"
+          formControlName="contrasena"
+          autocomplete="current-password"
+          [class.invalido]="tocado('contrasena')"
+        />
+        @if (tocado('contrasena')) {
+          <p class="campo-error">La contrasena no puede ir vacia.</p>
+        }
+
+        @if (error()) {
+          <p class="aviso aviso-error" role="alert">{{ error() }}</p>
+        }
+
+        <!--
+          El boton se deshabilita mientras viaja la peticion. Un doble clic
+          manda dos logins, y el segundo error (de sesion ya usada) se come el
+          mensaje del primero. Tambien dice "Entrando..." para que se vea que
+          algo paso: sin eso, en una red lenta parece que el clic no entro.
+        -->
+        <button type="submit" [disabled]="enviando()">
+          {{ enviando() ? 'Entrando...' : 'Entrar' }}
         </button>
-        <p>Solo en desarrollo. Entra como el administrador del seed, sin contrasena.</p>
-      </div>
-    }
+      </form>
+
+      @if (esDesarrollo) {
+        <!--
+          Acceso directo de desarrollo. Solo aparece con `ng serve`, y el
+          backend lo rechaza con 404 en produccion (ver `app.ts` y
+          `auth/rutas-dev.ts`), asi que el candado no depende de que este
+          boton este escondido.
+
+          Se separa del formulario y no es un `type="submit"` mas: es una
+          peticion distinta, a otra ruta, con otro cuerpo, y mezclarla en el
+          mismo form haria que el submit normal lo mandara.
+        -->
+        <div class="desarrollo">
+          <button
+            type="button"
+            class="atajo"
+            (click)="entrarComoAdministrador()"
+            [disabled]="enviando()"
+          >
+            Entrar como administrador
+          </button>
+          <p>Solo en desarrollo. Entra como el administrador del seed, sin contrasena.</p>
+        </div>
+      }
+    </div>
   </section>
 </main>

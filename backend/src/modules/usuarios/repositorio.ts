@@ -21,7 +21,7 @@ const PROYECCION = `
   u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.rfc, u.email,
   u.fecha_contratacion, u.puesto, u.activo, u.es_dueno,
   u.debe_cambiar_contrasena, u.intentos_fallidos, u.bloqueado_hasta,
-  u.ultimo_acceso, u.creado_en, u.actualizado_en,
+  u.ultimo_acceso, u.creado_en, u.actualizado_en, u.fondo_login,
   (SELECT json_agg(json_build_object(
               'id', r.id, 'nombre', r.nombre, 'descripcion', r.descripcion,
               'es_admin', r.es_admin) ORDER BY r.nombre)

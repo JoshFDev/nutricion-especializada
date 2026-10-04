@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { errorLegible } from '../nucleo/api';
+import { guardarFondo } from '../nucleo/fondo-login';
 import { Sesion } from '../nucleo/sesion';
 import {
   ETIQUETA_ESTADO,
@@ -14,6 +15,7 @@ import {
   rolesNormalizados,
   rfcNormalizado,
   rfcValido,
+  type FondoLogin,
   type Rol,
   type Usuario,
 } from './usuarios-api';
@@ -115,6 +117,25 @@ export class Usuarios {
    */
   readonly catalogo = signal<Rol[]>([]);
 
+  /**
+   * Los fondos de login, para el selector del editor.
+   *
+   * Se piden al backend y no se escriben aqui: la lista crece con una
+   * migracion, y una copia en el frontend se desincronizaria en silencio. Con
+   * dos imagenes da igual, pero la proxima que se agregue solo se pondria
+   * visible editando dos archivos.
+   */
+  readonly fondos = signal<FondoLogin[]>([]);
+
+  /**
+   * El fondo elegido en el editor, o null para el de por defecto.
+   *
+   * Va aparte del formulario a proposito: `fondo_login` es opcional en el
+   * PATCH, y si fuera un control del form, guardar sin tocarlo mandaria el
+   * valor inicial y dejaria fijada una eleccion que nadie hizo.
+   */
+  readonly fondoElegido = signal<string | null>(null);
+
   // ---------------------------------------------------------------- el editor
   readonly editando = signal<Usuario | null>(null);
   readonly guardando = signal(false);
@@ -181,6 +202,7 @@ export class Usuarios {
 
   constructor() {
     void this.cargarCatalogo();
+    void this.cargarFondos();
     void this.recargar();
   }
 
@@ -189,6 +211,18 @@ export class Usuarios {
       this.catalogo.set(await this.api.roles());
     } catch (falla) {
       this.error.set(errorLegible(falla).mensaje);
+    }
+  }
+
+  private async cargarFondos(): Promise<void> {
+    try {
+      this.fondos.set(await this.api.fondos());
+    } catch (falla) {
+      // A diferencia del catalogo de roles, aqui no hay error: el fondo es
+      // decorativo y sin la lista el resto de la pantalla funciona igual. Se
+      // avisa igual, pero en consola, para no dejar al usuario con un error
+      // en la cara por una foto de fondo.
+      console.warn('No se pudieron cargar los fondos del login:', errorLegible(falla).mensaje);
     }
   }
 
@@ -285,6 +319,9 @@ export class Usuarios {
     // que elegirlo, que es lo correcto para dar de alta a alguien.
     const porDefecto = this.catalogo().find((rol) => rol.id === 2);
     this.rolesMarcados.set(porDefecto ? [porDefecto.id] : []);
+    // Sin eleccion en el alta: el fondo por defecto es el del backend, y
+    // dejarlo en null lo dice de forma explicita.
+    this.fondoElegido.set(null);
     // Sin id: el editor sabe que es alta (ver `esAlta`).
     this.editando.set({} as Usuario);
   }
@@ -299,6 +336,10 @@ export class Usuarios {
       puesto: usuario.puesto ?? '',
       fecha_contratacion: usuario.fecha_contratacion.slice(0, 10),
     });
+    // En edicion el fondo SÍ se cambia desde aqui, a diferencia de los roles.
+    // Es una preferencia sin efecto sobre las sesiones abiertas, asi que no
+    // tiene por que ir en su propio `PUT` como el de los roles.
+    this.fondoElegido.set(usuario.fondo.clave);
     // Los roles NO se marcan aqui a proposito: en edicion no se cambian, se
     // cambian desde el detalle con su propio `PUT`, que ademas cierra las
     // sesiones de la persona. Poner casillas que no guardan nada seria una
@@ -306,6 +347,14 @@ export class Usuarios {
     this.errorEditor.set(null);
     this.editando.set(usuario);
   }
+
+  /** Elige un fondo del login. Volver a marcar el que ya estaba lo deja igual. */
+  elegirFondo(clave: string): void {
+    this.fondoElegido.update((actual) => (actual === clave ? null : clave));
+  }
+
+  /** El fondo por defecto, para el boton de "quitar la eleccion". */
+  readonly claveFondoDefecto = 'vacaLengua';
 
   cancelar(): void {
     this.editando.set(null);
@@ -380,7 +429,17 @@ export class Usuarios {
         // Edicion: los roles NO se tocan aqui. Van en su propio `PUT`, que
         // cierra las sesiones, y mezclarlos haria que un cambio de nombre
         // tumbara a la persona de todos los equipos.
-        await this.api.actualizar(actual.id, cuerpoDeActualizacion(bruto));
+        const actualizado = await this.api.actualizar(actual.id, {
+          ...cuerpoDeActualizacion(bruto),
+          fondo_login: this.fondoElegido(),
+        });
+        // Si la persona editada es la de esta maquina, su copia local del
+        // login se actualiza tambien. Sin esto habria que esperar al proximo
+        // ingreso para que el fondo nuevo se viera, y pareceria que el cambio
+        // no se guardo.
+        if (actualizado.id === this.idActual()) {
+          guardarFondo(actualizado.fondo.url);
+        }
         this.editando.set(null);
         await this.recargar();
         // Si se abrio desde la ficha, la ficha se queda abierta y se

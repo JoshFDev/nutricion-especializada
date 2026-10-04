@@ -65,7 +65,22 @@ export interface Usuario {
   ultimo_acceso: string | null;
   creado_en: string;
   actualizado_en: string;
+  /**
+   * El fondo que esta persona vera al entrar, ya resuelto.
+   *
+   * Llega como objeto y no como la clave guardada para que el frontend no
+   * tenga que saber quantas imagenes hay ni como se llaman: esa lista es del
+   * backend y cambia con una migracion (ver `usuarios/fondos-login.ts`).
+   */
+  fondo: FondoLogin;
   roles: Rol[];
+}
+
+/** Un fondo del login. La lista llega de `GET /api/usuarios/fondos`. */
+export interface FondoLogin {
+  clave: string;
+  etiqueta: string;
+  url: string;
 }
 
 /** La envoltura del listado (`usuarios/servicio.ts`). */
@@ -129,6 +144,14 @@ export interface CuerpoActualizacion {
   apellido_materno?: string | null;
   puesto?: string | null;
   activo?: boolean;
+  /**
+   * La CLAVE del fondo, o null para volver al de por defecto.
+   *
+   * Va la clave y no la `url` a proposito: el backend valida contra su lista y
+   * devuelve el `fondo` ya resuelto. Mandar la url seria pedirle al servidor
+   * que se fíe de un texto que eligio el cliente.
+   */
+  fondo_login?: string | null;
 }
 
 // ------------------------------------------------------------------ el RFC
@@ -306,6 +329,20 @@ export class UsuariosApi {
    */
   async roles(): Promise<Rol[]> {
     return firstValueFrom(this.http.get<Rol[]>(`${API}/usuarios/roles`));
+  }
+
+  /**
+   * Los fondos de login que se pueden elegir.
+   *
+   * Viene del backend en vez de estar escrito aqui a mano por lo mismo que los
+   * roles: la lista crece con una migracion, y si el frontend tuviera su propia
+   * copia se podrian desincronizar sin que nada avise.
+   */
+  async fondos(): Promise<FondoLogin[]> {
+    const r = await firstValueFrom(
+      this.http.get<{ datos: FondoLogin[] }>(`${API}/usuarios/fondos`),
+    );
+    return r.datos;
   }
 
   /**

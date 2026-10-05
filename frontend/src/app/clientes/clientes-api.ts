@@ -1,19 +1,19 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { API } from '../nucleo/api';
+import { API, descargarExcel } from '../nucleo/api';
 
 /**
  * La API de clientes.
  *
  * Los tipos son un espejo de `backend/src/modules/clientes`. El RFC y la
- * razon social vienen de `datos_fiscales_cliente` (LEFT JOIN en el listado)
- * pero NO se pueden escribir por esta API: el esquema de alta/edicion no
+ * razón social vienen de `datos_fiscales_cliente` (LEFT JOIN en el listado)
+ * pero NO se pueden escribir por esta API: el esquema de alta/edición no
  * los acepta, igual que el del backend. Por eso la forma del editor no los
  * lleva, y la fila si, para que se puedan ver.
  *
- * La lista responde con forma DISTINTA a la de productos: aqui es
- * `{ datos, paginacion: { limite, offset, total } }` (ver
+ * La lista responde con forma DISTINTA a la de productos: aquí es
+ * `{ datos, paginación: { limite, offset, total } }` (ver
  * `clientes/servicio.ts`), y productos manda el total suelto. Cada pantalla
  * define su propia envoltura.
  */
@@ -38,7 +38,7 @@ export interface Cliente {
   actualizado_en: string;
 }
 
-/** `catalogo/modelo.ts` -> `Especie`. Solo se usa el id y el nombre. */
+/** `catálogo/modelo.ts` -> `Especie`. Solo se usa el id y el nombre. */
 export interface Especie {
   id: number;
   nombre: string;
@@ -55,8 +55,8 @@ export interface ListaClientes {
  *
  * Van como TEXTO los campos que el backend recibe opcionales o numericos:
  * el select de especie manda `''` cuando no se elige ninguna, y el cuerpo
- * la convierte en `null`. Asi el formulario no tiene que saber distinguir
- * "vacio" de "no existe", que es problema del borde.
+ * la convierte en `null`. Así el formulario no tiene que saber distinguir
+ * "vacío" de "no existe", que es problema del borde.
  */
 export interface FormaCliente {
   codigo_cliente: string;
@@ -82,9 +82,9 @@ export interface CuerpoCliente {
 /**
  * La forma del editor convertida al cuerpo de la peticion.
  *
- * El codigo va en MAYUSCULAS y limpio de espacios: el esquema del backend
- * ya lo transforma asi, y hacerlo aqui evita que el listado refrescado
- * muestre el codigo con mayusculas distinto al que se tecleo.
+ * El código va en MAYUSCULAS y limpio de espacios: el esquema del backend
+ * ya lo transforma así, y hacerlo aquí evita que el listado refrescado
+ * muestre el código con mayúsculas distinto al que se tecleó.
  */
 export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
   return {
@@ -98,7 +98,7 @@ export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
   };
 }
 
-/** Un campo opcional que llego en blanco se manda como `null`, que es como
+/** Un campo opcional que llegó en blanco se manda como `null`, que es como
  * lo trata la base: sin dato, no con un string de espacios. */
 function textoONull(valor: string): string | null {
   const limpio = valor.trim();
@@ -112,11 +112,11 @@ export class ClientesApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * Lista con filtros y paginacion.
+   * Lista con filtros y paginación.
    *
-   * `buscar` busca en nombre, codigo Y rfc (el LEFT JOIN del listado); aqui
-   * se envuelve solo en el minimo de dos caracteres, igual que el buscador
-   * del POS: con uno el backend trae medio catalogo.
+   * `buscar` busca en nombre, código Y rfc (el LEFT JOIN del listado); aquí
+   * se envuelve solo en el mínimo de dos caracteres, igual que el buscador
+   * del POS: con uno el backend trae medio catálogo.
    */
   async listar(opciones: {
     buscar?: string;
@@ -143,14 +143,37 @@ export class ClientesApi {
     return firstValueFrom(this.http.patch<Cliente>(`${API}/clientes/${id}`, cuerpo));
   }
 
-  /** Borra. 204 si salio. */
+  /** Borra. 204 si salió. */
   async eliminar(id: number): Promise<void> {
     await firstValueFrom(this.http.delete(`${API}/clientes/${id}`));
   }
 
-  /** El catalogo de especies para el select del editor. */
+  /** El catálogo de especies para el select del editor. */
   async especies(): Promise<Especie[]> {
     const respuesta = await firstValueFrom(this.http.get<{ datos: Especie[] }>(`${API}/especies`));
     return respuesta.datos;
+  }
+
+  /**
+   * Exporta a Excel lo que hay FILTRADO, no la página que se ve.
+   *
+   * Los filtros se mandan tal cuál y sin `limite`/`offset`: el backend tiene
+   * su propia ruta sin paginación para esto, así que el archivo sale entero
+   * aunque en la pantalla se este viendo la segunda de tres páginas. Por eso
+   * esta fuera de `listar()` y no es un `listar` con otros parametros.
+   */
+  async exportarExcel(filtro: { buscar?: string; estatus?: 'Activo' | 'Inactivo' }): Promise<void> {
+    const params: Record<string, string> = {};
+    if (filtro.buscar) params['buscar'] = filtro.buscar;
+    if (filtro.estatus) params['estatus'] = filtro.estatus;
+
+    const respuesta = await firstValueFrom(
+      this.http.get(`${API}/clientes/exportar`, {
+        params,
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+    descargarExcel(respuesta, 'clientes.xlsx');
   }
 }

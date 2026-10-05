@@ -1,18 +1,18 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { API } from '../nucleo/api';
+import { API, descargarExcel } from '../nucleo/api';
 
 /**
  * La API de proveedores.
  *
- * Es el espejo de `backend/src/modules/proveedores`, y el modulo mas pequeno
- * del proyecto: nombre, contacto, telefono y nada mas. Tres cosas que no se
+ * Es el espejo de `backend/src/modules/proveedores`, y el módulo más pequeño
+ * del proyecto: nombre, contacto, teléfono y nada más. Tres cosas que no se
  * ven en los tipos pero si en las reglas:
  *
  *   - `saldo_actual` se LEE y nunca se manda. Lo mantiene
  *     `fn_recalcular_saldo_proveedor` sumando las compras y los pagos al
- *     proveedor; aceptarlo en el POST abriria la puerta a cuadrar a mano lo
+ *     proveedor; aceptarlo en el POST abriría la puerta a cuadrar a mano lo
  *     que la base recalcula sola. Por eso no esta en `CuerpoProveedor`.
  *   - No hay DELETE. La baja es `activo: false` por PATCH, y por eso el
  *     formulario NO tiene una casilla de "activo": el alta no la acepta
@@ -24,7 +24,7 @@ import { API } from '../nucleo/api';
  *
  * La envoltura de la lista es `{ datos, total, limite, offset }`
  * (`proveedores/servicio.ts`), como productos; clientes manda el total
- * anidado en `paginacion` y cada pantalla define la suya.
+ * anidado en `paginación` y cada pantalla define la suya.
  */
 
 // --------------------------------------------------------------------- tipos
@@ -33,7 +33,7 @@ import { API } from '../nucleo/api';
  * `proveedores/modelo.ts` -> `Proveedor`.
  *
  * Es lo que devuelven el alta, la edicion y `GET /:id`. El listado trae una
- * cosa mas (`compras`), y por eso son dos tipos y no uno con un opcional:
+ * cosa más (`compras`), y por eso son dos tipos y no uno con un opcional:
  * `compras` es un conteo de la fila, no una columna del proveedor.
  */
 export interface Proveedor {
@@ -52,7 +52,7 @@ export interface ProveedorListado extends Proveedor {
    * Cuantas compras tiene el proveedor.
    *
    * El conteo es del repositorio y no filtra por estatus (`proveedores/
-   * repositorio.ts`), asi que incluye las canceladas: sirve para saber si el
+   * repositorio.ts`), así que incluye las canceladas: sirve para saber si el
    * proveedor tiene historial —y por eso no se borra, se da de baja—, no
    * para cuadrar cuentas.
    */
@@ -115,7 +115,7 @@ export class ProveedoresApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * Lista con busqueda, filtro de estado y paginacion.
+   * Lista con búsqueda, filtro de estado y paginación.
    *
    * El filtro tiene tres estados porque el backend solo sabe decir
    * `activo: true` o `activo: false` (`listarProveedoresEsquema`), y "todos"
@@ -149,7 +149,7 @@ export class ProveedoresApi {
    * Edita.
    *
    * `activo` va APARTE del cuerpo y es opcional porque el esquema de crear
-   * no lo acepta: mandarlo en el alta seria un campo que el `strict` del
+   * no lo acepta: mandarlo en el alta sería un campo que el `strict` del
    * `POST` rechaza con un 400. Por eso el editor no lo manda y la baja se
    * alterna desde la fila con `alternarActivo`.
    */
@@ -163,11 +163,38 @@ export class ProveedoresApi {
    * Da de baja o reactiva, sin abrir el editor.
    *
    * Es un PATCH de un solo campo a proposito: el repositorio del backend
-   * arma el `UPDATE` campo por campo (`proveedores/repositorio.ts`), asi que
+   * arma el `UPDATE` campo por campo (`proveedores/repositorio.ts`), así que
    * mandando solo `activo` no se puede tocar por accidente el nombre o el
-   * telefono de un proveedor que ya tiene compras encima.
+   * teléfono de un proveedor que ya tiene compras encima.
    */
   async alternarActivo(id: number, activo: boolean): Promise<Proveedor> {
     return firstValueFrom(this.http.patch<Proveedor>(`${API}/proveedores/${id}`, { activo }));
+  }
+
+  /**
+   * Exporta a Excel lo que hay FILTRADO, no la página que se ve.
+   *
+   * Los filtros se mandan tal cuál y sin `limite`/`offset`: el backend tiene
+   * su propia ruta sin paginación para esto, así que el archivo sale entero
+   * aunque en la pantalla se esté viendo la segunda de tres páginas. Por eso
+   * esta fuera de `listar()` y no es un `listar` con otros parámetros.
+   */
+  async exportarExcel(filtro: {
+    buscar?: string;
+    activo?: 'todos' | 'activos' | 'inactivos';
+  }): Promise<void> {
+    const params: Record<string, string> = {};
+    if (filtro.buscar) params['buscar'] = filtro.buscar;
+    if (filtro.activo === 'activos') params['activo'] = 'true';
+    if (filtro.activo === 'inactivos') params['activo'] = 'false';
+
+    const respuesta = await firstValueFrom(
+      this.http.get(`${API}/proveedores/exportar`, {
+        params,
+        responseType: 'blob',
+        observe: 'response',
+      }),
+    );
+    descargarExcel(respuesta, 'proveedores.xlsx');
   }
 }

@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, type HttpResponse } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
 /**
@@ -162,4 +162,27 @@ function detallesDe(detalles: unknown): DetalleCampo[] {
     }
     return [];
   });
+}
+
+/**
+ * Guarda en el equipo el Excel que devuelve la API.
+ *
+ * El archivo llega como un `Blob` y hay que convertirlo en una descarga: se
+ * hace un `objectURL` temporal, se le pasa a un `<a>` con `download` y se
+ * pulsa. El nombre sale del `Content-Disposition` del backend, que es quien
+ * sabe si van today's date o el numero de la fila; el de aqui solo se usa si
+ * esa cabecera no llega (un proxy que la quita, por ejemplo).
+ *
+ * El `revokeObjectURL` va con espera y no de inmediato: hay navegadores que
+ * siguen leyendo del blob un instante despues del `click`, y si se libera
+ * antes de tiempo la descarga llega vacia.
+ */
+export function descargarExcel(respuesta: HttpResponse<Blob>, nombrePorDefecto: string): void {
+  const url = URL.createObjectURL(respuesta.body as Blob);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  const disposition = respuesta.headers.get('content-disposition');
+  enlace.download = /filename="([^"]+)"/.exec(disposition ?? '')?.[1] ?? nombrePorDefecto;
+  enlace.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

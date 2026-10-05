@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { cuerpoDeProveedor, type FormaProveedor } from './proveedores-api';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  type TestRequest,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { API } from '../nucleo/api';
+import { ProveedoresApi, cuerpoDeProveedor, type FormaProveedor } from './proveedores-api';
 
 /**
  * El cuerpo del proveedor: lo que se manda al backend.
@@ -64,5 +72,76 @@ describe('el cuerpo del proveedor', () => {
       'nombre',
       'telefono',
     ]);
+  });
+});
+
+/**
+ * La ruta de exportar.
+ *
+ * Es lo unico de esta API que necesita el HTTP de verdad simulado, y se
+ * prueba por dos razones concretas: que pegue a `/exportar` y NO a
+ * `/proveedores` (que devolveria JSON, no un archivo), y que NO mande
+ * `limite`/`offset`. Mandarlos haria que el excel saliera con solo la pagina
+ * que se esta viendo, que es justo lo que el operador no pide cuando exporta.
+ */
+describe('ProveedoresApi.exportarExcel', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+
+    // jsdom no sabe crear una URL de objeto, y la que trae vitest espera un
+    // Blob de su propio mundo. Con la descarga falseada lo que se prueba es
+    // la PETICION —la ruta y los filtros—, que es lo que esta pantalla
+    // decide; el nombre del archivo lo prueba `nucleo/api.spec.ts`.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    Object.defineProperty(URL, 'createObjectURL', { value: () => 'blob:mock', configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: () => undefined, configurable: true });
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  /** La peticion de la exportacion, ya respondida con un blob. */
+  async function pedir(
+    api: ProveedoresApi,
+    filtro: Parameters<ProveedoresApi['exportarExcel']>[0],
+  ): Promise<TestRequest> {
+    const promesa = api.exportarExcel(filtro);
+    const peticion = http.expectOne((req) => req.url.includes('/exportar'));
+    peticion.flush(new Blob(['xlsx']));
+    await promesa;
+    return peticion;
+  }
+
+  it('pega a /api/proveedores/exportar', async () => {
+    const peticion = await pedir(TestBed.inject(ProveedoresApi), {});
+
+    expect(peticion.request.method).toBe('GET');
+    expect(peticion.request.url).toBe(`${API}/proveedores/exportar`);
+    expect(peticion.request.responseType).toBe('blob');
+  });
+
+  it('no manda limite ni offset, para que salga el listado entero', async () => {
+    const peticion = await pedir(TestBed.inject(ProveedoresApi), { buscar: 'forra' });
+
+    expect(peticion.request.params.has('limite')).toBe(false);
+    expect(peticion.request.params.has('offset')).toBe(false);
+    expect(peticion.request.params.get('buscar')).toBe('forra');
+  });
+
+  it('traduce el filtro de estado a lo que el backend entiende', async () => {
+    // El desplegable tiene tres opciones y el backend solo dos: "todos" es no
+    // mandar el parametro, no mandar `activo=todos`.
+    const api = TestBed.inject(ProveedoresApi);
+
+    expect((await pedir(api, { activo: 'activos' })).request.params.get('activo')).toBe('true');
+    expect((await pedir(api, { activo: 'inactivos' })).request.params.get('activo')).toBe('false');
+    expect((await pedir(api, { activo: 'todos' })).request.params.has('activo')).toBe(false);
   });
 });

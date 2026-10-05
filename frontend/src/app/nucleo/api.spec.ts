@@ -1,6 +1,6 @@
-import { HttpErrorResponse } from '@angular/common/http';
-import { describe, expect, it } from 'vitest';
-import { errorLegible } from './api';
+import { HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { descargarExcel, errorLegible } from './api';
 
 /**
  * `errorLegible` es lo que decide que se le muestra a la persona cuando algo
@@ -86,5 +86,67 @@ describe('errorLegible', () => {
 
     expect(legible.codigo).toBe('ERROR_INESPERADO');
     expect(legible.mensaje).toBeTruthy();
+  });
+});
+
+/**
+ * `descargarExcel` es lo que hace que el archivo que baja se llame como debe.
+ *
+ * El backend manda el nombre en `content-disposition` (con la fecha, para que
+ * dos exportaciones del mismo día no se pisen), pero un proxy puede comerse esa
+ * cabecera, y por eso hay un nombre por defecto. Lo que NO puede pasar es que
+ * el archivo se quede con el nombre sin su extension y que el navegador no lo
+ * abra por unrecognized format.
+ */
+describe('descargarExcel', () => {
+  /** Los enlaces que se pulsaron, para mirar el nombre que se les puso. */
+  let descargas: HTMLAnchorElement[] = [];
+
+  function respuesta(conCabecera?: string): HttpResponse<Blob> {
+    return new HttpResponse({
+      body: new Blob(['xlsx']),
+      headers: conCabecera
+        ? new HttpHeaders({ 'content-disposition': conCabecera })
+        : new HttpHeaders(),
+    });
+  }
+
+  beforeEach(() => {
+    descargas = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      descargas.push(this);
+    });
+    // jsdom no trae las dos de `URL`, y sin ellas no hay forma de probar la
+    // descarga sin que salga el "Not implemented" de la navegacion.
+    Object.defineProperty(URL, 'createObjectURL', { value: () => 'blob:mock', configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: () => undefined, configurable: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('usa el nombre que manda el backend, con su fecha', () => {
+    descargarExcel(respuesta('attachment; filename="clientes-2026-10-05.xlsx"'), 'clientes.xlsx');
+
+    expect(descargas).toHaveLength(1);
+    expect(descargas[0].download).toBe('clientes-2026-10-05.xlsx');
+  });
+
+  it('cae al nombre por defecto si no llega la cabecera', () => {
+    // Es lo que pasa detras de un proxy que se come `content-disposition`:
+    // sin nombre por defecto el archivo se llama por la URL y el navegador
+    // no sabe que es un xlsx.
+    descargarExcel(respuesta(), 'clientes.xlsx');
+
+    expect(descargas[0].download).toBe('clientes.xlsx');
+  });
+
+  it('cae al nombre por defecto si la cabecera no trae filename', () => {
+    descargarExcel(respuesta('attachment'), 'proveedores.xlsx');
+
+    expect(descargas[0].download).toBe('proveedores.xlsx');
   });
 });

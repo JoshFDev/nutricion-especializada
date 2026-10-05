@@ -1,167 +1,331 @@
 <!--
-  Proveedores: listado + editor.
+  Proveedores: listado + editor inline colapsable.
 
-  Dos secciones excluyentes: con el editor abierto se ven los campos, y
-  cerrada se ve la tabla. El listado trae por omision los proveedores
-  ACTIVOS, y el boton de la fila alterna `activo` con un PATCH de un solo
-  campo (ver `alternarActivo`): no hay borrar, porque un proveedor con
-  compras tiene su nombre en documentos viejos.
+  La misma pantalla que clientes, productos y el catálogo: cabecera con la
+  acción principal, editor inline que se despliega ARRIBA de la tabla, barra
+  de filtros, tabla, estado vacío y paginación. El diseño sale de
+  `nucleo/pantallas.scss`.
 
-  El editor NO tiene casilla de "activo": el esquema de alta no acepta el
-  campo (`crearProveedorEsquema` es `strict` y no lo tiene) y la baja se
-  decide desde la fila.
+  Lo propio de esta pantalla:
+
+  - El editor tiene TRES campos, así que su rejilla es de dos columnas con el
+    nombre haciendo de campo ancho. Ver `proveedores.scss`.
+  - No hay botón de eliminar en ninguna fila: un proveedor con compras tiene
+    su nombre en documentos ya emitidos, así que la baja se hace con "Dar de
+    baja", que es un PATCH de un solo campo (ver `alternarActivo`). Por eso
+    esta pantalla no trae el modal de confirmación de productos: no hay nada
+    irreversible que preguntar.
+  - El listado sale por omisión con solo los ACTIVOS, que es como se usa en
+    una compra; el desplegable es el que cambia esa vista.
 -->
-<h1>Proveedores</h1>
-
-@if (editorAbierto()) {
-  <form class="editor" [formGroup]="forma" (ngSubmit)="guardar()">
-    <div class="cabecera">
-      <h2>{{ esAlta() ? 'Nuevo proveedor' : 'Editar proveedor' }}</h2>
-      <button type="button" (click)="cancelar()">Cancelar</button>
-    </div>
-
-    @if (errorEditor(); as error) {
-      <p class="error" role="alert">{{ error }}</p>
-    }
-
-    <div class="campos">
-      <div class="campo ancho">
-        <label for="nombre">Nombre</label>
-        <input
-          id="nombre"
-          type="text"
-          formControlName="nombre"
-          maxlength="120"
-          autocomplete="off"
-        />
-        @if (problemaDe('nombre'); as problema) {
-          <p class="ayuda">{{ problema }}</p>
-        }
-      </div>
-
-      <div class="campo">
-        <label for="contacto">Contacto</label>
-        <input
-          id="contacto"
-          type="text"
-          formControlName="contacto"
-          maxlength="120"
-          autocomplete="off"
-        />
-        @if (problemaDe('contacto'); as problema) {
-          <p class="ayuda">{{ problema }}</p>
-        }
-      </div>
-
-      <div class="campo">
-        <label for="telefono">Teléfono</label>
-        <input
-          id="telefono"
-          type="text"
-          formControlName="telefono"
-          maxlength="40"
-          autocomplete="off"
-        />
-        @if (problemaDe('telefono'); as problema) {
-          <p class="ayuda">{{ problema }}</p>
-        }
-      </div>
-    </div>
-
-    <p class="nota">
-      El nombre no se puede repetir: es como aparece al elegir al proveedor al capturar una compra.
-      El contacto y el teléfono son opcionales, y el saldo lo calcula el sistema con las compras y
-      los pagos.
-    </p>
-
-    <div class="acciones">
-      <button type="submit" class="primario" [disabled]="guardando() || forma.invalid">
-        {{ guardando() ? 'Guardando…' : 'Guardar' }}
-      </button>
-    </div>
-  </form>
-} @else {
+<section class="proveedores">
+  <!-- Cabecera: título a la izquierda, acción principal a la derecha -->
   <div class="cabecera">
-    <p class="subtitulo">
-      Los proveedores de donde viene la mercancía. Al capturar una compra se elige uno de aquí.
-    </p>
-    @if (puedeEditar()) {
-      <button type="button" class="primario" (click)="nuevo()">Nuevo proveedor</button>
+    <h1>Proveedores</h1>
+
+    @if (puedeGuardar()) {
+      <button
+        type="button"
+        class="toggle-editor"
+        (click)="alternarEditor()"
+        [attr.aria-expanded]="editorVisible()"
+        aria-controls="editor-form"
+      >
+        @if (editorVisible()) {
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Ocultar formulario
+        } @else {
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nuevo proveedor
+        }
+      </button>
     }
   </div>
 
-  <div class="filtros">
+  <!-- Editor inline (alta/edición) - colapsable arriba de la tabla -->
+  @if (puedeGuardar()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
+      <form
+        id="editor-form"
+        class="editor-inline"
+        [formGroup]="forma"
+        (keydown)="onKeydown($event)"
+      >
+        <div class="editor-cabecera">
+          <h2>{{ esAlta() ? 'Nuevo proveedor' : 'Editar proveedor' }}</h2>
+        </div>
+
+        @if (errorEditor(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+
+        <div class="campos">
+          <div class="campo ancho">
+            <label for="nombre">Nombre <span class="requerido" aria-hidden="true">*</span></label>
+            <input
+              id="nombre"
+              type="text"
+              formControlName="nombre"
+              maxlength="120"
+              autocomplete="off"
+              placeholder="Forrajera del Bajío"
+              [attr.aria-invalid]="
+                forma.controls.nombre.invalid &&
+                (forma.controls.nombre.dirty || forma.controls.nombre.touched)
+              "
+              [attr.aria-describedby]="problemaDe('nombre') ? 'nombre-error' : null"
+            />
+            @if (problemaDe('nombre'); as problema) {
+              <span class="ayuda" id="nombre-error">{{ problema }}</span>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="contacto">Contacto</label>
+            <input
+              id="contacto"
+              type="text"
+              formControlName="contacto"
+              maxlength="120"
+              autocomplete="off"
+            />
+            @if (problemaDe('contacto'); as problema) {
+              <span class="ayuda">{{ problema }}</span>
+            }
+          </div>
+
+          <div class="campo">
+            <label for="telefono">Teléfono</label>
+            <input
+              id="telefono"
+              type="text"
+              formControlName="telefono"
+              maxlength="40"
+              autocomplete="off"
+            />
+            @if (problemaDe('telefono'); as problema) {
+              <span class="ayuda">{{ problema }}</span>
+            }
+          </div>
+        </div>
+
+        <p class="nota">
+          El nombre no se puede repetir: es como aparece al elegir al proveedor al capturar una
+          compra. El contacto y el teléfono son opcionales, y el saldo lo calcula el sistema con las
+          compras y los pagos.
+        </p>
+
+        <div class="acciones">
+          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="primario"
+            (click)="guardar()"
+            [disabled]="forma.invalid || guardando() || !puedeGuardar()"
+          >
+            @if (guardando()) {
+              <span class="spinner" aria-hidden="true"></span> Guardando…
+            } @else {
+              {{ esAlta() ? 'Crear' : 'Guardar' }}
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- Filtros: la misma barra que en clientes, productos y el catálogo -->
+  <div class="filtros" role="group" aria-label="Filtros del listado">
     <input
       type="search"
       autocomplete="off"
-      placeholder="Buscar por nombre, contacto o teléfono"
+      placeholder="Buscar por nombre, contacto o teléfono…"
+      aria-label="Buscar proveedores"
       [value]="buscador()"
       (input)="buscar($any($event.target).value)"
+      (keydown.escape)="limpiarFiltros()"
     />
+
     <select
       class="filtro"
+      aria-label="Filtrar por estado"
       [value]="filtroActivo()"
       (change)="filtrar($any($event.target).value)"
-      aria-label="Filtrar por estado"
     >
       <option value="activos">Activos</option>
       <option value="inactivos">De baja</option>
       <option value="todos">Todos</option>
     </select>
+
+    @if (hayFiltros()) {
+      <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
+    }
+
+    <button type="button" class="primario" (click)="exportarExcel()" [disabled]="exportando()">
+      @if (exportando()) {
+        <span class="spinner" aria-hidden="true"></span> Exportando…
+      } @else {
+        exportar excel
+      }
+    </button>
   </div>
 
   @if (error(); as mensaje) {
     <p class="error" role="alert">{{ mensaje }}</p>
   }
 
+  <!--
+    El estado vacío, sin icono y con los DOS casos separados: no hay
+    proveedores, o el filtro no dejó ninguno. Se separan porque la acción que
+    sirve es distinta, y ofrecer "Crear el primero" con un filtro puesto
+    invita a crear un duplicado.
+  -->
   @if (buscando() && filas().length === 0) {
-    <p class="vacio">Buscando proveedores…</p>
+    <p class="cargando">Cargando…</p>
   } @else if (filas().length === 0) {
-    <p class="vacio">No hay proveedores que mostrar.</p>
+    <div class="estado-vacio">
+      @if (hayFiltros()) {
+        <h2>Ningún proveedor coincide</h2>
+        <p>Prueba con otro nombre o quita los filtros aplicados.</p>
+        <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else if (puedeGuardar()) {
+        <h2>Aún no hay proveedores</h2>
+        <p>Registra al primero para poder capturarle compras.</p>
+        <button type="button" class="primario" (click)="nuevo()">Crear el primero</button>
+      } @else {
+        <h2>No hay proveedores</h2>
+        <p>Todavía no se ha registrado ninguno.</p>
+      }
+    </div>
   } @else {
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th scope="col">Nombre</th>
-          <th scope="col">Contacto</th>
-          <th scope="col">Teléfono</th>
-          <th scope="col" class="num">Saldo</th>
-          <th scope="col" class="num">Compras</th>
-          <th scope="col">Estado</th>
-          <th scope="col"><span class="oculto">Acciones</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (proveedor of filas(); track proveedor.id) {
+    <div class="tabla-wrapper">
+      <table class="tabla">
+        <thead>
           <tr>
-            <td>{{ proveedor.nombre }}</td>
-            <td>{{ proveedor.contacto ?? '—' }}</td>
-            <td>{{ proveedor.telefono ?? '—' }}</td>
-            <td class="num">{{ montoComoTexto(proveedor.saldo_actual) }}</td>
-            <td class="num">{{ proveedor.compras }}</td>
-            <td>
-              <span [class.inactivo]="!proveedor.activo">{{
-                proveedor.activo ? 'Activo' : 'De baja'
-              }}</span>
-            </td>
-            <td class="acciones-celda">
-              @if (puedeEditar()) {
-                <button type="button" class="chico" (click)="editar(proveedor)">Editar</button>
-                <button type="button" class="chico" (click)="alternarActivo(proveedor)">
-                  {{ proveedor.activo ? 'Dar de baja' : 'Activar' }}
-                </button>
-              }
-            </td>
+            <th scope="col">Nombre</th>
+            <th scope="col">Contacto</th>
+            <th scope="col">Teléfono</th>
+            <th scope="col" class="num">Saldo</th>
+            <th scope="col" class="num">Compras</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Acciones</th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody [@filasAnimation]>
+          @for (proveedor of filas(); track proveedor.id) {
+            <tr>
+              <td>{{ proveedor.nombre }}</td>
+              <td>{{ proveedor.contacto ?? '—' }}</td>
+              <td>{{ proveedor.telefono ?? '—' }}</td>
+              <td class="num">{{ montoComoTexto(proveedor.saldo_actual) }}</td>
+              <td class="num">{{ proveedor.compras }}</td>
+              <td class="centro">
+                <span class="badge" [class.badge-apagado]="!proveedor.activo">
+                  {{ proveedor.activo ? 'Activo' : 'De baja' }}
+                </span>
+              </td>
+              <td class="acciones-celda">
+                <div class="acciones-fila">
+                  @if (puedeGuardar()) {
+                    <button
+                      type="button"
+                      class="accion-editar"
+                      (click)="editar(proveedor)"
+                      title="Editar"
+                      [attr.aria-label]="'Editar ' + proveedor.nombre"
+                    >
+                      Editar
+                    </button>
+                    @if (proveedor.activo) {
+                      <button
+                        type="button"
+                        class="accion-estado"
+                        (click)="alternarActivo(proveedor)"
+                        [disabled]="guardando()"
+                        title="Dar de baja"
+                        [attr.aria-label]="'Dar de baja a ' + proveedor.nombre"
+                      >
+                        Dar de baja
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="accion-reabrir"
+                        (click)="alternarActivo(proveedor)"
+                        [disabled]="guardando()"
+                        title="Activar"
+                        [attr.aria-label]="'Activar a ' + proveedor.nombre"
+                      >
+                        Activar
+                      </button>
+                    }
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
 
     <div class="paginacion">
-      <button type="button" [disabled]="!hayMas() || buscando()" (click)="cargarMas()">
-        {{ buscando() ? 'Buscando…' : 'Cargar más' }}
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaAnterior() || buscando()"
+        (click)="irPagina(pagina() - 1)"
+      >
+        ‹ Anterior
       </button>
-      <span class="cuenta">{{ filas().length }} de {{ total() }} proveedores</span>
+
+      <span class="contador">
+        {{ rangoDePagina() }}
+        <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+      </span>
+
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaSiguiente() || buscando()"
+        (click)="irPagina(pagina() + 1)"
+      >
+        Siguiente ›
+      </button>
+
+      <label class="oculto" for="tamano-pagina-proveedores">Proveedores por página</label>
+      <select
+        id="tamano-pagina-proveedores"
+        class="filtro tamano-pagina"
+        aria-label="Proveedores por página"
+        [value]="limiteComoTexto()"
+        (change)="aTamanoDePagina($any($event.target).value)"
+      >
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100">100 por página</option>
+        <option value="200">200 por página</option>
+      </select>
     </div>
   }
-}
+</section>

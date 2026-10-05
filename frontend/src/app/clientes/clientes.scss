@@ -1,130 +1,45 @@
 /*
  * La pantalla de clientes.
  *
- * Misma familia que las demas: los colores son las variables de
- * `styles.scss`, la tabla y los botones siguen el patron de notas.scss, y el
- * editor es una tarjeta con dos columnas para que los campos de texto no se
- * estiren a todo el ancho de la pantalla.
+ * El diseño —cabecera, botones, barra de filtros, tabla, estado vacío,
+ * paginación y animaciones— sale de `nucleo/pantallas.scss`, el MISMO
+ * partial que usan productos, precios, categorías y especies. Importarlo
+ * aquí es lo que hace que "Nuevo cliente", "Nuevo producto" y "Nueva
+ * categoría" se vean como el mismo botón.
+ *
+ * Lo que queda en este archivo es lo que NO es igual en ninguna otra
+ * pantalla: la rejilla de siete campos del editor y el ancho de cada
+ * columna de la tabla.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1 {
-  margin: 0 0 1rem;
-  font-size: 1.25rem;
-}
+/* ------------------------------------------------------- el editor inline */
 
-/* ------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.filtros {
-  display: flex;
-  gap: 0.625rem;
-  margin-bottom: 1rem;
-}
-
-.filtros input[type='search'] {
-  flex: 1;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.filtro {
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-/* --------------------------------------------------------------- la tabla */
-
-.tabla {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-}
-
-th,
-td {
-  padding: 0.5rem 0.625rem;
-  text-align: left;
-  border-bottom: 1px solid var(--borde);
-}
-
-th {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--texto-suave);
-  background: var(--fondo);
-}
-
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.rfc {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.inactivo {
-  color: var(--texto-tenue);
-}
-
-.acciones-celda {
-  white-space: nowrap;
-  text-align: right;
-}
-
-.paginacion {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.cuenta {
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
-
-.vacio {
-  margin: 0;
-  color: var(--texto-tenue);
-}
-
-/* -------------------------------------------------------------- el editor */
-
-.editor {
-  max-width: 46rem;
-}
-
+/*
+ * Cuatro columnas, no cinco como productos ni "las que quepan" como precios.
+ *
+ * Siete campos en una rejilla que se adapta sola salen en dos filas de cuatro
+ * y tres, con la dirección sola en la segunda y un hueco a su derecha. Con
+ * cuatro columnas fijas salen igual, pero la dirección —que es un texto de
+ * 400 caracteres— ocupa la fila entera de abajo.
+ *
+ * Y es la dirección la que decide el layout: metida en una de cuatro
+ * columnas se corta a la mitad de lo que se escribe.
+ */
 .campos {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.875rem 1rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem 1rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
 }
 
 .campo.ancho {
@@ -132,77 +47,111 @@ tbody tr:last-child td {
 }
 
 .campo label {
-  display: block;
   margin-bottom: 0.25rem;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--texto-suave);
 }
 
 .campo input,
 .campo select {
+  /* `width: 100%` con `box-sizing` global: sin esto el `padding` y el
+     `border` se suman al ancho de la columna y el campo de la última se
+     sale de su celda. */
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
-.acciones {
-  display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
-}
-
-/* ------------------------------------------------------------- los botones */
-
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
+.campo input:focus,
+.campo select:focus {
+  outline: none;
   border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
-}
-
-button.chico {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8125rem;
-}
-
-button.peligro {
-  color: var(--peligro-texto);
+/* El error va en el campo y no solo arriba del formulario: lo que hay que
+   corregir es el campo, y un mensaje suelto obliga a buscar cuál de los
+   siete es. */
+.campo input[aria-invalid='true'] {
   border-color: var(--peligro);
+  box-shadow: 0 0 0 2px var(--peligro-suave);
 }
 
-.oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
+.ayuda {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
   color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
+}
+
+/*
+ * En una tablet caben tres columnas, no cuatro, y el corte es por ancho y no
+ * por altura como en el login: cuatro columnas de formulario en 768px menos
+ * el padding quedan de 160px cada una, que es menos que un código de cliente
+ * con su prefijo.
+ */
+@media (max-width: 64rem) {
+  .campos {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* --------------------------------------------------------------- la tabla */
+
+/*
+ * Anchos fijos por columna, como en productos: con `table-layout: fixed` el
+ * nombre toma lo que sobra y las columnas cortas se quedan con lo justo, en
+ * vez de que un nombre de 80 caracteres empuje la de acciones a partirse los
+ * botones en dos líneas.
+ */
+.tabla {
+  table-layout: fixed;
+}
+
+th,
+td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+th:nth-child(1) {
+  width: 10%;
+} /* Código */
+th:nth-child(2) {
+  width: 22%;
+} /* Nombre */
+th:nth-child(3) {
+  width: 13%;
+} /* Especie */
+th:nth-child(4) {
+  width: 15%;
+} /* RFC */
+th:nth-child(5) {
+  width: 13%;
+} /* Teléfono */
+th:nth-child(6) {
+  width: 11%;
+} /* Saldo */
+th:nth-child(7) {
+  width: 9%;
+} /* Estatus */
+th:nth-child(8) {
+  width: 13%;
+} /* Acciones */
+
+/*
+ * El RFC son 13 caracteres y ni uno más, así que la columna se dimensiona para
+ * que quepa entero: parte renglones que delatan que un RFC se cortó, que es
+ * justo lo que lo hace ilegible.
+ */
+.rfc {
+  font-variant-numeric: tabular-nums;
 }

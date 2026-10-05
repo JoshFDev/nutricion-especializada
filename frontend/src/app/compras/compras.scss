@@ -1,208 +1,271 @@
 /*
  * La pantalla de compras.
  *
- * Es la union de dos familias que ya existen: la LISTA es la de proveedores
- * (cabecera, filtros, tabla, paginacion) y la CAPTURA/COMPROBANTE son las de
- * notas (bloques con buscador, renglones con inputs, cierre con el total).
- * Los colores salen de `styles.scss`, no de valores sueltos.
+ * El diseño —cabecera, editor inline, barra de filtros, tabla, estados vacíos,
+ * paginación, botones, badges y animaciones— sale de `nucleo/pantallas.scss`, el
+ * MISMO partial que usan clientes, proveedores, productos, precios y el
+ * catálogo. Aquí no se vuelve a pintar nada de eso.
  *
- * Lo propio son `.fecha` (los dos filtros de fecha con su etiqueta) y
- * `.cancelar` (el motivo, que se pide dentro de la pantalla y no en un
- * `prompt`).
+ * Lo que queda es lo que la compra tiene de distinto y no se puede prestar:
+ *
+ *   - `.campo-buscador` y `.resultados`, el desplegable de resultados que usan
+ *     los tres buscadores de esta pantalla (proveedor del alta, producto del
+ *     alta y proveedor del filtro).
+ *   - `.renglones` y `.con-problema`, la tabla de captura: los renglones llevan
+ *     inputs, y un renglón con un problema escribe el motivo debajo.
+ *   - `.fila-detalle`, el comprobante que se despliega DEBAJO de la fila.
+ *   - `.cierre`, el total de la captura, que es un preview y por eso avisa.
+ *   - `.badge-aviso`, el estatus "pago parcial", que en el partial no cabía.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1,
-h2 {
-  margin: 0;
-  font-size: 1.25rem;
+/* ------------------------------------------------------------- el listado */
+
+/*
+ * Anchos fijos, como en las demás pantallas: con `table-layout: fixed` la
+ * columna del proveedor toma lo que sobra y las de dinero se quedan con lo
+ * justo. Sin esto un nombre largo empuja el total y el monto se parte en dos
+ * renglones.
+ *
+ * Los anchos van en `.listado` y no en `.tabla` a propósito: las tablas de los
+ * renglones y la del comprobante también son `.tabla` pero llevan sus propias
+ * medidas, y heredar estas seven columnas las deformaba.
+ */
+.listado {
+  table-layout: fixed;
+  /*
+   * Ancho mínimo con scroll horizontal en vez de estrujarse: en una pantalla
+   * angosta, siete columnas sin ancho mínimo se recortan, y con ellas los
+   * botones de "Ver". Un botón a medio cortar no sirve, así que mejor la
+   * tabla scrollea (el `.tabla-wrapper` del partial ya trae `overflow-x: auto`).
+   */
+  min-width: 46rem;
 }
 
-/* ------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+.listado th,
+.listado td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.subtitulo {
-  max-width: 46rem;
-  margin: 0 0 1rem;
-  color: var(--texto-suave);
-}
+.listado th:nth-child(1) {
+  width: 12%;
+} /* Fecha */
+.listado th:nth-child(2) {
+  width: 24%;
+} /* Proveedor */
+.listado th:nth-child(3) {
+  width: 16%;
+} /* Folio */
+.listado th:nth-child(4) {
+  width: 10%;
+} /* Renglones */
+.listado th:nth-child(5) {
+  width: 15%;
+} /* Total */
+.listado th:nth-child(6) {
+  width: 13%;
+} /* Estatus */
+.listado th:nth-child(7) {
+  width: 10%;
+} /* Acciones */
 
-/* -------------------------------------------------------------- los filtros */
-
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.625rem;
-  margin-bottom: 1rem;
-}
-
-.filtros input[type='search'] {
-  flex: 1;
-  min-width: 10rem;
-}
-
-.campo-buscador {
-  position: relative;
-}
-
-.filtro,
-.fecha input {
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.fecha {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-/* --------------------------------------------------------------- la tabla */
-
-.tabla,
-.renglones,
-.detalle {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-}
-
-th,
-td {
-  padding: 0.5rem 0.625rem;
-  text-align: left;
-  border-bottom: 1px solid var(--borde);
-}
-
-th {
+/*
+ * El código del producto va DEBAJO del nombre y en pequeño.
+ *
+ * Se llama `.codigo` y no `.tenue` a propósito: en el partial `.tenue` es el
+ * texto apagado del contador de páginas, que va EN LÍNEA con el "página 3 de
+ * 8". Con un `.tenue` de bloque, ese contador se partía en dos renglones.
+ */
+.codigo {
+  display: block;
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--texto-suave);
+  color: var(--texto-tenue);
+}
+
+/* --------------------------------------------- el comprobante desplegable */
+
+/*
+ * El comprobante ocupa una fila de la MISMA tabla, debajo de la que se está
+ * viendo. Por eso la celda no trae padding (lo trae el div de adentro) y
+ * revive la herencia de `nowrap` que las celdas del listado necesitan para
+ * recortar con puntos suspensivos: aquí el texto tiene que poder dar vueltas.
+ */
+.fila-detalle > td {
+  padding: 0;
+  overflow: visible;
+  white-space: normal;
   background: var(--fondo);
 }
 
-/* El dinero y las cantidades a la derecha: se comparan de columna. */
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.detalle {
+  padding: 1rem 1.25rem;
+  /* La misma `slideDown` del editor: el comprobante baja desde arriba. */
+  animation: slideDown 0.2s ease-out;
 }
 
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.inactivo {
-  color: var(--texto-tenue);
-}
-
-.acciones-celda {
-  white-space: nowrap;
-  text-align: right;
-}
-
-.paginacion {
+.detalle-cabecera {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--borde);
 }
 
-.cuenta {
+.detalle-cabecera h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* El "Cerrar comprobante" se va a la derecha, y solo ocupa lugar si hace falta. */
+.detalle-cabecera .chico {
+  margin-left: auto;
+}
+
+/* La tabla de los renglones del comprobante: scrolls en horizontal si no cabe. */
+.detalle .tabla {
+  table-layout: fixed;
   font-size: 0.8125rem;
-  color: var(--texto-tenue);
 }
 
-.vacio {
-  margin: 0 0 1rem;
-  color: var(--texto-tenue);
+.detalle .tabla th:nth-child(1) {
+  width: 32%;
+}
+.detalle .tabla th:nth-child(2) {
+  width: 16%;
+}
+.detalle .tabla th:nth-child(3) {
+  width: 11%;
+}
+.detalle .tabla th:nth-child(4) {
+  width: 13%;
+}
+.detalle .tabla th:nth-child(5) {
+  width: 14%;
+}
+.detalle .tabla th:nth-child(6) {
+  width: 14%;
 }
 
-.tenue {
-  color: var(--texto-tenue);
-  font-size: 0.8125rem;
+.detalle .tabla th,
+.detalle .tabla td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ------------------------------------------------------------- la captura */
-
-.bloque {
-  position: relative;
-  max-width: 46rem;
-  margin-bottom: 1rem;
+.detalle .num {
+  font-weight: 500;
 }
 
-.bloque.apagado {
-  opacity: 0.5;
-}
-
-.datos {
+dl {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.875rem 1rem;
+  grid-template-columns: max-content 1fr;
+  gap: 0.375rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
 }
 
-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
+dt {
+  font-size: 0.8125rem;
   color: var(--texto-suave);
 }
 
-input[type='search'],
-input[type='text'],
-input[type='date'],
-textarea {
+dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+dd.total {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.nota {
+  margin: 0.625rem 0 1rem;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.cancelada {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 8px;
+}
+
+.cancelar {
+  max-width: 34rem;
+}
+
+.cancelar textarea {
   width: 100%;
   padding: 0.5rem 0.625rem;
   font: inherit;
+  font-size: 0.875rem;
   color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-}
-
-textarea {
   resize: vertical;
 }
 
-input[type='number'] {
-  width: 6.5rem;
-  padding: 0.375rem 0.5rem;
-  font: inherit;
-  text-align: right;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
+.cancelar textarea:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
 }
 
-.elegido {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
-  background: var(--acento-suave);
-  border: 1px solid var(--acento);
+/* ------------------------------------------------------- los buscadores */
+
+/*
+ * El desplegable de resultados va pegado al input, y el input necesita
+ * `position: relative` en su contenedor para que la lista quede debajo y no
+ * empuje lo que sigue.
+ */
+.campo-buscador {
+  position: relative;
+  min-width: 11rem;
+}
+
+.campo-buscador input[type='search'] {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
   border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.campo-buscador input[type='search']:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+.campo-buscador input[type='search']:disabled {
+  color: var(--texto-tenue);
+  cursor: not-allowed;
 }
 
 .resultados {
@@ -217,6 +280,7 @@ input[type='number'] {
   border: 1px solid var(--borde);
   border-radius: 6px;
   box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+  animation: slideDown 0.15s ease-out;
 }
 
 .resultados button {
@@ -227,21 +291,120 @@ input[type='number'] {
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
   font: inherit;
+  font-size: 0.875rem;
   text-align: left;
   color: var(--texto);
   background: none;
   border: 0;
-  cursor: pointer;
+  border-radius: 0;
 }
 
 .resultados button:hover:not(:disabled) {
+  color: var(--acento-texto);
   background: var(--acento-suave);
+  border-color: transparent;
 }
 
+/* El proveedor ya elegido, que se lee como etiqueta y se quita con un clic. */
+.elegido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+}
+
+/* Los dos filtros de fecha, con su etiqueta pegada al input. */
+.fecha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.fecha input {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------------- la captura */
+
+/* La frase que explica para qué es la captura, encima de los campos. */
+.descripcion {
+  margin: 0 0 1rem;
+  max-width: 46rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.bloque {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+/* Sin proveedor no se puede capturar: el costo por omisión sale de él. */
+.bloque.apagado {
+  opacity: 0.55;
+}
+
+/* Fecha y folio, en dos columnas. */
+.datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.campo input,
+.bloque > input {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.campo input:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+/*
+ * La ayuda va DEBAJO del campo. En rojo cuando avisa de algo que el backend va
+ * a rechazar (el motivo de la cancelación es obligatorio) y en `.tenue` cuando
+ * solo explica (la fecha vacía es la de hoy).
+ */
 .ayuda {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   color: var(--peligro-texto);
+}
+
+.ayuda.tenue {
+  color: var(--texto-tenue);
 }
 
 /* El aviso del buscador y el de "sin costo": en tenue, no en rojo. */
@@ -251,6 +414,41 @@ input[type='number'] {
   color: var(--texto-tenue);
 }
 
+/* ---------------------------------------------------------- los renglones */
+
+/*
+ * Los renglones llevan inputs, y por eso esta tabla NO lleva la animación de
+ * entrada de las demás: una fila que se va hacia atrás con el cursor dentro se
+ * lleva por delante el foco del input que se está escribiendo.
+ */
+.renglones td,
+.renglones th {
+  white-space: nowrap;
+}
+
+.renglones td:first-child {
+  white-space: normal;
+}
+
+.renglones input[type='number'] {
+  width: 6.5rem;
+  padding: 0.375rem 0.5rem;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: right;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.renglones input[type='number']:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+/* El motivo del problema se escribe en una fila propia, debajo del renglón. */
 .con-problema td {
   padding-top: 0;
   font-size: 0.8125rem;
@@ -259,19 +457,17 @@ input[type='number'] {
   border-bottom: 1px solid var(--borde);
 }
 
-/* ---------------------------------------------------------------- el cierre */
-
+/* El cierre: los kilos a la izquierda y el total a la derecha, como un recibo. */
 .cierre {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.25rem 1rem;
   align-items: baseline;
-  max-width: 46rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   padding: 0.875rem 1rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .kilos {
@@ -292,115 +488,52 @@ input[type='number'] {
   margin: 0;
 }
 
-/* ---------------------------------------------------------- el comprobante */
+/* --------------------------------------------------------------- el estatus */
 
-.comprobante {
-  max-width: 46rem;
+/*
+ * "Pago parcial" en ámbar.
+ *
+ * El partial trae el verde de "Pagada", el rojo de "Cancelada" y el gris de
+ * "Por pagar", pero el pago parcial es de otro color: no está saldado y no
+ * está mal. Con el gris de "Por pagar" se pierde la diferencia, que es
+ * justamente la que hace falta ver de un vistazo.
+ */
+.badge-aviso {
+  background: var(--advertencia-suave);
+  color: var(--advertencia-texto);
+  border-color: var(--advertencia);
 }
 
-dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.25rem 1rem;
-  margin: 0 0 1.25rem;
-}
+/* --------------------------------------------------------- pantallas angostas */
 
-dt {
-  color: var(--texto-suave);
-}
+/*
+ * En una pantalla angosta las rejillas de dos columnas y las etiquetas al lado
+ * del valor se aprietan demasiado, así que bajan a una columna. El
+ * comprobante y la captura se leen igual de bien, que es justo lo que se
+ * perdió cuando el comprobante salía a otra pantalla.
+ */
+@media (max-width: 46rem) {
+  .datos {
+    grid-template-columns: 1fr;
+  }
 
-dd {
-  margin: 0;
-}
+  dl {
+    grid-template-columns: 1fr;
+    gap: 0.125rem;
+  }
 
-dd.total {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
+  dt {
+    margin-top: 0.5rem;
+    font-weight: 600;
+  }
 
-.cancelada {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
-}
+  dt:first-child {
+    margin-top: 0;
+  }
 
-.nota {
-  margin: 0 0 1.25rem;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
-
-.cancelar {
-  max-width: 34rem;
-}
-
-/* ------------------------------------------------------------- los botones */
-
-.acciones {
-  display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
-}
-
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-}
-
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
-
-button.grande {
-  padding: 0.75rem 1.5rem;
-  font-size: 1.0625rem;
-  font-weight: 600;
-}
-
-button.chico {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8125rem;
-}
-
-button.peligro {
-  color: var(--peligro-texto);
-  border-color: var(--peligro);
-}
-
-.oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
+  .detalle,
+  .fila-detalle > td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
 }

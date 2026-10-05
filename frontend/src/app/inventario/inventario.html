@@ -1,84 +1,154 @@
 <!--
-  Inventario: la existencia por producto y almacen, en solo lectura.
+  Inventario: la existencia por producto y almacén, en solo lectura.
 
-  No hay boton de guardar porque no hay nada que capturar: la existencia es la
-  suma de los movimientos, y los movimientos los escriben las notas de venta y
-  las compras por trigger. Ajustar y registrar merma son otra pantalla.
+  La misma pantalla que clientes, proveedores y el catálogo: cabecera, barra de
+  filtros, tabla con estados vacíos y paginación. El diseño sale de
+  `nucleo/pantallas.scss`.
 
-  El cero y el negativo se pintan en rojo: el modelo permite vender sin
-  existencia (avisa, no bloquea), asi que un negativo es una deuda que hay que
-  ver.
+  Lo propio de esta pantalla:
+
+  - No hay botón de guardar ni editor, porque no hay nada que capturar: la
+    existencia es la suma de los movimientos, y los movimientos los escriben las
+    notas de remisión y las compras por trigger. Ajustar y registrar merma son
+    otra pantalla, con su motivo y su rastro en auditoría.
+  - El cero y el negativo se pintan en rojo: el modelo permite vender sin
+    existencia (avisa, no bloquea), así que un negativo es una deuda que hay que
+    ver.
+  - El código del producto va debajo del nombre, en `.codigo`: es el dato con
+    el que se busca, pero en la tabla el que identifica es el nombre. NO es
+    `.tenue`, que en el partial es el texto apagado del contador de páginas y
+    va en línea.
 -->
-<h1>Inventario</h1>
-
-<p class="subtitulo">
-  La existencia por producto y almacén, en bultos. Es la suma de lo que ha entrado y salido: las
-  notas de remisión la bajan y las compras la suben, sin capturar nada aquí.
-</p>
-
-<div class="filtros">
-  <input
-    type="search"
-    autocomplete="off"
-    placeholder="Código o nombre del producto"
-    [value]="buscador()"
-    (input)="buscar($any($event.target).value)"
-  />
-  <select
-    class="filtro"
-    [value]="filtro()"
-    (change)="cambiarFiltro($any($event.target).value)"
-    aria-label="Filtrar por existencia"
-  >
-    <option value="todas">Toda la existencia</option>
-    <option value="con">Con existencia</option>
-    <option value="vacios">En cero o negativo</option>
-  </select>
-</div>
-
-@if (error(); as mensaje) {
-  <p class="error" role="alert">{{ mensaje }}</p>
-}
-
-@if (cargando() && filas().length === 0) {
-  <p class="vacio">Buscando en el inventario…</p>
-} @else if (filas().length === 0) {
-  <p class="vacio">No hay existencia que mostrar.</p>
-} @else {
-  <table class="tabla">
-    <thead>
-      <tr>
-        <th scope="col">Producto</th>
-        <th scope="col">Almacén</th>
-        <th scope="col" class="num">Existencia (bultos)</th>
-        <th scope="col">Estado</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (fila of filas(); track fila.producto_id + '-' + fila.almacen_id) {
-        <tr>
-          <td>
-            {{ fila.producto }}
-            <span class="tenue">{{ fila.producto_codigo }}</span>
-          </td>
-          <td>{{ fila.almacen }}</td>
-          <td class="num" [class.sin-existencia]="sinExistencia(fila)">
-            {{ bultosComoTexto(fila.existencia_bultos) }}
-          </td>
-          <td>
-            <span [class.inactivo]="!fila.producto_activo">{{
-              fila.producto_activo ? 'Activo' : 'De baja'
-            }}</span>
-          </td>
-        </tr>
-      }
-    </tbody>
-  </table>
-
-  <div class="paginacion">
-    <button type="button" [disabled]="!hayMas() || cargandoMas()" (click)="cargarMas()">
-      {{ cargandoMas() ? 'Buscando…' : 'Cargar más' }}
-    </button>
-    <span class="cuenta">{{ filas().length }} de {{ totalEncontrado() }} renglones</span>
+<section class="inventario">
+  <!-- Cabecera. Sin acción principal: aquí no se captura nada -->
+  <div class="cabecera">
+    <h1>Inventario</h1>
   </div>
-}
+
+  <!-- Filtros: la misma barra que en las demás pantallas -->
+  <div class="filtros" role="group" aria-label="Filtros del listado">
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Código o nombre del producto…"
+      aria-label="Buscar productos"
+      [value]="buscador()"
+      (input)="buscar($any($event.target).value)"
+      (keydown.escape)="limpiarFiltros()"
+    />
+
+    <select
+      class="filtro"
+      aria-label="Filtrar por existencia"
+      [value]="filtro()"
+      (change)="cambiarFiltro($any($event.target).value)"
+    >
+      <option value="todas">Toda la existencia</option>
+      <option value="con">Con existencia</option>
+      <option value="vacios">En cero o negativo</option>
+    </select>
+
+    @if (hayFiltros()) {
+      <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
+    }
+  </div>
+
+  @if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  <!--
+    El estado vacío, sin icono y con los DOS casos separados: no hay productos
+    que cruzar, o el filtro no dejó ninguno. Se separan porque la acción que
+    sirve es distinta, y aquí la de "no hay nada" no es crear sino registrar una
+    compra: la existencia la hacen las compras y las notas de remisión.
+  -->
+  @if (buscando() && filas().length === 0) {
+    <p class="cargando">Cargando…</p>
+  } @else if (filas().length === 0) {
+    <div class="estado-vacio">
+      @if (hayFiltros()) {
+        <h2>Ningún producto coincide</h2>
+        <p>Prueba con otro nombre o quita los filtros aplicados.</p>
+        <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else {
+        <h2>No hay nada que ver todavía</h2>
+        <p>
+          La existencia se forma sola: al registrar una compra la mercancía entra y al vender sale.
+          Cuando se capture la primera compra, aquí aparecerá.
+        </p>
+      }
+    </div>
+  } @else {
+    <div class="tabla-wrapper">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Producto</th>
+            <th scope="col">Almacén</th>
+            <th scope="col" class="num">Existencia (bultos)</th>
+            <th scope="col">Estado</th>
+          </tr>
+        </thead>
+        <tbody [@filasAnimation]>
+          @for (fila of filas(); track fila.producto_id + '-' + fila.almacen_id) {
+            <tr>
+              <td>
+                {{ fila.producto }}
+                <span class="codigo">{{ fila.producto_codigo }}</span>
+              </td>
+              <td>{{ fila.almacen }}</td>
+              <td class="num" [class.sin-existencia]="sinExistencia(fila)">
+                {{ bultosComoTexto(fila.existencia_bultos) }}
+              </td>
+              <td class="centro">
+                <span class="badge" [class.badge-apagado]="!fila.producto_activo">
+                  {{ fila.producto_activo ? 'Activo' : 'De baja' }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="paginacion">
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaAnterior() || buscando()"
+        (click)="irPagina(pagina() - 1)"
+      >
+        ‹ Anterior
+      </button>
+
+      <span class="contador">
+        {{ rangoDePagina() }}
+        <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+      </span>
+
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaSiguiente() || buscando()"
+        (click)="irPagina(pagina() + 1)"
+      >
+        Siguiente ›
+      </button>
+
+      <label class="oculto" for="tamano-pagina-inventario">Renglones por página</label>
+      <select
+        id="tamano-pagina-inventario"
+        class="filtro tamano-pagina"
+        aria-label="Renglones por página"
+        [value]="limiteComoTexto()"
+        (change)="aTamanoDePagina($any($event.target).value)"
+      >
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100">100 por página</option>
+        <option value="200">200 por página</option>
+      </select>
+    </div>
+  }
+</section>

@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
 import { errorLegible } from '../nucleo/api';
 import { crearBuscador } from '../nucleo/buscador';
 import { Sesion } from '../nucleo/sesion';
+import { ToastService } from '../nucleo/toast.service';
 import { bultosComoTexto, kilosComoTexto, montoComoTexto } from '../nucleo/cifras';
+import { ConfirmModal } from '../productos/confirm-modal';
 import {
   ComprasApi,
   cuerpoDeCompra,
@@ -33,53 +43,86 @@ import {
 /**
  * La pantalla de compras.
  *
- * Tiene TRES vistas en un solo componente y no en tres rutas:
+ * La MISMA de clientes, proveedores, productos y el catálogo: cabecera con la
+ * acción principal, editor inline que se despliega ARRIBA de la tabla, barra de
+ * filtros, tabla con animaciones, estados vacíos y paginación. El diseño sale
+ * de `nucleo/pantallas.scss`.
  *
- *   - **lista**: las compras con sus filtros, lo que se ve casi siempre.
- *   - **captura**: el alta de una compra, con el proveedor y los renglones.
- *   - **detalle**: la compra guardada, que es el comprobante y donde se
- *     cancela.
+ * El comprobante se abre DEBAJO de la fila, como una fila que se despliega, y
+ * no en otra vista. Antes salía a otra pantalla y eso tenía dos problemas que
+ * se notaban enseguida: al abrirlo se iba la lista de la vista (en una
+ * pantalla angosta había que subir a buscarla otra vez), y no había forma de
+ * comparar la compra abierta con las de al lado. Con la fila desplegada la
+ * tabla no se mueve, el contexto se queda, y en una pantalla angosta el
+ * comprobante baja con scroll normal en vez de saltar a otro lado.
  *
- * El detalle NO es una ruta a proposito, por lo mismo que el comprobante del
- * POS: es el final de la captura, no otro lugar. Si fuera una ruta, recargar
- * dejaria a la persona en la pantalla de una compra que ya se guardo, sin
- * forma clara de volver.
+ * Por lo mismo, ya no hay dos vistas ni routes: la compra se captura en el
+ * editor inline y su comprobante es la fila que se despliega. El que guarda
+ * también ve el comprobante, en la misma tabla.
  *
- * Tres decisiones que conviene tener presentes:
+ * Cuatro decisiones que conviene tener presentes:
  *
- *   - **No hay editar.** Una compra se deshace CANCELANDOLA con un motivo, no
- *     editando renglones: editarlos dejaria el inventario con la entrada
- *     vieja y la nueva. La cancelacion la bloquea el backend si ya hay pagos
+ *   - **No hay editar.** Una compra se deshace CANCELÁNDOLA con un motivo, no
+ *     editando renglones: editarlos dejaría el inventario con la entrada vieja
+ *     y la nueva. La cancelación la bloquea el backend si ya hay pagos
  *     (`COMPRA_CON_PAGO`), y la pantalla lo explica.
  *   - **No hay borrar.** Cancelar deja el documento con estatus 'cancelada' y
  *     devuelve los bultos a la bodega por trigger.
- *   - **El costo se puede dejar vacio.** Si no se escribe, lo resuelve el
- *     backend con el ultimo costo de ESE proveedor (`producto_proveedor_precios`),
+ *   - **El costo se puede dejar vacío.** Si no se escribe, lo resuelve el
+ *     backend con el último costo de ESE proveedor (`producto_proveedor_precios`),
  *     y por eso el total de la captura es un preview que avisa cuando hay
  *     renglones sin costo (ver `haySinCosto`).
+ *   - **El listado pagina de verdad.** Antes tenía "cargar más", que pegaba las
+ *     siguientes al final: con el filtro de fechas abierto se acababa con una
+ *     tabla de cuatro pantallas sin forma de volver arriba.
  */
-type Pantalla = 'lista' | 'captura' | 'detalle';
 
 @Component({
   selector: 'app-compras',
   templateUrl: './compras.html',
   styleUrl: './compras.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ConfirmModal],
+  animations: [
+    trigger('filasAnimation', [
+      transition('* => *', [
+        query(
+          ':enter',
+          [
+            style({ opacity: 0, transform: 'translateY(-10px)' }),
+            stagger(50, [
+              animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
+            ]),
+          ],
+          { optional: true },
+        ),
+        query(
+          ':leave',
+          [
+            stagger(50, [
+              animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
+            ]),
+          ],
+          { optional: true },
+        ),
+      ]),
+    ]),
+  ],
 })
 export class Compras {
   private readonly api = inject(ComprasApi);
   private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
 
-  readonly pantalla = signal<Pantalla>('lista');
-
-  /** Cancelar pide `compras.crear` (asi lo exige el trigger de la base). */
+  /** Cancelar pide `compras.crear` (así lo exige el trigger de la base). */
   readonly puedeCrear = computed(() => this.sesion.puede('compras.crear'));
+
+  readonly confirmModal = viewChild.required(ConfirmModal);
 
   // --------------------------------------------------------------- el listado
   readonly filas = signal<CompraListada[]>([]);
   readonly totalEncontrado = signal(0);
   readonly cargando = signal(false);
-  readonly cargandoMas = signal(false);
   readonly errorLista = signal<string | null>(null);
 
   readonly filtroTexto = signal('');
@@ -88,7 +131,45 @@ export class Compras {
   readonly filtroHasta = signal('');
   readonly filtroProveedor = signal<ProveedorOpcion | null>(null);
 
-  readonly hayMas = computed(() => this.filas().length < this.totalEncontrado());
+  /**
+   * Cuántos renglones se ven por página, y la página que se está viendo.
+   *
+   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
+   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   */
+  readonly limite = signal(25);
+  readonly pagina = signal(1);
+
+  readonly paginasTotales = computed(() =>
+    Math.max(1, Math.ceil(this.totalEncontrado() / this.limite())),
+  );
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Lo que ve en la barra: "1-25 de 1,240". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.totalEncontrado();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
+
+  /**
+   * Si el listado lleva algo puesto, para poder ofrecer "Limpiar".
+   *
+   * El buscador se cuenta con dos caracteres porque es lo que el backend
+   * exige: con uno solo no filtra, y un "Limpiar" que aparece a la primera
+   * letra confunde más de lo que ayuda.
+   */
+  readonly hayFiltros = computed(
+    () =>
+      this.filtroTexto().trim().length >= 2 ||
+      this.filtroEstatus() !== 'todos' ||
+      this.filtroProveedor() !== null ||
+      this.filtroDesde() !== '' ||
+      this.filtroHasta() !== '',
+  );
 
   readonly buscadorFiltroProveedor = crearBuscador({
     cargar: (texto) => this.api.proveedores(texto),
@@ -98,6 +179,14 @@ export class Compras {
   });
 
   // --------------------------------------------------------------- la captura
+  /**
+   * El alta vive dentro de la lista, como el editor de las demás pantallas.
+   *
+   * Empieza cerrada: lo que se ve casi siempre son las compras, y el alta se
+   * abre a propósito.
+   */
+  readonly editorVisible = signal(false);
+
   readonly proveedor = signal<ProveedorOpcion | null>(null);
   readonly fecha = signal('');
   readonly folio = signal('');
@@ -124,22 +213,42 @@ export class Compras {
   readonly kilos = computed(() => kilosDeLineas(this.lineas()));
   readonly haySinCosto = computed(() => this.lineas().some(sinCostoEscrito));
 
-  readonly puedeGuardar = computed(
-    () =>
-      this.proveedor() !== null &&
-      this.hayLineas() &&
-      this.lineas().every(lineaValida) &&
-      this.puedeCrear() &&
-      !this.guardando(),
-  );
+  /** Por qué no se puede guardar todavía, o `null` si sí se puede. */
+  readonly problemaParaGuardar = computed(() => {
+    if (this.proveedor() === null) return 'Elige el proveedor de la compra.';
+    if (!this.hayLineas()) return 'Agrega al menos un producto.';
+    const renglon = this.lineas().find((linea) => !lineaValida(linea));
+    if (renglon) return `Revisa el renglón de ${renglon.producto_nombre}.`;
+    if (!this.puedeCrear()) return 'No tienes permiso para registrar compras.';
+    return null;
+  });
 
-  // --------------------------------------------------------------- el detalle
+  readonly puedeGuardar = computed(() => this.problemaParaGuardar() === null && !this.guardando());
+
+  // ------------------------------------------------------ el comprobante
+  /**
+   * La compra desplegada, y el id de la fila en la que se despliega.
+   *
+   * El id va aparte del documento porque es lo que la plantilla compara: así
+   * la fila sabe si es ella la que está abierta sin tener que buscar el
+   * documento entero.
+   *
+   * Solo hay una a la vez. Dos filas abiertas taparían la mitad de la tabla y
+   * no aportan nada: el comprobante es largo.
+   */
+  readonly expandida = signal<number | null>(null);
   readonly detalle = signal<Compra | null>(null);
+  readonly abriendoDetalle = signal(false);
   readonly errorDetalle = signal<string | null>(null);
   readonly cancelando = signal(false);
   /** El motivo se pide en la propia pantalla, no con un `prompt`. */
   readonly pidiendoMotivo = signal(false);
   readonly motivo = signal('');
+
+  /** Si la fila que se está tocando es la que está desplegada. */
+  detalleAbierto(id: number): boolean {
+    return this.expandida() === id;
+  }
 
   constructor() {
     void this.recargar();
@@ -148,14 +257,21 @@ export class Compras {
   // --------------------------------------------------------------- el listado
   private temporizador: ReturnType<typeof setTimeout> | undefined;
 
-  /** Busca con 250 ms de espera, igual que el resto de las pantallas. */
+  /**
+   * Busca con 250 ms de espera, igual que el resto de las pantallas.
+   *
+   * Cada tecleo NO pega una petición: con el buscador abierto a media escritura
+   * son varias y la última es la única que sirve. Además, buscar vuelve
+   * siempre a la página 1, porque quedarse en la 4 con un filtro nuevo es
+   * mirar un `offset` que ya no quiere decir nada.
+   */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
     this.filtroTexto.set(texto);
     this.temporizador = setTimeout(() => void this.recargar(), 250);
   }
 
-  /** El minimo de dos caracteres, como en proveedores y clientes. */
+  /** El mínimo de dos caracteres, como en proveedores y clientes. */
   private textoBusqueda(): string | undefined {
     const limpio = this.filtroTexto().trim();
     return limpio.length >= 2 ? limpio : undefined;
@@ -187,37 +303,85 @@ export class Compras {
     void this.recargar();
   }
 
-  async recargar(): Promise<void> {
+  /** Deja los filtros como estaban al entrar. */
+  limpiarFiltros(): void {
+    clearTimeout(this.temporizador);
+    this.filtroTexto.set('');
+    this.filtroEstatus.set('todos');
+    this.filtroDesde.set('');
+    this.filtroHasta.set('');
+    this.filtroProveedor.set(null);
+    this.buscadorFiltroProveedor.limpiar();
+    void this.recargar();
+  }
+
+  /**
+   * Vuelve a la primera página con el filtro que se tenga puesto, y cierra el
+   * comprobón: con filtros nuevos la compra abierta puede no estar en la
+   * página, y un comprobante flotando sin su fila es peor que ninguno.
+   */
+  private async recargar(): Promise<void> {
+    this.cerrarDetalle();
+    await this.cargarPagina(1);
+  }
+
+  /** Carga una página. Es la ÚNICA forma de pedir el listado. */
+  private async cargarPagina(pagina: number): Promise<void> {
     this.cargando.set(true);
     this.errorLista.set(null);
     try {
-      const resultado = await this.api.listar(this.filtros(0));
+      const resultado = await this.api.listar(this.filtros(pagina));
       this.filas.set(resultado.datos);
       this.totalEncontrado.set(resultado.total);
+      this.pagina.set(pagina);
+
+      // La fila desplegada puede no haber sobrevivido al filtro o a la página:
+      // si ya no está en la tabla, su comprobante se cierra solo.
+      const id = this.expandida();
+      if (id !== null && !resultado.datos.some((compra) => compra.id === id)) {
+        this.cerrarDetalle();
+      }
     } catch (falla) {
       this.filas.set([]);
+      this.totalEncontrado.set(0);
       this.errorLista.set(errorLegible(falla).mensaje);
+      this.cerrarDetalle();
     } finally {
       this.cargando.set(false);
     }
   }
 
-  async cargarMas(): Promise<void> {
-    if (!this.hayMas() || this.cargandoMas()) return;
-    this.cargandoMas.set(true);
-    try {
-      const resultado = await this.api.listar(this.filtros(this.filas().length));
-      this.filas.update((ya) => [...ya, ...resultado.datos]);
-      this.totalEncontrado.set(resultado.total);
-    } catch (falla) {
-      this.errorLista.set(errorLegible(falla).mensaje);
-    } finally {
-      this.cargandoMas.set(false);
-    }
+  /** Cambia de página y sube la tabla a la vista. */
+  async irPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+
+    this.cerrarDetalle();
+    await this.cargarPagina(pagina);
+    document.querySelector('.compras .tabla-wrapper')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
   }
 
-  /** Los filtros comunes a la carga y a "cargar mas". */
-  private filtros(offset: number): NonNullable<Parameters<ComprasApi['listar']>[0]> {
+  /** El tamaño de página como texto, para el `[value]` del desplegable. */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  /** Cambia cuántos renglones se ven por página. */
+  aTamanoDePagina(valor: string): void {
+    const limite = Number(valor);
+    if (!Number.isFinite(limite) || limite <= 0 || limite === this.limite()) return;
+
+    this.limite.set(limite);
+    this.cerrarDetalle();
+    // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50 filas
+    // es pedir un `offset` que ya no corresponde a nada.
+    void this.cargarPagina(1);
+  }
+
+  /** Los filtros comunes a la carga y a la paginación. */
+  private filtros(pagina: number): NonNullable<Parameters<ComprasApi['listar']>[0]> {
     const estatus = this.filtroEstatus();
     return {
       buscar: this.textoBusqueda(),
@@ -225,7 +389,8 @@ export class Compras {
       estatus: estatus === 'todos' ? undefined : estatus,
       desde: this.filtroDesde() || undefined,
       hasta: this.filtroHasta() || undefined,
-      offset,
+      limite: this.limite(),
+      offset: (pagina - 1) * this.limite(),
     };
   }
 
@@ -239,7 +404,41 @@ export class Compras {
     this.errorCaptura.set(null);
     this.buscadorProveedor.limpiar();
     this.buscadorProducto.limpiar();
-    this.pantalla.set('captura');
+    this.editorVisible.set(true);
+  }
+
+  /**
+   * Abre o cierra el alta.
+   *
+   * Cerrarla con renglones capturados pasa por el modal: si hay algo escrito,
+   * perderlo tiene que ser una decisión y no un clic.
+   */
+  async alternarEditor(): Promise<void> {
+    if (this.editorVisible() && this.hayLineas()) {
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Descartar la captura',
+        mensaje:
+          'Hay renglones capturados que se van a perder. ¿Cerrar de todos modos?\n\nSi solo querías revisar la lista, ciérralo y vuelve a abrirlo: el alta sigue en blanco.',
+        textoConfirmar: 'Descartar y cerrar',
+        variante: 'peligro',
+      });
+      if (!confirmado) return;
+
+      this.descartarCaptura();
+    }
+
+    this.editorVisible.update((visible) => !visible);
+  }
+
+  /** Vuelve el alta a blanco. */
+  private descartarCaptura(): void {
+    this.proveedor.set(null);
+    this.fecha.set('');
+    this.folio.set('');
+    this.lineas.set([]);
+    this.errorCaptura.set(null);
+    this.buscadorProveedor.limpiar();
+    this.buscadorProducto.limpiar();
   }
 
   elegirProveedor(opcion: ProveedorOpcion): void {
@@ -247,7 +446,7 @@ export class Compras {
     this.errorCaptura.set(null);
   }
 
-  /** Cambiar de proveedor no borra los renglones: compras no depende de el para el precio. */
+  /** Cambiar de proveedor no borra los renglones: compras no depende de él para el precio. */
   quitarProveedor(): void {
     this.proveedor.set(null);
     this.buscadorProveedor.limpiar();
@@ -281,18 +480,56 @@ export class Compras {
     this.lineas.update((lineas) => quitar(lineas, uid));
   }
 
-  /** Vuelve a la lista; si hay renglones capturados, primero avisa. */
-  volverALista(): void {
-    if (this.hayLineas() && !confirmar('Se pierde la compra que llevas capturada.')) return;
+  // ------------------------------------------------------ el comprobante
+  /**
+   * Despliega el comprobante DEBAJO de la fila, o lo recoge si ya estaba
+   * desplegado.
+   *
+   * No cambia de pantalla y no pide nada: es el mismo gesto que abrir y cerrar
+   * una fila, y el botón dice cuál de las dos cosas va a hacer.
+   */
+  async ver(id: number): Promise<void> {
+    if (this.expandida() === id) {
+      this.cerrarDetalle();
+      return;
+    }
+    if (this.abriendoDetalle()) return;
+
+    this.abriendoDetalle.set(true);
+    this.errorDetalle.set(null);
+    try {
+      this.detalle.set(await this.api.consultar(id));
+      this.expandida.set(id);
+      this.motivo.set('');
+      this.pidiendoMotivo.set(false);
+    } catch (falla) {
+      this.errorLista.set(errorLegible(falla).mensaje);
+    } finally {
+      this.abriendoDetalle.set(false);
+    }
+  }
+
+  /** Recoge el comprobante. */
+  cerrarDetalle(): void {
+    this.expandida.set(null);
     this.detalle.set(null);
     this.errorDetalle.set(null);
-    this.pantalla.set('lista');
+    this.pidiendoMotivo.set(false);
+    this.motivo.set('');
   }
 
   // --------------------------------------------------------------- el guardado
+  /**
+   * Guarda y enseña el comprobante en su propia fila.
+   *
+   * Vuelve a la página 1 antes de desplegarlo, porque la compra recién hecha es
+   * la más reciente y es donde tiene que estar. Si alguien capturó una fecha
+   * vieja puede quedar fuera de la primera página, y en ese caso la fila no
+   * está: por eso el aviso dice "se registró", no "ya la estás viendo".
+   */
   async guardar(): Promise<void> {
     const proveedor = this.proveedor();
-    if (proveedor === null || this.guardando()) return;
+    if (proveedor === null || !this.puedeGuardar()) return;
 
     this.guardando.set(true);
     this.errorCaptura.set(null);
@@ -300,27 +537,21 @@ export class Compras {
       const compra = await this.api.crear(
         cuerpoDeCompra(proveedor.id, this.lineas(), this.folio(), this.fecha()),
       );
-      this.detalle.set(compra);
-      this.pantalla.set('detalle');
-      await this.recargar();
+      this.descartarCaptura();
+      this.editorVisible.set(false);
+      this.toast.exito(`Compra #${compra.id} registrada con éxito`);
+
+      await this.cargarPagina(1);
+      // Se despliega lo que devolvió el alta, que ya trae los renglones: pedir
+      // el detalle otra vez sería una segunda ida al servidor por lo mismo.
+      if (this.filas().some((otra) => otra.id === compra.id)) {
+        this.detalle.set(compra);
+        this.expandida.set(compra.id);
+      }
     } catch (falla) {
       this.errorCaptura.set(this.explicar(falla));
     } finally {
       this.guardando.set(false);
-    }
-  }
-
-  // --------------------------------------------------------------- el detalle
-  async ver(id: number): Promise<void> {
-    this.errorLista.set(null);
-    try {
-      this.detalle.set(await this.api.consultar(id));
-      this.errorDetalle.set(null);
-      this.motivo.set('');
-      this.pidiendoMotivo.set(false);
-      this.pantalla.set('detalle');
-    } catch (falla) {
-      this.errorLista.set(errorLegible(falla).mensaje);
     }
   }
 
@@ -335,9 +566,17 @@ export class Compras {
     this.motivo.set('');
   }
 
-  /** El motivo es obligatorio (minimo 3 letras en el backend). */
+  /** El motivo es obligatorio (mínimo 3 letras en el backend). */
   readonly puedeCancelar = computed(() => this.motivo().trim().length >= 3 && !this.cancelando());
 
+  /**
+   * Cancela y deja la fila abierta con el comprobante ya actualizado.
+   *
+   * El listado se recarga para que el badge de estatus cambie, pero NO se
+   * recoge el comprobante: quien cancela necesita ver que la compra quedó
+   * cancelada y con su motivo, y cerrarles la fila justo entonces es
+   * contraproducente.
+   */
   async confirmarCancelacion(): Promise<void> {
     const compra = this.detalle();
     if (compra === null || !this.puedeCancelar()) return;
@@ -345,10 +584,12 @@ export class Compras {
     this.cancelando.set(true);
     this.errorDetalle.set(null);
     try {
-      this.detalle.set(await this.api.cancelar(compra.id, this.motivo()));
+      const cancelada = await this.api.cancelar(compra.id, this.motivo());
+      this.detalle.set(cancelada);
       this.pidiendoMotivo.set(false);
       this.motivo.set('');
-      await this.recargar();
+      this.toast.exito(`Compra #${cancelada.id} cancelada`);
+      await this.cargarPagina(this.pagina());
     } catch (falla) {
       this.errorDetalle.set(errorLegible(falla).mensaje);
     } finally {
@@ -357,10 +598,10 @@ export class Compras {
   }
 
   /**
-   * El error de guardar, en el idioma del que esta capturando.
+   * El error de guardar, en el idioma del que está capturando.
    *
    * `SIN_COSTO` es el que vale la pena tratar: el mensaje del backend no dice
-   * DE QUE producto, y la pantalla si lo sabe (esta en el renglon). Los otros
+   * DE QUÉ producto, y la pantalla sí lo sabe (está en el renglón). Los otros
    * (`PROVEEDOR_INACTIVO`, `PRODUCTO_INACTIVO`) ya vienen claros.
    */
   private explicar(falla: unknown): string {
@@ -374,7 +615,7 @@ export class Compras {
   }
 
   // ----------------------------------------------------------------- el texto
-  // Los simbolos que la plantilla usa como metodo de la clase.
+  // Los símbolos que la plantilla usa como método de la clase.
   estatusComoTexto = estatusComoTexto;
   montoComoTexto = montoComoTexto;
   kilosComoTexto = kilosComoTexto;
@@ -385,13 +626,24 @@ export class Compras {
   sinCostoEscrito = sinCostoEscrito;
 
   readonly totalComoTexto = computed(() => montoComoTexto(this.total()));
-}
 
-/**
- * `confirm` para la unica cosa que se pierde sin avisar. Va en un envoltorio
- * para que, si algun dia se cambia a un `dialog` propio, se cambie en un solo
- * lugar.
- */
-function confirmar(pregunta: string): boolean {
-  return window.confirm(pregunta);
+  /**
+   * La clase del badge de estatus.
+   *
+   * El estatus es la razón por la que se mira esta tabla —cuánto se le debe al
+   * proveedor— así que va en badge y no en texto: "Cancelada" tiene que verse de
+   * un vistazo, y verde es exactamente lo que NO es una compra cancelada.
+   */
+  claseDeEstatus(estatus: EstatusCompra): string {
+    switch (estatus) {
+      case 'pagada':
+        return 'badge';
+      case 'parcial':
+        return 'badge badge-aviso';
+      case 'cancelada':
+        return 'badge badge-apagado';
+      default:
+        return 'badge badge-neutro';
+    }
+  }
 }

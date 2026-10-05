@@ -1,418 +1,419 @@
 <!--
-  Compras: lista, captura y detalle en una sola pantalla.
+  Compras: listado + alta en editor inline + comprobante en la fila.
 
-  Se elige con la signal `pantalla` y no con el router: el detalle es el FINAL
-  de la captura (el comprobante) y la captura es un apartado de la lista, no
-  tres lugares distintos. Con rutas, recargar dejaria a la persona en la
-  pantalla de una compra ya guardada sin forma clara de volver.
+  La misma pantalla que clientes, proveedores, productos y el catálogo: cabecera
+  con la acción principal, editor inline que se despliega ARRIBA de la tabla,
+  barra de filtros, tabla con animaciones, estados vacíos y paginación. El
+  diseño sale de `nucleo/pantallas.scss`.
 
-  No hay boton de "borrar" en ningun lado: una compra se CANCELA con un
-  motivo, y el backend devuelve los bultos a la bodega por trigger.
+  Lo propio de esta pantalla:
+
+  - El alta va DENTRO de la lista, como el editor de las demás pantallas.
+  - El comprobante se despliega DEBAJO de la fila que se está viendo, en una
+    fila de la misma tabla. Antes salía a otra pantalla, y con eso la lista se
+    iba de la vista y no había forma de comparar la compra abierta con las de
+    al lado. Aquí la tabla no se mueve: en una pantalla angosta el comprobante
+    baja con scroll normal, y en una ancha se lee sin perder de vista el
+    proveedor, el estatus y el total de la fila.
+  - El proveedor es el primero porque es del que sale el costo por omisión, y
+    el buscador de productos se apaga hasta que hay proveedor.
+  - El total de la captura es un PREVIEW: los renglones sin costo los resuelve
+    el sistema al guardar, y por eso avisa en vez de dar un número frío.
+  - No hay botón de "borrar" en ningún lado: una compra se CANCELA con un
+    motivo, y el backend devuelve los bultos a la bodega por trigger.
 -->
-@if (pantalla() === 'captura') {
-  <section class="captura">
-    <div class="cabecera">
-      <h1>Nueva compra</h1>
-      <button type="button" (click)="volverALista()">Volver a la lista</button>
-    </div>
+<section class="compras">
+  <!-- Cabecera: título a la izquierda, alta a la derecha -->
+  <div class="cabecera">
+    <h1>Compras</h1>
 
-    @if (errorCaptura(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    <!-- El proveedor es del que sale el costo por omision, asi que va primero. -->
-    <div class="bloque">
-      @if (proveedor(); as elegido) {
-        <div class="elegido">
-          <span
-            ><strong>{{ elegido.nombre }}</strong></span
+    @if (puedeCrear()) {
+      <button
+        type="button"
+        class="toggle-editor"
+        (click)="alternarEditor()"
+        [attr.aria-expanded]="editorVisible()"
+        aria-controls="editor-compra"
+      >
+        @if (editorVisible()) {
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
           >
-          <button type="button" class="chico" (click)="quitarProveedor()">Cambiar</button>
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Ocultar el alta
+        } @else {
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nueva compra
+        }
+      </button>
+    }
+  </div>
+
+  <!-- El alta, colapsada y ARRIBA de la tabla, igual que en las demás pantallas -->
+  @if (puedeCrear()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
+      <div class="editor-inline" id="editor-compra">
+        <div class="editor-cabecera">
+          <h2>Nueva compra</h2>
         </div>
+
+        <p class="descripcion">
+          La mercancía que entra a la bodega: al guardar, sube el inventario y el saldo del
+          proveedor.
+        </p>
+
+        @if (errorCaptura(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+
+        <!-- El proveedor es del que sale el costo por omisión, así que va primero. -->
+        <div class="bloque">
+          @if (proveedor(); as elegido) {
+            <div class="elegido">
+              <span
+                ><strong>{{ elegido.nombre }}</strong></span
+              >
+              <button type="button" class="chico" (click)="quitarProveedor()">Cambiar</button>
+            </div>
+          } @else {
+            <label for="buscar-proveedor">Proveedor</label>
+            <div class="campo-buscador">
+              <input
+                id="buscar-proveedor"
+                type="search"
+                autocomplete="off"
+                placeholder="Nombre del proveedor"
+                [value]="buscadorProveedor.texto()"
+                (input)="buscadorProveedor.escribir($any($event.target).value)"
+                (focus)="buscadorProveedor.alEntrar()"
+                (focusout)="buscadorProveedor.alSalir($event)"
+                (keydown.escape)="buscadorProveedor.cerrar()"
+              />
+              @if (buscadorProveedor.lista()) {
+                <ul class="resultados">
+                  @for (opcion of buscadorProveedor.opciones(); track opcion.id) {
+                    <li>
+                      <button type="button" (click)="buscadorProveedor.elegir(opcion)">
+                        {{ opcion.nombre }}
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+              @if (buscadorProveedor.sinNada(); as aviso) {
+                <p class="aviso">{{ aviso }}</p>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="datos">
+          <div class="campo">
+            <label for="fecha">Fecha de la compra</label>
+            <input
+              id="fecha"
+              type="date"
+              [value]="fecha()"
+              (change)="fecha.set($any($event.target).value)"
+            />
+            <p class="ayuda tenue">Si la dejas vacía se usa la de hoy.</p>
+          </div>
+          <div class="campo">
+            <label for="folio">Folio del proveedor (opcional)</label>
+            <input
+              id="folio"
+              type="text"
+              maxlength="60"
+              autocomplete="off"
+              [value]="folio()"
+              (input)="folio.set($any($event.target).value)"
+            />
+          </div>
+        </div>
+
+        <!-- Sin proveedor no hay costo por omisión, así que el producto espera. -->
+        <div class="bloque" [class.apagado]="proveedor() === null">
+          <label for="buscar-producto">Producto</label>
+          <div class="campo-buscador">
+            <input
+              id="buscar-producto"
+              type="search"
+              autocomplete="off"
+              placeholder="Código o nombre del producto"
+              [disabled]="proveedor() === null"
+              [value]="buscadorProducto.texto()"
+              (input)="buscadorProducto.escribir($any($event.target).value)"
+              (focus)="buscadorProducto.alEntrar()"
+              (focusout)="buscadorProducto.alSalir($event)"
+              (keydown.escape)="buscadorProducto.cerrar()"
+            />
+            @if (buscadorProducto.lista()) {
+              <ul class="resultados">
+                @for (opcion of buscadorProducto.opciones(); track opcion.id) {
+                  <li>
+                    <button type="button" (click)="buscadorProducto.elegir(opcion)">
+                      <span>{{ opcion.nombre }}</span>
+                      <span class="codigo">{{ opcion.codigo }}</span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+            @if (buscadorProducto.sinNada(); as aviso) {
+              <p class="aviso">{{ aviso }}</p>
+            }
+          </div>
+        </div>
+
+        @if (hayLineas()) {
+          <div class="tabla-wrapper">
+            <table class="tabla renglones">
+              <thead>
+                <tr>
+                  <th scope="col">Producto</th>
+                  <th scope="col">Bultos</th>
+                  <th scope="col">Kg por bulto</th>
+                  <th scope="col">Costo por kg ($)</th>
+                  <th scope="col" class="num">Subtotal</th>
+                  <th scope="col"><span class="oculto">Quitar</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (linea of lineas(); track linea.uid) {
+                  <tr>
+                    <td>
+                      {{ linea.producto_nombre }}
+                      <span class="codigo">{{ linea.producto_codigo }}</span>
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputmode="decimal"
+                        [value]="linea.cantidad_bultos"
+                        (change)="ponerCantidad(linea.uid, $any($event.target).value)"
+                        [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        inputmode="decimal"
+                        [value]="linea.kg_bulto"
+                        (change)="ponerKilos(linea.uid, $any($event.target).value)"
+                        [attr.aria-label]="'Kilos por bulto de ' + linea.producto_nombre"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputmode="decimal"
+                        placeholder="según el sistema"
+                        [value]="linea.precio_kg ?? ''"
+                        (change)="ponerCosto(linea.uid, $any($event.target).value)"
+                        [attr.aria-label]="'Costo por kilo de ' + linea.producto_nombre"
+                      />
+                    </td>
+                    <td class="num">
+                      @if (sinCostoEscrito(linea)) {
+                        <span class="tenue">—</span>
+                      } @else {
+                        {{ montoDeLinea(linea) }}
+                      }
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        class="peligro chico"
+                        (click)="quitarLinea(linea.uid)"
+                        [attr.aria-label]="'Quitar ' + linea.producto_nombre"
+                      >
+                        Quitar
+                      </button>
+                    </td>
+                  </tr>
+                  @if (problemasDeLinea(linea)['cantidad_bultos']; as problema) {
+                    <tr class="con-problema">
+                      <td colspan="6">{{ problema }}</td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cierre">
+            <p class="kilos">{{ kilosComoTexto(kilos()) }} kg en total</p>
+            <p class="total">{{ totalComoTexto() }}</p>
+            <p class="aviso">
+              Este total es un preview: los renglones sin costo los resuelve el sistema al guardar,
+              y el monto que vale es el que calcula la base.
+            </p>
+            @if (haySinCosto()) {
+              <p class="aviso">
+                Hay renglones sin costo escrito. Si el producto no tiene un costo registrado con
+                este proveedor, el guardado se rechaza y hay que escribirlo.
+              </p>
+            }
+          </div>
+        }
+
+        <div class="acciones">
+          <button type="button" (click)="alternarEditor()">Cancelar</button>
+          <button
+            type="button"
+            class="primario"
+            [disabled]="!puedeGuardar()"
+            (click)="guardar()"
+            [attr.title]="problemaParaGuardar()"
+          >
+            {{ guardando() ? 'Guardando…' : 'Guardar la compra' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Filtros: la misma barra que en las demás pantallas -->
+  <div class="filtros" role="group" aria-label="Filtros del listado">
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Folio del proveedor"
+      aria-label="Buscar por folio del proveedor"
+      [value]="filtroTexto()"
+      (input)="buscar($any($event.target).value)"
+      (keydown.escape)="limpiarFiltros()"
+    />
+
+    <div class="campo-buscador">
+      @if (filtroProveedor(); as elegido) {
+        <button type="button" class="filtro-elegido" (click)="quitarFiltroProveedor()">
+          {{ elegido.nombre }}
+          <svg
+            class="icono"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       } @else {
-        <label for="buscar-proveedor">Proveedor</label>
         <input
-          id="buscar-proveedor"
           type="search"
           autocomplete="off"
-          placeholder="Nombre del proveedor"
-          [value]="buscadorProveedor.texto()"
-          (input)="buscadorProveedor.escribir($any($event.target).value)"
-          (focus)="buscadorProveedor.alEntrar()"
-          (focusout)="buscadorProveedor.alSalir($event)"
-          (keydown.escape)="buscadorProveedor.cerrar()"
+          placeholder="Proveedor"
+          aria-label="Filtrar por proveedor"
+          [value]="buscadorFiltroProveedor.texto()"
+          (input)="buscadorFiltroProveedor.escribir($any($event.target).value)"
+          (focus)="buscadorFiltroProveedor.alEntrar()"
+          (focusout)="buscadorFiltroProveedor.alSalir($event)"
+          (keydown.escape)="buscadorFiltroProveedor.cerrar()"
         />
-        @if (buscadorProveedor.lista()) {
+        @if (buscadorFiltroProveedor.lista()) {
           <ul class="resultados">
-            @for (opcion of buscadorProveedor.opciones(); track opcion.id) {
+            @for (opcion of buscadorFiltroProveedor.opciones(); track opcion.id) {
               <li>
-                <button type="button" (click)="buscadorProveedor.elegir(opcion)">
+                <button type="button" (click)="buscadorFiltroProveedor.elegir(opcion)">
                   {{ opcion.nombre }}
                 </button>
               </li>
             }
           </ul>
         }
-        @if (buscadorProveedor.sinNada(); as aviso) {
-          <p class="aviso">{{ aviso }}</p>
-        }
       }
     </div>
 
-    <div class="bloque datos">
-      <div class="campo">
-        <label for="fecha">Fecha de la compra</label>
-        <input
-          id="fecha"
-          type="date"
-          [value]="fecha()"
-          (change)="fecha.set($any($event.target).value)"
-        />
-        <p class="ayuda">Si la dejas vacía se usa la de hoy.</p>
-      </div>
-      <div class="campo">
-        <label for="folio">Folio del proveedor (opcional)</label>
-        <input
-          id="folio"
-          type="text"
-          maxlength="60"
-          autocomplete="off"
-          [value]="folio()"
-          (input)="folio.set($any($event.target).value)"
-        />
-      </div>
-    </div>
+    <select
+      class="filtro"
+      aria-label="Filtrar por estatus"
+      [value]="filtroEstatus()"
+      (change)="cambiarEstatus($any($event.target).value)"
+    >
+      <option value="todos">Todos los estatus</option>
+      <option value="pendiente">Por pagar</option>
+      <option value="parcial">Pago parcial</option>
+      <option value="pagada">Pagadas</option>
+      <option value="cancelada">Canceladas</option>
+    </select>
 
-    <div class="bloque" [class.apagado]="proveedor() === null">
-      <label for="buscar-producto">Producto</label>
+    <label class="fecha">
+      Desde
       <input
-        id="buscar-producto"
-        type="search"
-        autocomplete="off"
-        placeholder="Código o nombre del producto"
-        [disabled]="proveedor() === null"
-        [value]="buscadorProducto.texto()"
-        (input)="buscadorProducto.escribir($any($event.target).value)"
-        (focus)="buscadorProducto.alEntrar()"
-        (focusout)="buscadorProducto.alSalir($event)"
-        (keydown.escape)="buscadorProducto.cerrar()"
+        type="date"
+        [value]="filtroDesde()"
+        (change)="cambiarDesde($any($event.target).value)"
       />
-      @if (buscadorProducto.lista()) {
-        <ul class="resultados">
-          @for (opcion of buscadorProducto.opciones(); track opcion.id) {
-            <li>
-              <button type="button" (click)="buscadorProducto.elegir(opcion)">
-                <span>{{ opcion.nombre }}</span>
-                <span class="tenue">{{ opcion.codigo }}</span>
-              </button>
-            </li>
-          }
-        </ul>
-      }
-      @if (buscadorProducto.sinNada(); as aviso) {
-        <p class="aviso">{{ aviso }}</p>
-      }
-    </div>
+    </label>
 
-    @if (hayLineas()) {
-      <table class="renglones">
-        <thead>
-          <tr>
-            <th scope="col">Producto</th>
-            <th scope="col">Bultos</th>
-            <th scope="col">Kg por bulto</th>
-            <th scope="col">Costo por kg ($)</th>
-            <th scope="col" class="num">Subtotal</th>
-            <th scope="col"><span class="oculto">Quitar</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (linea of lineas(); track linea.uid) {
-            <tr>
-              <td>
-                {{ linea.producto_nombre }}
-                <span class="tenue">{{ linea.producto_codigo }}</span>
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputmode="decimal"
-                  [value]="linea.cantidad_bultos"
-                  (change)="ponerCantidad(linea.uid, $any($event.target).value)"
-                  [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  inputmode="decimal"
-                  [value]="linea.kg_bulto"
-                  (change)="ponerKilos(linea.uid, $any($event.target).value)"
-                  [attr.aria-label]="'Kilos por bulto de ' + linea.producto_nombre"
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputmode="decimal"
-                  placeholder="según el sistema"
-                  [value]="linea.precio_kg ?? ''"
-                  (change)="ponerCosto(linea.uid, $any($event.target).value)"
-                  [attr.aria-label]="'Costo por kilo de ' + linea.producto_nombre"
-                />
-              </td>
-              <td class="num">
-                @if (sinCostoEscrito(linea)) {
-                  <span class="tenue">—</span>
-                } @else {
-                  {{ montoDeLinea(linea) }}
-                }
-              </td>
-              <td>
-                <button
-                  type="button"
-                  class="peligro chico"
-                  (click)="quitarLinea(linea.uid)"
-                  [attr.aria-label]="'Quitar ' + linea.producto_nombre"
-                >
-                  Quitar
-                </button>
-              </td>
-            </tr>
-            @if (problemasDeLinea(linea)['cantidad_bultos']; as problema) {
-              <tr class="con-problema">
-                <td colspan="6">{{ problema }}</td>
-              </tr>
-            }
-          }
-        </tbody>
-      </table>
+    <label class="fecha">
+      Hasta
+      <input
+        type="date"
+        [value]="filtroHasta()"
+        (change)="cambiarHasta($any($event.target).value)"
+      />
+    </label>
 
-      <div class="cierre">
-        <p class="kilos">{{ kilosComoTexto(kilos()) }} kg en total</p>
-        <p class="total">{{ totalComoTexto() }}</p>
-        <p class="aviso">
-          Este total es un preview: los renglones sin costo los resuelve el sistema al guardar, y el
-          monto que vale es el que calcula la base.
-        </p>
-        @if (haySinCosto()) {
-          <p class="aviso">
-            Hay renglones sin costo escrito. Si el producto no tiene un costo registrado con este
-            proveedor, el guardado se rechaza y hay que escribirlo.
-          </p>
-        }
-      </div>
+    @if (hayFiltros()) {
+      <button type="button" class="quitar-filtros" (click)="limpiarFiltros()">Limpiar</button>
     }
+  </div>
 
-    <div class="acciones">
-      <button
-        type="button"
-        class="primario grande"
-        [disabled]="!puedeGuardar()"
-        (click)="guardar()"
-      >
-        {{ guardando() ? 'Guardando…' : 'Guardar la compra' }}
-      </button>
-    </div>
-  </section>
-} @else if (pantalla() === 'detalle') {
-  @if (detalle(); as compra) {
-    <section class="comprobante">
-      <div class="cabecera">
-        <h1>Compra #{{ compra.id }}</h1>
-        <button type="button" (click)="volverALista()">Volver a la lista</button>
-      </div>
-
-      @if (errorDetalle(); as mensaje) {
-        <p class="error" role="alert">{{ mensaje }}</p>
-      }
-
-      <dl>
-        <dt>Proveedor</dt>
-        <dd>{{ compra.proveedor }}</dd>
-        <dt>Fecha</dt>
-        <dd>{{ compra.fecha }}</dd>
-        <dt>Folio del proveedor</dt>
-        <dd>{{ compra.folio_proveedor ?? '—' }}</dd>
-        <dt>Estatus</dt>
-        <dd>
-          <span [class.inactivo]="compra.estatus === 'cancelada'">
-            {{ estatusComoTexto(compra.estatus) }}
-          </span>
-        </dd>
-        <dt>Total</dt>
-        <dd class="total">{{ montoComoTexto(compra.monto_total) }}</dd>
-      </dl>
-
-      @if (compra.motivo_cancelacion; as motivoTexto) {
-        <p class="cancelada">Cancelada: {{ motivoTexto }}</p>
-      }
-
-      <table class="detalle">
-        <thead>
-          <tr>
-            <th scope="col">Producto</th>
-            <th scope="col">Almacén</th>
-            <th scope="col">Bultos</th>
-            <th scope="col">Kg por bulto</th>
-            <th scope="col">Costo por kg</th>
-            <th scope="col" class="num">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (renglon of compra.renglones; track renglon.id) {
-            <tr>
-              <td>
-                {{ renglon.producto_nombre }}
-                <span class="tenue">{{ renglon.producto_codigo }}</span>
-              </td>
-              <td>{{ renglon.almacen }}</td>
-              <td class="num">{{ bultosComoTexto(renglon.cantidad_bultos) }}</td>
-              <td class="num">{{ kilosComoTexto(renglon.kg_bulto) }}</td>
-              <td class="num">{{ montoComoTexto(renglon.precio_kg) }}</td>
-              <td class="num">{{ montoComoTexto(renglon.subtotal) }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-
-      <p class="nota">
-        El total de arriba es el que calculó la base, no el preview de la captura. La mercancía ya
-        entró a la bodega.
-      </p>
-
-      @if (compra.estatus !== 'cancelada' && puedeCrear()) {
-        @if (pidiendoMotivo()) {
-          <div class="cancelar">
-            <label for="motivo">Motivo de la cancelación</label>
-            <textarea
-              id="motivo"
-              rows="3"
-              maxlength="500"
-              [value]="motivo()"
-              (input)="motivo.set($any($event.target).value)"
-            ></textarea>
-            <p class="ayuda">Es obligatorio: cancelar una compra saca mercancía de la bodega.</p>
-            <div class="acciones">
-              <button
-                type="button"
-                class="peligro"
-                [disabled]="!puedeCancelar()"
-                (click)="confirmarCancelacion()"
-              >
-                {{ cancelando() ? 'Cancelando…' : 'Confirmar la cancelación' }}
-              </button>
-              <button type="button" (click)="noCancelar()">No</button>
-            </div>
-          </div>
-        } @else {
-          <div class="acciones">
-            <button type="button" class="peligro" (click)="pedirMotivo()">
-              Cancelar la compra
-            </button>
-          </div>
-        }
-      }
-    </section>
+  @if (errorLista(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
   }
-} @else {
-  <section class="lista">
-    <div class="cabecera">
-      <h1>Compras</h1>
-      @if (puedeCrear()) {
-        <button type="button" class="primario" (click)="nueva()">Nueva compra</button>
+
+  <!-- Los estados vacíos se separan: con filtro la salida es quitarlo. -->
+  @if (cargando() && filas().length === 0) {
+    <p class="cargando">Buscando compras…</p>
+  } @else if (filas().length === 0) {
+    <div class="estado-vacio">
+      @if (hayFiltros()) {
+        <h2>Ninguna compra coincide</h2>
+        <p>Prueba con otro folio, quita el filtro de fechas o cambia el estatus.</p>
+        <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else {
+        <h2>Todavía no hay compras</h2>
+        <p>
+          La mercancía entra por aquí: al registrar una compra sube el inventario y el saldo del
+          proveedor.
+        </p>
+        @if (puedeCrear()) {
+          <button type="button" class="primario" (click)="nueva()">
+            Registrar la primera compra
+          </button>
+        }
       }
     </div>
-
-    <p class="subtitulo">
-      La mercancía que entra a la bodega. Registrar una compra sube el inventario y el saldo del
-      proveedor; cancelarla lo devuelve.
-    </p>
-
-    <div class="filtros">
-      <input
-        type="search"
-        autocomplete="off"
-        placeholder="Folio del proveedor"
-        [value]="filtroTexto()"
-        (input)="buscar($any($event.target).value)"
-      />
-      <div class="campo-buscador">
-        @if (filtroProveedor(); as elegido) {
-          <button type="button" class="chico" (click)="quitarFiltroProveedor()">
-            {{ elegido.nombre }}
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        } @else {
-          <input
-            type="search"
-            autocomplete="off"
-            placeholder="Proveedor"
-            [value]="buscadorFiltroProveedor.texto()"
-            (input)="buscadorFiltroProveedor.escribir($any($event.target).value)"
-            (focus)="buscadorFiltroProveedor.alEntrar()"
-            (focusout)="buscadorFiltroProveedor.alSalir($event)"
-            (keydown.escape)="buscadorFiltroProveedor.cerrar()"
-          />
-          @if (buscadorFiltroProveedor.lista()) {
-            <ul class="resultados">
-              @for (opcion of buscadorFiltroProveedor.opciones(); track opcion.id) {
-                <li>
-                  <button type="button" (click)="buscadorFiltroProveedor.elegir(opcion)">
-                    {{ opcion.nombre }}
-                  </button>
-                </li>
-              }
-            </ul>
-          }
-        }
-      </div>
-      <select
-        class="filtro"
-        [value]="filtroEstatus()"
-        (change)="cambiarEstatus($any($event.target).value)"
-        aria-label="Filtrar por estatus"
-      >
-        <option value="todos">Todos los estatus</option>
-        <option value="pendiente">Por pagar</option>
-        <option value="parcial">Pago parcial</option>
-        <option value="pagada">Pagadas</option>
-        <option value="cancelada">Canceladas</option>
-      </select>
-      <label class="fecha">
-        Desde
-        <input
-          type="date"
-          [value]="filtroDesde()"
-          (change)="cambiarDesde($any($event.target).value)"
-        />
-      </label>
-      <label class="fecha">
-        Hasta
-        <input
-          type="date"
-          [value]="filtroHasta()"
-          (change)="cambiarHasta($any($event.target).value)"
-        />
-      </label>
-    </div>
-
-    @if (errorLista(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    @if (cargando() && filas().length === 0) {
-      <p class="vacio">Buscando compras…</p>
-    } @else if (filas().length === 0) {
-      <p class="vacio">No hay compras que mostrar.</p>
-    } @else {
-      <table class="tabla">
+  } @else {
+    <div class="tabla-wrapper">
+      <table class="tabla listado">
         <thead>
           <tr>
             <th scope="col">Fecha</th>
@@ -424,7 +425,7 @@
             <th scope="col"><span class="oculto">Acciones</span></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody [@filasAnimation]>
           @for (compra of filas(); track compra.id) {
             <tr>
               <td>{{ compra.fecha }}</td>
@@ -433,24 +434,204 @@
               <td class="num">{{ compra.renglones }}</td>
               <td class="num">{{ montoComoTexto(compra.monto_total) }}</td>
               <td>
-                <span [class.inactivo]="compra.estatus === 'cancelada'">
+                <span [class]="claseDeEstatus(compra.estatus)">
                   {{ estatusComoTexto(compra.estatus) }}
                 </span>
               </td>
-              <td class="acciones-celda">
-                <button type="button" class="chico" (click)="ver(compra.id)">Ver</button>
+              <td class="acciones-fila">
+                <button
+                  type="button"
+                  class="chico"
+                  (click)="ver(compra.id)"
+                  [attr.aria-expanded]="detalleAbierto(compra.id)"
+                  [attr.aria-controls]="'detalle-' + compra.id"
+                >
+                  @if (detalleAbierto(compra.id)) {
+                    <svg
+                      class="icono"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="18 15 12 9 6 15" />
+                    </svg>
+                    Cerrar
+                  } @else {
+                    <svg
+                      class="icono"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    Ver
+                  }
+                </button>
               </td>
             </tr>
+
+            <!--
+              El comprobante, en una fila de la MISMA tabla debajo de la que se
+              está viendo. Se despliega con la animación de entrada de las
+              filas y al recogerse sale con la de salida.
+            -->
+            @if (expandida() === compra.id) {
+              @if (detalle(); as abierta) {
+                <tr class="fila-detalle">
+                  <td colspan="7">
+                    <div class="detalle" [id]="'detalle-' + compra.id">
+                      <div class="detalle-cabecera">
+                        <h3>Comprobante de la compra #{{ abierta.id }}</h3>
+                        <span [class]="claseDeEstatus(abierta.estatus)">
+                          {{ estatusComoTexto(abierta.estatus) }}
+                        </span>
+                        <button type="button" class="chico" (click)="cerrarDetalle()">
+                          Cerrar comprobante
+                        </button>
+                      </div>
+
+                      @if (errorDetalle(); as mensaje) {
+                        <p class="error" role="alert">{{ mensaje }}</p>
+                      }
+
+                      @if (abierta.motivo_cancelacion; as motivoTexto) {
+                        <p class="cancelada">Cancelada: {{ motivoTexto }}</p>
+                      }
+
+                      <dl>
+                        <dt>Proveedor</dt>
+                        <dd>{{ abierta.proveedor }}</dd>
+                        <dt>Fecha</dt>
+                        <dd>{{ abierta.fecha }}</dd>
+                        <dt>Folio del proveedor</dt>
+                        <dd>{{ abierta.folio_proveedor ?? '—' }}</dd>
+                        <dt>Total</dt>
+                        <dd class="total">{{ montoComoTexto(abierta.monto_total) }}</dd>
+                      </dl>
+
+                      <div class="tabla-wrapper">
+                        <table class="tabla">
+                          <thead>
+                            <tr>
+                              <th scope="col">Producto</th>
+                              <th scope="col">Almacén</th>
+                              <th scope="col" class="num">Bultos</th>
+                              <th scope="col" class="num">Kg por bulto</th>
+                              <th scope="col" class="num">Costo por kg</th>
+                              <th scope="col" class="num">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (renglon of abierta.renglones; track renglon.id) {
+                              <tr>
+                                <td>
+                                  {{ renglon.producto_nombre }}
+                                  <span class="codigo">{{ renglon.producto_codigo }}</span>
+                                </td>
+                                <td>{{ renglon.almacen }}</td>
+                                <td class="num">{{ bultosComoTexto(renglon.cantidad_bultos) }}</td>
+                                <td class="num">{{ kilosComoTexto(renglon.kg_bulto) }}</td>
+                                <td class="num">{{ montoComoTexto(renglon.precio_kg) }}</td>
+                                <td class="num">{{ montoComoTexto(renglon.subtotal) }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <p class="nota">
+                        El total de arriba es el que calculó la base, no el preview de la captura.
+                        La mercancía ya entró a la bodega.
+                      </p>
+
+                      @if (abierta.estatus !== 'cancelada' && puedeCrear()) {
+                        @if (pidiendoMotivo()) {
+                          <div class="cancelar">
+                            <label for="motivo">Motivo de la cancelación</label>
+                            <textarea
+                              id="motivo"
+                              rows="3"
+                              maxlength="500"
+                              [value]="motivo()"
+                              (input)="motivo.set($any($event.target).value)"
+                            ></textarea>
+                            <p class="ayuda">
+                              Es obligatorio: cancelar una compra saca mercancía de la bodega.
+                            </p>
+                            <div class="acciones">
+                              <button type="button" (click)="noCancelar()">No cancelar</button>
+                              <button
+                                type="button"
+                                class="primario peligro"
+                                [disabled]="!puedeCancelar()"
+                                (click)="confirmarCancelacion()"
+                              >
+                                {{ cancelando() ? 'Cancelando…' : 'Confirmar la cancelación' }}
+                              </button>
+                            </div>
+                          </div>
+                        } @else {
+                          <div class="acciones">
+                            <button type="button" class="peligro" (click)="pedirMotivo()">
+                              Cancelar la compra
+                            </button>
+                          </div>
+                        }
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
           }
         </tbody>
       </table>
+    </div>
 
-      <div class="paginacion">
-        <button type="button" [disabled]="!hayMas() || cargandoMas()" (click)="cargarMas()">
-          {{ cargandoMas() ? 'Buscando…' : 'Cargar más' }}
-        </button>
-        <span class="cuenta">{{ filas().length }} de {{ totalEncontrado() }} compras</span>
-      </div>
-    }
-  </section>
-}
+    <div class="paginacion">
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaAnterior() || cargando()"
+        (click)="irPagina(pagina() - 1)"
+      >
+        ‹ Anterior
+      </button>
+
+      <span class="contador">
+        {{ rangoDePagina() }}
+        <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+      </span>
+
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaSiguiente() || cargando()"
+        (click)="irPagina(pagina() + 1)"
+      >
+        Siguiente ›
+      </button>
+
+      <label class="oculto" for="tamano-pagina-compras">Renglones por página</label>
+      <select
+        id="tamano-pagina-compras"
+        class="filtro tamano-pagina"
+        aria-label="Renglones por página"
+        [value]="limiteComoTexto()"
+        (change)="aTamanoDePagina($any($event.target).value)"
+      >
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100">100 por página</option>
+        <option value="200">200 por página</option>
+      </select>
+    </div>
+  }
+</section>
+
+<app-confirm-modal />

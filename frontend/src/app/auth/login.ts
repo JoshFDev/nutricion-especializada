@@ -71,6 +71,23 @@ export class Login {
   readonly error = signal<string | null>(null);
   readonly enviando = signal(false);
 
+  /**
+   * Si la contrasena se esta viendo.
+   *
+   * Arranca en `false` siempre: aunque la ultima vez se quedara a la vista, un
+   * campo de contrasena en claro esperando a que alguien escriba en el es la
+   * peor forma de tenerla guardada en la pantalla de un mostrador.
+   *
+   * El boton que lo cambia solo cambia el atributo `type` del input, asi que
+   * el valor, el cursor y el estado del formulario se quedan como estaban: no
+   * se reconstruye el campo y no se pierde lo que ya estaba escrito.
+   */
+  readonly verContrasena = signal(false);
+
+  alternarContrasena(): void {
+    this.verContrasena.update((visible) => !visible);
+  }
+
   /** Se muestra solo si el backend dijo que si. */
   readonly avisoSesionCerrada = signal(false);
 

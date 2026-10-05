@@ -33,7 +33,7 @@
  * motivo: es espacio que la tarjeta necesita.
  */
 .pantalla {
-  --fondo-login: url('/fondos/vacaLengua.jpg');
+  --fondo-login: url('/fondos/establo.jpg');
   --alto-banda: clamp(6rem, 24dvh, 16rem);
   --alto-panel: clamp(1.25rem, 4dvh, 2.5rem);
 
@@ -249,12 +249,17 @@
   /* El logo va centrado arriba del titulo, y escala con la altura de la
      ventana. Es lo que mas espacio gasta de todo el login para lo poco que
      aporta, asi que en pantalla baja encoge de forma continua en vez de dar un
-     salto al cruzar el breakpoint. */
+     salto al cruzar el breakpoint.
+
+     Esta es la marca de la aplicacion: es la unica pantalla donde se ve sin
+     sesion, asi que se le dio el doble que antes y se le dejo respirar (ver
+     `respirar`). Antes de 2.75rem-4.5rem, ahora de 3.5rem-6rem. */
   .logo {
     display: block;
-    width: clamp(2.75rem, 8dvh, 4.5rem);
-    height: clamp(2.75rem, 8dvh, 4.5rem);
+    width: clamp(3.5rem, 11dvh, 6rem);
+    height: clamp(3.5rem, 11dvh, 6rem);
     margin: 0 auto clamp(0.5rem, 1.5dvh, 0.875rem);
+    animation: respirar 6s ease-in-out 0.8s infinite;
   }
 
   h1 {
@@ -290,6 +295,30 @@
   }
 }
 
+/* El logo respira: sube y baja tres pixeles, muy despacio, y en bucle.
+ *
+ * Es la unica animacion REPETIDA de la pantalla, y a proposito son tres pixeles:
+ * se nota que la pantalla esta viva sin que el ojo tenga que seguir nada. Con mas
+ * amplitud se vuelve un distraction en la primera pagina que se ve de la app, y
+ * en un mostrador con el logo al centro de la mirada eso no ayuda.
+ *
+ * El `delay` de 0.8s es para que no se mueva mientras entra la tarjeta: si los
+ * dos motions arrancan juntos, el logo sube mientras la tarjeta baja y el
+ * conjunto se ve tembloroso en vez de vivo.
+ *
+ * El keyframe termina en `none` y no en `translateY(0)`, por la misma razon que
+ * `asentar` y `emerger`: ver la nota de "Capas y texto" al final del archivo. */
+@keyframes respirar {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* El formulario                                                        */
 /* ------------------------------------------------------------------ */
@@ -315,6 +344,37 @@
   text-shadow: none;
 }
 
+/*
+  Cada campo en su bloque: etiqueta, input y el error que le toca.
+
+  Con los campos sueltos, el margen de debajo del input era el que separaba un
+  campo del siguiente, y el error (con su margen negativo) se colaba entre los
+  dos: cuando aparecia, empujaba el boton de entrar hacia abajo y el boton se
+  movia justo cuando ya se esta escribiendo la contrasena, que es cuando mas
+  molesta que se mueva.
+
+  Con el bloque, el input ya no trae margen, el margen vive en el bloque y el
+  error queda DENTRO: sale debajo del input sin empujar nada, porque lo que hay
+  debajo es el margen del bloque.
+
+  El escalonado es lo otro que aporta. Cada bloque baja un poco despues del
+  anterior, encima de la foto y la tarjeta que ya entran: el conjunto se lee
+  como una entrada en orden y no como cinco cosas que aparecieron a la vez. Los
+  retardos son cortos (60ms) y arrancan cuando la tarjeta ya esta (0.32s): mas
+  lento se siente lento, y mas rapido no se percibe el orden. */
+.campo-login {
+  margin-bottom: clamp(0.625rem, 1.8dvh, 1rem);
+  animation: emerger 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.campo-login:nth-of-type(1) {
+  animation-delay: 0.32s;
+}
+
+.campo-login:nth-of-type(2) {
+  animation-delay: 0.38s;
+}
+
 label {
   display: block;
   margin-bottom: 0.375rem;
@@ -326,7 +386,6 @@ label {
 input {
   width: 100%;
   padding: clamp(0.5rem, 1.6dvh, 0.6875rem) 0.8125rem;
-  margin-bottom: clamp(0.625rem, 1.8dvh, 1rem);
   font: inherit;
   color: inherit;
 
@@ -368,12 +427,101 @@ input {
   &.invalido:focus {
     box-shadow: 0 0 0 3px rgb(179 38 30 / 20%);
   }
+
+  /* El placeholder es la ayuda de ahi: nunca se ve mientras se escribe, asi
+     que va mas claro que el texto y el navegador no lo Borra. */
+  &::placeholder {
+    color: rgb(27 31 36 / 38%);
+  }
 }
 
+/*
+  El campo de contrasena con el boton de verla.
+
+  El contenedor es `relative` y el boton va pegado a la derecha, a la altura del
+  input. El input cede el espacio del boton con `padding-right`: sin eso el texto
+  llega debajo del ojo justo al final de la contrasena, que es donde se escribe
+  sin mirar. */
+.campo-contrasena {
+  position: relative;
+
+  input {
+    padding-right: 2.875rem;
+  }
+}
+
+/*
+  El boton de ver la contrasena.
+
+  Va sin fondo y sin borde a proposito: es un control, no un boton de la tarjeta,
+  y si tuviera el fondo azul de "Entrar" se leeria como una segunda accion igual
+  de importante. Se queda en gris y se enciende al pasar el cursor.
+
+  El tamano es de 2.25rem, el minimo comfortable con el dedo para un control de
+  este tamano, y el area pulsable llega a los 44px que piden las guias de
+  accesibilidad tactil sin que se vea un boton enorme: el `padding` invisible
+  hace eso y el icono no crece. */
+.ver {
+  position: absolute;
+  top: 50%;
+  right: 0.1875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0.6875rem 0;
+  color: var(--texto-tenue);
+  background: transparent;
+  border: 0;
+  border-radius: 0.5rem;
+  box-shadow: none;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  &:hover:not(:disabled) {
+    color: var(--acento-texto);
+    background: rgb(30 64 175 / 8%);
+    box-shadow: none;
+    transform: translateY(-50%);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 1px;
+  }
+}
+
+/* El error del campo, dentro del bloque del campo. Ver `.campo-login`. */
 .campo-error {
-  margin: -0.75rem 0 0.875rem;
+  margin: 0.375rem 0 0;
   color: var(--peligro-texto);
   font-size: 0.8125rem;
+
+  animation: salir 0.25s ease-out both;
+}
+
+/* El error de un campo aparece de golpe y por lo general mientras se escribe:
+   bajarlo un poco hace que se note sin tener que ir a buscarlo. */
+@keyframes salir {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .aviso {
@@ -392,7 +540,47 @@ input {
     background: rgb(251 234 233 / 0.9);
     color: var(--peligro-texto);
     border: 1px solid rgb(179 38 30 / 25%);
+
+    /* El aviso se sacude, no la tarjeta. La tarjeta ya tiene la animacion de
+       entrada con `fill-mode: both`, y ponersela encima dejaria su `transform`
+       puesto para siempre (ver "Capas y texto"), que es exactamente el texto
+       borroso que este archivo lleva tanto cuidado de evitar. Un elemento
+       chico y con su propia animacion no deja capa ninguna. */
+    animation: sacudir 0.36s ease-in-out;
   }
+}
+
+/* Una contrasena mal escrita se lee como "te equivoquiste", y un "no" seco sin
+   movimiento pasa desapercibido en una pantalla que acaba de aparecer. Cuatro
+   pixeles y medio segundo: se nota sin insultar a nadie. */
+@keyframes sacudir {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  20% {
+    transform: translateX(-5px);
+  }
+
+  45% {
+    transform: translateX(4px);
+  }
+
+  70% {
+    transform: translateX(-2px);
+  }
+
+  85% {
+    transform: translateX(1px);
+  }
+}
+
+/* El borde de la tarjeta se aviva cuando hay un error del servidor: un rojo en
+   el contorno entero, sin parpadeo y sin movimiento, que se queda mientras el
+   aviso este a la vista. */
+.tarjeta.con-error {
+  border-color: rgb(179 38 30 / 32%);
 }
 
 button {
@@ -433,6 +621,34 @@ button {
     opacity: 0.6;
     cursor: progress;
     transform: none;
+  }
+}
+
+/*
+  El spinner del boton de entrar.
+
+  El login no usa `nucleo/pantallas.scss` (esta pantalla se ve antes de tener
+  sesion y no comparte nada con el resto de las tablas), asi que el spinner se
+  declara aqui. Es el mismo dibujo del partial: un circulo con el borde de arriba
+  del color del texto.
+
+  Va DENTRO del boton y no al lado del texto porque el ancho del boton es el de
+  la tarjeta: el texto ya se centra con el `padding`, y con el spinner al lado
+  el conjunto se ve descuadrado mientras dura la espera. */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 0.875em;
+  height: 0.875em;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -557,19 +773,31 @@ button {
 /* ------------------------------------------------------------------ */
 
 /*
- * Las tres animaciones de arriba son de entrada, duran poco y no se repiten, asi
- * que no son las que mas molestan. Pero `prefers-reduced-motion` no es solo
- * para gente a quien el movimiento le mareo: tambien esta el ahorro de bateria
- * en equipos sin GPU. Con la foto a pantalla completa, la animacion de
- * `asentar` obliga a repintar toda la pantalla cada cuadro.
+ * Las de entrada duran poco y no se repiten, asi que no son las que mas
+ * molestan. Pero `prefers-reduced-motion` no es solo para gente a quien el
+ * movimiento le mareo: tambien esta el ahorro de bateria en equipos sin GPU. Con
+ * la foto a pantalla completa, la animacion de `asentar` obliga a repintar toda
+ * la pantalla cada cuadro, y la del logo que respira la mantiene encendida
+ * mientras la sesion este abierta.
  *
- * Se quitan las tres, no se acortan: dejar el desenfoque puesto desde el
+ * Se quitan todas, no se acortan: dejar el desenfoque puesto desde el
  * principio se ve igual de bien y no hay transicion que fallar.
+ *
+ * La lista incluye las de este archivo ademas de las tres de entrada: el logo
+ * que respira, el escalonado de los campos, la bajada de los errores y la
+ * sacudida del aviso de contrasena incorrecta. La de girar del spinner NO se
+ * quita: un boton que dice "Entrando..." con la palabra quieta sigue diciendo
+ * que algo pasa, y quitarle el unico movimiento que le queda seria dejarlo
+ * mudo.
  */
 @media (prefers-reduced-motion: reduce) {
   .pantalla::before,
   .panel,
-  .tarjeta {
+  .tarjeta,
+  .cabecera .logo,
+  .campo-login,
+  .campo-error,
+  .aviso-error {
     animation: none;
   }
 }

@@ -30,7 +30,7 @@ const CLAVE = 'nutricion:fondo-login:v1';
  * archivo, y es deliberado, para que el login tenga algo que pintar ANTES de
  * que exista sesion con la que preguntar al servidor.
  */
-export const FONDO_POR_DEFECTO = '/fondos/vacaLengua.jpg';
+export const FONDO_POR_DEFECTO = '/fondos/establo.jpg';
 
 /**
  * Solo se acepta lo que parece una ruta nuestra o una URL completa.

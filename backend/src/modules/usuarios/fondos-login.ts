@@ -30,6 +30,11 @@ export const FONDOS_LOGIN = [
     etiqueta: 'Fondo vertical',
     url: '/fondos/vacaFondo.jpg',
   },
+  {
+    clave: 'establo',
+    etiqueta: 'Establo',
+    url: '/fondos/establo.jpg',
+  },
 ] as const;
 
 export type ClaveFondo = (typeof FONDOS_LOGIN)[number]['clave'];
@@ -37,8 +42,14 @@ export type ClaveFondo = (typeof FONDOS_LOGIN)[number]['clave'];
 /** Un fondo, tal como lo consume el frontend. */
 export type FondoLogin = (typeof FONDOS_LOGIN)[number];
 
-/** El fondo de quien no eligió nada. */
-export const FONDO_LOGIN_DEFECTO = 'vacaLengua';
+/**
+ * El fondo de quien no eligió nada.
+ *
+ * Cambiarlo NO necesita migración: `NULL` significa "el de por defecto" y se
+ * resuelve contra esta lista, así que quien nunca eligió nada ve el nuevo sin
+ * tocar su fila. Los que sí eligieron conservan el suyo.
+ */
+export const FONDO_LOGIN_DEFECTO = 'establo';
 
 const CLAVES: readonly string[] = FONDOS_LOGIN.map((f) => f.clave);
 

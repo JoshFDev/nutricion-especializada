@@ -1,6 +1,6 @@
 <main class="pantalla" [style.--fondo-login]="imagenFondo">
   <section class="panel">
-    <div class="tarjeta">
+    <div class="tarjeta" [class.con-error]="error()">
       <!--
         La cabecera va en su propio bloque, separada del formulario por una
         linea: sin ella, el campo de correo parece el primer campo de algo que
@@ -24,30 +24,101 @@
       }
 
       <form [formGroup]="form" (ngSubmit)="entrar()">
-        <label for="correo">Correo</label>
-        <input
-          id="correo"
-          type="email"
-          formControlName="correo"
-          autocomplete="username"
-          autofocus
-          [class.invalido]="tocado('correo')"
-        />
-        @if (tocado('correo')) {
-          <p class="campo-error">Escribe un correo con formato valido.</p>
-        }
+        <!--
+          Cada campo va en su bloque y no suelto. Sirve para dos cosas: el
+          escalonado de la entrada (cada bloque baja un poco despues del
+          anterior, y el conjunto se lee como una entrada y no como cinco cosas
+          que aparecieron a la vez), y para que el margen del campo viva en el
+          bloque: el error sale DENTRO del bloque, entre el input y el margen,
+          y con los campos sueltos el error empujaba el boton de entrar hacia
+          abajo cada vez que aparecia.
+        -->
+        <div class="campo-login">
+          <label for="correo">Correo</label>
+          <input
+            id="correo"
+            type="email"
+            formControlName="correo"
+            autocomplete="username"
+            inputmode="email"
+            enterkeyhint="next"
+            autocapitalize="none"
+            spellcheck="false"
+            placeholder="nombre@correo.com"
+            autofocus
+            [class.invalido]="tocado('correo')"
+            [attr.aria-invalid]="tocado('correo')"
+            [attr.aria-describedby]="tocado('correo') ? 'correo-error' : null"
+          />
+          @if (tocado('correo')) {
+            <p class="campo-error" id="correo-error">Escribe un correo con formato valido.</p>
+          }
+        </div>
 
-        <label for="contrasena">Contrasena</label>
-        <input
-          id="contrasena"
-          type="password"
-          formControlName="contrasena"
-          autocomplete="current-password"
-          [class.invalido]="tocado('contrasena')"
-        />
-        @if (tocado('contrasena')) {
-          <p class="campo-error">La contrasena no puede ir vacia.</p>
-        }
+        <div class="campo-login">
+          <label for="contrasena">Contrasena</label>
+          <!--
+            El campo con el boton de ver la contrasena.
+
+            Es la unica concession a la seguridad de la pantalla, y a cambio
+            resuelve el problema mas comun de un mostrador: teclear la contrasena
+            en mayusculas o con el teclado en espanol, con el numero de
+            caracteres equivocado y sin poder notarlo. El boton es un
+            `type="button"` para que no dispare el `submit` del formulario, y
+            lleva `aria-pressed` para que el lector de pantalla diga si la
+            contrasena esta a la vista o no.
+          -->
+          <div class="campo-contrasena">
+            <input
+              id="contrasena"
+              [type]="verContrasena() ? 'text' : 'password'"
+              formControlName="contrasena"
+              autocomplete="current-password"
+              enterkeyhint="go"
+              placeholder="Tu contrasena"
+              [class.invalido]="tocado('contrasena')"
+              [attr.aria-invalid]="tocado('contrasena')"
+              [attr.aria-describedby]="tocado('contrasena') ? 'contrasena-error' : null"
+            />
+            <button
+              type="button"
+              class="ver"
+              (click)="alternarContrasena()"
+              [attr.aria-pressed]="verContrasena()"
+              [attr.aria-label]="verContrasena() ? 'Ocultar la contrasena' : 'Ver la contrasena'"
+              [title]="verContrasena() ? 'Ocultar la contrasena' : 'Ver la contrasena'"
+            >
+              @if (verContrasena()) {
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path
+                    d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.5" />
+                  <path
+                    d="M4 16L16 4"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              } @else {
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path
+                    d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+              }
+            </button>
+          </div>
+          @if (tocado('contrasena')) {
+            <p class="campo-error" id="contrasena-error">La contrasena no puede ir vacia.</p>
+          }
+        </div>
 
         @if (error()) {
           <p class="aviso aviso-error" role="alert">{{ error() }}</p>
@@ -56,10 +127,14 @@
         <!--
           El boton se deshabilita mientras viaja la peticion. Un doble clic
           manda dos logins, y el segundo error (de sesion ya usada) se come el
-          mensaje del primero. Tambien dice "Entrando..." para que se vea que
-          algo paso: sin eso, en una red lenta parece que el clic no entro.
+          mensaje del primero. Tambien dice "Entrando..." y enseña el spinner
+          para que se vea que algo paso: sin eso, en una red lenta parece que el
+          clic no entro.
         -->
         <button type="submit" [disabled]="enviando()">
+          @if (enviando()) {
+            <span class="spinner" aria-hidden="true"></span>
+          }
           {{ enviando() ? 'Entrando...' : 'Entrar' }}
         </button>
       </form>

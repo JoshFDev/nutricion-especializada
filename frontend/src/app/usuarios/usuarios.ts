@@ -353,8 +353,16 @@ export class Usuarios {
     this.fondoElegido.update((actual) => (actual === clave ? null : clave));
   }
 
-  /** El fondo por defecto, para el boton de "quitar la eleccion". */
-  readonly claveFondoDefecto = 'vacaLengua';
+  /**
+   * El fondo por defecto, para el boton de "quitar la eleccion".
+   *
+   * Va repetido aqui a proposito y no se pide al backend: el selector lo dibuja
+   * al abrirse, y una peticion para saber cual es el default seria un viaje de
+   * mas en cada edicion por un dato que solo cambia con una migracion. Si se
+   * cambia el default hay que tocar este renglon, `FONDO_POR_DEFECTO` de
+   * `nucleo/fondo-login.ts` y `FONDO_LOGIN_DEFECTO` del backend.
+   */
+  readonly claveFondoDefecto = 'establo';
 
   cancelar(): void {
     this.editando.set(null);

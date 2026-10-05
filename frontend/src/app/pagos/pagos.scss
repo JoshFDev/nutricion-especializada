@@ -1,300 +1,452 @@
 /*
  * La pantalla de pagos.
  *
- * Misma familia que productos.scss (filtros, tabla, editor), con lo que el
- * pago agrega a la cobranza: el metodo en los filtros y en el editor, el
- * detalle de un pago (sus aplicaciones) y las notas abiertas del cliente
- * con su caja de "aplicar".
+ * El diseño —cabecera, editor inline, barra de filtros, tabla, estados vacíos,
+ * paginación, botones, badges y animaciones— sale de `nucleo/pantallas.scss`, el
+ * MISMO partial que usan clientes, proveedores, compras, inventario, productos y
+ * el catálogo. Aquí no se vuelve a pintar nada de eso.
+ *
+ * Lo que queda es lo que la cobranza tiene de distinto y no se puede prestar:
+ *
+ *   - `.campos`, la rejilla del cobro: el cliente toma el ancho completo porque
+ *     de él dependen las notas abiertas, y el resto va en pares.
+ *   - `.notas`, la tabla de aplicación, que lleva un input por nota y una fila
+ *     de problema debajo de cada una.
+ *   - `.cierre`, el resumen de "aplicado / sin aplicar", que es un preview.
+ *   - `.fila-detalle`, el detalle que se despliega DEBAJO de la fila.
+ *   - `.sin-aplicar`, el saldo que quedó flotando: es dinero del cliente, y por
+ *     eso no puede verse igual que un saldo ya liquidado.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1,
-h2 {
-  margin: 0;
-  font-size: 1.25rem;
+/* ------------------------------------------------------------- el listado */
+
+/*
+ * Anchos fijos, como en las demás pantallas: con `table-layout: fixed` la
+ * columna del cliente toma lo que sobra y las de dinero se quedan con lo justo.
+ *
+ * Los anchos van en `.listado` y no en `.tabla` a propósito: las tablas de las
+ * notas y de las aplicaciones también son `.tabla` pero llevan sus propias
+ * medidas.
+ *
+ * El ancho mínimo es para que en una pantalla angosta la tabla scrollee en vez
+ * de estrujarse: nueve columnas sin mínimo se recortan, y con ellas los
+ * botones de "Ver". El `.tabla-wrapper` del partial ya trae `overflow-x: auto`.
+ */
+.listado {
+  table-layout: fixed;
+  min-width: 56rem;
 }
 
-/* ------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+.listado th,
+.listado td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.filtros {
-  display: flex;
-  gap: 0.625rem;
-  margin-bottom: 1rem;
-}
+.listado th:nth-child(1) {
+  width: 7%;
+} /* Pago */
+.listado th:nth-child(2) {
+  width: 22%;
+} /* Cliente */
+.listado th:nth-child(3) {
+  width: 10%;
+} /* Fecha */
+.listado th:nth-child(4) {
+  width: 15%;
+} /* Método */
+.listado th:nth-child(5) {
+  width: 12%;
+} /* Monto */
+.listado th:nth-child(6) {
+  width: 11%;
+} /* Aplicado */
+.listado th:nth-child(7) {
+  width: 10%;
+} /* Saldo */
+.listado th:nth-child(8) {
+  width: 9%;
+} /* Referencia */
+.listado th:nth-child(9) {
+  width: 8%;
+} /* Acciones */
 
-.filtros input[type='search'] {
-  flex: 1;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.filtro {
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-/* --------------------------------------------------------------- la tabla */
-
-.tabla {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-}
-
-th,
-td {
-  padding: 0.5rem 0.625rem;
-  text-align: left;
-  border-bottom: 1px solid var(--borde);
-}
-
-th {
-  font-size: 0.8125rem;
+/* El número del pago es la referencia de la persona, no un autoincremental. */
+.folio {
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--texto-suave);
+}
+
+/*
+ * El saldo sin aplicar se pinta aparte del resto.
+ *
+ * Es dinero del cliente que todavía no cubre ninguna nota: ya se le descontó
+ * del saldo, pero está ahí sin destino. Verlo igual que un saldo liquidado
+ * esconde exactamente lo que el operador tiene que saber.
+ */
+.sin-aplicar {
+  color: var(--advertencia-texto);
+}
+
+/* --------------------------------------------- el detalle desplegable */
+
+/*
+ * El detalle ocupa una fila de la MISMA tabla, debajo de la que se está viendo.
+ * Por eso la celda no trae padding (lo trae el div de adentro) y revive la
+ * herencia de `nowrap` que las celdas del listado necesitan para recortar con
+ * puntos suspensivos: aquí el texto tiene que poder dar vueltas.
+ */
+.fila-detalle > td {
+  padding: 0;
+  overflow: visible;
+  white-space: normal;
   background: var(--fondo);
 }
 
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.detalle {
+  padding: 1rem 1.25rem;
+  /* La misma `slideDown` del editor: el detalle baja desde arriba. */
+  animation: slideDown 0.2s ease-out;
 }
 
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.inactivo {
-  color: var(--texto-tenue);
-}
-
-.acciones-celda {
-  white-space: nowrap;
-  text-align: right;
-}
-
-.folio {
-  font-variant-numeric: tabular-nums;
-}
-
-.paginacion {
+.detalle-cabecera {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--borde);
 }
 
-.cuenta {
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
+.detalle-cabecera h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
-.vacio {
+/* El "Cerrar detalle" se va a la derecha, y solo ocupa lugar si hace falta. */
+.detalle-cabecera .chico {
+  margin-left: auto;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.375rem 1rem;
   margin: 0 0 1rem;
-  color: var(--texto-tenue);
-}
-
-/* ------------------------------------------------------- el pago por notas */
-
-.aplicar {
-  width: 6rem;
-  padding: 0.375rem 0.5rem;
-  font: inherit;
-  text-align: right;
-  color: var(--texto);
+  padding: 0.875rem 1rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
-.nota-error td {
-  padding-top: 0.25rem;
+dt {
   font-size: 0.8125rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
+  color: var(--texto-suave);
 }
 
-.resumen {
-  display: flex;
-  gap: 1.25rem;
-  margin-bottom: 1rem;
+dd {
+  margin: 0;
   font-size: 0.875rem;
+  font-weight: 500;
 }
 
-.no-alcanza {
-  color: var(--peligro-texto);
+/* -------------------------------------------------------------- el editor */
+
+/* La frase que explica para qué es el cobro, encima de los campos. */
+.descripcion {
+  margin: 0 0 1rem;
+  max-width: 46rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
 }
 
-/* --------------------------------------------------------------- el editor */
-
-.editor {
-  max-width: 58rem;
+/* El título de "Aplicar a las notas abiertas". */
+.titulo {
+  margin: 1.25rem 0 0.625rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .campos {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 0.875rem 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.5rem;
 }
 
+/* El cliente manda: de él salen las notas abiertas de la tabla de abajo. */
 .campo.ancho {
   grid-column: 1 / -1;
 }
 
-.campo label,
-.marca {
+label {
   display: block;
   margin-bottom: 0.25rem;
   font-size: 0.875rem;
   color: var(--texto-suave);
 }
 
-.campo input:not([type='checkbox']),
-.campo select {
+/* La casilla de "Requiere factura" es una línea, no un campo con etiqueta. */
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+  font-size: 0.875rem;
+  color: var(--texto);
+}
+
+.campo input:not([type='checkbox']) {
   width: 100%;
   padding: 0.5rem 0.625rem;
   font: inherit;
+  font-size: 0.875rem;
   color: var(--texto);
-  background: var(--superficie);
+  background: var(--fondo);
   border: 1px solid var(--borde);
+  border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.campo input:not([type='checkbox']):focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+/* El cliente ya elegido, que se lee como etiqueta y se quita con un clic. */
+.cliente-elegido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
   border-radius: 6px;
 }
 
-.cliente-elegido .cambiar {
+/* ----------------------------------------------------- los buscadores */
+
+/*
+ * El desplegable de resultados va pegado al input, y el input necesita
+ * `position: relative` en su contenedor para que la lista quede debajo y no
+ * empuje lo que sigue.
+ */
+.campo-buscador {
+  position: relative;
+}
+
+.campo-buscador input[type='search'] {
   width: 100%;
-  padding: 0.5rem 0.625rem;
+  padding: 0.5rem 0.75rem;
   font: inherit;
-  text-align: left;
+  font-size: 0.875rem;
   color: var(--texto);
-  background: var(--superficie);
+  background: var(--fondo);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.campo-buscador input[type='search']:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
 }
 
 .resultados {
-  margin: 0.375rem 0 0;
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
   padding: 0;
   list-style: none;
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  overflow: hidden;
+  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+  animation: slideDown 0.15s ease-out;
 }
 
 .resultados button {
   display: block;
   width: 100%;
-  padding: 0.5rem 0.625rem;
+  padding: 0.5rem 0.75rem;
   font: inherit;
+  font-size: 0.875rem;
   text-align: left;
   color: var(--texto);
-  background: transparent;
+  background: none;
   border: 0;
-  cursor: pointer;
+  border-radius: 0;
 }
 
-.resultados button:hover {
+.resultados button:hover:not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: transparent;
+}
+
+.aviso {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+/* ------------------------------------------------------- las notas abiertas */
+
+/*
+ * Esta tabla lleva un input por nota y NO lleva la animación de entrada de las
+ * demás: una fila que se va hacia atrás con el cursor dentro se lleva por
+ * delante el foco del campo que se está escribiendo.
+ */
+.notas th,
+.notas td {
+  white-space: nowrap;
+}
+
+.aplicar {
+  width: 7rem;
+  padding: 0.375rem 0.5rem;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: right;
+  color: var(--texto);
   background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
 }
 
-/* ------------------------------------------------------------- el detalle */
-
-.detalle {
-  margin-top: 1.25rem;
+.aplicar:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
 }
 
-.detalle-cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.875rem;
+/* El motivo del problema se escribe en una fila propia, debajo de la nota. */
+.con-problema td {
+  padding-top: 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-bottom: 1px solid var(--borde);
 }
 
-.detalle-titulo {
-  margin: 1.25rem 0 0.625rem;
-  font-size: 1rem;
-}
-
-.detalle-campos {
+/* El cierre: lo aplicado a la izquierda y lo que sobra a la derecha. */
+.cierre {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.375rem 1rem;
-  margin: 0 0 1rem;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  margin-bottom: 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
 }
 
-.detalle-campos dt {
+.aplicado {
+  margin: 0;
   color: var(--texto-suave);
+  font-size: 0.875rem;
 }
 
-.detalle-campos dd {
+.total {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cierre .aviso {
+  grid-column: 1 / -1;
   margin: 0;
 }
 
-/* ------------------------------------------------------------- los botones */
+.no-alcanza {
+  color: var(--peligro-texto);
+  font-weight: 600;
+}
 
-button {
-  padding: 0.5rem 0.875rem;
+/* Los dos filtros de fecha, con su etiqueta pegada al input. */
+.fecha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.fecha input {
+  padding: 0.5rem 0.75rem;
   font: inherit;
+  font-size: 0.875rem;
   color: var(--texto);
-  background: var(--superficie);
+  background: var(--fondo);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  cursor: pointer;
 }
 
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
+/* --------------------------------------------------------- pantallas angostas */
+
+/*
+ * En una pantalla angosta la rejilla del cobro y las etiquetas del detalle
+ * bajan a una columna, y la tabla scrollea. Lo importante es que el cobro se
+ * pueda hacer igual de bien en una laptop angosta que en un monitor grande.
+ */
+@media (max-width: 52rem) {
+  .campos {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .marca {
+    margin-top: 1.75rem;
+  }
 }
 
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
-}
+@media (max-width: 40rem) {
+  .campos {
+    grid-template-columns: 1fr;
+  }
 
-button.chico {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8125rem;
-}
+  .marca {
+    margin-top: 0;
+  }
 
-.acciones {
-  display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
-}
+  dl {
+    grid-template-columns: 1fr;
+    gap: 0.125rem;
+  }
 
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
+  dt {
+    margin-top: 0.5rem;
+    font-weight: 600;
+  }
+
+  dt:first-child {
+    margin-top: 0;
+  }
+
+  .detalle,
+  .fila-detalle > td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
 }

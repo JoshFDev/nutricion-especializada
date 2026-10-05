@@ -1,7 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
+import { ToastService } from '../nucleo/toast.service';
 import { montoComoTexto } from '../nucleo/cifras';
+import { ConfirmModal } from '../productos/confirm-modal';
 import {
   cuerpoDePago,
   hoyComoTexto,
@@ -18,59 +28,134 @@ import {
 /**
  * La cobranza: qué se cobró, a qué notas y cómo.
  *
- * Es la pantalla de MOSTRADOR de los pagos — mismo ánimo que el POS pero de
- * dinero en vez de producto. Dos pasos en una vista:
+ * La MISMA pantalla que clientes, proveedores, compras, productos y el
+ * catálogo: cabecera con la acción principal, editor inline que se despliega
+ * ARRIBA de la tabla, barra de filtros, tabla con animaciones, estados vacíos
+ * y paginación. El diseño sale de `nucleo/pantallas.scss`.
  *
- *   1. El listado: quién pagó, cuándo, por cuánto, y con qué método. El
- *      pago NO se puede borrar ni corregir (el backend no tiene PATCH ni
- *      DELETE; un pago en mal estado se arregla cancelando la nota que
- *      cobraba, no borrando), así que aquí no hay edición: hay Ver.
- *   2. El editor: se elige el cliente, se captura método y monto, y se le
- *      aplica a las notas abiertas. Un pago sin aplicaciones es un abono a
- *      cuenta, y es válido; el saldo (monto - aplicado) se ve mientras se
- *      captura y la base lo recalcula al guardar.
+ * El pago es dinero que YA entró, así que esto no es "facturar": es dejar
+ * registrado qué dio el cliente y a qué notas se reparte. Por eso el editor
+ * tiene dos pasos en una vista:
  *
- * Cada aplicación se valida DOS veces, como en el POS: aquí con el subtotal
- * (el editor sabe cuánto vale cada nota), y en el backend contra el saldo
- * REAL de la nota (una parcial ya trae cobrado). Es el mismo acuerdo de
- * `problemaDeAplicacion`: el frontend avisa lo que puede y el backend
- * comprueba lo que sabe.
+ *   1. Se elige el cliente, el método y el monto.
+ *   2. Se reparte entre sus notas abiertas. Un pago sin aplicaciones es un
+ *      abono a cuenta, y es válido: el saldo (monto − aplicado) se ve mientras
+ *      se captura, y la base lo recalcula al guardar.
+ *
+ * El detalle de un pago se despliega DEBAJO de su fila, no en otra pantalla,
+ * como en compras: la lista es la que dice si el cliente está al corriente y
+ * el detalle es la explicación de UN pago.
+ *
+ * Tres cosas que conviene tener presentes:
+ *
+ *   - **Un pago no se borra ni se corrige.** El backend no tiene PATCH ni
+ *     DELETE: un pago mal capturado se arregla cancelando la nota que cubría,
+ *     no borrando, y queda el rastro. Por eso aquí no hay edición: hay Ver.
+ *   - **Lo que no se aplica es dinero real.** El saldo sin aplicar se descuenta
+ *     del saldo del cliente (`fn_recalcular_saldo_cliente`), así que tiene que
+ *     estar a la vista o el operador no sabe que hay un abono flotando.
+ *   - **Cada aplicación se valida DOS veces**, como en el POS: aquí con el
+ *     subtotal (el editor sabe cuánto vale cada nota), y en el backend contra
+ *     el saldo REAL de la nota (una parcial ya trae cobrado). Es el mismo
+ *     acuerdo de `problemaDeAplicacion`: el frontend avisa lo que puede y el
+ *     backend comprueba lo que sabe.
  */
+
 @Component({
   selector: 'app-pagos',
   templateUrl: './pagos.html',
   styleUrl: './pagos.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ConfirmModal],
+  animations: [
+    trigger('filasAnimation', [
+      transition('* => *', [
+        query(
+          ':enter',
+          [
+            style({ opacity: 0, transform: 'translateY(-10px)' }),
+            stagger(50, [
+              animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
+            ]),
+          ],
+          { optional: true },
+        ),
+        query(
+          ':leave',
+          [
+            stagger(50, [
+              animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
+            ]),
+          ],
+          { optional: true },
+        ),
+      ]),
+    ]),
+  ],
 })
 export class Pagos {
   private readonly api = inject(PagosApi);
   private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
 
-  // ------------------------------------------------------------- el listado
+  readonly confirmModal = viewChild.required(ConfirmModal);
+
+  // --------------------------------------------------------------- el listado
   readonly listado = signal<PagoListado[]>([]);
   readonly total = signal(0);
-  readonly offset = signal(0);
-  readonly limite = 50;
-  readonly cargandoLista = signal(false);
-  readonly buscandoMas = signal(false);
+  readonly cargando = signal(false);
   readonly errorLista = signal<string | null>(null);
 
-  readonly buscar = signal('');
-  readonly metodo = signal<'' | MetodoPago>('');
-  readonly desde = signal('');
-  readonly hasta = signal('');
+  readonly filtroTexto = signal('');
+  readonly filtroMetodo = signal<'' | MetodoPago>('');
+  readonly filtroDesde = signal('');
+  readonly filtroHasta = signal('');
 
-  /** El detalle que se ve encima de la lista; vacío es "no hay ninguna abierta". */
-  readonly detalle = signal<Pago | null>(null);
-  readonly cargandoDetalle = signal(false);
+  /**
+   * Cuántos renglones se ven por página, y la página que se está viendo.
+   *
+   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
+   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   */
+  readonly limite = signal(25);
+  readonly pagina = signal(1);
 
-  readonly puedeCrear = computed(() => this.sesion.puede('pagos.crear'));
-  readonly hayMas = computed(() => this.listado().length < this.total());
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Lo que ve en la barra: "1-25 de 1,240". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.total();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
+
+  /**
+   * Si el listado lleva algo puesto, para poder ofrecer "Limpiar".
+   *
+   * El buscador se cuenta con dos caracteres porque es lo que el backend
+   * exige: con uno solo no filtra, y un "Limpiar" que aparece a la primera
+   * letra confunde más de lo que ayuda.
+   */
+  readonly hayFiltros = computed(
+    () =>
+      this.filtroTexto().trim().length >= 2 ||
+      this.filtroMetodo() !== '' ||
+      this.filtroDesde() !== '' ||
+      this.filtroHasta() !== '',
+  );
 
   // -------------------------------------------------------------- el editor
-  /** `null` es "mostrar el listado" y `true` es "capturar un pago". */
-  private conEditor = signal(false);
-  readonly editorAbierto = this.conEditor.asReadonly();
+  /**
+   * El alta vive dentro de la lista, como el editor de las demás pantallas.
+   *
+   * Empieza cerrada: lo que se ve casi siempre son los pagos cobrados, y el
+   * cobro se abre a propósito.
+   */
+  readonly editorVisible = signal(false);
 
   readonly cliente = signal<{ id: number; nombre: string } | null>(null);
   readonly resultadosCliente = signal<{ id: number; nombre: string }[]>([]);
@@ -87,7 +172,9 @@ export class Pagos {
   readonly guardando = signal(false);
   readonly error = signal<string | null>(null);
 
-  // ------------------------------------------------------- la derivada
+  /** Si el editor tiene algo escrito que se pierde al cerrarlo. */
+  private hayCaptura = computed(() => this.cliente() !== null || this.monto().trim() !== '');
+
   readonly aplicado = computed(() => montoDeAplicaciones(this.aplicaciones()));
   readonly montoNumero = computed(() => {
     const numero = Number(this.monto().trim().replace(',', '.'));
@@ -100,18 +187,221 @@ export class Pagos {
     () => this.aplicaciones().length === 0 || this.aplicado() <= this.montoNumero(),
   );
 
-  readonly puedeGuardar = computed(
-    () =>
-      this.puedeCrear() &&
-      this.cliente() !== null &&
-      this.montoNumero() > 0 &&
-      this.aplicaciones().every((a) => problemaDeAplicacion(a) === null) &&
-      this.alcanza() &&
-      !this.guardando(),
-  );
+  /** Por qué no se puede guardar todavía, o `null` si sí se puede. */
+  readonly problemaParaGuardar = computed(() => {
+    if (!this.sesion.puede('pagos.crear')) return 'No tienes permiso para registrar pagos.';
+    if (this.cliente() === null) return 'Elige el cliente que pagó.';
+    if (this.montoNumero() <= 0) return 'Escribe el monto del pago.';
+    if (!this.alcanza()) return 'El pago no alcanza las aplicaciones que pusiste.';
+    const nota = this.aplicaciones().find((a) => problemaDeAplicacion(a) !== null);
+    if (nota) return `Revisa lo que aplicas a la nota ${nota.folio}.`;
+    return null;
+  });
+
+  readonly puedeCrear = computed(() => this.sesion.puede('pagos.crear'));
+
+  readonly puedeGuardar = computed(() => this.problemaParaGuardar() === null && !this.guardando());
+
+  // ------------------------------------------------------------ el detalle
+  /**
+   * El pago desplegado, y el id de la fila en la que se despliega.
+   *
+   * El id va aparte del documento porque es lo que la plantilla compara: así
+   * la fila sabe si es ella la que está abierta sin tener que buscar el
+   * documento entero. Solo hay uno a la vez: el detalle es largo y dos abiertos
+   * taparían la tabla sin aportar nada.
+   */
+  readonly expandida = signal<number | null>(null);
+  readonly detalle = signal<Pago | null>(null);
+  readonly abriendoDetalle = signal(false);
+
+  constructor() {
+    void this.recargar();
+  }
+
+  // --------------------------------------------------------------- el listado
+  private temporizadorFiltros: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Busca con 250 ms de espera, igual que el resto de las pantallas.
+   *
+   * Cada tecleo NO pega una petición: con el buscador abierto a media escritura
+   * son varias y la última es la única que sirve. Además, buscar vuelve
+   * siempre a la página 1, porque quedarse en la 4 con un filtro nuevo es
+   * mirar un `offset` que ya no quiere decir nada.
+   */
+  aBuscar(texto: string): void {
+    clearTimeout(this.temporizadorFiltros);
+    this.filtroTexto.set(texto);
+    this.temporizadorFiltros = setTimeout(() => void this.recargar(), 250);
+  }
+
+  aMetodo(valor: string): void {
+    this.filtroMetodo.set(valor as '' | MetodoPago);
+    void this.recargar();
+  }
+
+  aDesde(valor: string): void {
+    this.filtroDesde.set(valor);
+    void this.recargar();
+  }
+
+  aHasta(valor: string): void {
+    this.filtroHasta.set(valor);
+    void this.recargar();
+  }
+
+  /** Deja los filtros como estaban al entrar. */
+  limpiarFiltros(): void {
+    clearTimeout(this.temporizadorFiltros);
+    this.filtroTexto.set('');
+    this.filtroMetodo.set('');
+    this.filtroDesde.set('');
+    this.filtroHasta.set('');
+    void this.recargar();
+  }
+
+  /**
+   * Vuelve a la primera página con el filtro que se tenga puesto, y cierra el
+   * detalle: con filtros nuevos el pago abierto puede no estar en la página, y
+   * un comprobante flotando sin su fila es peor que ninguno.
+   */
+  private async recargar(): Promise<void> {
+    this.cerrarDetalle();
+    await this.cargarPagina(1);
+  }
+
+  /** Carga una página. Es la ÚNICA forma de pedir el listado. */
+  private async cargarPagina(pagina: number): Promise<void> {
+    // La signal se lee UNA vez y a una variable: leída dos veces en la misma
+    // expresión, TypeScript no la puede acotar y el filtro-empty se cuela en
+    // el tipo del parámetro.
+    const metodoElegido = this.filtroMetodo();
+    this.cargando.set(true);
+    this.errorLista.set(null);
+    try {
+      const resultado = await this.api.listar({
+        buscar: this.textoBusqueda(),
+        metodo: metodoElegido === '' ? undefined : metodoElegido,
+        desde: this.filtroDesde() || undefined,
+        hasta: this.filtroHasta() || undefined,
+        limite: this.limite(),
+        offset: (pagina - 1) * this.limite(),
+      });
+      this.listado.set(resultado.datos);
+      this.total.set(resultado.total);
+      this.pagina.set(pagina);
+
+      // La fila desplegada puede no haber sobrevivido al filtro o a la página:
+      // si ya no está en la tabla, su detalle se cierra solo.
+      const id = this.expandida();
+      if (id !== null && !resultado.datos.some((pago) => pago.id === id)) {
+        this.cerrarDetalle();
+      }
+    } catch (falla) {
+      this.listado.set([]);
+      this.total.set(0);
+      this.errorLista.set(errorLegible(falla).mensaje);
+      this.cerrarDetalle();
+    } finally {
+      this.cargando.set(false);
+    }
+  }
+
+  /** El mínimo de dos caracteres, como en las demás pantallas. */
+  private textoBusqueda(): string | undefined {
+    const limpio = this.filtroTexto().trim();
+    return limpio.length >= 2 ? limpio : undefined;
+  }
+
+  /** Cambia de página y sube la tabla a la vista. */
+  async irPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+
+    this.cerrarDetalle();
+    await this.cargarPagina(pagina);
+    document.querySelector('.pagos .tabla-wrapper')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }
+
+  /** El tamaño de página como texto, para el `[value]` del desplegable. */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  /** Cambia cuántos renglones se ven por página. */
+  aTamanoDePagina(valor: string): void {
+    const limite = Number(valor);
+    if (!Number.isFinite(limite) || limite <= 0 || limite === this.limite()) return;
+
+    this.limite.set(limite);
+    this.cerrarDetalle();
+    // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50 filas
+    // es pedir un `offset` que ya no corresponde a nada.
+    void this.cargarPagina(1);
+  }
+
+  // --------------------------------------------------------------- el editor
+  /** Abre el cobro en blanco. */
+  abrirEditor(): void {
+    this.cliente.set(null);
+    this.resultadosCliente.set([]);
+    this.fecha.set(hoyComoTexto());
+    this.metodoPago.set('');
+    this.monto.set('');
+    this.referencia.set('');
+    this.requiereFactura.set(false);
+    this.aplicaciones.set([]);
+    this.error.set(null);
+    this.editorVisible.set(true);
+  }
+
+  /**
+   * Abre o cierra el cobro.
+   *
+   * Cerrarlo con algo escrito pasa por el modal: si ya se eligió cliente o se
+   * escribió un monto, perderlo tiene que ser una decisión y no un clic.
+   */
+  async alternarEditor(): Promise<void> {
+    if (this.editorVisible() && this.hayCaptura()) {
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Descartar el cobro',
+        mensaje:
+          'Este pago está a medio capturar y se va a perder. ¿Cerrar de todos modos?\n\nSi solo querías revisar la lista, ciérralo y vuelve a abrirlo: el cobro sigue en blanco.',
+        textoConfirmar: 'Descartar y cerrar',
+        variante: 'peligro',
+      });
+      if (!confirmado) return;
+
+      this.vaciarEditor();
+    }
+
+    this.editorVisible.update((visible) => !visible);
+  }
+
+  /** Cierra el cobro sin preguntar. Es lo que se usa al guardar bien. */
+  private cerrarEditor(): void {
+    this.vaciarEditor();
+    this.editorVisible.set(false);
+  }
+
+  /** Vuelve el cobro a blanco. */
+  private vaciarEditor(): void {
+    this.cliente.set(null);
+    this.resultadosCliente.set([]);
+    this.metodoPago.set('');
+    this.monto.set('');
+    this.referencia.set('');
+    this.requiereFactura.set(false);
+    this.aplicaciones.set([]);
+    this.error.set(null);
+  }
 
   // ------------------------------------------------------------ la búsqueda
   private temporizadorCliente: ReturnType<typeof setTimeout> | undefined;
+
   /** Sin confirmar el texto, tras 250 ms para no buscar en cada tecla. */
   buscarCliente(texto: string): void {
     clearTimeout(this.temporizadorCliente);
@@ -137,7 +427,7 @@ export class Pagos {
     this.resultadosCliente.set([]);
     this.error.set(null);
     this.aplicaciones.set([]);
-    this.cargarNotas(cliente.id);
+    void this.cargarNotas(cliente.id);
   }
 
   cambiarCliente(): void {
@@ -177,116 +467,52 @@ export class Pagos {
     );
   }
 
-  abrirEditor(): void {
-    this.conEditor.set(true);
-    this.cliente.set(null);
-    this.resultadosCliente.set([]);
-    this.fecha.set(hoyComoTexto());
-    this.metodoPago.set('');
-    this.monto.set('');
-    this.referencia.set('');
-    this.requiereFactura.set(false);
-    this.aplicaciones.set([]);
-    this.error.set(null);
-  }
-
-  cerrarEditor(): void {
-    this.conEditor.set(false);
-    this.error.set(null);
-  }
-
-  // ------------------------------------------------------------- el listado
-  private temporizadorFiltros: ReturnType<typeof setTimeout> | undefined;
-
-  aBuscar(texto: string): void {
-    clearTimeout(this.temporizadorFiltros);
-    this.temporizadorFiltros = setTimeout(() => {
-      this.buscar.set(texto.trim());
-      this.recargar();
-    }, 250);
-  }
-
-  aMetodo(valor: string): void {
-    this.metodo.set(valor as '' | MetodoPago);
-    this.recargar();
-  }
-
-  aDesde(valor: string): void {
-    this.desde.set(valor);
-    this.recargar();
-  }
-
-  aHasta(valor: string): void {
-    this.hasta.set(valor);
-    this.recargar();
-  }
-
-  async recargar(): Promise<void> {
-    this.cargandoLista.set(true);
-    this.errorLista.set(null);
-    this.offset.set(0);
-    try {
-      const [filas, total] = await this.paginar(0);
-      this.listado.set(filas);
-      this.total.set(total);
-    } catch (falla) {
-      this.listado.set([]);
-      this.errorLista.set(errorLegible(falla).mensaje);
-    } finally {
-      this.cargandoLista.set(false);
-    }
-  }
-
-  async cargarMas(): Promise<void> {
-    if (!this.hayMas() || this.buscandoMas()) return;
-    this.buscandoMas.set(true);
-    try {
-      const [siguientes] = await this.paginar(this.listado().length);
-      this.listado.update((ya) => [...ya, ...siguientes]);
-      this.offset.set(this.listado().length);
-    } catch (falla) {
-      this.errorLista.set(errorLegible(falla).mensaje);
-    } finally {
-      this.buscandoMas.set(false);
-    }
-  }
-
-  /** Pide una pagina y devuelve sus filas con el total de la consulta. */
-  private async paginar(offset: number): Promise<[PagoListado[], number]> {
-    const metodoActual = this.metodo();
-    const resultado = await this.api.listar({
-      buscar: this.buscar() || undefined,
-      metodo: metodoActual === '' ? undefined : metodoActual,
-      desde: this.desde() || undefined,
-      hasta: this.hasta() || undefined,
-      limite: this.limite,
-      offset,
-    });
-    return [resultado.datos, resultado.total];
-  }
-
+  // --------------------------------------------------------------- el detalle
+  /**
+   * Despliega el detalle DEBAJO de la fila, o lo recoge si ya estaba
+   * desplegado. El mismo gesto que abrir y cerrar una fila.
+   */
   async ver(pago: PagoListado): Promise<void> {
-    this.cargandoDetalle.set(true);
+    if (this.expandida() === pago.id) {
+      this.cerrarDetalle();
+      return;
+    }
+    if (this.abriendoDetalle()) return;
+
+    this.abriendoDetalle.set(true);
     this.errorLista.set(null);
     try {
       this.detalle.set(await this.api.obtener(pago.id));
+      this.expandida.set(pago.id);
     } catch (falla) {
       this.errorLista.set(errorLegible(falla).mensaje);
     } finally {
-      this.cargandoDetalle.set(false);
+      this.abriendoDetalle.set(false);
     }
   }
 
+  /** Si la fila que se está tocando es la que está desplegada. */
+  detalleAbierto(id: number): boolean {
+    return this.expandida() === id;
+  }
+
   cerrarDetalle(): void {
+    this.expandida.set(null);
     this.detalle.set(null);
   }
 
   // ------------------------------------------------------------- el guardado
   async guardar(): Promise<void> {
     const cliente = this.cliente();
-    if (cliente === null || this.guardando()) return;
+    if (cliente === null || !this.puedeGuardar()) return;
+
     const metodoActual = this.metodoPago();
     const metodo = metodoActual === '' ? null : metodoActual;
+
+    // Los montos del aviso se leen ANTES de cerrar el editor: cerrarlo vacía
+    // el formulario, y un "registrado con $0.00" sería una mentira.
+    const montoCobrado = this.montoNumero();
+    const sinAplicar = this.saldo();
 
     this.guardando.set(true);
     this.error.set(null);
@@ -302,6 +528,11 @@ export class Pagos {
       );
       await this.api.crear(cuerpo);
       this.cerrarEditor();
+      this.toast.exito(
+        sinAplicar > 0
+          ? `Pago de ${montoComoTexto(montoCobrado)} registrado con ${montoComoTexto(sinAplicar)} sin aplicar`
+          : 'Pago registrado con éxito',
+      );
       await this.recargar();
     } catch (falla) {
       this.error.set(this.explicar(falla));
@@ -313,9 +544,9 @@ export class Pagos {
   /**
    * Los errores del servicio, traducidos para quien cobra.
    *
-   * `MONTO_MAYOR_A_NOTA` es el que vale la pena tratar: el mensaje del
-   * backend no dice de qué nota, y el `detalles` sí. La nota ya está en el
-   * editor, así que su folio se pone aquí. El resto llega legible.
+   * `MONTO_MAYOR_A_NOTA` es el que vale la pena tratar: el mensaje del backend
+   * no dice de qué nota, y el `detalles` sí. La nota ya está en el editor, así
+   * que su folio se pone aquí. El resto llega legible.
    */
   private explicar(falla: unknown): string {
     const legible = errorLegible(falla);
@@ -328,7 +559,7 @@ export class Pagos {
       : `La nota ${nota.folio} ya no acepta ese monto: comprueba cuánto le falta por cobrar.`;
   }
 
-  // ----------------------------------------------------------------- atajos
+  // ----------------------------------------------------------------- el texto
   montoComoTexto = montoComoTexto;
   METODOS_PAGO = METODOS_PAGO;
   problemaDeAplicacion = problemaDeAplicacion;

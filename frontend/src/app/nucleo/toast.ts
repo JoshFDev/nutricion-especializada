@@ -15,115 +15,124 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
           <div class="toast" [class]="toast.tipo" [@slideIn]>
             <span class="toast-icon" [innerHTML]="icono(toast.tipo)"></span>
             <span class="toast-mensaje">{{ toast.mensaje }}</span>
-            <button type="button" class="toast-cerrar" (click)="toastService.cerrar(toast.id)" aria-label="Cerrar">×</button>
+            <button
+              type="button"
+              class="toast-cerrar"
+              (click)="toastService.cerrar(toast.id)"
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
           </div>
         }
       </div>
     }
   `,
-  styles: [`
-    .toast-container {
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
-      z-index: 2000;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      pointer-events: none;
-      max-width: 360px;
-    }
-
-    .toast {
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      background: var(--superficie);
-      border: 1px solid var(--borde);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      font-size: 0.875rem;
-      color: var(--texto);
-      min-width: 280px;
-      max-width: 100%;
-    }
-
-    .toast.exito {
-      border-left: 4px solid var(--exito-texto);
-    }
-
-    .toast.exito .toast-icon {
-      color: var(--exito-texto);
-    }
-
-    .toast.error {
-      border-left: 4px solid var(--peligro);
-    }
-
-    .toast.error .toast-icon {
-      color: var(--peligro);
-    }
-
-    .toast.advertencia {
-      border-left: 4px solid var(--advertencia);
-    }
-
-    .toast.advertencia .toast-icon {
-      color: var(--advertencia-texto);
-    }
-
-    .toast.info {
-      border-left: 4px solid var(--acento);
-    }
-
-    .toast.info .toast-icon {
-      color: var(--acento);
-    }
-
-    .toast-icon {
-      font-size: 1rem;
-      font-weight: bold;
-      flex-shrink: 0;
-    }
-
-    .toast-mensaje {
-      flex: 1;
-      line-height: 1.4;
-    }
-
-    .toast-cerrar {
-      background: none;
-      border: none;
-      color: var(--texto-tenue);
-      font-size: 1.25rem;
-      line-height: 1;
-      cursor: pointer;
-      padding: 0;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .toast-cerrar:hover {
-      color: var(--texto);
-    }
-
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateX(100%);
+  styles: [
+    `
+      .toast-container {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        pointer-events: none;
+        max-width: 360px;
       }
-      to {
-        opacity: 1;
-        transform: translateX(0);
+
+      .toast {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: var(--superficie);
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        font-size: 0.875rem;
+        color: var(--texto);
+        min-width: 280px;
+        max-width: 100%;
       }
-    }
-  `],
+
+      .toast.exito {
+        border-left: 4px solid var(--exito-texto);
+      }
+
+      .toast.exito .toast-icon {
+        color: var(--exito-texto);
+      }
+
+      .toast.error {
+        border-left: 4px solid var(--peligro);
+      }
+
+      .toast.error .toast-icon {
+        color: var(--peligro);
+      }
+
+      .toast.advertencia {
+        border-left: 4px solid var(--advertencia);
+      }
+
+      .toast.advertencia .toast-icon {
+        color: var(--advertencia-texto);
+      }
+
+      .toast.info {
+        border-left: 4px solid var(--acento);
+      }
+
+      .toast.info .toast-icon {
+        color: var(--acento);
+      }
+
+      .toast-icon {
+        font-size: 1rem;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+
+      .toast-mensaje {
+        flex: 1;
+        line-height: 1.4;
+      }
+
+      .toast-cerrar {
+        background: none;
+        border: none;
+        color: var(--texto-tenue);
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .toast-cerrar:hover {
+        color: var(--texto);
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+    `,
+  ],
   animations: [
     trigger('slideIn', [
       transition(':enter', [

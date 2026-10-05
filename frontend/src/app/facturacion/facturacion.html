@@ -1,360 +1,333 @@
 <!--
-  Facturacion: lista, captura y detalle en una sola pantalla, como compras.
+  Facturación: listado + captura en editor inline + el comprobante en la fila.
 
-  Lo que la pantalla no tiene, y es decision y no olvido: no hay edicion (el
-  unico PATCH del modulo es el del estatus), no hay borrado (una factura
-  cancelada tiene que quedar en la bitacora) y no se ofrecen notas canceladas
-  (facturar mercancia que no salio es un CFDI que el SAT rechaza).
+  La misma pantalla que compras, pagos, clientes y el catálogo: cabecera con la
+  acción principal, editor inline que se despliega ARRIBA de la tabla, barra de
+  filtros, tabla con animaciones, estados vacíos y paginación. El diseño sale
+  de `nucleo/pantallas.scss`.
 
-  El total que se ve en la captura es un preview de las notas marcadas. El que
-  vale lo calcula el servidor sumando los subtotales, y por eso no se manda.
+  Lo propio de esta pantalla:
+
+  - Una factura agrupa las notas de remisión de UN cliente, y aquí no se teclea
+    nada por renglón: se marca lo que entra. Por eso la tabla de notas lleva
+    casillas y no campos, y la fila marcada se ve sin leer.
+  - El total de la captura es un PREVIEW de las notas marcadas. El que vale lo
+    calcula el servidor sumando los subtotales, y por eso no se manda: el
+    `monto_total` en el cuerpo sería un 400.
+  - La factura NO tiene edición ni borrado. El único PATCH del módulo es el
+    del estatus, así que se emite o se cancela con motivo, y una factura
+    cancelada tiene que quedar en la bitácora.
+  - El detalle de una factura se despliega DEBAJO de su fila, igual que el
+    comprobante de una compra y el detalle de un pago: la lista es la que dice
+    qué se ha facturado, y el comprobante es la explicación de UNA factura.
 -->
-@if (pantalla() === 'captura') {
-  <section class="captura">
-    <div class="cabecera">
-      <h1>Nueva factura</h1>
-      <button type="button" (click)="volverAlListado()">Volver a la lista</button>
-    </div>
+<section class="facturacion">
+  <!-- Cabecera: título a la izquierda, la captura a la derecha -->
+  <div class="cabecera">
+    <h1>Facturación</h1>
 
-    @if (errorCaptura(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    <!-- El cliente primero: de el son las notas que se pueden marcar. -->
-    <div class="bloque">
-      @if (cliente(); as elegido) {
-        <div class="elegido">
-          <span
-            ><strong>{{ elegido.nombre }}</strong></span
+    @if (puedeSolicitar()) {
+      <button
+        type="button"
+        class="toggle-editor"
+        (click)="alternarEditor()"
+        [attr.aria-expanded]="editorVisible()"
+        aria-controls="editor-factura"
+      >
+        @if (editorVisible()) {
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
           >
-          <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Ocultar la captura
+        } @else {
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nueva factura
+        }
+      </button>
+    }
+  </div>
+
+  <!-- La captura, colapsada y ARRIBA de la tabla, igual que en las demás pantallas -->
+  @if (puedeSolicitar()) {
+    <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
+      <div class="editor-inline" id="editor-factura">
+        <div class="editor-cabecera">
+          <h2>Nueva factura</h2>
         </div>
-      } @else {
-        <label for="buscar-cliente">Cliente</label>
-        <input
-          id="buscar-cliente"
-          type="search"
-          autocomplete="off"
-          placeholder="Nombre del cliente"
-          [value]="buscadorCliente.texto()"
-          (input)="buscadorCliente.escribir($any($event.target).value)"
-          (focus)="buscadorCliente.alEntrar()"
-          (focusout)="buscadorCliente.alSalir($event)"
-          (keydown.escape)="buscadorCliente.cerrar()"
-        />
-        @if (buscadorCliente.lista()) {
-          <ul class="resultados">
-            @for (opcion of buscadorCliente.opciones(); track opcion.id) {
-              <li>
-                <button type="button" (click)="buscadorCliente.elegir(opcion)">
-                  {{ opcion.nombre }}
-                </button>
-              </li>
+
+        <p class="descripcion">
+          Las notas de remisión de un cliente que se le facturan juntas. Se marca lo que entra y el
+          total lo calcula el servidor sumando esas notas.
+        </p>
+
+        @if (errorCaptura(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+
+        <div class="campos">
+          <!-- El cliente primero: de él son las notas que se pueden marcar. -->
+          <div class="campo ancho">
+            <label for="cliente">Cliente al que se le factura</label>
+            @if (cliente(); as elegido) {
+              <div class="cliente-elegido">
+                <strong>{{ elegido.nombre }}</strong>
+                <button type="button" class="chico" (click)="cambiarCliente()">Cambiar</button>
+              </div>
+            } @else {
+              <div class="campo-buscador">
+                <input
+                  id="cliente"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Nombre del cliente"
+                  [value]="buscadorCliente.texto()"
+                  (input)="buscadorCliente.escribir($any($event.target).value)"
+                  (focus)="buscadorCliente.alEntrar()"
+                  (focusout)="buscadorCliente.alSalir($event)"
+                  (keydown.escape)="buscadorCliente.cerrar()"
+                />
+                @if (buscadorCliente.lista()) {
+                  <ul class="resultados">
+                    @for (opcion of buscadorCliente.opciones(); track opcion.id) {
+                      <li>
+                        <button type="button" (click)="buscadorCliente.elegir(opcion)">
+                          {{ opcion.nombre }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (buscadorCliente.sinNada(); as aviso) {
+                  <p class="aviso">{{ aviso }}</p>
+                }
+              </div>
             }
-          </ul>
-        }
-        @if (buscadorCliente.sinNada(); as aviso) {
-          <p class="aviso">{{ aviso }}</p>
-        }
-      }
-    </div>
+          </div>
 
-    <div class="bloque datos">
-      <div class="campo">
-        <label for="fecha">Fecha de la factura</label>
-        <input
-          id="fecha"
-          type="date"
-          [value]="fecha()"
-          (change)="fecha.set($any($event.target).value)"
-        />
-        <p class="ayuda">Si la dejas vacía se usa la de hoy.</p>
-      </div>
-      <div class="campo">
-        <label for="metodo">Forma de pago del CFDI (opcional)</label>
-        <input
-          id="metodo"
-          type="text"
-          maxlength="60"
-          autocomplete="off"
-          [value]="metodoPago()"
-          (input)="metodoPago.set($any($event.target).value)"
-        />
-        <p class="ayuda">No es el método con el que se cobró, es el del CFDI.</p>
+          <div class="campo">
+            <label for="fecha">Fecha de la factura</label>
+            <input
+              id="fecha"
+              type="date"
+              [value]="fecha()"
+              (change)="fecha.set($any($event.target).value)"
+            />
+            <p class="ayuda tenue">Si la dejas vacía se usa la de hoy.</p>
+          </div>
+
+          <div class="campo">
+            <label for="metodo">Forma de pago del CFDI (opcional)</label>
+            <input
+              id="metodo"
+              type="text"
+              maxlength="60"
+              autocomplete="off"
+              [value]="metodoPago()"
+              (input)="metodoPago.set($any($event.target).value)"
+            />
+            <p class="ayuda tenue">No es el método con el que se cobró, es el del CFDI.</p>
+          </div>
+        </div>
+
+        <!-- Sin cliente no hay notas que marcar, así que la tabla se apaga. -->
+        <div class="notas-bloque" [class.apagado]="cliente() === null">
+          <div class="notas-cabecera">
+            <h3 class="titulo">Notas que cubre</h3>
+            @if (hayNotas()) {
+              <button type="button" class="chico" (click)="alternarTodas()">
+                {{ elegidas() === notas().length ? 'Desmarcar todas' : 'Marcar todas' }}
+              </button>
+            }
+          </div>
+
+          @if (cargandoNotas()) {
+            <p class="cargando">Buscando las notas del cliente…</p>
+          } @else if (!hayNotas()) {
+            @if (cliente() === null) {
+              <p class="aviso">Elige un cliente y se buscarán sus notas pendientes.</p>
+            } @else {
+              <p class="aviso">
+                Este cliente no tiene notas pendientes, parciales ni pagadas que facturar. Las notas
+                canceladas no se pueden facturar.
+              </p>
+            }
+          } @else {
+            <!--
+              El tope de 200. Cuando el cliente tiene más notas de las que una
+              factura puede cubrir, se ofrecen las más antiguas y se dice cuántas
+              se quedaron fuera: sin este aviso, marcar todo y guardar parece
+              haber facturado el mes entero.
+            -->
+            @if (hayMasCandidatas()) {
+              <p class="aviso" role="status">
+                Se muestran {{ notas().length }} de {{ totalCandidatas() }} notas: una factura no
+                puede cubrir más de 200. Se ofrecen primero las más antiguas.
+              </p>
+            }
+
+            <div class="tabla-wrapper">
+              <table class="tabla notas">
+                <thead>
+                  <tr>
+                    <th scope="col"><span class="oculto">Facturar</span></th>
+                    <th scope="col">Folio</th>
+                    <th scope="col">Fecha</th>
+                    <th scope="col">Estatus</th>
+                    <th scope="col" class="num">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (nota of notas(); track nota.nota_id) {
+                    <tr [class.marcada]="nota.elegida">
+                      <td>
+                        <input
+                          type="checkbox"
+                          [checked]="nota.elegida"
+                          (change)="alternar(nota.nota_id)"
+                          [attr.aria-label]="'Facturar la nota ' + nota.folio"
+                        />
+                      </td>
+                      <td>{{ nota.folio }}</td>
+                      <td>{{ nota.fecha }}</td>
+                      <td>
+                        <span [class]="claseDeNota(nota.estatus)">
+                          {{ estatusNotaComoTexto(nota.estatus) }}
+                        </span>
+                      </td>
+                      <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <p class="nota">
+              Una nota que ya esté en otra factura activa se va a rechazar al guardar: el listado de
+              notas no dice cuáles están facturadas. Si pasa, quítala de la lista.
+            </p>
+          }
+        </div>
+
+        <div class="cierre">
+          <p class="marcadas">
+            {{ elegidas() }} {{ elegidas() === 1 ? 'nota marcada' : 'notas marcadas' }}
+          </p>
+          <p class="total">{{ montoComoTexto(total()) }}</p>
+          <p class="aviso">
+            Este total es un preview: el que vale lo calcula el servidor sumando los subtotales de
+            las notas marcadas.
+          </p>
+        </div>
+
+        <div class="acciones">
+          <button type="button" (click)="alternarEditor()">Cancelar</button>
+          <button
+            type="button"
+            class="primario"
+            [disabled]="!puedeGuardar()"
+            (click)="guardar()"
+            [attr.title]="problemaParaGuardar()"
+          >
+            {{ guardando() ? 'Generando…' : 'Generar la factura' }}
+          </button>
+        </div>
       </div>
     </div>
+  }
 
-    <div class="bloque" [class.apagado]="cliente() === null">
-      <div class="cabecera-notas">
-        <h2>Notas que cubre</h2>
-        @if (hayNotas()) {
-          <button type="button" class="chico" (click)="alternarTodas()">
-            {{ elegidas() === notas().length ? 'Desmarcar todas' : 'Marcar todas' }}
+  <!-- Filtros: la misma barra que en las demás pantallas -->
+  <div class="filtros" role="group" aria-label="Filtros del listado">
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Cliente o forma de pago"
+      aria-label="Buscar facturas"
+      [value]="filtroTexto()"
+      (input)="buscar($any($event.target).value)"
+      (keydown.escape)="limpiarFiltros()"
+    />
+
+    <select
+      class="filtro"
+      aria-label="Filtrar por estatus"
+      [value]="filtroEstatus()"
+      (change)="cambiarEstatus($any($event.target).value)"
+    >
+      <option value="">Todos los estatus</option>
+      <option value="solicitada">Solicitadas</option>
+      <option value="emitida">Emitidas</option>
+      <option value="cancelada">Canceladas</option>
+    </select>
+
+    <label class="fecha">
+      Desde
+      <input
+        type="date"
+        [value]="filtroDesde()"
+        (change)="cambiarDesde($any($event.target).value)"
+      />
+    </label>
+
+    <label class="fecha">
+      Hasta
+      <input
+        type="date"
+        [value]="filtroHasta()"
+        (change)="cambiarHasta($any($event.target).value)"
+      />
+    </label>
+
+    @if (hayFiltros()) {
+      <button type="button" class="quitar-filtros" (click)="limpiarFiltros()">Limpiar</button>
+    }
+  </div>
+
+  @if (errorLista(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  <!-- Los estados vacíos se separan: con filtro la salida es quitarlo. -->
+  @if (cargando() && filas().length === 0) {
+    <p class="cargando">Buscando facturas…</p>
+  } @else if (filas().length === 0) {
+    <div class="estado-vacio">
+      @if (hayFiltros()) {
+        <h2>Ninguna factura coincide</h2>
+        <p>Prueba con otro cliente, quita el filtro de fechas o cambia el estatus.</p>
+        <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else {
+        <h2>Todavía no hay facturas</h2>
+        <p>
+          Una factura se solicita con las notas de remisión que cubre, y de ahí en adelante solo
+          avanza: se emite o se cancela con motivo.
+        </p>
+        @if (puedeSolicitar()) {
+          <button type="button" class="primario" (click)="nueva()">
+            Generar la primera factura
           </button>
         }
-      </div>
-
-      @if (cargandoNotas()) {
-        <p class="vacio">Buscando las notas del cliente…</p>
-      } @else if (!hayNotas()) {
-        <p class="vacio">
-          Este cliente no tiene notas pendientes, parciales ni pagadas que facturar. Las notas
-          canceladas no se pueden facturar.
-        </p>
-      } @else {
-        <!--
-          El tope de 200. Cuando el cliente tiene mas notas de las que una
-          factura puede cubrir, se ofrecen las mas antiguas y se dice cuantas
-          se quedaron fuera: sin este aviso, marcar todo y guardar parece
-          haber facturado el mes entero.
-        -->
-        @if (hayMasCandidatas()) {
-          <p class="aviso" role="status">
-            Se muestran {{ notas().length }} de {{ totalCandidatas() }} notas: una factura no puede
-            cubrir más de 200. Se ofrecen primero las más antiguas.
-          </p>
-        }
-        <table class="notas">
-          <thead>
-            <tr>
-              <th scope="col"><span class="oculto">Facturar</span></th>
-              <th scope="col">Folio</th>
-              <th scope="col">Fecha</th>
-              <th scope="col">Estatus</th>
-              <th scope="col" class="num">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (nota of notas(); track nota.nota_id) {
-              <tr [class.marcada]="nota.elegida">
-                <td>
-                  <input
-                    type="checkbox"
-                    [checked]="nota.elegida"
-                    (change)="alternar(nota.nota_id)"
-                    [attr.aria-label]="'Facturar la nota ' + nota.folio"
-                  />
-                </td>
-                <td>{{ nota.folio }}</td>
-                <td>{{ nota.fecha }}</td>
-                <td>
-                  <span [class.tenue]="nota.estatus === 'pagada'">{{
-                    estatusNotaComoTexto(nota.estatus)
-                  }}</span>
-                </td>
-                <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-
-        <p class="nota">
-          Una nota que ya esté en otra factura activa se va a rechazar al guardar: el listado de
-          notas no dice cuáles están facturadas. Si pasa, quítala de la lista.
-        </p>
       }
     </div>
-
-    <div class="total">
-      <span> {{ elegidas() }} {{ elegidas() === 1 ? 'nota' : 'notas' }} marcadas </span>
-      <strong>{{ montoComoTexto(total()) }}</strong>
-    </div>
-
-    <div class="acciones">
-      <button type="button" class="primario" [disabled]="!puedeGuardar()" (click)="guardar()">
-        {{ guardando() ? 'Guardando…' : 'Generar la factura' }}
-      </button>
-    </div>
-  </section>
-} @else if (pantalla() === 'detalle') {
-  <section class="detalle">
-    <div class="cabecera">
-      <h1>Factura</h1>
-      <button type="button" (click)="volverAlListado()">Volver a la lista</button>
-    </div>
-
-    @if (errorDetalle(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    @if (cargandoDetalle()) {
-      <p class="vacio">Cargando la factura…</p>
-    } @else if (detalle(); as factura) {
-      <dl class="datos-factura">
-        <div>
-          <dt>Cliente</dt>
-          <dd>{{ factura.cliente }}</dd>
-        </div>
-        <div>
-          <dt>Fecha</dt>
-          <dd>{{ factura.fecha }}</dd>
-        </div>
-        <div>
-          <dt>Forma de pago</dt>
-          <dd>{{ factura.metodo_pago ?? '—' }}</dd>
-        </div>
-        <div>
-          <dt>Estatus</dt>
-          <dd [class.cancelada]="factura.estatus === 'cancelada'">
-            {{ estatusComoTexto(factura.estatus) }}
-          </dd>
-        </div>
-        <div>
-          <dt>Total</dt>
-          <dd>{{ montoComoTexto(factura.monto_total) }}</dd>
-        </div>
-      </dl>
-
-      @if (factura.motivo_cancelacion) {
-        <p class="motivo">
-          <strong>Motivo de la cancelación:</strong> {{ factura.motivo_cancelacion }}
-        </p>
-      }
-
-      <h2>Notas que cubre</h2>
-      <table class="notas">
-        <thead>
-          <tr>
-            <th scope="col">Folio</th>
-            <th scope="col">Fecha</th>
-            <th scope="col">Estatus</th>
-            <th scope="col" class="num">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (nota of factura.notas; track nota.nota_id) {
-            <tr>
-              <td>{{ nota.nota }}</td>
-              <td>{{ nota.fecha }}</td>
-              <td>{{ estatusNotaComoTexto(nota.estatus) }}</td>
-              <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-
-      <p class="nota">
-        El total es el que calculó el backend sumando los subtotales de estas notas, no el preview
-        de la captura.
-      </p>
-
-      @if (factura.estatus === 'cancelada') {
-        <p class="nota">
-          Una factura cancelada ya no se vuelve a emitir. Se pide una nueva con las mismas notas.
-        </p>
-      }
-
-      @if (puedeEmitirFactura() || puedeCancelarFactura()) {
-        @if (pidiendoMotivo()) {
-          <div class="cancelar">
-            <label for="motivo">Motivo de la cancelación</label>
-            <textarea
-              id="motivo"
-              rows="3"
-              maxlength="500"
-              [value]="motivo()"
-              (input)="motivo.set($any($event.target).value)"
-            ></textarea>
-            @if (problemaDeMotivo(motivo()); as problema) {
-              <p class="ayuda">{{ problema }}</p>
-            }
-            <div class="acciones">
-              <button
-                type="button"
-                class="peligro"
-                [disabled]="problemaDeMotivo(motivo()) !== null || cambiando()"
-                (click)="confirmarCancelacion()"
-              >
-                {{ cambiando() ? 'Cancelando…' : 'Confirmar la cancelación' }}
-              </button>
-              <button type="button" (click)="pidiendoMotivo.set(false)">No</button>
-            </div>
-          </div>
-        } @else {
-          <div class="acciones">
-            @if (puedeEmitirFactura()) {
-              <button
-                type="button"
-                class="primario"
-                [disabled]="cambiando()"
-                (click)="marcarEmitida()"
-              >
-                {{ cambiando() ? 'Guardando…' : 'Marcar como emitida' }}
-              </button>
-            }
-            @if (puedeCancelarFactura()) {
-              <button type="button" class="peligro" (click)="cancelar()">
-                Cancelar la factura
-              </button>
-            }
-          </div>
-        }
-      } @else if (factura.estatus !== 'cancelada') {
-        <p class="nota">Tu rol puede ver las facturas, pero no emitirlas ni cancelarlas.</p>
-      }
-    }
-  </section>
-} @else {
-  <section class="lista">
-    <div class="cabecera">
-      <h1>Facturación</h1>
-      @if (puedeSolicitar()) {
-        <button type="button" class="primario" (click)="abrirCaptura()">Nueva factura</button>
-      }
-    </div>
-
-    <p class="subtitulo">
-      Las notas de remisión agrupadas por cliente. Una factura se solicita con las notas que cubre y
-      de ahí en adelante solo avanza: se emite o se cancela con motivo.
-    </p>
-
-    <div class="filtros">
-      <input
-        type="search"
-        autocomplete="off"
-        placeholder="Cliente o forma de pago"
-        [value]="filtroTexto()"
-        (input)="buscar($any($event.target).value)"
-      />
-      <select
-        class="filtro"
-        [value]="filtroEstatus()"
-        (change)="cambiarEstatus($any($event.target).value)"
-        aria-label="Filtrar por estatus"
-      >
-        <option value="">Todos los estatus</option>
-        <option value="solicitada">Solicitadas</option>
-        <option value="emitida">Emitidas</option>
-        <option value="cancelada">Canceladas</option>
-      </select>
-      <label class="fecha">
-        Desde
-        <input
-          type="date"
-          [value]="filtroDesde()"
-          (change)="cambiarDesde($any($event.target).value)"
-        />
-      </label>
-      <label class="fecha">
-        Hasta
-        <input
-          type="date"
-          [value]="filtroHasta()"
-          (change)="cambiarHasta($any($event.target).value)"
-        />
-      </label>
-    </div>
-
-    @if (errorLista(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    @if (cargando() && filas().length === 0) {
-      <p class="vacio">Buscando facturas…</p>
-    } @else if (filas().length === 0) {
-      <p class="vacio">No hay facturas que mostrar.</p>
-    } @else {
-      <table class="tabla">
+  } @else {
+    <div class="tabla-wrapper">
+      <table class="tabla listado">
         <thead>
           <tr>
             <th scope="col">Cliente</th>
@@ -363,10 +336,10 @@
             <th scope="col" class="num">Notas</th>
             <th scope="col" class="num">Total</th>
             <th scope="col">Estatus</th>
-            <th scope="col"><span class="oculto">Ver</span></th>
+            <th scope="col"><span class="oculto">Acciones</span></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody [@filasAnimation]>
           @for (factura of filas(); track factura.id) {
             <tr>
               <td>{{ factura.cliente }}</td>
@@ -375,24 +348,222 @@
               <td class="num">{{ factura.notas }}</td>
               <td class="num">{{ montoComoTexto(factura.monto_total) }}</td>
               <td>
-                <span [class.cancelada]="factura.cancelada">{{
-                  estatusComoTexto(factura.estatus)
-                }}</span>
+                <span [class]="claseDeEstatus(factura.estatus)">
+                  {{ estatusComoTexto(factura.estatus) }}
+                </span>
               </td>
-              <td class="acciones-celda">
-                <button type="button" class="chico" (click)="ver(factura)">Ver</button>
+              <td class="acciones-fila">
+                <button
+                  type="button"
+                  class="chico"
+                  (click)="ver(factura.id)"
+                  [disabled]="abriendoDetalle()"
+                  [attr.aria-expanded]="detalleAbierto(factura.id)"
+                  [attr.aria-controls]="'detalle-factura-' + factura.id"
+                >
+                  @if (detalleAbierto(factura.id)) {
+                    <svg
+                      class="icono"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="18 15 12 9 6 15" />
+                    </svg>
+                    Cerrar
+                  } @else {
+                    <svg
+                      class="icono"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    Ver
+                  }
+                </button>
               </td>
             </tr>
+
+            <!-- El comprobante, en una fila de la MISMA tabla debajo de la suya. -->
+            @if (expandida() === factura.id) {
+              @if (detalle(); as abierta) {
+                <tr class="fila-detalle">
+                  <td colspan="7">
+                    <div class="detalle" [id]="'detalle-factura-' + factura.id">
+                      <div class="detalle-cabecera">
+                        <h3>Factura #{{ abierta.id }} de {{ abierta.cliente }}</h3>
+                        <span [class]="claseDeEstatus(abierta.estatus)">
+                          {{ estatusComoTexto(abierta.estatus) }}
+                        </span>
+                        <button type="button" class="chico" (click)="cerrarDetalle()">
+                          Cerrar comprobante
+                        </button>
+                      </div>
+
+                      @if (errorDetalle(); as mensaje) {
+                        <p class="error" role="alert">{{ mensaje }}</p>
+                      }
+
+                      @if (abierta.motivo_cancelacion; as motivo) {
+                        <p class="cancelada">Cancelada: {{ motivo }}</p>
+                      }
+
+                      <dl>
+                        <dt>Fecha</dt>
+                        <dd>{{ abierta.fecha }}</dd>
+                        <dt>Forma de pago</dt>
+                        <dd>{{ abierta.metodo_pago ?? '—' }}</dd>
+                        <dt>Notas que cubre</dt>
+                        <dd>{{ abierta.notas.length }}</dd>
+                        <dt>Total</dt>
+                        <dd class="total">{{ montoComoTexto(abierta.monto_total) }}</dd>
+                      </dl>
+
+                      <h3 class="titulo">Notas que cubre</h3>
+                      <div class="tabla-wrapper">
+                        <table class="tabla notas">
+                          <thead>
+                            <tr>
+                              <th scope="col">Folio</th>
+                              <th scope="col">Fecha</th>
+                              <th scope="col">Estatus</th>
+                              <th scope="col" class="num">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (nota of abierta.notas; track nota.nota_id) {
+                              <tr>
+                                <td>{{ nota.nota }}</td>
+                                <td>{{ nota.fecha }}</td>
+                                <td>
+                                  <span [class]="claseDeNota(nota.estatus)">
+                                    {{ estatusNotaComoTexto(nota.estatus) }}
+                                  </span>
+                                </td>
+                                <td class="num">{{ montoComoTexto(nota.subtotal) }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <p class="nota">
+                        El total de arriba es el que calculó el servidor sumando los subtotales de
+                        estas notas, no el preview de la captura.
+                      </p>
+
+                      @if (abierta.estatus === 'cancelada') {
+                        <p class="nota">
+                          Una factura cancelada ya no se vuelve a emitir. Se pide una nueva con las
+                          mismas notas.
+                        </p>
+                      } @else if (puedeEmitirFactura() || puedeCancelarFactura()) {
+                        @if (pidiendoMotivo()) {
+                          <div class="cancelar">
+                            <div class="campo">
+                              <label for="motivo">Motivo de la cancelación</label>
+                              <textarea
+                                id="motivo"
+                                rows="3"
+                                maxlength="500"
+                                [value]="motivo()"
+                                (input)="motivo.set($any($event.target).value)"
+                              ></textarea>
+                              @if (problemaDeMotivo(motivo()); as problema) {
+                                <p class="ayuda">{{ problema }}</p>
+                              }
+                            </div>
+                            <div class="acciones">
+                              <button type="button" (click)="noCancelar()">No cancelar</button>
+                              <button
+                                type="button"
+                                class="primario peligro"
+                                [disabled]="problemaDeMotivo(motivo()) !== null || cambiando()"
+                                (click)="confirmarCancelacion()"
+                              >
+                                {{ cambiando() ? 'Cancelando…' : 'Confirmar la cancelación' }}
+                              </button>
+                            </div>
+                          </div>
+                        } @else {
+                          <div class="acciones">
+                            @if (puedeEmitirFactura()) {
+                              <button
+                                type="button"
+                                class="primario"
+                                [disabled]="cambiando()"
+                                (click)="marcarEmitida()"
+                              >
+                                {{ cambiando() ? 'Guardando…' : 'Marcar como emitida' }}
+                              </button>
+                            }
+                            @if (puedeCancelarFactura()) {
+                              <button type="button" class="peligro" (click)="cancelar()">
+                                Cancelar la factura
+                              </button>
+                            }
+                          </div>
+                        }
+                      } @else {
+                        <p class="nota">
+                          Tu rol puede ver las facturas, pero no emitirlas ni cancelarlas.
+                        </p>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
           }
         </tbody>
       </table>
+    </div>
 
-      <div class="paginacion">
-        <button type="button" [disabled]="!hayMas() || cargandoMas()" (click)="cargarMas()">
-          {{ cargandoMas() ? 'Buscando…' : 'Cargar más' }}
-        </button>
-        <span class="cuenta">{{ filas().length }} de {{ totalEncontrado() }} facturas</span>
-      </div>
-    }
-  </section>
-}
+    <div class="paginacion">
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaAnterior() || cargando()"
+        (click)="irPagina(pagina() - 1)"
+      >
+        ‹ Anterior
+      </button>
+
+      <span class="contador">
+        {{ rangoDePagina() }}
+        <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+      </span>
+
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaSiguiente() || cargando()"
+        (click)="irPagina(pagina() + 1)"
+      >
+        Siguiente ›
+      </button>
+
+      <label class="oculto" for="tamano-pagina-facturas">Renglones por página</label>
+      <select
+        id="tamano-pagina-facturas"
+        class="filtro tamano-pagina"
+        aria-label="Renglones por página"
+        [value]="limiteComoTexto()"
+        (change)="aTamanoDePagina($any($event.target).value)"
+      >
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100">100 por página</option>
+        <option value="200">200 por página</option>
+      </select>
+    </div>
+  }
+</section>
+
+<app-confirm-modal />

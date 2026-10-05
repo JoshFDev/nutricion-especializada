@@ -354,6 +354,361 @@ tbody tr:last-child td {
   border-radius: 6px;
 }
 
+/* ------------------------------------- el editor inline y el detalle desplegado */
+
+/*
+ * Lo que tienen en común el EDITOR y el DETALLE de todas las pantallas: la
+ * rejilla de campos, el input con su foco, el desplegable de resultados del
+ * buscador, las etiquetas de las fechas, el bloque de datos del detalle y la
+ * fila extra que lo aloja.
+ *
+ * Esto estaba copiado en `compras.scss` y en `pagos.scss`, y para las dos
+ * pantallas siguientes ya iba a ser la cuarta y la quinta copia: con
+ * `facturacion.scss` y `caja.scss` ya son cuatro archivos con el mismo input
+ * y el mismo borde, y cualquier retoque de un campo tocaba cuatro lugares.
+ * Lo idéntico vive aquí una vez.
+ *
+ * Lo que SÍ es de cada pantalla se queda en su `.scss`: el ancho de las
+ * columnas de la tabla y las clases que solo existen en una pantalla
+ * (`.aplicar`, `.renglones`, `.codigo`, `.sin-aplicar`, el tamaño de su
+ * `.total`). Eso no se puede compartir porque no es lo mismo.
+ */
+
+/* La frase que explica para qué es la captura, encima de los campos. */
+.descripcion {
+  margin: 0 0 1rem;
+  max-width: 46rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+/* El subtítulo de una parte del editor: "Notas que cubre", "Las cuentas". */
+.titulo {
+  margin: 1.25rem 0 0.625rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* La línea de ayuda bajo un campo: no es un error, es contexto. */
+.aviso {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+/*
+ * La misma línea, pero en rojo: avisa de algo que el backend va a rechazar
+ * (el motivo de una cancelación es obligatorio, el monto no puede ser cero).
+ * Con `.tenue` se vuelve la ayuda normal, que es lo que se usa cuando el campo
+ * solo explica (la fecha vacía es la de hoy).
+ */
+.ayuda {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
+.ayuda.tenue {
+  color: var(--texto-tenue);
+}
+
+/* La rejilla de campos del editor: tres columnas que bajan a dos y a una. */
+.campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.875rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* El campo que manda sobre los demás: de él salen las filas de la tabla. */
+.campo.ancho {
+  grid-column: 1 / -1;
+}
+
+.campo input:not([type='checkbox']),
+.campo select,
+.campo textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.campo input:not([type='checkbox']):focus,
+.campo select:focus,
+.campo textarea:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+/* El `select` y el `textarea` van aquí porque el editor de caja elige cuenta de
+   una lista y el motivo de una cancelación se escribe en varias líneas: los dos
+   son campos del mismo editor y no pueden verse distintos de los de al lado. */
+.campo textarea {
+  resize: vertical;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+/* La casilla es una línea, no un campo con etiqueta encima. */
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+  font-size: 0.875rem;
+  color: var(--texto);
+}
+
+/*
+ * Lo ya elegido —un cliente, un proveedor, un producto— que se lee como
+ * etiqueta y se quita con un clic. `.cliente-elegido` es el mismo bloque con
+ * el nombre que usaba pagos antes de que se juntaran las dos pantallas.
+ */
+.elegido,
+.cliente-elegido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+}
+
+/*
+ * El desplegable de resultados va pegado al input, y el input necesita
+ * `position: relative` en su contenedor para que la lista quede debajo y no
+ * empuje lo que sigue.
+ */
+.campo-buscador {
+  position: relative;
+}
+
+.campo-buscador input[type='search'] {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.campo-buscador input[type='search']:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+.resultados {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
+  animation: slideDown 0.15s ease-out;
+}
+
+.resultados button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--texto);
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.resultados button:hover:not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: transparent;
+}
+
+/* Los filtros de fecha, con su etiqueta pegada al input. */
+.fecha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.fecha input {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+/*
+ * El cierre del editor: lo que se lleva a la izquierda y la cifra a la
+ * derecha, como un recibo. La cifra es de cada pantalla y va en su `.scss`.
+ */
+.cierre {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  margin-bottom: 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+.cierre .aviso {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/*
+ * El detalle ocupa una fila de la MISMA tabla, debajo de la que se está viendo.
+ * Por eso la celda no trae padding (lo trae el div de adentro) y revive la
+ * herencia de `nowrap` que las celdas del listado necesitan para recortar con
+ * puntos suspensivos: aquí el texto tiene que poder dar vueltas.
+ */
+.fila-detalle > td {
+  padding: 0;
+  overflow: visible;
+  white-space: normal;
+  background: var(--fondo);
+}
+
+.detalle {
+  padding: 1rem 1.25rem;
+  /* La misma `slideDown` del editor: el detalle baja desde arriba. */
+  animation: slideDown 0.2s ease-out;
+}
+
+.detalle-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.detalle-cabecera h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* El "Cerrar detalle" se va a la derecha, y solo ocupa lugar si hace falta. */
+.detalle-cabecera .chico {
+  margin-left: auto;
+}
+
+/* Los datos del detalle: la etiqueta a la izquierda, el valor a la derecha. */
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.375rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+dt {
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+}
+
+dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* La línea al pie del detalle: de dónde sale el número, o qué no se puede ya. */
+.nota {
+  margin: 0.625rem 0 1rem;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+/*
+ * En una pantalla angosta la rejilla del editor y las etiquetas del detalle
+ * bajan a una columna, y la tabla scrollea. Lo que importa es que la captura
+ * se pueda hacer igual de bien en una laptop angosta que en un monitor.
+ */
+@media (max-width: 52rem) {
+  .campos {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .marca {
+    margin-top: 1.75rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  .campos {
+    grid-template-columns: 1fr;
+  }
+
+  .marca {
+    margin-top: 0;
+  }
+
+  dl {
+    grid-template-columns: 1fr;
+    gap: 0.125rem;
+  }
+
+  dt {
+    margin-top: 0.5rem;
+    font-weight: 600;
+  }
+
+  dt:first-child {
+    margin-top: 0;
+  }
+
+  .detalle,
+  .fila-detalle > td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
 /* -------------------------------------------------------------- botones */
 
 /*
@@ -439,6 +794,47 @@ button.primario:focus-visible,
 button.toggle-editor:focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: 2px;
+}
+
+/*
+ * El botón que destruye: cancelar una factura, cancelar una compra, borrar el
+ * movimiento de caja.
+ *
+ * Es el MISMO botón de las demás pantallas y no uno aparte: lo único que
+ * cambia es el color. Nace en rojo apagado y se enciende al pasar el cursor,
+ * como los otros; con `.primario` encima es la acción que manda y es
+ * destructiva (el botón que confirma una cancelación), y entonces va en rojo
+ * sólido para que no se confunda con un "Guardar".
+ */
+button.peligro {
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border-color: var(--peligro);
+}
+
+button.peligro:hover:not(:disabled) {
+  color: var(--sobre-peligro);
+  background: var(--peligro);
+  border-color: var(--peligro);
+}
+
+button.primario.peligro {
+  color: var(--sobre-peligro);
+  background: var(--peligro);
+  border-color: var(--peligro);
+}
+
+button.primario.peligro:hover:not(:disabled) {
+  color: var(--sobre-peligro);
+  background: var(--peligro-texto);
+  border-color: var(--peligro-texto);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(140 29 24 / 25%);
+}
+
+button.primario.peligro:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 /*

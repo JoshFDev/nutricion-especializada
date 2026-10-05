@@ -1,594 +1,665 @@
 <!--
-  Caja y bancos: lista, cuentas, captura y detalle en una sola pantalla.
+  La pantalla de caja y bancos.
 
-  Se elige con la signal `pantalla` y no con el router, como en compras: el
-  detalle es el final de la captura y la captura es un apartado de la lista.
+  Dos vistas y no cuatro, como antes: el listado con su alta y su comprobante, y
+  las cuentas. El movimiento se captura en el editor inline que se despliega
+  ARRIBA de la tabla, y su comprobante es la fila que se abre DEBAJO — igual que
+  en compras, en pagos y en facturación. El diseño viene entero de
+  `nucleo/pantallas.scss`.
 
-  Lo que hay aqui y no hay en ninguna otra pantalla:
+  Lo propio de esta pantalla, y está en el SCSS de al lado:
 
-   - La tarjeta del periodo, con las tres cifras de arriba. Sale de
-     `/resumen` y no de la tabla: un `total` de la pagina no es el total del
-     periodo. Comparte las fechas con el listado, y lo dice, porque un resumen
-     que no corresponde a lo que se esta viendo es como se cuadra mal un dia.
-   - El borrado, que es el unico DELETE del proyecto. Pide escribir el monto.
-   - La descripcion es un `input` y no un `textarea`, porque el esquema
-     rechaza los saltos de linea.
+    - La tarjeta `.resumen`: una fila por cuenta con lo que entró y salió DENTRO
+      del periodo. Las fechas viven aquí porque son el periodo entero, no un
+      filtro de la tabla, y el aviso lo dice para que un resumen que no
+      corresponde a lo que se está viendo no se lea como un cuadre del día.
+    - Los `.ingreso` y `.egreso`: el signo del monto, que es la única forma de
+      distinguir a simple vista un saldo de una deuda.
+    - El `.borrar`: el único DELETE del proyecto, y se confirma escribiendo el
+      monto, no con un `confirm` de una línea.
+    - `.ancho`: el ancho de las columnas, que aquí no es el de las otras
+      pantallas porque hay siete columnas y las cuentas son cinco.
 -->
-@if (pantalla() === 'captura') {
-  <section class="captura">
-    <div class="cabecera">
-      <h1>Nuevo movimiento</h1>
-      <button type="button" (click)="volverALista()">Volver a la lista</button>
-    </div>
-
-    @if (errorCaptura(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    <div class="bloque datos">
-      <div class="campo">
-        <label for="cuenta">Cuenta</label>
-        <select
-          id="cuenta"
-          [value]="editor().cuenta_id ?? ''"
-          (change)="cambiarCuentaEditada($any($event.target).value)"
-        >
-          <option value="">Elige una cuenta…</option>
-          @for (cuenta of cuentas(); track cuenta.id) {
-            <option [value]="cuenta.id">
-              {{ cuenta.nombre }} ({{ cuenta.tipo === 'banco' ? 'banco' : 'efectivo' }})
-            </option>
-          }
-        </select>
+@if (pantalla() === 'cuentas') {
+  <section class="caja">
+    <header class="cabecera">
+      <div>
+        <h1>Cuentas</h1>
       </div>
-
-      <div class="campo">
-        <label for="tipo">Tipo</label>
-        <select
-          id="tipo"
-          [value]="editor().tipo"
-          (change)="cambiarTipoEditado($any($event.target).value)"
-        >
-          <option value="egreso">Egreso (sale dinero)</option>
-          <option value="ingreso">Ingreso (entra dinero)</option>
-        </select>
-      </div>
-
-      <div class="campo">
-        <label for="categoria">Categoría</label>
-        <input
-          id="categoria"
-          type="text"
-          maxlength="80"
-          autocomplete="off"
-          list="categorias-caja"
-          [value]="editor().categoria"
-          (input)="ponerCategoria($any($event.target).value)"
-        />
-        <!--
-          Las categorias que ya se usan, para no teclear "Nomina" de cinco
-          formas distintas en cinco meses. Es una ayuda: el campo se puede
-          escribir a mano, y por eso el `datalist` y no un `select`.
-        -->
-        <datalist id="categorias-caja">
-          @for (categoria of categorias(); track categoria.categoria) {
-            <option [value]="categoria.categoria"></option>
-          }
-        </datalist>
-      </div>
-
-      <div class="campo">
-        <label for="monto">Monto</label>
-        <input
-          id="monto"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-          placeholder="0.00"
-          [value]="editor().monto"
-          (input)="ponerMonto($any($event.target).value)"
-        />
-        <p class="ayuda">Tiene que ser mayor que cero.</p>
-      </div>
-
-      <div class="campo">
-        <label for="fecha">Fecha</label>
-        <input
-          id="fecha"
-          type="date"
-          [value]="fecha()"
-          (change)="fecha.set($any($event.target).value)"
-        />
-        <p class="ayuda">Si la dejas vacía se usa la de hoy.</p>
-      </div>
-    </div>
-
-    <!--
-      Cliente y proveedor son excluyentes porque el esquema rechaza un
-      movimiento que sea de los dos. Los dos pueden quedar vacios: la renta
-      del local no es de nadie.
-    -->
-    <div class="bloque">
-      <h2>¿De quién es?</h2>
-
-      @if (cliente(); as elegido) {
-        <div class="elegido">
-          <span
-            >Cliente: <strong>{{ elegido.nombre }}</strong></span
-          >
-          <button type="button" class="chico" (click)="quitarCliente()">Cambiar</button>
-        </div>
-      } @else {
-        <label for="buscar-cliente">Cliente (opcional)</label>
-        <input
-          id="buscar-cliente"
-          type="search"
-          autocomplete="off"
-          placeholder="Nombre del cliente"
-          [value]="buscadorCliente.texto()"
-          (input)="buscadorCliente.escribir($any($event.target).value)"
-          (focus)="buscadorCliente.alEntrar()"
-          (focusout)="buscadorCliente.alSalir($event)"
-          (keydown.escape)="buscadorCliente.cerrar()"
-        />
-        @if (buscadorCliente.lista()) {
-          <ul class="resultados">
-            @for (opcion of buscadorCliente.opciones(); track opcion.id) {
-              <li>
-                <button type="button" (click)="buscadorCliente.elegir(opcion)">
-                  {{ opcion.nombre }}
-                </button>
-              </li>
-            }
-          </ul>
-        }
-        @if (buscadorCliente.sinNada(); as aviso) {
-          <p class="aviso">{{ aviso }}</p>
-        }
-      }
-
-      @if (proveedor(); as elegido) {
-        <div class="elegido">
-          <span
-            >Proveedor: <strong>{{ elegido.nombre }}</strong></span
-          >
-          <button type="button" class="chico" (click)="quitarProveedor()">Cambiar</button>
-        </div>
-      } @else {
-        <label for="buscar-proveedor">Proveedor (opcional)</label>
-        <input
-          id="buscar-proveedor"
-          type="search"
-          autocomplete="off"
-          placeholder="Nombre del proveedor"
-          [value]="buscadorProveedor.texto()"
-          (input)="buscadorProveedor.escribir($any($event.target).value)"
-          (focus)="buscadorProveedor.alEntrar()"
-          (focusout)="buscadorProveedor.alSalir($event)"
-          (keydown.escape)="buscadorProveedor.cerrar()"
-        />
-        @if (buscadorProveedor.lista()) {
-          <ul class="resultados">
-            @for (opcion of buscadorProveedor.opciones(); track opcion.id) {
-              <li>
-                <button type="button" (click)="buscadorProveedor.elegir(opcion)">
-                  {{ opcion.nombre }}
-                </button>
-              </li>
-            }
-          </ul>
-        }
-        @if (buscadorProveedor.sinNada(); as aviso) {
-          <p class="aviso">{{ aviso }}</p>
-        }
-      }
-    </div>
-
-    <div class="bloque">
-      <div class="campo">
-        <label for="descripcion">Descripción (opcional)</label>
-        <!--
-          Un `input` y no un `textarea` a proposito: el esquema usa `texto()`,
-          que rechaza los caracteres de control, asi que un "enter" de mas
-          seria un 422 con un mensaje que no menciona los saltos de linea.
-        -->
-        <input
-          id="descripcion"
-          type="text"
-          maxlength="300"
-          autocomplete="off"
-          [value]="descripcion()"
-          (input)="ponerDescripcion($any($event.target).value)"
-        />
-      </div>
-
-      <label class="casilla">
-        <input
-          type="checkbox"
-          [checked]="tieneFactura()"
-          (change)="ponerFactura($any($event.target).checked)"
-        />
-        <span>Este movimiento tiene factura</span>
-      </label>
-    </div>
-
-    @if (problemas().length > 0) {
-      <ul class="problemas">
-        @for (problema of problemas(); track problema) {
-          <li>{{ problema }}</li>
-        }
-      </ul>
-    }
-
-    <div class="acciones">
-      <button
-        type="button"
-        class="primario grande"
-        [disabled]="!puedeGuardar()"
-        (click)="guardar()"
-      >
-        {{ guardando() ? 'Guardando…' : 'Guardar el movimiento' }}
-      </button>
-      @if (!puedeCrear()) {
-        <p class="aviso">No tienes el permiso para capturar movimientos.</p>
-      }
-    </div>
-  </section>
-} @else if (pantalla() === 'detalle') {
-  @if (detalle(); as movimiento) {
-    <section class="comprobante">
-      <div class="cabecera">
-        <h1>{{ movimiento.tipo === 'ingreso' ? 'Ingreso' : 'Egreso' }} #{{ movimiento.id }}</h1>
-        <button type="button" (click)="volverALista()">Volver a la lista</button>
-      </div>
-
-      @if (errorDetalle(); as mensaje) {
-        <p class="error" role="alert">{{ mensaje }}</p>
-      }
-
-      <dl>
-        <dt>Cuenta</dt>
-        <dd>{{ movimiento.cuenta }}</dd>
-        <dt>Fecha</dt>
-        <dd>{{ movimiento.fecha }}</dd>
-        <dt>Categoría</dt>
-        <dd>{{ movimiento.categoria }}</dd>
-        <dt>Cliente</dt>
-        <dd>{{ movimiento.cliente ?? '—' }}</dd>
-        <dt>Proveedor</dt>
-        <dd>{{ movimiento.proveedor ?? '—' }}</dd>
-        <dt>Descripción</dt>
-        <dd>{{ movimiento.descripcion ?? '—' }}</dd>
-        <dt>Factura</dt>
-        <dd>{{ movimiento.tiene_factura ? 'Sí, con factura' : 'Sin factura' }}</dd>
-        <dt>Monto</dt>
-        <dd
-          class="total"
-          [class.ingreso]="movimiento.tipo === 'ingreso'"
-          [class.egreso]="movimiento.tipo === 'egreso'"
-        >
-          {{ movimiento.tipo === 'egreso' ? '−' : '+' }}{{ montoComoTexto(movimiento.monto) }}
-        </dd>
-      </dl>
-
-      <p class="nota">
-        El saldo de {{ movimiento.cuenta }} ya quedó recalculado con este movimiento. Ese número lo
-        hace la base sumando todo lo que hay en la cuenta, no la pantalla.
-      </p>
-
-      @if (puedeEliminar()) {
-        @if (confirmandoBorrado()) {
-          <div class="borrar">
-            <h2>Borrar este movimiento</h2>
-            <p class="aviso">
-              No hay forma de recuperarlo: no aparece en ningún documento y el saldo de la cuenta se
-              recalcula sin él. Para confirmar, escribe el monto.
-            </p>
-            <label for="monto-borrar">Monto del movimiento</label>
-            <input
-              id="monto-borrar"
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
-              [value]="montoParaBorrar()"
-              (input)="montoParaBorrar.set($any($event.target).value)"
+      <div class="acciones-cabecera">
+        <button type="button" (click)="volverALista()">
+          <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M10 3L5 8l5 5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             />
-            <div class="acciones">
-              <button
-                type="button"
-                class="peligro"
-                [disabled]="!montoCoincide() || borrando()"
-                (click)="confirmarBorrado()"
-              >
-                {{ borrando() ? 'Borrando…' : 'Sí, bórralo' }}
-              </button>
-              <button type="button" (click)="noBorrar()">Mejor no</button>
-            </div>
-          </div>
-        } @else {
-          <div class="acciones">
-            <button type="button" class="peligro chico" (click)="pedirBorrado()">
-              Borrar el movimiento
-            </button>
-          </div>
-        }
-      } @else {
-        <p class="aviso">No tienes el permiso para borrar movimientos.</p>
-      }
-    </section>
-  } @else {
-    <section>
-      <p class="aviso">No se encontró el movimiento.</p>
-      <button type="button" (click)="volverALista()">Volver a la lista</button>
-    </section>
-  }
-} @else if (pantalla() === 'cuentas') {
-  <section class="cuentas">
-    <div class="cabecera">
-      <h1>Cuentas</h1>
-      <button type="button" (click)="volverALista()">Volver a la lista</button>
-    </div>
-
-    @if (exito(); as mensaje) {
-      <p class="aviso aviso-ok" role="status">{{ mensaje }}</p>
-    }
-    @if (errorCuentas(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Cuenta</th>
-          <th scope="col">Tipo</th>
-          <th scope="col">Banco</th>
-          <th scope="col">Titular</th>
-          <th scope="col" class="num">Saldo</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (cuenta of cuentas(); track cuenta.id) {
-          <tr>
-            <td>{{ cuenta.nombre }}</td>
-            <td>{{ cuenta.tipo === 'banco' ? 'Banco' : 'Efectivo' }}</td>
-            <td>{{ cuenta.banco ?? '—' }}</td>
-            <td>{{ cuenta.titular ?? '—' }}</td>
-            <td class="num" [class.negativo]="saldoNegativo(cuenta.saldo_actual)">
-              {{ montoComoTexto(cuenta.saldo_actual) }}
-            </td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="5" class="vacio">Todavía no hay cuentas.</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-
-    @if (puedeCrear()) {
-      <div class="alta">
-        <h2>Abrir una cuenta</h2>
-
-        @if (errorAltaCuenta(); as mensaje) {
-          <p class="error" role="alert">{{ mensaje }}</p>
-        }
-
-        <div class="bloque datos">
-          <div class="campo">
-            <label for="nombre-cuenta">Nombre</label>
-            <input
-              id="nombre-cuenta"
-              type="text"
-              maxlength="120"
-              autocomplete="off"
-              placeholder="Caja chica, Cuenta del banco…"
-              [value]="nombreCuenta()"
-              (input)="ponerNombreCuenta($any($event.target).value)"
-            />
-            @if (problemaNombreCuenta(); as problema) {
-              <p class="problema">{{ problema }}</p>
-            }
-          </div>
-
-          <div class="campo">
-            <label for="tipo-cuenta">Tipo</label>
-            <select
-              id="tipo-cuenta"
-              [value]="tipoCuenta()"
-              (change)="cambiarTipoCuenta($any($event.target).value)"
-            >
-              <option value="efectivo">Efectivo</option>
-              <option value="banco">Banco</option>
-            </select>
-          </div>
-
-          <!-- El banco solo se pide si el tipo es banco: una caja chica no tiene. -->
-          @if (tipoCuenta() === 'banco') {
-            <div class="campo">
-              <label for="banco">Banco</label>
-              <input
-                id="banco"
-                type="text"
-                maxlength="120"
-                autocomplete="off"
-                [value]="bancoCuenta()"
-                (input)="ponerBanco($any($event.target).value)"
-              />
-              @if (problemaBancoCuenta(); as problema) {
-                <p class="problema">{{ problema }}</p>
-              }
-            </div>
-          }
-
-          <div class="campo">
-            <label for="titular">Titular (opcional)</label>
-            <input
-              id="titular"
-              type="text"
-              maxlength="120"
-              autocomplete="off"
-              [value]="titularCuenta()"
-              (input)="ponerTitular($any($event.target).value)"
-            />
-          </div>
-        </div>
-
-        <div class="acciones">
+          </svg>
+          Volver a los movimientos
+        </button>
+        @if (puedeCrear()) {
           <button
             type="button"
-            class="primario"
-            [disabled]="!puedeGuardarCuenta()"
-            (click)="guardarCuenta()"
+            class="toggle-editor"
+            (click)="alternarEditorCuenta()"
+            [attr.aria-expanded]="cuentaEditorVisible()"
+            aria-controls="editor-cuenta"
           >
-            {{ guardandoCuenta() ? 'Abriendo…' : 'Abrir la cuenta' }}
+            <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 3.5v9M3.5 8h9"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+            {{ cuentaEditorVisible() ? 'Cerrar el alta' : 'Abrir una cuenta' }}
           </button>
-        </div>
-
-        <p class="nota">
-          El saldo de una cuenta nueva siempre empieza en cero: lo va armando la base con cada
-          movimiento, y no se puede escribir a mano.
-        </p>
-      </div>
-    } @else {
-      <p class="aviso">No tienes el permiso para abrir cuentas.</p>
-    }
-  </section>
-} @else {
-  <section class="lista">
-    <div class="cabecera">
-      <h1>Caja y bancos</h1>
-      <div class="cabecera-botones">
-        <button type="button" (click)="verCuentas()">Ver las cuentas</button>
-        @if (puedeCrear()) {
-          <button type="button" class="primario" (click)="nueva()">Nuevo movimiento</button>
         }
       </div>
-    </div>
+    </header>
 
-    <p class="subtitulo">
-      Los ingresos y egresos de cada cuenta. El saldo lo calcula la base sumando los movimientos, y
-      por eso aquí no se puede escribir.
+    <p class="descripcion">
+      Cada cuenta es una caja, un banco o una caja fuerte. El
+      <strong>saldo</strong> no se escribe: lo rehace el servidor sumando los movimientos de la
+      cuenta, así que nunca se puede cuadrar a mano. Los tipos de movimiento son los mismos para
+      todas: un ingreso entra a la cuenta y un egreso sale de ella.
     </p>
 
-    @if (exito(); as mensaje) {
-      <p class="aviso aviso-ok" role="status">{{ mensaje }}</p>
+    @if (errorCuentas()) {
+      <p class="error">{{ errorCuentas() }}</p>
     }
 
-    <!--
-      EL PERIODO. Va arriba porque es la pregunta que se hace primero ("¿cuánto
-      entró y cuánto salió?"), y usa `/resumen` y no la tabla: la tabla viene
-      paginada y la suma de una pagina no es la suma del periodo.
-    -->
-    <section class="resumen">
-      <div class="resumen-cabecera">
-        <h2>El periodo</h2>
-        <div class="fechas">
-          <div class="fecha">
-            <label for="resumen-desde">Del</label>
-            <input
-              id="resumen-desde"
-              type="date"
-              [value]="filtroDesde()"
-              (change)="cambiarDesde($any($event.target).value)"
-            />
+    @if (puedeCrear()) {
+      <div
+        id="editor-cuenta"
+        class="editor-wrapper"
+        [class.colapsado]="!cuentaEditorVisible()"
+        [attr.inert]="cuentaEditorVisible() ? null : ''"
+      >
+        <div class="editor-cabecera">
+          <h2>Abrir una cuenta</h2>
+        </div>
+        <div class="editor-inline">
+          <p class="descripcion">
+            El saldo de una cuenta nueva es cero y no se puede escribir: empieza en cero porque así
+            lo pone la base.
+          </p>
+
+          <div class="campos">
+            <div class="campo">
+              <label for="cuenta-nombre">El nombre</label>
+              <input
+                id="cuenta-nombre"
+                type="text"
+                [value]="nombreCuenta()"
+                (input)="ponerNombreCuenta($any($event.target).value)"
+                placeholder="Caja del mostrador"
+                autocomplete="off"
+              />
+              @if (problemaNombreCuenta(); as problema) {
+                <p class="ayuda">{{ problema }}</p>
+              } @else {
+                <p class="ayuda tenue">Como se le va a llamar aquí. Es lo que sale en la tabla.</p>
+              }
+            </div>
+
+            <div class="campo">
+              <label for="cuenta-tipo">El tipo</label>
+              <select
+                id="cuenta-tipo"
+                [value]="tipoCuenta()"
+                (change)="cambiarTipoCuenta($any($event.target).value)"
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="banco">Banco</option>
+              </select>
+            </div>
+
+            <div class="campo">
+              <label for="cuenta-banco">El banco</label>
+              <input
+                id="cuenta-banco"
+                type="text"
+                [value]="bancoCuenta()"
+                (input)="ponerBanco($any($event.target).value)"
+                [placeholder]="tipoCuenta() === 'banco' ? 'Banco de México' : 'No aplica'"
+                autocomplete="off"
+              />
+              @if (problemaBancoCuenta(); as problema) {
+                <p class="ayuda">{{ problema }}</p>
+              } @else {
+                <p class="ayuda tenue">Solo se pide si la cuenta es de banco.</p>
+              }
+            </div>
+
+            <div class="campo ancho">
+              <label for="cuenta-titular">El titular</label>
+              <input
+                id="cuenta-titular"
+                type="text"
+                [value]="titularCuenta()"
+                (input)="ponerTitular($any($event.target).value)"
+                placeholder="Opcional: a nombre de quién está"
+                autocomplete="off"
+              />
+            </div>
           </div>
-          <div class="fecha">
-            <label for="resumen-hasta">Al</label>
-            <input
-              id="resumen-hasta"
-              type="date"
-              [value]="filtroHasta()"
-              (change)="cambiarHasta($any($event.target).value)"
-            />
+
+          @if (errorAltaCuenta()) {
+            <p class="error">{{ errorAltaCuenta() }}</p>
+          }
+
+          <div class="acciones">
+            <button type="button" (click)="alternarEditorCuenta()" [disabled]="guardandoCuenta()">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="primario"
+              (click)="guardarCuenta()"
+              [disabled]="!puedeGuardarCuenta()"
+            >
+              @if (guardandoCuenta()) {
+                <span class="spinner" aria-hidden="true"></span>
+                Abriendo…
+              } @else {
+                Abrir la cuenta
+              }
+            </button>
           </div>
         </div>
       </div>
+    }
 
-      <div class="cifras">
-        <div class="cifra">
-          <span>Entró</span>
-          <strong class="ingreso">{{ montoComoTexto(totales().ingresos) }}</strong>
-        </div>
-        <div class="cifra">
-          <span>Salió</span>
-          <strong class="egreso">{{ montoComoTexto(totales().egresos) }}</strong>
-        </div>
-        <div class="cifra">
-          <span>Diferencia</span>
-          <strong [class.negativo]="saldoNegativo(totales().saldo)">
-            {{ totales().saldo < 0 ? '−' : '' }}{{ montoComoTexto(totales().saldo) }}
-          </strong>
-        </div>
-      </div>
-
-      @if (errorResumen(); as mensaje) {
-        <p class="error" role="alert">{{ mensaje }}</p>
-      }
-
-      <p class="ayuda">
-        Son las sumas de las fechas de arriba, que son las mismas que filtran la tabla. Sin fechas,
-        es toda la historia.
-      </p>
-
-      @if (cargandoResumen()) {
-        <p class="vacio">Calculando…</p>
-      } @else if (resumenCuentas().length > 0) {
-        <table class="por-cuenta">
+    @if (cuentas().length > 0) {
+      <div class="tabla-wrapper">
+        <table class="tabla listado">
           <thead>
             <tr>
-              <th scope="col">Cuenta</th>
-              <th scope="col" class="num">Entró</th>
-              <th scope="col" class="num">Salió</th>
-              <th scope="col" class="num">Diferencia</th>
-              <th scope="col" class="num">Saldo actual</th>
+              <th>La cuenta</th>
+              <th>El tipo</th>
+              <th>El banco</th>
+              <th>El titular</th>
+              <th class="num">El saldo</th>
             </tr>
           </thead>
-          <tbody>
-            @for (cuenta of resumenCuentas(); track cuenta.cuenta_id) {
+          <tbody [@filasAnimation]>
+            @for (cuenta of cuentas(); track cuenta.id) {
               <tr>
+                <td class="nombre-cuenta">{{ cuenta.nombre }}</td>
                 <td>
-                  {{ cuenta.cuenta }}
-                  <span class="tenue">
-                    {{ cuenta.movimientos }} movimiento{{ cuenta.movimientos === 1 ? '' : 's' }}
+                  <span class="badge" [class.badge-neutro]="cuenta.tipo === 'efectivo'">
+                    {{ cuenta.tipo === 'banco' ? 'Banco' : 'Efectivo' }}
                   </span>
                 </td>
-                <td class="num">{{ montoComoTexto(cuenta.ingresos) }}</td>
-                <td class="num">{{ montoComoTexto(cuenta.egresos) }}</td>
-                <td class="num" [class.negativo]="saldoNegativo(cuenta.saldo_periodo)">
-                  {{ cuenta.saldo_periodo < 0 ? '−' : '' }}
-                  {{ montoComoTexto(cuenta.saldo_periodo) }}
-                </td>
-                <td class="num" [class.negativo]="saldoNegativo(cuenta.saldo_actual)">
+                <td class="tenue">{{ cuenta.banco ?? '—' }}</td>
+                <td class="tenue">{{ cuenta.titular ?? '—' }}</td>
+                <td class="num saldo" [class.saldo-rojo]="saldoNegativo(cuenta.saldo_actual)">
                   {{ montoComoTexto(cuenta.saldo_actual) }}
                 </td>
               </tr>
             }
           </tbody>
         </table>
+      </div>
+      <p class="nota">
+        El saldo de una cuenta no se escribe nunca: sale de lo que entró menos lo que salió en sus
+        movimientos. Cuando un movimiento se borra, el servidor lo vuelve a sumar.
+      </p>
+    } @else {
+      <div class="estado-vacio">
+        <h2>Aún no hay ninguna cuenta</h2>
+        <p>
+          Los movimientos se registran en una cuenta: la caja del mostrador o el banco de la nómina.
+          Se abre aquí, y empieza con el saldo en cero.
+        </p>
+        @if (puedeCrear()) {
+          <button type="button" class="primario" (click)="alternarEditorCuenta()">
+            Abrir la primera cuenta
+          </button>
+        }
+      </div>
+    }
+  </section>
+} @else {
+  <section class="caja">
+    <header class="cabecera">
+      <div>
+        <h1>Caja y bancos</h1>
+      </div>
+      <div class="acciones-cabecera">
+        <button type="button" (click)="verCuentas()">
+          <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M2 5.5h12M4 5.5V4a1 1 0 011-1h6a1 1 0 011 1v1.5M3 5.5l.8 7a1 1 0 001 .9h6.4a1 1 0 001-.9l.8-7"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          Las cuentas
+        </button>
+        @if (puedeCrear()) {
+          <button
+            type="button"
+            class="toggle-editor"
+            (click)="alternarEditor()"
+            [attr.aria-expanded]="editorVisible()"
+            aria-controls="editor-movimiento"
+          >
+            <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 3.5v9M3.5 8h9"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+            {{ editorVisible() ? 'Cerrar el alta' : 'Nuevo movimiento' }}
+          </button>
+        }
+      </div>
+    </header>
+
+    <p class="descripcion">
+      Todo lo que entra y sale de la caja y de los bancos, con su categoría y su cuenta. El saldo de
+      cada cuenta lo rehace el servidor sumando sus movimientos, y por eso aquí solo se capturan
+      movimientos.
+    </p>
+
+    <!--
+      El periodo va arriba porque el resumen y el listado lo comparten. Son las
+      fechas de la tarjeta, no un filtro más: si se movieran a la barra, el
+      "Entró" de arriba dejaría de cuadrar con lo que hay en la tabla sin que
+      nadie viera por qué.
+    -->
+    <section class="resumen">
+      <div class="resumen-cabecera">
+        <h2 class="resumen-titulo">El periodo</h2>
+        <div class="fechas">
+          <label class="fecha">
+            Del
+            <input
+              type="date"
+              [value]="filtroDesde()"
+              (change)="cambiarDesde($any($event.target).value)"
+            />
+          </label>
+          <span class="al" aria-hidden="true">al</span>
+          <label class="fecha">
+            <input
+              type="date"
+              [value]="filtroHasta()"
+              (change)="cambiarHasta($any($event.target).value)"
+              aria-label="Hasta"
+            />
+          </label>
+        </div>
+      </div>
+
+      @if (cargandoResumen() && resumenCuentas().length === 0) {
+        <p class="cargando">Calculando el periodo…</p>
+      } @else if (errorResumen()) {
+        <p class="error">{{ errorResumen() }}</p>
+      } @else if (resumenCuentas().length === 0) {
+        <p class="aviso">
+          No hay movimientos en el periodo. Con las fechas vacías se toma toda la historia.
+        </p>
       } @else {
-        <p class="vacio">No hay movimientos en este periodo.</p>
+        <dl class="cifras">
+          <div class="cifra">
+            <dt>Entró</dt>
+            <dd class="ingreso">{{ montoComoTexto(totales().ingresos) }}</dd>
+          </div>
+          <div class="cifra">
+            <dt>Salió</dt>
+            <dd class="egreso">{{ montoComoTexto(totales().egresos) }}</dd>
+          </div>
+          <div class="cifra">
+            <dt>El saldo del periodo</dt>
+            <dd [class.ingreso]="totales().saldo >= 0" [class.egreso]="totales().saldo < 0">
+              {{ montoComoTexto(totales().saldo) }}
+            </dd>
+          </div>
+        </dl>
+
+        <table class="por-cuenta">
+          <thead>
+            <tr>
+              <th>La cuenta</th>
+              <th class="num">Entró</th>
+              <th class="num">Salió</th>
+              <th class="num">Saldo del periodo</th>
+              <th class="num">Saldo de hoy</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cuenta of resumenCuentas(); track cuenta.cuenta_id) {
+              <tr>
+                <td>{{ cuenta.cuenta }}</td>
+                <td class="num ingreso">{{ montoComoTexto(cuenta.ingresos) }}</td>
+                <td class="num egreso">{{ montoComoTexto(cuenta.egresos) }}</td>
+                <td
+                  class="num"
+                  [class.ingreso]="cuenta.saldo_periodo >= 0"
+                  [class.egreso]="cuenta.saldo_periodo < 0"
+                >
+                  {{ montoComoTexto(cuenta.saldo_periodo) }}
+                </td>
+                <td class="num tenue">{{ montoComoTexto(cuenta.saldo_actual) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        <p class="nota">
+          La primera tabla es del periodo que está arriba; "el saldo de hoy" es lo que hay en la
+          cuenta ahora, con todos sus movimientos. Lo que se registra con "Nuevo movimiento" sale en
+          el saldo del periodo solo si su fecha cae dentro de estas fechas.
+        </p>
       }
     </section>
 
     <!--
-      Los filtros de la TABLA. El "saldo actual" de la tarjeta de arriba no
-      cambia con estos: es el saldo de hoy de la cuenta, no una suma de lo que
-      se esta viendo.
+      El alta se despliega ARRIBA de la tabla, como en compras, pagos y
+      facturación: se abre a propósito y no esconde nada de lo que ya se está
+      mirando.
+    -->
+    @if (puedeCrear()) {
+      <div
+        id="editor-movimiento"
+        class="editor-wrapper"
+        [class.colapsado]="!editorVisible()"
+        [attr.inert]="editorVisible() ? null : ''"
+      >
+        <div class="editor-cabecera">
+          <h2>Registrar un movimiento</h2>
+        </div>
+        <div class="editor-inline">
+          <p class="descripcion">
+            Un movimiento es un ingreso o un egreso de una cuenta. Si no es de un cliente ni de un
+            proveedor —la renta del local, por ejemplo— se deja en blanco: los dos no pueden ser a
+            la vez.
+          </p>
+
+          <div class="campos">
+            <div class="campo">
+              <label for="mov-cuenta">La cuenta <span class="requerido">*</span></label>
+              <select
+                id="mov-cuenta"
+                [value]="editor().cuenta_id ?? ''"
+                (change)="cambiarCuentaEditada($any($event.target).value)"
+              >
+                @for (cuenta of cuentas(); track cuenta.id) {
+                  <option [value]="cuenta.id">
+                    {{ cuenta.nombre }}{{ cuenta.banco ? ' · ' + cuenta.banco : '' }}
+                  </option>
+                } @empty {
+                  <option value="">No hay cuentas</option>
+                }
+              </select>
+            </div>
+
+            <div class="campo">
+              <label for="mov-tipo">El tipo</label>
+              <select
+                id="mov-tipo"
+                [value]="editor().tipo"
+                (change)="cambiarTipoEditado($any($event.target).value)"
+              >
+                <option value="egreso">Egreso</option>
+                <option value="ingreso">Ingreso</option>
+              </select>
+              @if (editor().tipo === 'ingreso') {
+                <p class="aviso">Un ingreso suma a la cuenta; un egreso le resta.</p>
+              }
+            </div>
+
+            <div class="campo">
+              <label for="mov-categoria">La categoría <span class="requerido">*</span></label>
+              <input
+                id="mov-categoria"
+                type="text"
+                list="categorias-caja"
+                [value]="editor().categoria"
+                (input)="ponerCategoria($any($event.target).value)"
+                placeholder="Renta, nómina, venta…"
+                autocomplete="off"
+              />
+              <datalist id="categorias-caja">
+                @for (categoria of categorias(); track categoria.categoria) {
+                  <option [value]="categoria.categoria">
+                    {{ categoria.movimientos }} movimiento(s)
+                  </option>
+                }
+              </datalist>
+            </div>
+
+            <div class="campo">
+              <label for="mov-monto">El monto <span class="requerido">*</span></label>
+              <input
+                id="mov-monto"
+                type="text"
+                inputmode="decimal"
+                [value]="editor().monto"
+                (input)="ponerMonto($any($event.target).value)"
+                placeholder="0.00"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="campo">
+              <label for="mov-fecha">La fecha</label>
+              <input
+                id="mov-fecha"
+                type="date"
+                [value]="fecha()"
+                (change)="fecha.set($any($event.target).value)"
+              />
+              <p class="ayuda tenue">Si se deja vacía, se registra con la fecha de hoy.</p>
+            </div>
+
+            <div class="campo ancho">
+              <label for="mov-descripcion">La descripción</label>
+              <input
+                id="mov-descripcion"
+                type="text"
+                [value]="descripcion()"
+                (input)="ponerDescripcion($any($event.target).value)"
+                placeholder="Opcional: para qué fue, con qué fue"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+
+          <!--
+            El cliente y el proveedor van en la misma rejilla y son excluyentes:
+            elegir uno borra al otro. Por eso la casilla de la factura es el
+            tercer hueco, y no está sola abajo.
+          -->
+          <h3 class="titulo">¿De quién es?</h3>
+          <div class="campos">
+            <div class="campo">
+              <label for="mov-cliente">El cliente</label>
+              @if (cliente(); as elegido) {
+                <div class="elegido">
+                  <span>{{ elegido.nombre }}</span>
+                  <button
+                    type="button"
+                    class="chico"
+                    (click)="quitarCliente()"
+                    [attr.aria-label]="'Quitar a ' + elegido.nombre"
+                  >
+                    <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path
+                        d="M4.5 4.5l7 7M11.5 4.5l-7 7"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              } @else {
+                <div class="campo-buscador">
+                  <input
+                    id="mov-cliente"
+                    type="search"
+                    [value]="buscadorCliente.texto()"
+                    (input)="buscadorCliente.escribir($any($event.target).value)"
+                    (focus)="buscadorCliente.alEntrar()"
+                    (focusout)="buscadorCliente.alSalir($event)"
+                    (keydown.escape)="buscadorCliente.cerrar()"
+                    placeholder="Dos letras o más"
+                    autocomplete="off"
+                  />
+                  @if (buscadorCliente.lista()) {
+                    <ul class="resultados">
+                      @for (opcion of buscadorCliente.opciones(); track opcion.id) {
+                        <li>
+                          <button type="button" (click)="buscadorCliente.elegir(opcion)">
+                            {{ opcion.nombre }}
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (buscadorCliente.sinNada(); as vacio) {
+                    <ul class="resultados">
+                      <li>
+                        <button type="button" disabled>{{ vacio }}</button>
+                      </li>
+                    </ul>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="campo">
+              <label for="mov-proveedor">El proveedor</label>
+              @if (proveedor(); as elegido) {
+                <div class="elegido">
+                  <span>{{ elegido.nombre }}</span>
+                  <button
+                    type="button"
+                    class="chico"
+                    (click)="quitarProveedor()"
+                    [attr.aria-label]="'Quitar a ' + elegido.nombre"
+                  >
+                    <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path
+                        d="M4.5 4.5l7 7M11.5 4.5l-7 7"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              } @else {
+                <div class="campo-buscador">
+                  <input
+                    id="mov-proveedor"
+                    type="search"
+                    [value]="buscadorProveedor.texto()"
+                    (input)="buscadorProveedor.escribir($any($event.target).value)"
+                    (focus)="buscadorProveedor.alEntrar()"
+                    (focusout)="buscadorProveedor.alSalir($event)"
+                    (keydown.escape)="buscadorProveedor.cerrar()"
+                    placeholder="Dos letras o más"
+                    autocomplete="off"
+                  />
+                  @if (buscadorProveedor.lista()) {
+                    <ul class="resultados">
+                      @for (opcion of buscadorProveedor.opciones(); track opcion.id) {
+                        <li>
+                          <button type="button" (click)="buscadorProveedor.elegir(opcion)">
+                            {{ opcion.nombre }}
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (buscadorProveedor.sinNada(); as vacio) {
+                    <ul class="resultados">
+                      <li>
+                        <button type="button" disabled>{{ vacio }}</button>
+                      </li>
+                    </ul>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="campo">
+              <label class="marca" for="mov-factura">
+                <input
+                  id="mov-factura"
+                  type="checkbox"
+                  [checked]="tieneFactura()"
+                  (change)="ponerFactura($any($event.target).checked)"
+                />
+                Trae factura
+              </label>
+            </div>
+          </div>
+
+          <!--
+            Los problemas se listan arriba del botón y no se esconden en el
+            tooltip del campo: son cuatro y el que se está escribiendo es
+            siempre uno de ellos, así que se leen de un vistazo.
+          -->
+          @if (problemas().length > 0) {
+            <ul class="problemas">
+              @for (problema of problemas(); track problema) {
+                <li>{{ problema }}</li>
+              }
+            </ul>
+          }
+
+          @if (errorCaptura()) {
+            <p class="error">{{ errorCaptura() }}</p>
+          }
+
+          <div class="acciones">
+            <button type="button" (click)="alternarEditor()" [disabled]="guardando()">
+              Cancelar
+            </button>
+            <button type="button" class="primario" (click)="guardar()" [disabled]="!puedeGuardar()">
+              @if (guardando()) {
+                <span class="spinner" aria-hidden="true"></span>
+                Guardando…
+              } @else {
+                Guardar el movimiento
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!--
+      La barra de filtros es de la TABLA. No lleva fechas porque esas ya están
+      arriba, en la tarjeta del periodo, y el aviso de la tarjeta lo explica.
     -->
     <div class="filtros">
       <input
         type="search"
-        autocomplete="off"
-        placeholder="Cuenta, categoría o descripción"
-        aria-label="Buscar movimientos"
         [value]="filtroTexto()"
         (input)="buscar($any($event.target).value)"
+        placeholder="Buscar por categoría, cliente o proveedor"
+        aria-label="Buscar movimientos"
       />
 
       <select
-        aria-label="Filtrar por cuenta"
+        class="filtro"
         [value]="filtroCuenta()"
         (change)="cambiarCuenta($any($event.target).value)"
+        aria-label="Filtrar por cuenta"
       >
         <option value="">Cualquier cuenta</option>
         @for (cuenta of cuentas(); track cuenta.id) {
@@ -597,96 +668,364 @@
       </select>
 
       <select
-        aria-label="Filtrar por tipo"
+        class="filtro"
         [value]="filtroTipo()"
         (change)="cambiarTipo($any($event.target).value)"
+        aria-label="Filtrar por tipo"
       >
         <option value="">Ingresos y egresos</option>
         <option value="ingreso">Solo ingresos</option>
         <option value="egreso">Solo egresos</option>
       </select>
 
+      <input
+        type="search"
+        class="filtro-categoria"
+        [value]="filtroCategoria()"
+        (input)="cambiarCategoria($any($event.target).value)"
+        placeholder="La categoría"
+        aria-label="Filtrar por categoría"
+      />
+
       <select
-        aria-label="Filtrar por factura"
+        class="filtro"
         [value]="filtroFactura()"
         (change)="cambiarFactura($any($event.target).value)"
+        aria-label="Filtrar por factura"
       >
         <option value="">Con y sin factura</option>
         <option value="si">Solo con factura</option>
         <option value="no">Solo sin factura</option>
       </select>
 
-      <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
+      @if (hayFiltros()) {
+        <button
+          type="button"
+          class="quitar-filtros"
+          (click)="limpiarFiltros()"
+          aria-label="Quitar todos los filtros"
+        >
+          <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M4.5 4.5l7 7M11.5 4.5l-7 7"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+          Limpiar
+        </button>
+      }
     </div>
 
-    @if (errorLista(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
+    @if (errorLista()) {
+      <p class="error">{{ errorLista() }}</p>
     }
 
-    @if (cargando()) {
-      <p class="vacio">Cargando…</p>
-    } @else {
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Fecha</th>
-            <th scope="col">Cuenta</th>
-            <th scope="col">Categoría</th>
-            <th scope="col">De quién</th>
-            <th scope="col">Factura</th>
-            <th scope="col" class="num">Monto</th>
-            <th scope="col"><span class="oculto">Acciones</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (movimiento of filas(); track movimiento.id) {
-            <tr>
-              <td>{{ movimiento.fecha }}</td>
-              <td>{{ movimiento.cuenta }}</td>
-              <td>
-                {{ movimiento.categoria }}
-                <!--
-                  La descripcion NO aparece en la fila, y no es un olvido: el
-                  listado no la trae (son 10 campos, no 11), aunque la busqueda
-                  SI la incluye. Se ve en el detalle, que es donde se lee.
-                -->
-              </td>
-              <td>{{ movimiento.cliente ?? movimiento.proveedor ?? '—' }}</td>
-              <td>{{ movimiento.tiene_factura ? 'Sí' : 'No' }}</td>
-              <td
-                class="num"
-                [class.ingreso]="movimiento.tipo === 'ingreso'"
-                [class.egreso]="movimiento.tipo === 'egreso'"
-              >
-                {{ movimiento.tipo === 'egreso' ? '−' : '+' }}
-                {{ montoComoTexto(movimiento.monto) }}
-              </td>
-              <td>
-                <button
-                  type="button"
-                  class="chico"
-                  (click)="ver(movimiento.id)"
-                  [attr.aria-label]="'Ver el movimiento ' + movimiento.id"
-                >
-                  Ver
-                </button>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="7" class="vacio">No hay movimientos con estos filtros.</td>
-            </tr>
+    @if (cargando() && filas().length === 0) {
+      <p class="cargando">Cargando los movimientos…</p>
+    } @else if (filas().length === 0) {
+      <div class="estado-vacio">
+        <h2>
+          @if (hayFiltros()) {
+            Nada coincide con el filtro
+          } @else {
+            Aún no hay movimientos
           }
-        </tbody>
-      </table>
+        </h2>
+        @if (hayFiltros()) {
+          <p>
+            Los filtros se quedan como están y se quitan con "Limpiar". Si lo que se busca es una
+            fecha, está arriba, en el periodo.
+          </p>
+          <button type="button" class="primario" (click)="limpiarFiltros()">
+            Quitar los filtros
+          </button>
+        } @else if (puedeCrear() && cuentas().length === 0) {
+          <p>
+            Los movimientos van a una cuenta. La primera es la caja del mostrador: se abre en "Las
+            cuentas", arriba.
+          </p>
+          <button type="button" class="primario" (click)="verCuentas()">Abrir una cuenta</button>
+        } @else if (puedeCrear()) {
+          <p>
+            El primer movimiento es el más difícil de saber: suele ser el cambio de la caja por la
+            mañana o el primer cobro del día.
+          </p>
+          <button type="button" class="primario" (click)="alternarEditor()">
+            Registrar el primero
+          </button>
+        } @else {
+          <p>Cuando se registren movimientos, van a aparecer aquí.</p>
+        }
+      </div>
+    } @else {
+      <div class="tabla-wrapper">
+        <table class="tabla listado">
+          <thead>
+            <tr>
+              <th>La fecha</th>
+              <th>La cuenta</th>
+              <th>La categoría</th>
+              <th>De quién</th>
+              <th>Factura</th>
+              <th class="num">El monto</th>
+              <th class="acciones-celda">Ver</th>
+            </tr>
+          </thead>
+          <tbody [@filasAnimation]>
+            @for (movimiento of filas(); track movimiento.id) {
+              <tr [class.fila-abierta]="detalleAbierto(movimiento.id)">
+                <td>{{ movimiento.fecha }}</td>
+                <td class="cuenta">{{ movimiento.cuenta }}</td>
+                <td>{{ movimiento.categoria }}</td>
+                <td class="de-quien">
+                  {{ movimiento.cliente ?? movimiento.proveedor ?? '—' }}
+                </td>
+                <td>
+                  @if (movimiento.tiene_factura) {
+                    <span class="badge">Con factura</span>
+                  } @else {
+                    <span class="sin-factura">Sin factura</span>
+                  }
+                </td>
+                <td
+                  class="num"
+                  [class.ingreso]="movimiento.tipo === 'ingreso'"
+                  [class.egreso]="movimiento.tipo === 'egreso'"
+                >
+                  {{ movimiento.tipo === 'ingreso' ? '+' : '−'
+                  }}{{ montoComoTexto(movimiento.monto) }}
+                </td>
+                <td class="acciones-celda">
+                  <button
+                    type="button"
+                    class="chico"
+                    (click)="ver(movimiento.id)"
+                    [attr.aria-expanded]="detalleAbierto(movimiento.id)"
+                    [attr.aria-label]="'Ver el movimiento de ' + montoComoTexto(movimiento.monto)"
+                  >
+                    <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path
+                        d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      />
+                      <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5" />
+                    </svg>
+                    Ver
+                  </button>
+                </td>
+              </tr>
 
-      @if (hayMas()) {
-        <div class="acciones">
-          <button type="button" [disabled]="cargandoMas()" (click)="cargarMas()">
-            {{ cargandoMas() ? 'Cargando…' : 'Cargar más' }}
+              @if (detalleAbierto(movimiento.id)) {
+                <tr class="fila-detalle">
+                  <td colspan="7">
+                    <div class="detalle">
+                      <div class="detalle-cabecera">
+                        <h3>El movimiento</h3>
+                        <button type="button" class="chico" (click)="cerrarDetalle()">
+                          <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path
+                              d="M4.5 4.5l7 7M11.5 4.5l-7 7"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                          Cerrar el detalle
+                        </button>
+                      </div>
+
+                      @if (detalle(); as ficha) {
+                        <dl>
+                          <dt>La categoría</dt>
+                          <dd>{{ ficha.categoria }}</dd>
+
+                          <dt>El tipo</dt>
+                          <dd>{{ ficha.tipo === 'ingreso' ? 'Ingreso' : 'Egreso' }}</dd>
+
+                          <dt>El monto</dt>
+                          <dd
+                            class="num"
+                            [class.ingreso]="ficha.tipo === 'ingreso'"
+                            [class.egreso]="ficha.tipo === 'egreso'"
+                          >
+                            {{ ficha.tipo === 'ingreso' ? '+' : '−'
+                            }}{{ montoComoTexto(ficha.monto) }}
+                          </dd>
+
+                          <dt>La cuenta</dt>
+                          <dd>{{ ficha.cuenta }}</dd>
+
+                          <dt>La fecha</dt>
+                          <dd>{{ ficha.fecha }}</dd>
+
+                          <dt>De quién</dt>
+                          <dd>{{ ficha.cliente ?? ficha.proveedor ?? 'De nadie' }}</dd>
+
+                          <dt>La factura</dt>
+                          <dd>
+                            @if (ficha.tiene_factura) {
+                              Trae factura
+                            } @else {
+                              <span class="sin-factura">Sin factura</span>
+                            }
+                          </dd>
+
+                          @if (ficha.descripcion) {
+                            <dt>La descripción</dt>
+                            <dd>{{ ficha.descripcion }}</dd>
+                          }
+
+                          <dt>Registrado</dt>
+                          <dd>{{ fechaDeRegistro(ficha.creado_en) }}</dd>
+                        </dl>
+
+                        @if (puedeEliminar()) {
+                          <!--
+                            EL ÚNICO BORRADO DEL PROYECTO.
+
+                            Se pide escribiendo el monto, no con un "sí/no":
+                            un movimiento no tiene documento que lo respalde
+                            ni se puede rehacer, y un confirm de una línea se
+                            acepta sin leer. El monto está dos líneas más
+                            arriba, así que escribirlo es rápido y obliga a
+                            mirar antes.
+                          -->
+                          <div class="borrar">
+                            @if (confirmandoBorrado()) {
+                              <label class="borrar-campo">
+                                Escribe el monto para confirmar:
+                                <input
+                                  type="text"
+                                  inputmode="decimal"
+                                  [value]="montoParaBorrar()"
+                                  (input)="montoParaBorrar.set($any($event.target).value)"
+                                  autocomplete="off"
+                                />
+                              </label>
+                              <div class="borrar-acciones">
+                                <button
+                                  type="button"
+                                  class="chico"
+                                  (click)="noBorrar()"
+                                  [disabled]="borrando()"
+                                >
+                                  No borrar
+                                </button>
+                                <button
+                                  type="button"
+                                  class="peligro"
+                                  (click)="confirmarBorrado()"
+                                  [disabled]="!montoCoincide() || borrando()"
+                                >
+                                  @if (borrando()) {
+                                    <span class="spinner" aria-hidden="true"></span>
+                                    Borrando…
+                                  } @else {
+                                    Borrar el movimiento
+                                  }
+                                </button>
+                              </div>
+                            } @else {
+                              <button type="button" class="peligro" (click)="pedirBorrado()">
+                                <svg
+                                  class="icono"
+                                  viewBox="0 0 16 16"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M3 4.5h10M6.5 4.5V3.5h3v1M4.5 4.5l.6 8a1 1 0 001 .9h3.8a1 1 0 001-.9l.6-8"
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                  />
+                                </svg>
+                                Borrar el movimiento
+                              </button>
+                            }
+                          </div>
+
+                          @if (errorDetalle()) {
+                            <p class="ayuda">{{ errorDetalle() }}</p>
+                          }
+                        }
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!--
+        El contador va primero porque responde la pregunta que se hace al ver
+        la tabla ("¿cuántos hay?"), y el tamaño de página al final porque es lo
+        menos que se cambia.
+      -->
+      <div class="paginacion">
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">movimientos</span>
+        </span>
+
+        <div class="paginas">
+          <button
+            type="button"
+            (click)="irPagina(pagina() - 1)"
+            [disabled]="!hayPaginaAnterior() || cargando()"
+            aria-label="La página anterior"
+          >
+            <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M10 3L5 8l5 5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+
+          <span class="pagina-actual"> Página {{ pagina() }} de {{ paginasTotales() }} </span>
+
+          <button
+            type="button"
+            (click)="irPagina(pagina() + 1)"
+            [disabled]="!hayPaginaSiguiente() || cargando()"
+            aria-label="La página siguiente"
+          >
+            <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M6 3l5 5-5 5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
           </button>
         </div>
-      }
+
+        <select
+          class="tamano-pagina"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+          aria-label="Cuántos movimientos por página"
+        >
+          <option value="10">10 por página</option>
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
     }
   </section>
 }
+
+<app-confirm-modal />

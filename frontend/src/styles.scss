@@ -39,6 +39,10 @@
   --peligro: #b3261e;
   --peligro-suave: #fbeae9;
   --peligro-texto: #8c1d18;
+  /* El texto sobre el rojo de los botones de peligro. `notas.scss` ya lo
+     usaba sin que existiera, y una variable sin definir no sale "negro":
+     invalida la regla entera y el hover se queda con el color heredado. */
+  --sobre-peligro: #ffffff;
 
   --advertencia: #f59e0b;
   --advertencia-suave: #fef3c7;

@@ -1,468 +1,332 @@
 /*
  * La pantalla de caja y bancos.
  *
- * Es la union de las dos familias que ya existen: la LISTA es la de compras
- * (cabecera, filtros, tabla, paginacion) y la CAPTURA y el COMPROBANTE son
- * las de notas (bloques con buscador, cierre con la cifra). Los colores salen
- * de `styles.scss`, no de valores sueltos.
+ * El diseño —cabecera, editor inline, barra de filtros, tabla, estados vacíos,
+ * paginación, botones, badges y animaciones— sale de `nucleo/pantallas.scss`, el
+ * MISMO partial que usan clientes, proveedores, compras, pagos, inventario,
+ * notas y facturación. Aquí no se vuelve a pintar nada de eso.
  *
- * Lo propio de esta pantalla son tres cosas:
+ * Lo que queda es lo que caja tiene de distinto y no se puede prestar:
  *
- *   - `.resumen` y `.cifras`: la tarjeta del periodo, que va arriba porque
- *     "cuanto entro y cuanto salio" es la primera pregunta, y que tiene sus
- *     propias cifras grandes y su tabla por cuenta.
- *   - `.ingreso`, `.egreso` y `.negativo`: el color del dinero. Entra en
- *     verde, sale en rojo, y un saldo negativo tambien en rojo aunque sea un
- *     egreso, porque lo que se marca es que la cuenta esta en menos.
- *   - `.borrar`: el aviso del unico DELETE del proyecto, con el campo para
- *     escribir el monto. Va en una caja propia para que se lea como lo que es.
+ *   - `.resumen`, la tarjeta del periodo: una fila por cuenta con lo que entró
+ *     y lo que salió DENTRO del rango, y los tres totales de arriba. El aviso
+ *     del pie va aquí porque el error clásico de esta pantalla es leer el
+ *     "saldo del periodo" como si fuera el saldo de la cuenta.
+ *   - `.cifras` y `.ingreso` / `.egreso`, el signo del monto. Es la única forma
+ *     de distinguir a simple vista un saldo de una deuda, y el color es
+ *     justamente lo que hace falta para no leerlo al revés.
+ *   - `.borrar`, el único DELETE del proyecto: el botón, el campo de
+ *     confirmación y los dos botones de la confirmación.
+ *   - `.ancho`, los anchos de las columnas, que aquí no son los de las demás
+ *     pantallas: son siete en los movimientos y cinco en las cuentas.
+ *   - `.problemas`, los cuatro fallos de la captura listados arriba del botón
+ *     en vez de escondidos en el tooltip del campo.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1,
-h2 {
-  margin: 0;
-  font-size: 1.25rem;
-}
+/* --------------------------------------------------------------- la tarjeta */
 
-h2 {
-  font-size: 1rem;
-}
-
-/* ------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.cabecera-botones {
-  display: flex;
-  gap: 0.625rem;
-}
-
-.subtitulo {
-  max-width: 46rem;
-  margin: 0 0 1rem;
-  color: var(--texto-suave);
-}
-
-/* ------------------------------------------------------- la tarjeta del periodo */
-
+/*
+ * El periodo, arriba de todo.
+ *
+ * Es lo primero que se ve porque las fechas son del periodo ENTERO, no un
+ * filtro más de la tabla, y porque los tres números de arriba son de lo que
+ * pasó en el rango. Si el periodo se moviera a la barra de filtros, el "Entró"
+ * dejaría de cuadrar con lo que hay en la tabla sin que nada lo dijera.
+ */
 .resumen {
   max-width: 52rem;
-  margin-bottom: 1.5rem;
-  padding: 0.875rem 1rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.25rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .resumen-cabecera {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.fechas {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.fecha {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-.cifras {
-  display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  margin-bottom: 0.625rem;
-}
-
-.cifra {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-/* La cifra grande del periodo: se compara de un vistazo. */
-.cifra strong {
-  font-size: 1.5rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-/*
- * El color del dinero.
- *
- * `.negativo` va aparte del tipo porque un saldo en menos es un `.negativo`,
- * no un egreso: la cuenta esta en rojo aunque el ultimo movimiento haya sido
- * un ingreso. `.ingreso` y `.egreso` se usan con `font-weight`, no con el
- * color solo, para que se distingan tambien en una pantalla en escala de
- * grises.
- */
-.ingreso {
-  color: var(--exito-texto);
-  font-weight: 600;
-}
-
-.egreso,
-.negativo {
-  color: var(--peligro-texto);
-  font-weight: 600;
-}
-
-/* --------------------------------------------------------------- la tabla */
-
-table {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-}
-
-th,
-td {
-  padding: 0.5rem 0.625rem;
-  text-align: left;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.875rem;
+  padding-bottom: 0.625rem;
   border-bottom: 1px solid var(--borde);
 }
 
-th {
-  font-size: 0.8125rem;
+.resumen-titulo {
+  margin: 0;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--texto-suave);
-  background: var(--fondo);
 }
 
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* La tabla del resumen va sobre el fondo de la tarjeta, no con borde propio. */
-.por-cuenta {
-  margin-bottom: 0;
-  background: none;
-  border: 0;
-}
-
-.por-cuenta th {
-  background: none;
-}
-
-.vacio {
-  margin: 0 0 1rem;
-  color: var(--texto-tenue);
-}
-
-.tenue {
-  display: block;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
-
-.oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-/* -------------------------------------------------------------- los filtros */
-
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.625rem;
-  margin-bottom: 1rem;
-}
-
-.filtros input[type='search'] {
-  flex: 1;
-  min-width: 10rem;
-}
-
-/* --------------------------------------------------------------- la captura */
-
-.bloque {
-  position: relative;
-  max-width: 46rem;
-  margin-bottom: 1rem;
-}
-
-.datos {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.875rem 1rem;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
-}
-
-input[type='search'],
-input[type='text'],
-input[type='date'],
-select {
-  width: 100%;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.casilla {
+/* Las dos fechas pegadas a su etiqueta, y la palabra que las une. */
+.resumen .fechas {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.casilla input {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
-.casilla span {
-  font-size: 0.9375rem;
-  color: var(--texto);
-}
-
-.elegido {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.625rem;
-  padding: 0.625rem 0.75rem;
-  background: var(--acento-suave);
-  border: 1px solid var(--acento);
-  border-radius: 6px;
-}
-
-.resultados {
-  position: absolute;
-  z-index: 2;
-  left: 0;
-  right: 0;
-  margin: 0.25rem 0 0;
-  padding: 0;
-  list-style: none;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgb(27 31 36 / 12%);
-}
-
-.resultados button {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  font: inherit;
-  text-align: left;
-  color: var(--texto);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
-.resultados button:hover {
-  background: var(--acento-suave);
-}
-
-.ayuda {
-  margin: 0.25rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
-
-.problema {
-  margin: 0.25rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--peligro-texto);
-}
-
-/* Lo que falta para poder guardar, junto en vez de campo por campo. */
-.problemas {
-  max-width: 46rem;
-  margin: 0 0 1rem;
-  padding-left: 1.25rem;
-  font-size: 0.875rem;
-  color: var(--peligro-texto);
-}
-
-.aviso {
-  margin: 0.375rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
-
-.aviso-ok {
-  padding: 0.625rem 0.75rem;
-  color: var(--exito-texto);
-  background: var(--exito-suave);
-  border: 1px solid var(--exito-texto);
-  border-radius: 6px;
-}
-
-/* ------------------------------------------------------- el detalle y el borrado */
-
-.comprobante {
-  max-width: 46rem;
-}
-
-dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.25rem 1rem;
-  margin: 0 0 1.25rem;
-}
-
-dt {
-  color: var(--texto-suave);
-}
-
-dd {
-  margin: 0;
-}
-
-dd.total {
-  font-size: 1.5rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.nota {
-  margin: 0 0 1.25rem;
+.resumen .al {
   font-size: 0.8125rem;
   color: var(--texto-tenue);
 }
 
 /*
- * El borrado va en una caja, y no es estetica: es lo unico de la app que no se
- * puede deshacer, y por eso se separa del resto del comprobante y obliga a
- * escribir el monto antes de habilitarse el boton.
+ * Los tres números del periodo.
+ *
+ * Es un `dl` porque lo es, y el partial ya le da la caja: aquí solo se le quita
+ * el borde para que la tarjeta de arriba sea la única con marco, y se reparte
+ * en tres columnas.
  */
-.borrar {
-  max-width: 34rem;
-  margin-top: 1.5rem;
-  padding: 0.875rem 1rem;
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
+.cifras {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-.borrar h2 {
-  margin-bottom: 0.5rem;
-  color: var(--peligro-texto);
-}
-
-.borrar .aviso {
-  margin: 0 0 0.75rem;
-  color: var(--peligro-texto);
-}
-
-.borrar label {
-  color: var(--peligro-texto);
-}
-
-/* ------------------------------------------------------------- las cuentas */
-
-.alta {
-  max-width: 46rem;
-  margin-top: 2rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--borde);
-}
-
-.alta h2 {
-  margin-bottom: 0.75rem;
-}
-
-/* ------------------------------------------------------------- los botones */
-
-.acciones {
-  display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
-}
-
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-}
-
-button.primario:disabled {
+.cifra dt {
+  margin: 0 0 0.125rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-  cursor: not-allowed;
 }
 
-button.peligro {
-  color: var(--peligro-texto);
-  border-color: var(--peligro);
+.cifra dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-button.chico {
-  padding: 0.25rem 0.5rem;
+/*
+ * La tabla por cuenta va DENTRO de la tarjeta y sin marco: es el detalle del
+ * periodo, no otra lista. Las columnas de dinero a la derecha y en rojo el
+ * egreso, igual que en el listado.
+ */
+.por-cuenta {
+  width: 100%;
+  margin-top: 0.875rem;
   font-size: 0.8125rem;
+  border-collapse: collapse;
 }
 
-button.grande {
-  padding: 0.75rem 1.5rem;
-  font-size: 1.0625rem;
+.por-cuenta th {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-tenue);
+  border-bottom: 1px solid var(--borde);
+}
+
+.por-cuenta td {
+  padding: 0.4375rem 0.5rem;
+  color: var(--texto);
+  border-bottom: 1px solid var(--borde);
+}
+
+.por-cuenta tr:last-child td {
+  border-bottom: 0;
+}
+
+.por-cuenta .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- ingreso y egreso */
+
+/*
+ * El signo del monto y su color.
+ *
+ * El signo va en el texto (la plantilla escribe el `+` o el `−`) y el color
+ * aquí. Sin los dos, un egreso se lee como un ingreso: es el error que más
+ * cuesta caro en una caja, porque cuadra al revés y nadie lo ve hasta que el
+ * saldo no sale.
+ */
+.ingreso {
+  color: var(--exito-texto);
+}
+
+.egreso {
+  color: var(--peligro-texto);
+}
+
+/* Un saldo en rojo: la cuenta debe dinero. */
+.saldo-rojo {
+  color: var(--peligro-texto);
   font-weight: 600;
 }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+/* Lo accesorio de una celda: el banco o el titular que no hay. */
+.tenue {
+  color: var(--texto-tenue);
 }
 
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
+/* El nombre de la cuenta es lo que se lee primero en la lista de cuentas. */
+.nombre-cuenta {
+  font-weight: 500;
+}
+
+/* En el filtro de "con factura", un "no" no necesita un badge entero. */
+.sin-factura {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+/* ------------------------------------------------------------ el listado */
+
+/*
+ * Siete columnas, así que el mínimo es más ancho que en las demás pantallas:
+ * con menos, la columna de la categoría y la del nombre se estrujan y el
+ * "Ver" queda con el botón a medio cortar, que no sirve de nada. El
+ * `.tabla-wrapper` del partial ya trae `overflow-x: auto`.
+ */
+.listado {
+  table-layout: fixed;
+  min-width: 52rem;
+}
+
+.listado th,
+.listado td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* La fila abierta es la que trae el comprobante: se marca para no buscarla. */
+.listado tbody tr.fila-abierta {
+  background: var(--acento-suave);
+}
+
+.listado th:nth-child(1) {
+  width: 11%;
+} /* Fecha */
+.listado th:nth-child(2) {
+  width: 15%;
+} /* Cuenta */
+.listado th:nth-child(3) {
+  width: 16%;
+} /* Categoría */
+.listado th:nth-child(4) {
+  width: 20%;
+} /* De quién */
+.listado th:nth-child(5) {
+  width: 13%;
+} /* Factura */
+.listado th:nth-child(6) {
+  width: 15%;
+} /* Monto */
+.listado th:nth-child(7) {
+  width: 10%;
+} /* Ver */
+
+/* La fecha y el monto se leen de un vistazo: no se recortan. */
+.listado td:first-child,
+.listado td.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* La cuenta es el hilo de la tabla: se lee un poco más pesada. */
+.listado .cuenta {
+  font-weight: 500;
+}
+
+/* -------------------------------------------------------- los problemas */
+
+/*
+ * Los cuatro fallos de la captura, juntos y arriba del botón.
+ *
+ * En los otros módulos el problema va en el `title` del botón: aquí son cuatro
+ * y el campo que se está escribiendo es siempre uno de ellos, así que
+ * listarlos se leen de un vistazo y el botón no se explica a sí mismo.
+ */
+.problemas {
+  margin: 0.875rem 0 0;
+  padding: 0.625rem 0.875rem 0.625rem 1.75rem;
+  font-size: 0.8125rem;
   color: var(--peligro-texto);
   background: var(--peligro-suave);
   border: 1px solid var(--peligro);
+  border-radius: 8px;
+}
+
+.problemas li {
+  margin: 0.125rem 0;
+}
+
+/* ------------------------------------------------------------------ borrar */
+
+/*
+ * EL ÚNICO BORRADO DEL PROYECTO.
+ *
+ * No hay documento que lo respalde ni forma de rehacerlo, así que no es un
+ * `confirm` de una línea: primero se pide el monto y solo con el monto escrito
+ * bien se habilita el botón. Es más lento a propósito, y el monto está dos
+ * líneas más arriba.
+ */
+.borrar {
+  max-width: 34rem;
+  padding: 0.75rem 0.875rem;
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 8px;
+}
+
+.borrar-campo {
+  display: block;
+  margin: 0 0 0.625rem;
+  font-size: 0.875rem;
+  color: var(--peligro-texto);
+}
+
+.borrar-campo input {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--peligro);
   border-radius: 6px;
+}
+
+.borrar-campo input:focus {
+  outline: none;
+  border-color: var(--peligro-texto);
+  box-shadow: 0 0 0 3px var(--peligro-suave);
+}
+
+.borrar-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@media (max-width: 40rem) {
+  .cifras {
+    grid-template-columns: 1fr;
+  }
+
+  .por-cuenta .num:nth-child(2),
+  .por-cuenta td:nth-child(2),
+  .por-cuenta .num:nth-child(5),
+  .por-cuenta td:nth-child(5) {
+    display: none;
+  }
 }

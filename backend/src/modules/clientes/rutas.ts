@@ -15,6 +15,11 @@ import * as controlador from './controlador.js';
  *
  * Se lee de abajo hacia arriba: rutas.ts dice qué se expone, controlador
  * translates, servicio decide, repositorio ejecuta.
+ *
+ * `GET /exportar` va ANTES que `GET /:id` por el mismo motivo que en el
+ * catálogo: Express no distingue "exportar" de un id, así que declarado al
+ * final pasaría por `validarParams` y contestaría un 400 de "el id debe ser
+ * un número positivo" en vez de mandar el archivo.
  */
 export const rutasClientes = Router();
 
@@ -23,6 +28,13 @@ export const rutasClientes = Router();
 rutasClientes.use(requiereSesion);
 
 rutasClientes.get('/', validarQuery(listarClientesEsquema), controlador.listar);
+
+rutasClientes.get(
+  '/exportar',
+  requierePermiso('clientes.ver'),
+  validarQuery(listarClientesEsquema),
+  controlador.exportarExcel,
+);
 
 rutasClientes.get('/:id', validarParams(idClienteEsquema), controlador.obtener);
 

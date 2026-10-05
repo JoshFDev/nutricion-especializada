@@ -27,4 +27,25 @@ export const controladorProveedores = {
       ),
     );
   },
+
+  exportarExcel: async (req: Request, res: Response): Promise<void> => {
+    const bytes = await servicio.exportarExcel(req.db, consulta<ListarProveedores>(req));
+    res
+      .setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .setHeader('Content-Disposition', `attachment; filename="${nombreDelArchivo()}.xlsx"`)
+      .send(bytes);
+  },
 };
+
+/**
+ * `proveedores-AAAAMMDD`.
+ *
+ * Sin la extensión: la pone el `Content-Disposition`, que es el que decide
+ * el nombre que ve el navegador.
+ */
+function nombreDelArchivo(): string {
+  return `proveedores-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+}

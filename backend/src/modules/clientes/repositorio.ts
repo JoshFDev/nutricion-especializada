@@ -74,6 +74,28 @@ export async function listar(
   return { filas, total };
 }
 
+/**
+ * La MISMA consulta sin `LIMIT`, para el Excel.
+ *
+ * El `limite` de `listar` es de 200 por peticion, y un listado de clientes
+ * cabe de sobra en eso, pero la exportacion no puede depender de cuantos
+ * quepan en una pagina: se exporta lo que hay filtrado, no lo que se ve.
+ * Por eso el filtro es el mismo (`construirFiltro`) y lo que se cae es solo
+ * el recorte.
+ *
+ * No hace falta el `total` de aquí: el COUNT solo lo necesita el listado,
+ * que lo pinta para la barra de paginación.
+ */
+export async function listarTodos(cliente: PoolClient, q: ListarClientes): Promise<ClienteFila[]> {
+  const { donde, valores } = construirFiltro(q);
+  return consultar<ClienteFila>(
+    cliente,
+    `SELECT ${CAMPOS} ${FROM_CLIENTES} ${donde}
+      ORDER BY c.nombre`,
+    valores,
+  );
+}
+
 export async function obtenerPorId(cliente: PoolClient, id: number): Promise<ClienteFila | null> {
   return consultarUno<ClienteFila>(cliente, `SELECT ${CAMPOS} ${FROM_CLIENTES} WHERE c.id = $1`, [
     id,

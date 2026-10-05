@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { Conflicto, NoEncontrado } from '../../core/errores.js';
+import { excelListaProveedores } from './excel.js';
 import type { ActualizarProveedor, CrearProveedor, ListarProveedores } from './esquemas.js';
 import type { Listado, Proveedor, ProveedorListado } from './modelo.js';
 import { mapearProveedor } from './modelo.js';
@@ -50,4 +51,15 @@ export async function actualizar(
   const fila = await repo.actualizar(cliente, id, d);
   if (!fila) throw new NoEncontrado(`No existe el proveedor ${id}`);
   return mapearProveedor(fila);
+}
+
+/**
+ * El Excel del listado.
+ *
+ * El filtro es el mismo que el de la pantalla y entra COMPLETO: lo que se
+ * exporta es lo que hay filtrado, no la página que se está viendo. Por eso
+ * va por `listarTodos`, que no trae el `COUNT` que aquí no hace falta.
+ */
+export async function exportarExcel(cliente: PoolClient, q: ListarProveedores): Promise<Buffer> {
+  return excelListaProveedores(await repo.listarTodos(cliente, q));
 }

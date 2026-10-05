@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { Conflicto, NoEncontrado } from '../../core/errores.js';
+import { excelListaClientes } from './excel.js';
 import * as repo from './repositorio.js';
 import type { ActualizarCliente, CrearCliente, ListarClientes } from './esquemas.js';
 import { mapeoCliente, mapeoNota, type Cliente, type ClienteConNotas } from './modelo.js';
@@ -73,4 +74,17 @@ export async function eliminar(cliente: PoolClient, id: number): Promise<void> {
   if (!(await repo.eliminar(cliente, id))) {
     throw new NoEncontrado(`No existe el cliente ${id}`);
   }
+}
+
+/**
+ * El Excel del listado.
+ *
+ * Toma los mismos filtros que la lista y los pasa enteros: lo que se
+ * exporta es lo que hay filtrado, no la página que se está viendo. Por eso
+ * va por `listarTodos` y no por `listar`, que además hace el COUNT que aquí
+ * no se usa.
+ */
+export async function exportarExcel(cliente: PoolClient, q: ListarClientes): Promise<Buffer> {
+  const filas = await repo.listarTodos(cliente, q);
+  return excelListaClientes(filas.map(mapeoCliente));
 }

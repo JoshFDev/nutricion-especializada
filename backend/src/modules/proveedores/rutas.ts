@@ -20,6 +20,12 @@ import { controladorProveedores as controlador } from './controlador.js';
  *
  * No hay DELETE: la baja es `activo: false` por PATCH, y ya lo aplica
  * `compras` cuando el proveedor esta dado de baja.
+ *
+ * `GET /exportar` va antes que `GET /:id` porque Express no distingue
+ * "exportar" de un id: declarado al final pasaría por `validarParams` y
+ * contestaría un 400 de "el id debe ser un número positivo" en vez de
+ * mandar el archivo. Usa `proveedores.ver` y no `proveedores.editar` porque
+ * exportar es leer.
  */
 export const rutasProveedores = Router();
 
@@ -30,6 +36,13 @@ rutasProveedores.get(
   requierePermiso('proveedores.ver'),
   validarQuery(listarProveedoresEsquema),
   controlador.listar,
+);
+
+rutasProveedores.get(
+  '/exportar',
+  requierePermiso('proveedores.ver'),
+  validarQuery(listarProveedoresEsquema),
+  controlador.exportarExcel,
 );
 
 rutasProveedores.get(

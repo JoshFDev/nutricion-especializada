@@ -116,6 +116,52 @@ const construirFiltro = (q: ListarProveedores) => {
   };
 };
 
+/**
+ * Las columnas del listado, con el conteo de compras.
+ *
+ * Vive aqui y no en cada consulta porque `listar` y `listarTodos` la comparten
+ * y tienen que verse IGUALES: si una de las dos se queda una columna, el
+ * listado de la pantalla y el Excel teach cosas distintas sin que nada falle.
+ */
+const SELECT_LISTADO = `SELECT id, nombre, contacto, telefono, saldo_actual, activo, creado_en,
+        (SELECT count(*) FROM compras c WHERE c.proveedor_id = proveedores.id)::TEXT AS compras
+   FROM proveedores`;
+
+/** La fila del listado: `saldo_actual` llega como texto de Postgres. */
+const mapearListado = (f: FilaProveedor): ProveedorListado => ({
+  id: Number(f.id),
+  nombre: f.nombre,
+  contacto: f.contacto,
+  telefono: f.telefono,
+  saldo_actual: Number(f.saldo_actual),
+  activo: f.activo,
+  compras: Number(f.compras),
+});
+
+/**
+ * La MISMA consulta sin `LIMIT`, para el Excel.
+ *
+ * Comparte el filtro con `listar` a propósito: la exportación tiene que traer
+ * lo que hay filtrado y no lo que cabe en la página de 50 que se está viendo.
+ * El `COUNT` no se hace aquí porque solo lo necesita la barra de paginación.
+ */
+export async function listarTodos(
+  cliente: PoolClient,
+  q: ListarProveedores,
+): Promise<ProveedorListado[]> {
+  const { valores, donde } = construirFiltro(q);
+
+  const filas = await consultar<FilaProveedor>(
+    cliente,
+    `${SELECT_LISTADO}
+     ${donde}
+     ORDER BY nombre`,
+    valores,
+  );
+
+  return filas.map(mapearListado);
+}
+
 export async function listar(
   cliente: PoolClient,
   q: ListarProveedores,
@@ -130,25 +176,15 @@ export async function listar(
 
   const filas = await consultar<FilaProveedor>(
     cliente,
-    `SELECT id, nombre, contacto, telefono, saldo_actual, activo, creado_en,
-            (SELECT count(*) FROM compras c WHERE c.proveedor_id = proveedores.id)::TEXT AS compras
-       FROM proveedores
-       ${donde}
+    `${SELECT_LISTADO}
+     ${donde}
      ORDER BY nombre
      LIMIT $${valores.length + 1} OFFSET $${valores.length + 2}`,
     [...valores, q.limite, q.offset],
   );
 
   return {
-    datos: filas.map((f) => ({
-      id: Number(f.id),
-      nombre: f.nombre,
-      contacto: f.contacto,
-      telefono: f.telefono,
-      saldo_actual: Number(f.saldo_actual),
-      activo: f.activo,
-      compras: Number(f.compras),
-    })),
+    datos: filas.map(mapearListado),
     total,
     limite: q.limite,
     offset: q.offset,

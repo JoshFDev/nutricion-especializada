@@ -42,3 +42,23 @@ export const eliminar = async (req: Request, res: Response): Promise<void> => {
   await servicio.eliminar(req.db, id);
   res.status(204).end();
 };
+
+export const exportarExcel = async (req: Request, res: Response): Promise<void> => {
+  const bytes = await servicio.exportarExcel(req.db, consulta<ListarClientes>(req));
+  res
+    .setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .setHeader('Content-Disposition', `attachment; filename="${nombreDelArchivo()}.xlsx"`)
+    .send(bytes);
+};
+
+/**
+ * `clientes-AAAAMMDD.xlsx`.
+ *
+ * La fecha va en el nombre porque es lo que se guarda en el equipo de quien
+ * lo pidió, y lo que sale del controlador no lleva la extensión: esa la
+ * pone el `Content-Disposition`, que es el que decide el nombre que ve el
+ * navegador.
+ */
+function nombreDelArchivo(): string {
+  return `clientes-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+}

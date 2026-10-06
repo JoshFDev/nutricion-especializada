@@ -51,7 +51,9 @@
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .campo input:focus,
@@ -96,10 +98,24 @@ td {
   white-space: nowrap;
 }
 
-th:nth-child(1) { width: 10%; } /* Código */
-th:nth-child(2) { width: 22%; } /* Nombre */
-th:nth-child(3) { width: 14%; } /* Presentación */
-th:nth-child(4) { width: 14%; } /* Categoría */
-th:nth-child(5) { width: 14%; } /* Especie */
-th:nth-child(6) { width: 10%; } /* Estado */
-th:nth-child(7) { width: 16%; } /* Acciones */
+th:nth-child(1) {
+  width: 10%;
+} /* Código */
+th:nth-child(2) {
+  width: 22%;
+} /* Nombre */
+th:nth-child(3) {
+  width: 14%;
+} /* Presentación */
+th:nth-child(4) {
+  width: 14%;
+} /* Categoría */
+th:nth-child(5) {
+  width: 14%;
+} /* Especie */
+th:nth-child(6) {
+  width: 10%;
+} /* Estado */
+th:nth-child(7) {
+  width: 16%;
+} /* Acciones */

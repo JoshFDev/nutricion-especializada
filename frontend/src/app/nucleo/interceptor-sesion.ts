@@ -34,11 +34,25 @@ export const interceptorSesion: HttpInterceptorFn = (peticion, siguiente) => {
       // alguien hizo logout en otra compu, o le cambiaron la contrasena y
       // cerro las sesiones.
       //
-      // El `token` que se compara es el de ANTES de la peticion, no el de
-      // ahora: si la peticion sin token (el propio login) falla con 401, no
-      // hay sesion que haya caducado y hay que dejar que la pantalla de
-      // login muestre el "correo o contrasena incorrectos".
-      if (error instanceof HttpErrorResponse && error.status === 401 && token !== null) {
+      // Las DOS comprobaciones importan:
+      //
+      //   - `token` es el de ANTES de la peticion: si la peticion sin token
+      //     (el propio login) falla con 401, no hay sesion que haya
+      //     caducado y hay que dejar que la pantalla de login muestre el
+      //     "correo o contrasena incorrectos".
+      //   - `sesion.hayToken()` es el de AHORA: si mientras la respuesta
+      //     volvia alguien ya cerro la sesion (el propio `salir`), o si ya
+      //     entro un 401 previo y limpio, no hay nada que expire ni que
+      //     navegar. Sin esto, un logout con el token ya muerto disparaba
+      //     una SEGUNDA navegacion a `/login` y la view-transition se
+      //     colgaba a media animacion; y dos peticiones fallidas a la vez
+      //     navegaban dos veces.
+      if (
+        error instanceof HttpErrorResponse &&
+        error.status === 401 &&
+        token !== null &&
+        sesion.hayToken()
+      ) {
         sesion.expirar();
         // `state.url` es la de donde venia la persona, para que al volver a
         // entrar caiga donde estaba y no siempre en el inicio. Solo tiene

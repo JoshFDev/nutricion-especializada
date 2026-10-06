@@ -383,7 +383,7 @@ export class Catalogo implements OnInit {
     }
   }
 
-/**
+  /**
    * Borra.
    *
    * El backend no deja borrar lo que ya se uso (los FK no tienen ON

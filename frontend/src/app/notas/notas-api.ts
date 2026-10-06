@@ -471,9 +471,7 @@ export class NotasApi {
     if (filtro['limite'] !== undefined) params['limite'] = filtro['limite'];
     if (filtro['offset'] !== undefined) params['offset'] = filtro['offset'];
 
-    return firstValueFrom(
-      this.http.get<Listado<NotaListada>>(`${API}/notas-remision`, { params }),
-    );
+    return firstValueFrom(this.http.get<Listado<NotaListada>>(`${API}/notas-remision`, { params }));
   }
 
   /**
@@ -599,7 +597,7 @@ export class NotasApi {
     }
   }
 
-/**
+  /**
    * Descarga el Excel de la lista de notas (exportar lista completa).
    *
    * Igual que `abrirExcel`, se baja como `attachment` con `<a download>`.

@@ -139,35 +139,53 @@ describe('Sesion', () => {
     expect(sesion.sesionPerdida()).toBe(true);
   });
 
-  it('salir avisa al backend y aun asi borra todo lo local', async () => {
+  it('salir borra la sesion en el acto y aun asi avisa al backend', async () => {
+    // La limpieza NO espera al logout. Si esperara, la navegacion a
+    // `/login` saldria despues del viaje de ida y vuelta al servidor y la
+    // pantalla se quedaria quieta viendolo — peor aun si el token ya estaba
+    // muerto y el 401 disparaba una segunda navegacion encima.
     const sesion = TestBed.inject(Sesion);
     const promesa = sesion.entrar('cajera@ejemplo.mx', 'secreta123');
     http.expectOne(`${API}/auth/login`).flush({ token, usuario: perfil });
     await promesa;
 
-    const salida = sesion.salir();
-    http.expectOne(`${API}/auth/logout`).flush({});
-    await salida;
+    sesion.salir();
 
+    // Limpio ANTES de que el logout conteste...
     expect(sesion.hayToken()).toBe(false);
+    expect(localStorage.getItem('ne.token')).toBeNull();
+
+    // ...pero la peticion salio igual y queda ahi, en segundo plano.
+    http.expectOne(`${API}/auth/logout`).flush({});
   });
 
-  it('salir limpia la sesion aunque el backend no conteste', async () => {
+  it('el error del logout no rompe nada: la sesion ya estaba limpia', async () => {
     // Quedarse "dentro" sin sesion solo produce un 401 en cada clic, y el
-    // usuario no puede hacer nada con eso.
+    // usuario no puede hacer nada con eso. El rechazo se traga dentro de
+    // `salir` (fire and forget), asi que ni siquiera se escapa.
     const sesion = TestBed.inject(Sesion);
     const promesa = sesion.entrar('cajera@ejemplo.mx', 'secreta123');
     http.expectOne(`${API}/auth/login`).flush({ token, usuario: perfil });
     await promesa;
 
-    const salida = sesion.salir();
+    sesion.salir();
     http
       .expectOne(`${API}/auth/logout`)
       .flush('no hay servidor', { status: 500, statusText: 'Error' });
-    await salida;
 
     expect(sesion.hayToken()).toBe(false);
     expect(localStorage.getItem('ne.token')).toBeNull();
+    expect(sesion.sesionPerdida()).toBe(false);
+  });
+
+  it('salir sin token no le pregunta nada al backend', () => {
+    // `http.verify()` del `afterEach` seria el que falte si saliera una
+    // peticion: sin token no hay sesion que cerrar del lado del servidor.
+    const sesion = TestBed.inject(Sesion);
+
+    sesion.salir();
+
+    expect(sesion.hayToken()).toBe(false);
   });
 
   it('marcar la contrasena cambiada quita la bandera local', async () => {

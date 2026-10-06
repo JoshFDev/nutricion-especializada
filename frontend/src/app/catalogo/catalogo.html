@@ -28,9 +28,30 @@
         aria-controls="editor-form"
       >
         @if (editorVisible()) {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg> Ocultar formulario
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Ocultar formulario
         } @else {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva {{ singular() }}
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nueva {{ singular() }}
         }
       </button>
     }
@@ -39,7 +60,12 @@
   <!-- Editor inline (alta/renombrado) - colapsable arriba de la tabla -->
   @if (puedeCrear()) {
     <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
-      <form id="editor-form" class="editor-inline" [formGroup]="forma" (keydown)="onKeydown($event)">
+      <form
+        id="editor-form"
+        class="editor-inline"
+        [formGroup]="forma"
+        (keydown)="onKeydown($event)"
+      >
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nueva ' + singular() : 'Renombrar ' + singular().toLowerCase() }}</h2>
         </div>
@@ -68,7 +94,9 @@
         </div>
 
         <div class="acciones">
-          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
+          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">
+            Cancelar
+          </button>
           <button
             type="button"
             class="primario"
@@ -119,12 +147,7 @@
       <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
     }
 
-    <button
-      type="button"
-      class="primario"
-      (click)="exportarExcel()"
-      [disabled]="exportando()"
-    >
+    <button type="button" class="primario" (click)="exportarExcel()" [disabled]="exportando()">
       @if (exportando()) {
         <span class="spinner" aria-hidden="true"></span> Exportando…
       } @else {
@@ -193,7 +216,9 @@
               <td class="acciones-celda">
                 <div class="acciones-fila">
                   @if (puedeCrear()) {
-                    <button type="button" class="accion-editar" (click)="renombrar(fila)">Renombrar</button>
+                    <button type="button" class="accion-editar" (click)="renombrar(fila)">
+                      Renombrar
+                    </button>
                   }
                   @if (puedeEliminar()) {
                     <button

@@ -1,0 +1,3 @@
+# El lockfile lo genera pnpm y su formato no lo decide prettier: cada
+# `pnpm install` lo reescribiria y el `formato:check` volveria a fallar.
+pnpm-lock.yaml

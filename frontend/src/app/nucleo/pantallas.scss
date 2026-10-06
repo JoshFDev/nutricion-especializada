@@ -314,6 +314,21 @@ tbody tr:last-child td {
   font-size: 0.875rem;
 }
 
+/*
+ * El texto secundario: gris y más chico.
+ *
+ * Sin `display`, para que dentro del `.contador` de la paginación siga en
+ * línea con el rango; donde hace falta apilarse (una celda con dos datos)
+ * se le suma `display: block` en el scss de la pantalla, acotado a su
+ * contexto. Antes cada pantalla se copiaba su propia versión o no lo tenía
+ * y el texto salía con el color normal (auditoría traía veinte usos sin
+ * estilo tras su migración).
+ */
+.tenue {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
 /* ----------------------------------------------------------- paginación */
 
 /* Va PEGADA abajo de la tabla: es el final de la lista, no un bloque más. */

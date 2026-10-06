@@ -26,7 +26,10 @@
       aria-label="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
       title="{{ sidebarColapsado() ? 'Expandir menu' : 'Colapsar menu' }}"
     >
-      <span class="toggle-icon" [innerHTML]="icono(sidebarColapsado() ? 'chevronRight' : 'chevronLeft')"></span>
+      <span
+        class="toggle-icon"
+        [innerHTML]="icono(sidebarColapsado() ? 'chevronRight' : 'chevronLeft')"
+      ></span>
     </button>
 
     <!--
@@ -77,7 +80,13 @@
           }
         </div>
       } @else {
-        <button type="button" class="salir" (click)="salir()" aria-label="Cerrar sesión" title="Salir">
+        <button
+          type="button"
+          class="salir"
+          (click)="salir()"
+          aria-label="Cerrar sesión"
+          title="Salir"
+        >
           <span class="salir-icon" [innerHTML]="icono('log-out')"></span>
         </button>
       }
@@ -105,22 +114,51 @@
       ></button>
     }
 
-    <nav class="lateral" [class.abierto]="menuAbierto()" [class.colapsado]="sidebarColapsado()" aria-label="Menu principal">
+    <nav
+      class="lateral"
+      [class.abierto]="menuAbierto()"
+      [class.colapsado]="sidebarColapsado()"
+      aria-label="Menu principal"
+    >
       @for (grupo of menu(); track grupo.titulo) {
         @if (grupo.titulo !== 'Sistema') {
-        @if (grupo.colapsable) {
-          <div class="grupo colapsable">
-            <button
-              type="button"
-              class="grupo-header"
-              (click)="alternarGrupo(grupo)"
-              [attr.aria-expanded]="!estaColapsado(grupo)"
-            >
-              <span class="grupo-titulo">{{ grupo.titulo }}</span>
-              <span class="grupo-chevron" [innerHTML]="icono(estaColapsado(grupo) ? 'chevronRight' : 'chevronDown')"></span>
-            </button>
-            @if (!estaColapsado(grupo)) {
-              <ul class="grupo-lista">
+          @if (grupo.colapsable) {
+            <div class="grupo colapsable">
+              <button
+                type="button"
+                class="grupo-header"
+                (click)="alternarGrupo(grupo)"
+                [attr.aria-expanded]="!estaColapsado(grupo)"
+              >
+                <span class="grupo-titulo">{{ grupo.titulo }}</span>
+                <span
+                  class="grupo-chevron"
+                  [innerHTML]="icono(estaColapsado(grupo) ? 'chevronRight' : 'chevronDown')"
+                ></span>
+              </button>
+              @if (!estaColapsado(grupo)) {
+                <ul class="grupo-lista">
+                  @for (modulo of grupo.modulos; track modulo.ruta) {
+                    <li>
+                      <a
+                        [routerLink]="'/' + modulo.ruta"
+                        routerLinkActive="activo"
+                        ariaCurrentWhenActive="page"
+                        (click)="cerrarMenu()"
+                        [title]="sidebarColapsado() ? modulo.etiqueta : ''"
+                      >
+                        <span class="menu-icon" [innerHTML]="icono(modulo.icon)"></span>
+                        <span class="menu-texto">{{ modulo.etiqueta }}</span>
+                      </a>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          } @else {
+            <div class="grupo">
+              <span class="grupo-titulo-simple">{{ grupo.titulo }}</span>
+              <ul>
                 @for (modulo of grupo.modulos; track modulo.ruta) {
                   <li>
                     <a
@@ -136,29 +174,8 @@
                   </li>
                 }
               </ul>
-            }
-          </div>
-        } @else {
-          <div class="grupo">
-            <span class="grupo-titulo-simple">{{ grupo.titulo }}</span>
-            <ul>
-              @for (modulo of grupo.modulos; track modulo.ruta) {
-                <li>
-                  <a
-                    [routerLink]="'/' + modulo.ruta"
-                    routerLinkActive="activo"
-                    ariaCurrentWhenActive="page"
-                    (click)="cerrarMenu()"
-                    [title]="sidebarColapsado() ? modulo.etiqueta : ''"
-                  >
-                    <span class="menu-icon" [innerHTML]="icono(modulo.icon)"></span>
-                    <span class="menu-texto">{{ modulo.etiqueta }}</span>
-                  </a>
-                </li>
-              }
-            </ul>
-          </div>
-        }
+            </div>
+          }
         }
       }
     </nav>

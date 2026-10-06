@@ -50,6 +50,8 @@ function forma(extra: Partial<FormaUsuario> = {}): FormaUsuario {
     email: ' juan@ejemplo.mx ',
     puesto: ' Cajera ',
     fecha_contratacion: '2021-03-04',
+    contrasena: '',
+    confirmar: '',
     ...extra,
   };
 }
@@ -128,6 +130,33 @@ describe('el cuerpo del alta', () => {
     expect(cuerpoDeUsuario(forma({ email: ' juan@ejemplo.mx ' }), [2]).email).toBe(
       'juan@ejemplo.mx',
     );
+  });
+
+  it('incluye la contrasena solo si el administrador la escribio', () => {
+    const cuerpo = cuerpoDeUsuario(forma({ contrasena: 'VacaDelEstablo123' }), [2]);
+    expect(cuerpo.contrasena).toBe('VacaDelEstablo123');
+  });
+
+  it('la omite entera en blanco: es cuando el servidor genera la temporal', () => {
+    // No va `''`: el esquema es `strictObject` y un `contrasena: ''` daria
+    // 400 en vez de caer en la clave temporal.
+    expect(cuerpoDeUsuario(forma(), [2])).not.toHaveProperty('contrasena');
+  });
+
+  it('nunca manda la confirmacion: es solo para no equivocarse al escribirla', () => {
+    const cuerpo = cuerpoDeUsuario(
+      forma({ contrasena: 'VacaDelEstablo123', confirmar: 'VacaDelEstablo123' }),
+      [2],
+    );
+    expect(cuerpo).not.toHaveProperty('confirmar');
+  });
+
+  it('no recorta la contrasena: los espacios adentro son parte de la clave', () => {
+    // El backend tampoca aplica `.trim()`, a proposito: recortarla aqui
+    // cambiaria la clave sin aviso y la persona no podria entrar con lo que
+    // le dieron.
+    const cuerpo = cuerpoDeUsuario(forma({ contrasena: ' La Clave Es Esta ' }), [2]);
+    expect(cuerpo.contrasena).toBe(' La Clave Es Esta ');
   });
 });
 

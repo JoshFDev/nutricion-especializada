@@ -1,6 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators,
+  type AbstractControl,
+  type ValidationErrors,
+} from '@angular/forms';
 import { errorLegible } from '../nucleo/api';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { guardarFondo } from '../nucleo/fondo-login';
 import { Sesion } from '../nucleo/sesion';
 import {
@@ -30,13 +37,17 @@ import {
  *
  * Las tres vistas:
  *
- *   - **Lista.** Busqueda, filtro por rol y filtro de estado. Sale solo la
- *     gente activa, como en proveedores.
+ *   - **Lista.** Busqueda, filtro por rol, filtro de estado y paginacion de
+ *     verdad, igual que proveedores. Sale solo la gente activa, como en
+ *     proveedores.
  *   - **Editor.** El mismo formulario para el alta y para la edicion, y la
  *     diferencia real esta en que en edicion el RFC y el correo NO se
  *     pueden tocar: el `PATCH` no los acepta y no es una limitacion de la
  *     pantalla. Se muestran de todos modos, en solo lectura, para que quien
- *     edita vea el RFC que tiene la persona enfrente.
+ *     edita vea el RFC que tiene la persona enfrente. En el alta ademas
+ *     salen la clave y su confirmacion, ambas OPCIONALES: en blanco el
+ *     servidor genera la temporal de siempre, y escrita la usa tal cual y
+ *     la persona nace sin pendiente de cambio.
  *   - **Detalle.** La ficha con los datos que no se editan (intentos
  *     fallidos, bloqueado hasta, ultimo acceso), los roles como casillas y
  *     las tres acciones: activar/desactivar, cambiar roles y resetear clave.
@@ -44,7 +55,8 @@ import {
  * Lo de las acciones que se olvidan en un click:
  *
  *   - **La clave temporal se muestra una vez y hay que copiarla.** Vuelve en
- *     el alta y en el reseteo, y en la base solo esta el hash. Por eso hay
+ *     el alta (solo si el administrador dejo la clave en blanco) y en el
+ *     reseteo, y en la base solo esta el hash. Por eso hay
  *     un panel con el texto seleccionable y un boton de copiar, y no un
  *     aviso que se va solo: si el operador lo pierde, tiene que volver a
  *     resetear, y ahi ya no sabe si el anterior sirvio.
@@ -74,6 +86,38 @@ function validaRfc(control: { value: string }): Record<string, boolean> | null {
   return rfcValido(valor) ? null : { rfc: true };
 }
 
+/**
+ * Las tres clases de la politica del backend (`contrasenaFuerte`): 12+
+ * caracteres, mayuscula, minuscula y un numero.
+ *
+ * Va aqui para que el error salga pegado al campo en vez de despues del
+ * viaje al servidor, pero quien MANDA es el backend: si las dos reglas se
+ * llegan a separar, gana la del servidor y el alta falla ahi. En vacio pasa
+ * sin mas, porque la clave es opcional en el alta (`Validators.minLength`
+ * tambien se salta lo vacio, que para eso esta).
+ */
+function validaClaseDeClave(control: { value: string }): ValidationErrors | null {
+  const valor = String(control.value);
+  if (valor === '') return null;
+  const cumple = /[a-z]/.test(valor) && /[A-Z]/.test(valor) && /\d/.test(valor);
+  return cumple ? null : { contrasenaDebil: true };
+}
+
+/**
+ * Que las dos claves del alta dicen lo mismo.
+ *
+ * La comparacion vive en el GRUPO y no en `confirmar`: un control solo se
+ * ve a si mismo, y para comparar tiene que alcanzar a su hermano. Con las
+ * dos vacias no hay error —la clave es opcional—; lo que no puede pasar es
+ * que una se escriba y la otra no, o que difieran.
+ */
+function clavesCoinciden(grupo: AbstractControl): ValidationErrors | null {
+  const clave = String(grupo.get('contrasena')?.value ?? '');
+  const otra = String(grupo.get('confirmar')?.value ?? '');
+  if (clave === '' && otra === '') return null;
+  return clave === otra ? null : { noCoinciden: true };
+}
+
 /** Lo que se guarda de una clave recien generada, para mostrarla. */
 export interface ClaveMostrada {
   contrasena: string;
@@ -89,6 +133,7 @@ export interface ClaveMostrada {
   styleUrl: './usuarios.scss',
   imports: [ReactiveFormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [filasAnimation],
 })
 export class Usuarios {
   private readonly api = inject(UsuariosApi);
@@ -96,17 +141,53 @@ export class Usuarios {
   private readonly sesion = inject(Sesion);
 
   // ------------------------------------------------------------- el listado
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
   readonly vista = signal<Vista>('lista');
   readonly filas = signal<Usuario[]>([]);
   readonly total = signal(0);
-  readonly offset = signal(0);
   readonly buscando = signal(false);
   readonly error = signal<string | null>(null);
   readonly buscador = signal('');
   readonly filtroRol = signal<number | null>(null);
   readonly filtroActivo = signal<'todos' | 'activos' | 'inactivos'>('activos');
 
-  readonly hayMas = computed(() => this.filas().length < this.total());
+  /**
+   * Cuántas personas se ven por página, y la página que se está viendo.
+   *
+   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
+   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   */
+  readonly limite = signal(25);
+  readonly pagina = signal(1);
+
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+
+  /** Lo que ve en la barra: "1-25 de 240". */
+  readonly rangoDePagina = computed(() => {
+    const total = this.total();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
+
+  /**
+   * Si el listado lleva algo puesto, para poder ofrecer "Quitar filtros".
+   *
+   * El buscador se cuenta con dos caracteres porque es lo que el backend
+   * exige: con uno solo no filtra, y un botón que aparece a la primera letra
+   * confunde más de lo que ayuda.
+   */
+  readonly hayFiltros = computed(
+    () =>
+      this.buscador().trim().length >= 2 ||
+      this.filtroRol() !== null ||
+      this.filtroActivo() !== 'activos',
+  );
 
   /**
    * El catalogo de roles, para el filtro de la lista y para las casillas.
@@ -170,15 +251,23 @@ export class Usuarios {
   readonly copiada = signal(false);
   readonly errorClave = signal<string | null>(null);
 
-  readonly forma = this.fb.nonNullable.group({
-    nombre: ['', [Validators.required, Validators.maxLength(120)]],
-    apellido_paterno: ['', [Validators.required, Validators.maxLength(120)]],
-    apellido_materno: ['', [Validators.maxLength(120)]],
-    rfc: ['', [Validators.required, Validators.maxLength(13), validaRfc]],
-    email: ['', [Validators.maxLength(200)]],
-    puesto: ['', [Validators.maxLength(120)]],
-    fecha_contratacion: ['', [Validators.maxLength(10)]],
-  });
+  readonly forma = this.fb.nonNullable.group(
+    {
+      nombre: ['', [Validators.required, Validators.maxLength(120)]],
+      apellido_paterno: ['', [Validators.required, Validators.maxLength(120)]],
+      apellido_materno: ['', [Validators.maxLength(120)]],
+      rfc: ['', [Validators.required, Validators.maxLength(13), validaRfc]],
+      email: ['', [Validators.maxLength(200)]],
+      puesto: ['', [Validators.maxLength(120)]],
+      fecha_contratacion: ['', [Validators.maxLength(10)]],
+      // Los dos existen tambien en edicion (un `setValue` exige las llaves
+      // completas), pero se VEN solo en el alta: ahi son opcionales, y la
+      // validacion de que coincidan es del grupo, no de un campo.
+      contrasena: ['', [Validators.minLength(12), Validators.maxLength(200), validaClaseDeClave]],
+      confirmar: ['', [Validators.maxLength(200)]],
+    },
+    { validators: clavesCoinciden },
+  );
 
   // Para la plantilla: son funciones puras y asi se leen ahi sin this.
   nombreCompleto = nombreCompleto;
@@ -230,25 +319,49 @@ export class Usuarios {
 
   private temporizador: ReturnType<typeof setTimeout> | undefined;
 
-  /** Busca con 250 ms de espera, igual que el resto de las pantallas. */
+  /**
+   * Busca con 250 ms de espera, igual que el resto de las pantallas.
+   *
+   * Cada tecleo NO pega una petición: con el buscador abierto a media
+   * escritura son varias y la última es la única que sirve. Además, buscar
+   * siempre vuelve a la página 1, porque quedarse en la 4 con un filtro
+   * nuevo es mirar un `offset` que ya no quiere decir nada.
+   */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
     this.buscador.set(texto);
     this.temporizador = setTimeout(() => void this.recargar(), 250);
   }
 
+  /** Cambia el filtro de rol. También vuelve a la primera página. */
   filtrarRol(id: string): void {
     const numero = Number(id);
     this.filtroRol.set(id === '' || Number.isNaN(numero) ? null : numero);
     void this.recargar();
   }
 
+  /** Cambia el filtro de estado. También vuelve a la primera página. */
   filtrarActivo(activo: string): void {
     this.filtroActivo.set(activo as 'todos' | 'activos' | 'inactivos');
     void this.recargar();
   }
 
+  /** Deja el buscador y los filtros como estaban al entrar. */
+  limpiarFiltros(): void {
+    clearTimeout(this.temporizador);
+    this.buscador.set('');
+    this.filtroRol.set(null);
+    this.filtroActivo.set('activos');
+    void this.recargar();
+  }
+
+  /** Vuelve a la primera página con el filtro que se tenga puesto. */
   private async recargar(): Promise<void> {
+    await this.cargarPagina(1);
+  }
+
+  /** Carga una página. Es la ÚNICA forma de pedir usuarios. */
+  private async cargarPagina(pagina: number): Promise<void> {
     this.buscando.set(true);
     this.error.set(null);
     try {
@@ -256,34 +369,56 @@ export class Usuarios {
         buscar: this.textoBusqueda(),
         rol: this.filtroRol(),
         activo: this.filtroActivo(),
+        limite: this.limite(),
+        offset: (pagina - 1) * this.limite(),
       });
+
+      // Se dio de baja la última persona de la última página: la que se pide
+      // ya no existe. Se retrocede una en vez de dejar una tabla vacía con
+      // el contador diciendo "página 7 de 7".
+      if (resultado.datos.length === 0 && pagina > 1) {
+        await this.cargarPagina(pagina - 1);
+        return;
+      }
+
       this.filas.set(resultado.datos);
+      this.recarga.marcar();
       this.total.set(resultado.total);
-      this.offset.set(resultado.offset);
+      this.pagina.set(pagina);
     } catch (falla) {
+      this.filas.set([]);
+      this.total.set(0);
       this.error.set(errorLegible(falla).mensaje);
     } finally {
       this.buscando.set(false);
     }
   }
 
-  async cargarMas(): Promise<void> {
-    if (this.buscando()) return;
-    this.buscando.set(true);
-    try {
-      const resultado = await this.api.listar({
-        buscar: this.textoBusqueda(),
-        rol: this.filtroRol(),
-        activo: this.filtroActivo(),
-        offset: this.offset() + this.filas().length,
-      });
-      this.filas.update((actuales) => [...actuales, ...resultado.datos]);
-      this.total.set(resultado.total);
-    } catch (falla) {
-      this.error.set(errorLegible(falla).mensaje);
-    } finally {
-      this.buscando.set(false);
-    }
+  /** Cambia de página y sube la tabla a la vista. */
+  async irPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+
+    await this.cargarPagina(pagina);
+    document.querySelector('app-usuarios .tabla-wrapper')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }
+
+  /** El tamaño de página como texto, para el `[value]` del desplegable. */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  /** Cambia cuántas personas se ven por página. */
+  aTamanoDePagina(valor: string): void {
+    const limite = Number(valor);
+    if (!Number.isFinite(limite) || limite <= 0 || limite === this.limite()) return;
+
+    this.limite.set(limite);
+    // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50
+    // filas es pedir un `offset` que ya no corresponde a nada.
+    void this.recargar();
   }
 
   /**
@@ -309,6 +444,10 @@ export class Usuarios {
       email: '',
       puesto: '',
       fecha_contratacion: '',
+      // En blanco: si no se escribe nada, el servidor genera la clave
+      // temporal de siempre y la pantalla muestra el panel de una sola vez.
+      contrasena: '',
+      confirmar: '',
     });
     this.errorEditor.set(null);
     // El rol 2 de una vez, porque es lo que el backend pone por omision
@@ -335,6 +474,11 @@ export class Usuarios {
       email: usuario.email ?? '',
       puesto: usuario.puesto ?? '',
       fecha_contratacion: usuario.fecha_contratacion.slice(0, 10),
+      // En edicion no hay clave que poner: el `PATCH` no la acepta. Se
+      // reinician por el `setValue` (pide TODAS las llaves), no porque se
+      // vayan a usar.
+      contrasena: '',
+      confirmar: '',
     });
     // En edicion el fondo SÍ se cambia desde aqui, a diferencia de los roles.
     // Es una preferencia sin efecto sobre las sesiones abiertas, asi que no
@@ -392,6 +536,10 @@ export class Usuarios {
   problemaDe(campo: keyof typeof this.forma.controls): string | null {
     const control = this.forma.controls[campo];
     if (control.hasError('requerido')) return 'Este campo es obligatorio.';
+    if (control.hasError('minlength')) return 'La contraseña necesita al menos 12 caracteres.';
+    if (control.hasError('contrasenaDebil')) {
+      return 'Debe tener mayúsculas, minúsculas y al menos un número.';
+    }
     if (control.hasError('maxlength')) return 'Es más largo de lo permitido.';
     if (control.hasError('rfc')) return 'El RFC no cumple el formato del SAT.';
     if (control.hasError('duplicado')) {
@@ -419,20 +567,26 @@ export class Usuarios {
       if (actual === null) return;
 
       if (actual.id === undefined) {
-        // Alta: van los cinco campos del RFC, el correo y la fecha.
+        // Alta: van los cinco campos del RFC, el correo, la fecha y la
+        // clave si el administrador la escribio.
         const respuesta = await this.api.crear(
           cuerpoDeUsuario(bruto, rolesNormalizados(this.rolesMarcados(), this.catalogo())),
         );
         this.editando.set(null);
         await this.recargar();
-        // La clave va PRIMERO, antes de la recarga: si la recarga falla, el
-        // usuario ya existe en la base y sin esta clave no hay forma de que
-        // vuelva a entrar.
-        this.mostrarClave({
-          contrasena: respuesta.contrasenaTemporal,
-          titulo: `Clave de ${nombreCompleto(respuesta.usuario)}`,
-          sesionesCerradas: null,
-        });
+        // La clave temporal se muestra UNA vez y va ANTES de la recarga en
+        // el orden del codigo: si la recarga falla, el usuario ya existe en
+        // la base y sin esta clave no hay forma de que vuelva a entrar. Si
+        // no viene (el administrador eligio la clave) no hay panel: ya la
+        // tiene la persona y volver a mostrarsela seria una copia de algo
+        // que ya no es secreto para nadie.
+        if (respuesta.contrasenaTemporal !== null) {
+          this.mostrarClave({
+            contrasena: respuesta.contrasenaTemporal,
+            titulo: `Clave de ${nombreCompleto(respuesta.usuario)}`,
+            sesionesCerradas: null,
+          });
+        }
       } else {
         // Edicion: los roles NO se tocan aqui. Van en su propio `PUT`, que
         // cierra las sesiones, y mezclarlos haria que un cambio de nombre
@@ -528,7 +682,10 @@ export class Usuarios {
     try {
       const actualizado = await this.api.actualizar(usuario.id, { activo: !usuario.activo });
       this.abierto.set(actualizado);
-      await this.recargar();
+      // La fila puede desaparecer del listado —con el filtro en "activos",
+      // al dar de baja no sale— y por eso se vuelve a pedir la MISMA página:
+      // si dejó de existir, `cargarPagina` retrocede sola.
+      await this.cargarPagina(this.pagina());
     } catch (falla) {
       // `ULTIMO_ADMIN` llega aqui: no se sabe desde la pantalla si es el
       // unico, y el mensaje del backend ya lo dice.
@@ -560,7 +717,7 @@ export class Usuarios {
     try {
       this.abierto.set(await this.api.asignarRoles(usuario.id, roles));
       this.rolesMarcados.set(roles);
-      await this.recargar();
+      await this.cargarPagina(this.pagina());
     } catch (falla) {
       this.errorAccion.set(errorLegible(falla).mensaje);
     } finally {

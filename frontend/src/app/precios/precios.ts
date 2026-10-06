@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
@@ -120,22 +127,22 @@ export class Precios {
   readonly filtroProducto = signal<OpcionFiltro | null>(null);
   readonly filtroCliente = signal<OpcionFiltro | null>(null);
 
-/**
- * Si el listado lleva filtros puestos.
- *
- * Distingue "no hay precios" de "el filtro se los ha llevado todos": en el
- * primer caso lo que hace falta es crear uno, y en el segundo quitar el
- * filtro. `total` no sirve para esto porque ya viene filtrado: con un
- * filtro que no coincide da 0 igual que cuando la tabla esta vacia de
- * verdad. `vigentes` es lo que se ve por defecto, asi que no cuenta como
- * filtro.
- */
-readonly hayFiltros = computed(
-  () =>
-    this.vigencia() !== 'vigentes' ||
-    this.filtroProducto() !== null ||
-    this.filtroCliente() !== null,
-);
+  /**
+   * Si el listado lleva filtros puestos.
+   *
+   * Distingue "no hay precios" de "el filtro se los ha llevado todos": en el
+   * primer caso lo que hace falta es crear uno, y en el segundo quitar el
+   * filtro. `total` no sirve para esto porque ya viene filtrado: con un
+   * filtro que no coincide da 0 igual que cuando la tabla esta vacia de
+   * verdad. `vigentes` es lo que se ve por defecto, asi que no cuenta como
+   * filtro.
+   */
+  readonly hayFiltros = computed(
+    () =>
+      this.vigencia() !== 'vigentes' ||
+      this.filtroProducto() !== null ||
+      this.filtroCliente() !== null,
+  );
   readonly esClientes = computed(() => this.vista() === 'clientes');
 
   /** El listado se pide al entrar: sin esto la tabla sale en vacio. */
@@ -373,7 +380,9 @@ readonly hayFiltros = computed(
   }
 
   private subirTabla(): void {
-    document.querySelector('.tabla-precios')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document
+      .querySelector('.tabla-precios')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   /**
@@ -636,7 +645,9 @@ readonly hayFiltros = computed(
       } else {
         await this.api.exportarExcelClientes(criterios);
       }
-      this.toast.exito(`${this.vista() === 'publicos' ? 'Precios de lista' : 'Precios de cliente'} exportados`);
+      this.toast.exito(
+        `${this.vista() === 'publicos' ? 'Precios de lista' : 'Precios de cliente'} exportados`,
+      );
     } catch (falla) {
       const legible = errorLegible(falla);
       this.error.set(legible.mensaje);

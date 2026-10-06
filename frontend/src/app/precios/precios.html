@@ -50,9 +50,30 @@
         aria-controls="editor-form"
       >
         @if (editorAbierto()) {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg> Ocultar formulario
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Ocultar formulario
         } @else {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nuevo precio
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nuevo precio
         }
       </button>
     }
@@ -187,12 +208,7 @@
         </div>
 
         <div class="acciones">
-          <button
-            type="button"
-            class="primario"
-            (click)="guardar()"
-            [disabled]="!puedeGuardar()"
-          >
+          <button type="button" class="primario" (click)="guardar()" [disabled]="!puedeGuardar()">
             {{ guardando() ? 'Guardando…' : 'Guardar precio' }}
           </button>
           <button type="button" (click)="cerrarEditor()">Cancelar</button>
@@ -311,7 +327,17 @@
       @if (filtroProducto(); as filtro) {
         <button type="button" class="filtro-elegido" (click)="quitarFiltroProducto()">
           {{ filtro.codigo }} · {{ filtro.nombre }}
-          <svg class="cerrar-filtro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg
+            class="cerrar-filtro"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
         </button>
       } @else {
         <input
@@ -346,7 +372,17 @@
         @if (filtroCliente(); as filtro) {
           <button type="button" class="filtro-elegido" (click)="quitarFiltroCliente()">
             {{ filtro.nombre }}
-            <svg class="cerrar-filtro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg
+              class="cerrar-filtro"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         } @else {
           <input
@@ -380,7 +416,18 @@
 
       @if (hayFiltros()) {
         <button type="button" class="quitar-filtros" (click)="quitarFiltros()">
-          <svg class="cerrar-filtro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Quitar filtros
+          <svg
+            class="cerrar-filtro"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          Quitar filtros
         </button>
       }
 
@@ -426,7 +473,9 @@
         <h2>Aún no hay precios</h2>
         <p>Registra el precio por kilo de un producto para empezar a cobrarlo.</p>
         @if (puedeEditar()) {
-          <button type="button" class="primario" (click)="alternarEditor()">Crear el primero</button>
+          <button type="button" class="primario" (click)="alternarEditor()">
+            Crear el primero
+          </button>
         }
       }
     </div>
@@ -468,7 +517,9 @@
                 <td class="acciones-celda">
                   @if (puedeEditar()) {
                     <div class="acciones-fila">
-                      <button type="button" class="accion-editar" (click)="editar(fila)">Editar</button>
+                      <button type="button" class="accion-editar" (click)="editar(fila)">
+                        Editar
+                      </button>
                       <!--
                         Cerrar y reabrir son las dos caras de lo mismo: solo se
                         ofrece la que toca. Un precio ya cerrado no se vuelve a

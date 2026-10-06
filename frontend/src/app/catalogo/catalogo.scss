@@ -50,7 +50,9 @@
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .campo input:focus {
@@ -83,9 +85,15 @@
   table-layout: fixed;
 }
 
-th:nth-child(1) { width: 46%; } /* Nombre */
-th:nth-child(2) { width: 18%; } /* Uso */
-th:nth-child(3) { width: 36%; } /* Acciones */
+th:nth-child(1) {
+  width: 46%;
+} /* Nombre */
+th:nth-child(2) {
+  width: 18%;
+} /* Uso */
+th:nth-child(3) {
+  width: 36%;
+} /* Acciones */
 
 th,
 td {

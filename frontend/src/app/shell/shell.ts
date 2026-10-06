@@ -1,4 +1,12 @@
-import { Component, ElementRef, HostListener, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { menuPara, type Grupo } from '../nucleo/menu';
@@ -74,16 +82,26 @@ export class Shell {
   readonly sistemaOpciones = computed(() => {
     const permisos = new Set(this.sesion.perfil()?.permisos ?? []);
     const opciones: { etiqueta: string; ruta: string; icono: string; permiso: string }[] = [];
-    
+
     if (permisos.has('usuarios.ver')) {
-      opciones.push({ etiqueta: 'Usuarios y roles', ruta: '/usuarios', icono: 'user-cog', permiso: 'usuarios.ver' });
+      opciones.push({
+        etiqueta: 'Usuarios y roles',
+        ruta: '/usuarios',
+        icono: 'user-cog',
+        permiso: 'usuarios.ver',
+      });
     }
     if (permisos.has('auditoria.ver')) {
-      opciones.push({ etiqueta: 'Auditoria', ruta: '/auditoria', icono: 'scroll', permiso: 'auditoria.ver' });
+      opciones.push({
+        etiqueta: 'Auditoria',
+        ruta: '/auditoria',
+        icono: 'scroll',
+        permiso: 'auditoria.ver',
+      });
     }
     // Salir siempre esta disponible si hay sesion
     opciones.push({ etiqueta: 'Salir', ruta: '', icono: 'log-out', permiso: '' });
-    
+
     return opciones;
   });
 
@@ -137,7 +155,12 @@ export class Shell {
   }
 
   /** Navega a una opcion del menu Sistema y cierra el dropdown */
-  async irAOpcion(opcion: { etiqueta: string; ruta: string; icono: string; permiso: string }): Promise<void> {
+  async irAOpcion(opcion: {
+    etiqueta: string;
+    ruta: string;
+    icono: string;
+    permiso: string;
+  }): Promise<void> {
     this.cerrarSistemaDropdown();
     if (opcion.ruta === '') {
       await this.salir();
@@ -184,7 +207,10 @@ export class Shell {
   }
 
   async salir(): Promise<void> {
-    await this.sesion.salir();
+    // Se limpia en el acto y sin esperar al backend: la navegacion sale en
+    // el mismo clic y el `/auth/logout` va en segundo plano. Ver
+    // `Sesion.salir`, que explica el trabazon que habia al esperarlo.
+    this.sesion.salir();
     await this.router.navigate(['/login']);
   }
 }

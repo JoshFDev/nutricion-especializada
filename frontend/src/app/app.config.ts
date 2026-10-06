@@ -1,8 +1,10 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import type { ApplicationConfig } from '@angular/core';
+import { inject } from '@angular/core';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideBrowserGlobalErrorListeners } from '@angular/core';
 import {
+  Router,
   provideRouter,
   withComponentInputBinding,
   withInMemoryScrolling,
@@ -10,6 +12,16 @@ import {
 } from '@angular/router';
 import { interceptorSesion } from './nucleo/interceptor-sesion';
 import { routes } from './app.routes';
+
+/**
+ * Las dos pantallas de sesion, reconocidas por la URL.
+ *
+ * `/login` con su `?returnUrl=...` y `/cambiar-contrasena`, y tambien lo que
+ * apunte hacia ellas. No hay otras rutas que empiecen asi (ver
+ * `app.routes.ts`), y el `[/?#]` despues evita confundir `/login` con una
+ * ruta hipotetica `/logina`.
+ */
+const PANTALLA_DE_SESION = /^\/(login|cambiar-contrasena)([/?#]|$)/;
 
 /**
  * Como se arma la app.
@@ -40,6 +52,22 @@ export const appConfig: ApplicationConfig = {
     // app con `/notas` ya en la barra de direcciones no hay pagina anterior
     // de la que cruzar, y animar ese primer render hacia un frame en blanco.
     //
+    // `onViewTransitionCreated` salta la animacion cuando el cruce toca
+    // `/login` o `/cambiar-contrasena`, en cualquier sentido. La razon es el
+    // trabazon del logout: dos navegaciones seguidas hacia o desde el login
+    // (el interceptor y el boton de salir, o la guarda de cambio obligatorio)
+    // arrancaban DOS view-transitions, la segunda cancelaba a la primera a
+    // media mezcla y la pantalla se quedaba congelada con la foto vieja.
+    // Saltando la transicion en esas dos pantallas la navegacion sale limpia
+    // y ademas entrar al login no se anima, que es un corte: no hay nada que
+    // mezclar con una pantalla de contrasena.
+    //
+    // El callback corre en contexto de inyeccion (lo dice el tipo del
+    // router), asi que `inject(Router)` va. En ese momento el router todavia
+    // apunta a la pantalla DE DONDE se viene (`router.url`) y la navegacion
+    // en curso da hacia DONDE se va; el estado se cambia despues, al
+    // activar las rutas.
+    //
     // `withInMemoryScrolling` devuelve cada pantalla arriba al entrar. Sin
     // esto se hereda la posicion del scroll de la pantalla anterior, asi que
     // cambiar de productos a clientes te dejaba a media tabla del sitio
@@ -47,7 +75,19 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
-      withViewTransitions({ skipInitialTransition: true }),
+      withViewTransitions({
+        skipInitialTransition: true,
+        onViewTransitionCreated: ({ transition }) => {
+          const router = inject(Router);
+          const navegacion = router.getCurrentNavigation();
+          const hacia = navegacion
+            ? router.serializeUrl(navegacion.finalUrl ?? navegacion.extractedUrl)
+            : router.url;
+          if (PANTALLA_DE_SESION.test(router.url) || PANTALLA_DE_SESION.test(hacia)) {
+            transition.skipTransition();
+          }
+        },
+      }),
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled' }),
     ),
 

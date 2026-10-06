@@ -33,9 +33,30 @@
         aria-controls="editor-form"
       >
         @if (editorVisible()) {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg> Ocultar formulario
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Ocultar formulario
         } @else {
-          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nuevo producto
+          <svg
+            class="icono"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nuevo producto
         }
       </button>
     }
@@ -44,7 +65,12 @@
   <!-- Editor inline (nuevo/editar) - colapsable arriba de la tabla -->
   @if (puedeEditar()) {
     <div class="editor-wrapper" [class.colapsado]="!editorVisible()">
-      <form id="editor-form" class="editor-inline" [formGroup]="forma" (keydown)="onKeydown($event)">
+      <form
+        id="editor-form"
+        class="editor-inline"
+        [formGroup]="forma"
+        (keydown)="onKeydown($event)"
+      >
         <div class="editor-cabecera">
           <h2>{{ esAlta() ? 'Nuevo producto' : 'Editar producto' }}</h2>
         </div>
@@ -63,15 +89,32 @@
               maxlength="40"
               autocomplete="off"
               placeholder="clave"
-              [class.error]="forma.controls.codigo.invalid && (forma.controls.codigo.dirty || forma.controls.codigo.touched)"
-              [attr.aria-invalid]="forma.controls.codigo.invalid && (forma.controls.codigo.dirty || forma.controls.codigo.touched)"
-              [attr.aria-describedby]="forma.controls.codigo.hasError('required') ? 'codigo-error' : (forma.controls.codigo.hasError('duplicado') ? 'codigo-duplicado' : null)"
+              [class.error]="
+                forma.controls.codigo.invalid &&
+                (forma.controls.codigo.dirty || forma.controls.codigo.touched)
+              "
+              [attr.aria-invalid]="
+                forma.controls.codigo.invalid &&
+                (forma.controls.codigo.dirty || forma.controls.codigo.touched)
+              "
+              [attr.aria-describedby]="
+                forma.controls.codigo.hasError('required')
+                  ? 'codigo-error'
+                  : forma.controls.codigo.hasError('duplicado')
+                    ? 'codigo-duplicado'
+                    : null
+              "
             />
-            @if (forma.controls.codigo.hasError('required') && (forma.controls.codigo.dirty || forma.controls.codigo.touched)) {
+            @if (
+              forma.controls.codigo.hasError('required') &&
+              (forma.controls.codigo.dirty || forma.controls.codigo.touched)
+            ) {
               <span class="error-texto" id="codigo-error">El código es obligatorio</span>
             }
             @if (forma.controls.codigo.hasError('duplicado')) {
-              <span class="error-texto" id="codigo-duplicado">Ya existe un producto con ese código</span>
+              <span class="error-texto" id="codigo-duplicado"
+                >Ya existe un producto con ese código</span
+              >
             }
           </div>
 
@@ -83,17 +126,30 @@
               formControlName="nombre"
               maxlength="100"
               autocomplete="off"
-              [class.error]="forma.controls.nombre.invalid && (forma.controls.nombre.dirty || forma.controls.nombre.touched)"
-              [attr.aria-invalid]="forma.controls.nombre.invalid && (forma.controls.nombre.dirty || forma.controls.nombre.touched)"
-              [attr.aria-describedby]="forma.controls.nombre.hasError('required') ? 'nombre-error' : null"
+              [class.error]="
+                forma.controls.nombre.invalid &&
+                (forma.controls.nombre.dirty || forma.controls.nombre.touched)
+              "
+              [attr.aria-invalid]="
+                forma.controls.nombre.invalid &&
+                (forma.controls.nombre.dirty || forma.controls.nombre.touched)
+              "
+              [attr.aria-describedby]="
+                forma.controls.nombre.hasError('required') ? 'nombre-error' : null
+              "
             />
-            @if (forma.controls.nombre.hasError('required') && (forma.controls.nombre.dirty || forma.controls.nombre.touched)) {
+            @if (
+              forma.controls.nombre.hasError('required') &&
+              (forma.controls.nombre.dirty || forma.controls.nombre.touched)
+            ) {
               <span class="error-texto" id="nombre-error">El nombre es obligatorio</span>
             }
           </div>
 
           <div class="campo">
-            <label for="presentacion_kg">Presentación (kg) <span class="requerido" aria-hidden="true">*</span></label>
+            <label for="presentacion_kg"
+              >Presentación (kg) <span class="requerido" aria-hidden="true">*</span></label
+            >
             <input
               id="presentacion_kg"
               type="text"
@@ -101,15 +157,37 @@
               inputmode="decimal"
               maxlength="10"
               placeholder="25.000"
-              [class.error]="forma.controls.presentacion_kg.invalid && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)"
-              [attr.aria-invalid]="forma.controls.presentacion_kg.invalid && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)"
-              [attr.aria-describedby]="forma.controls.presentacion_kg.hasError('required') ? 'presentacion-error' : (forma.controls.presentacion_kg.hasError('pattern') ? 'presentacion-pattern' : null)"
+              [class.error]="
+                forma.controls.presentacion_kg.invalid &&
+                (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)
+              "
+              [attr.aria-invalid]="
+                forma.controls.presentacion_kg.invalid &&
+                (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)
+              "
+              [attr.aria-describedby]="
+                forma.controls.presentacion_kg.hasError('required')
+                  ? 'presentacion-error'
+                  : forma.controls.presentacion_kg.hasError('pattern')
+                    ? 'presentacion-pattern'
+                    : null
+              "
             />
-            @if (forma.controls.presentacion_kg.hasError('required') && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)) {
-              <span class="error-texto" id="presentacion-error">La presentación es obligatoria</span>
+            @if (
+              forma.controls.presentacion_kg.hasError('required') &&
+              (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)
+            ) {
+              <span class="error-texto" id="presentacion-error"
+                >La presentación es obligatoria</span
+              >
             }
-            @if (forma.controls.presentacion_kg.hasError('pattern') && (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)) {
-              <span class="error-texto" id="presentacion-pattern">Formato inválido (ej: 25.000)</span>
+            @if (
+              forma.controls.presentacion_kg.hasError('pattern') &&
+              (forma.controls.presentacion_kg.dirty || forma.controls.presentacion_kg.touched)
+            ) {
+              <span class="error-texto" id="presentacion-pattern"
+                >Formato inválido (ej: 25.000)</span
+              >
             }
           </div>
 
@@ -135,7 +213,9 @@
         </div>
 
         <div class="acciones">
-          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
+          <button type="button" class="chico" (click)="cancelar()" [disabled]="guardando()">
+            Cancelar
+          </button>
           <button type="button" class="primario" [disabled]="guardando()" (click)="guardar()">
             @if (guardando()) {
               <span class="spinner" aria-hidden="true"></span>
@@ -275,13 +355,33 @@
               <td class="acciones-celda">
                 @if (puedeEditar()) {
                   <div class="acciones-fila">
-                    <button type="button" class="accion-editar" (click)="editar(producto)" title="Editar" [attr.aria-label]="'Editar ' + producto.nombre">
+                    <button
+                      type="button"
+                      class="accion-editar"
+                      (click)="editar(producto)"
+                      title="Editar"
+                      [attr.aria-label]="'Editar ' + producto.nombre"
+                    >
                       Editar
                     </button>
-                    <button type="button" class="accion-estado" (click)="alternaActivo(producto)" [title]="producto.activo ? 'Dar de baja' : 'Activar'" [attr.aria-label]="(producto.activo ? 'Dar de baja ' : 'Activar ') + producto.nombre">
+                    <button
+                      type="button"
+                      class="accion-estado"
+                      (click)="alternaActivo(producto)"
+                      [title]="producto.activo ? 'Dar de baja' : 'Activar'"
+                      [attr.aria-label]="
+                        (producto.activo ? 'Dar de baja ' : 'Activar ') + producto.nombre
+                      "
+                    >
                       {{ producto.activo ? 'Baja' : 'Activar' }}
                     </button>
-                    <button type="button" class="accion-eliminar" (click)="eliminar(producto)" title="Eliminar" [attr.aria-label]="'Eliminar ' + producto.nombre">
+                    <button
+                      type="button"
+                      class="accion-eliminar"
+                      (click)="eliminar(producto)"
+                      title="Eliminar"
+                      [attr.aria-label]="'Eliminar ' + producto.nombre"
+                    >
                       Eliminar
                     </button>
                   </div>
@@ -294,7 +394,12 @@
     </div>
 
     <div class="paginacion">
-      <button type="button" class="chico" [disabled]="!hayPaginaAnterior() || buscando()" (click)="irAPagina(pagina() - 1)">
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaAnterior() || buscando()"
+        (click)="irAPagina(pagina() - 1)"
+      >
         ‹ Anterior
       </button>
 
@@ -303,7 +408,12 @@
         <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
       </span>
 
-      <button type="button" class="chico" [disabled]="!hayPaginaSiguiente() || buscando()" (click)="irAPagina(pagina() + 1)">
+      <button
+        type="button"
+        class="chico"
+        [disabled]="!hayPaginaSiguiente() || buscando()"
+        (click)="irAPagina(pagina() + 1)"
+      >
         Siguiente ›
       </button>
 

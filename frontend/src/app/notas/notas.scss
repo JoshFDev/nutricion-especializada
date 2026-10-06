@@ -1394,7 +1394,9 @@ button.peligro:not(:disabled):hover {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Cabecera de la columna ACCIONES */

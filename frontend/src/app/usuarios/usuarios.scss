@@ -1,124 +1,52 @@
 /*
  * La pantalla de usuarios.
  *
- * Misma familia que las demas: los colores son las variables de
- * `styles.scss`, la tabla y los botones son los de productos, precios y caja.
- * Lo unico propio son `.estado` (la insignia de la columna de estado), la
- * linea de la clave temporal y `.ficha`, que ordena los bloques de la ficha
- * en una columna angosta.
+ * Misma familia que las demas: la cabecera, los filtros, la tabla, el estado
+ * vacio, la paginacion, los avisos y los botones salen de
+ * `nucleo/pantallas.scss`, igual que en proveedores y auditoria. Lo unico
+ * propio son `.estado` (la insignia de la columna de estado), la rejilla del
+ * editor, la linea de la clave temporal, `.pista`, `.vacio` (carga de roles)
+ * y `.ficha`, que ordena los bloques de la ficha en una columna angosta.
  */
+
+@use '../nucleo/pantallas';
 
 :host {
   display: block;
 }
 
-h1 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
 h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
+  margin-bottom: 0.5rem;
 }
 
-.tenue {
-  display: block;
+/*
+ * El texto tenue va en su propia linea: el RFC debajo del nombre en la
+ * lista, el RFC y el correo en la cabecera de la ficha.
+ *
+ * El `display: block` se acota a `td` y el `margin: 0` a los `<p>`: el otro
+ * tenue de esta pantalla es el de la paginacion, un `<span>` dentro de
+ * `.contador` que tiene que seguir en la misma linea que el rango.
+ */
+p.tenue {
   margin: 0;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
 }
 
-/* Lo que explica algo que la pantalla no puede dejar claro sola: que el RFC
+td .tenue {
+  display: block;
+}
+
+/* Lo que explica algo que la pantalla no puede dejar clara sola: que el RFC
    no se edita, que cambiar un rol cierra sesiones, y que la clave se ve una
-   vez. */
-.pista,
-.nota,
-.aviso {
+   vez. `.nota` y `.aviso` ya vienen del compartido. */
+.pista {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   color: var(--texto-suave);
 }
 
-.nota,
-.aviso {
-  max-width: 46rem;
-  margin: 0.5rem 0 0;
-}
-
-/* --------------------------------------------------------------- la cabecera */
-
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.cabecera-botones {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.filtros {
-  display: flex;
-  gap: 0.625rem;
-  margin-bottom: 1rem;
-}
-
-.filtros input[type='search'] {
-  flex: 1;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-.filtro {
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
 /* ------------------------------------------------------------------ la lista */
 
-table {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-}
-
-th,
-td {
-  padding: 0.5rem 0.625rem;
-  text-align: left;
-  border-bottom: 1px solid var(--borde);
-}
-
-th {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--texto-suave);
-  background: var(--fondo);
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.acciones-celda {
-  white-space: nowrap;
-  text-align: right;
-}
-
+/* Mensaje de mientras no hay nada que mostrar, como el de los roles. */
 .vacio {
   margin: 0 0 1rem;
   color: var(--texto-tenue);
@@ -210,6 +138,11 @@ tbody tr:last-child td {
   margin-bottom: 1rem;
 }
 
+/*
+ * La rejilla del editor: dos columnas y no las tres del compartido. Van dos
+ * porque los campos son apellidos y nombres que se leen en pareja ("Juan"
+ * "Perez"), y en tres la tercera columna quedaria sola a la derecha.
+ */
 .datos {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -233,6 +166,14 @@ tbody tr:last-child td {
   border-radius: 6px;
 }
 
+/* El mismo foco del compartido: sin esto el editor era la unica pantalla en
+   la que el campo activo no se encendia. */
+.datos input:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
 /* El RFC y el correo se muestran igual pero sin poder tocarse: quien edita
    tiene que ver el RFC que tiene la persona enfrente, y un campo que
    desaparece de la vista no dice nada de por que no se puede cambiar. */
@@ -242,11 +183,17 @@ tbody tr:last-child td {
   border-style: dashed;
 }
 
+/*
+ * El rol es una linea, no un campo con etiqueta encima (el `.marca` del
+ * compartido). El color va aqui y no hereda: el `label` global pone el texto
+ * suave y el nombre del rol se lee como nota al pie y no como lo que es.
+ */
 .casilla {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+  color: var(--texto);
 }
 
 .casilla input {
@@ -256,70 +203,6 @@ tbody tr:last-child td {
 
 .casilla span {
   font-size: 0.9375rem;
-}
-
-.acciones {
-  display: flex;
-  gap: 0.625rem;
-  margin-top: 1rem;
-}
-
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
-}
-
-/* El problema va debajo del campo y no solo en el aviso de arriba: si no,
-   hay que adivinar QUAL de los campos hay que corregir. */
-.ayuda {
-  display: block;
-  margin: 0.25rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--peligro-texto);
-}
-
-/* ------------------------------------------------------------------- botones */
-
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-}
-
-button.peligro {
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border-color: var(--peligro);
-}
-
-button.primario:disabled,
-button.peligro:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
-
-button.chico {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8125rem;
 }
 
 /* ------------------------------------------------------------------ */
@@ -371,6 +254,9 @@ button.fondo {
   }
 
   &:hover {
+    /* El hover generico del compartido pintaria la miniatura de azul; aqui
+       solo se enciende el borde, como antes. */
+    background: var(--superficie);
     border-color: var(--acento);
     transform: translateY(-1px);
   }

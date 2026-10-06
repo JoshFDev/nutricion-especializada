@@ -24,11 +24,17 @@ http
     const pedido = decodeURIComponent(peticion.url.split('?')[0]);
     let archivo = path.join(raiz, pedido);
 
-    if (!archivo.startsWith(raiz) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) {
+    if (
+      !archivo.startsWith(raiz) ||
+      !fs.existsSync(archivo) ||
+      fs.statSync(archivo).isDirectory()
+    ) {
       archivo = path.join(raiz, 'index.html');
     }
 
-    respuesta.writeHead(200, { 'content-type': tipos[path.extname(archivo)] || 'application/octet-stream' });
+    respuesta.writeHead(200, {
+      'content-type': tipos[path.extname(archivo)] || 'application/octet-stream',
+    });
     fs.createReadStream(archivo).pipe(respuesta);
   })
   .listen(puerto, () => console.log(`listo en ${puerto}`));

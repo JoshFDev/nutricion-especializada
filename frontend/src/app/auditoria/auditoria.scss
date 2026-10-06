@@ -64,6 +64,13 @@
   border-bottom-color: var(--acento);
 }
 
+/* El hover del compartido trae su borde azul, y en una pestana ese borde es
+   justo lo que marca la pestana activa: sin esto, pasar el cursor por una
+   pestana la hacia ver seleccionada. */
+.pestanas button:hover:not(.activa) {
+  border-bottom-color: transparent;
+}
+
 /* ------------------------------------------------------------------ el filtro */
 
 /*
@@ -92,24 +99,13 @@
   gap: 0.5rem;
 }
 
+/*
+ * Los dos inputs del rango no miden el 100% del campo: van los dos en linea,
+ * entre "Del" y "al", y con el ancho del compartido la pareja se estiraria.
+ * El resto (padding, foco, borde) es el de `.campo input` y ya no se copia.
+ */
 .campo.fechas input {
   width: auto;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  font-size: 0.875rem;
-  color: var(--texto);
-  background: var(--fondo);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-}
-
-.campo.fechas input:focus {
-  outline: none;
-  border-color: var(--acento);
-  box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
 .campo.fechas span {
@@ -172,9 +168,15 @@ code {
   white-space: nowrap;
 }
 
-.acciones-celda {
-  text-align: right;
-  white-space: nowrap;
+/*
+ * Los dos datos de una celda van apilados, no en la misma linea: el ip
+ * debajo del usuario, el id debajo de la tabla, "la cuenta no existe" debajo
+ * del intento. El `display: block` va acotado a `td` y no en `.tenue` del
+ * compartido, porque ahi dentro de `.contador` romperia la linea de la
+ * paginacion.
+ */
+td .tenue {
+  display: block;
 }
 
 /*
@@ -226,55 +228,6 @@ code {
   color: var(--peligro-texto);
 }
 
-/* ------------------------------------------------------------------- botones */
-
-button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button.primario {
-  color: var(--sobre-acento);
-  background: var(--acento);
-  border-color: var(--acento);
-}
-
-button.primario:disabled {
-  color: var(--texto-tenue);
-  background: var(--fondo);
-  border-color: var(--borde);
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
-
-button.chico {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8125rem;
-}
-
-.acciones {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.error {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  color: var(--peligro-texto);
-  background: var(--peligro-suave);
-  border: 1px solid var(--peligro);
-  border-radius: 6px;
-}
-
 /* ------------------------------------------------------------- el ver cambios */
 
 /* El detalle va en un velo y no en una cuarta pantalla: es una mirada rapida
@@ -303,6 +256,12 @@ button.chico {
   border: 0;
   border-radius: 0;
   cursor: pointer;
+}
+
+/* El hover generico de los botones del compartido pintaba la cortina de
+   azul; aqui solo se oscurece un poco, para que se vea que el clic cierra. */
+button.velo-fondo:hover {
+  background: rgb(0 0 0 / 55%);
 }
 
 .hoja {

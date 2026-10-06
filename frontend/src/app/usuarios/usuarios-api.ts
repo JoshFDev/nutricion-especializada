@@ -91,10 +91,16 @@ export interface ListaUsuarios {
   offset: number;
 }
 
-/** El POST devuelve la clave temporal junto al usuario. Solo esta vez. */
+/**
+ * El POST devuelve la clave temporal junto al usuario. Solo esta vez.
+ *
+ * `contrasenaTemporal` es `string | null` y el null no es un error: es el
+ * caso en que el administrador escribio la clave en el alta. Ahi no hay nada
+ * que mostrar ni que entregar, la persona ya la tiene.
+ */
 export interface UsuarioCreado {
   usuario: Usuario;
-  contrasenaTemporal: string;
+  contrasenaTemporal: string | null;
 }
 
 export interface Reseteo {
@@ -117,6 +123,16 @@ export interface FormaUsuario {
   email: string;
   puesto: string;
   fecha_contratacion: string;
+  /**
+   * La clave del alta, en texto plano. Vacia = que la genere el sistema.
+   *
+   * Existe solo en el alta y no se recorta: las contrasenas admiten espacios
+   * a proposito (el backend tampoco aplica `.trim()`), y un recorte aqui
+   * cambiaria la clave sin aviso. `confirmar` viaja en la forma y NO en el
+   * cuerpo: es para que no se equivoquen al escribirla, nada mas.
+   */
+  contrasena: string;
+  confirmar: string;
 }
 
 /** Lo que acepta `POST /api/usuarios`. Es `strictObject`: sobra un campo y es 400. */
@@ -128,6 +144,11 @@ export interface CuerpoUsuario {
   email: string | null;
   puesto: string | null;
   fecha_contratacion?: string;
+  /**
+   * La clave, si el administrador la escribio. Si no viene, el servidor
+   * genera la temporal de siempre (`crearUsuarioEsquema`).
+   */
+  contrasena?: string;
   roles: number[];
 }
 
@@ -198,6 +219,10 @@ function textoONull(valor: string): string | null {
  *   3. **La fecha solo va si se escribio.** El esquema la pone opcional y el
  *      servicio la rellena con hoy si no llega; mandarla vacia seria un 400
  *      del `regex`.
+ *   4. **La contrasena solo va si se escribio**, y sin recortarla: los
+ *      espacios adentro son parte de la clave y el backend tampoco los
+ *      toca. En blanco se omite el campo entero (no `''`, que daria 400) y
+ *      el servidor genera la temporal. `confirmar` jamas sale de aqui.
  */
 export function cuerpoDeUsuario(forma: FormaUsuario, roles: number[]): CuerpoUsuario {
   const cuerpo: CuerpoUsuario = {
@@ -211,6 +236,7 @@ export function cuerpoDeUsuario(forma: FormaUsuario, roles: number[]): CuerpoUsu
   };
   const fecha = forma.fecha_contratacion.trim();
   if (fecha !== '') cuerpo.fecha_contratacion = fecha;
+  if (forma.contrasena !== '') cuerpo.contrasena = forma.contrasena;
   return cuerpo;
 }
 

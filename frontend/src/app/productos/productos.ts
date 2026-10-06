@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
@@ -204,7 +212,12 @@ export class Productos {
   }
 
   hayFiltrosActivos(): boolean {
-    return this.filtroActivo() !== 'activos' || this.filtroCategoria() !== null || this.filtroEspecie() !== null || this.buscador().trim().length >= 2;
+    return (
+      this.filtroActivo() !== 'activos' ||
+      this.filtroCategoria() !== null ||
+      this.filtroEspecie() !== null ||
+      this.buscador().trim().length >= 2
+    );
   }
 
   /**
@@ -255,7 +268,9 @@ export class Productos {
   async irAPagina(pagina: number): Promise<void> {
     if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
     await this.cargarPagina(pagina);
-    document.querySelector('.tabla-wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document
+      .querySelector('.tabla-wrapper')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   /**

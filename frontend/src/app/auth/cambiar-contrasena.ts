@@ -138,7 +138,9 @@ export class CambiarContrasena {
   }
 
   async salir(): Promise<void> {
-    await this.sesion.salir();
+    // Igual que en el shell: sin esperar al backend, para que la salida no
+    // se quede colgada viendo a la pantalla.
+    this.sesion.salir();
     await this.router.navigate(['/login']);
   }
 }

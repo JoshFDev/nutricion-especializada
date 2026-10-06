@@ -90,7 +90,9 @@
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .campo input:focus,

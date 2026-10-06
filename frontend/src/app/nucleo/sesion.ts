@@ -240,20 +240,26 @@ export class Sesion {
   /**
    * Cierra la sesion de verdad.
    *
-   * Primero se avisa al backend, que es lo que deja de valer el token en su
-   * tabla `sesiones`, y despues se limpia lo local. Se limpia en los dos
-   * casos aunque el backend falle: quedarse "dentro" de la app sin sesion
-   * solo produce errores 401 en cada clic, y el token ya no sirve para
-   * nada. El error del logout se ignora a proposito.
+   * Se limpia lo local SIN esperar al backend y el `/auth/logout` sale en
+   * segundo plano. La razon es lo que pasaba al salir: mientras la
+   * peticion volvia no pasaba nada en pantalla, y si el token ya estaba
+   * muerto el 401 del logout provocaba una SEGUNDA navegacion a `/login`
+   * desde el interceptor —dos view-transitions encima, y la segunda cancela
+   * a la primera a la mitad: la pantalla se quedaba congelada con la foto
+   * vieja.
+   *
+   * Se limpia aunque el logout falle: quedarse "dentro" de la app sin
+   * sesion solo produce errores 401 en cada clic, y el token ya no sirve
+   * para nada. El error se ignora a proposito —si el servidor no responde,
+   * el token se caduca solo y no hay nada que la persona pueda hacer— y
+   * tampoco se espera: ver el comentario de arriba.
    */
-  async salir(): Promise<void> {
+  salir(): void {
     if (this.hayToken()) {
-      try {
-        await firstValueFrom(this.http.post(`${API}/auth/logout`, {}));
-      } catch {
-        // Si el servidor no responde, el token se caduca solo. No hay nada
-        // que el usuario pueda hacer al respecto, asi que no se le avisa.
-      }
+      // Sin `await` a proposito. `firstValueFrom` se suscribe de inmediato,
+      // asi que la peticion sale igual, todavia con el token puesto (el
+      // interceptor lo lee al suscribir, antes de `limpiar`).
+      void firstValueFrom(this.http.post(`${API}/auth/logout`, {})).catch(() => undefined);
     }
     this.limpiar();
   }

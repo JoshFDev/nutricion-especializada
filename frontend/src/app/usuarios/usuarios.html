@@ -126,6 +126,41 @@
         }
       </div>
 
+      <!--
+        La clave del alta, OPCIONAL. En blanco el servidor genera la
+        temporal de siempre (y sale el panel de una sola vez); escrita, se
+        usa tal cual y la persona entra sin pendiente de cambio.
+        `confirmar` no se manda: existe para que no se equivoquen al
+        escribirla.
+      -->
+      @if (esAlta()) {
+        <div class="bloque">
+          <h2>Clave de acceso</h2>
+          <div class="datos">
+            <label>
+              <span>Contraseña (opcional)</span>
+              <input type="password" formControlName="contrasena" autocomplete="new-password" />
+              @if (problemaDe('contrasena'); as problema) {
+                <small class="ayuda">{{ problema }}</small>
+              } @else {
+                <small class="pista">
+                  En blanco y el sistema genera una clave temporal que la persona cambia al entrar.
+                </small>
+              }
+            </label>
+            <label>
+              <span>Repite la contraseña</span>
+              <input type="password" formControlName="confirmar" autocomplete="new-password" />
+              @if (forma.hasError('noCoinciden')) {
+                <small class="ayuda">Las contraseñas no coinciden.</small>
+              } @else if (problemaDe('confirmar'); as problema) {
+                <small class="ayuda">{{ problema }}</small>
+              }
+            </label>
+          </div>
+        </div>
+      }
+
       @if (esAlta()) {
         <div class="bloque">
           <h2>Roles</h2>
@@ -218,7 +253,7 @@
           }
         </p>
       </div>
-      <div class="cabecera-botones">
+      <div class="acciones-cabecera">
         @if (puedeEditar()) {
           <button type="button" (click)="editar(ficha)">Editar</button>
         }
@@ -342,16 +377,20 @@
       }
     </div>
 
-    <div class="filtros">
+    <div class="filtros" role="group" aria-label="Filtros del listado">
       <input
         type="search"
+        autocomplete="off"
         placeholder="Buscar por nombre, apellido, RFC o correo"
+        aria-label="Buscar usuarios"
         [value]="buscador()"
         (input)="buscar($any($event.target).value)"
+        (keydown.escape)="limpiarFiltros()"
       />
 
       <select
         class="filtro"
+        aria-label="Filtrar por rol"
         [value]="filtroRol() ?? ''"
         (change)="filtrarRol($any($event.target).value)"
       >
@@ -363,6 +402,7 @@
 
       <select
         class="filtro"
+        aria-label="Filtrar por estado"
         [value]="filtroActivo()"
         (change)="filtrarActivo($any($event.target).value)"
       >
@@ -376,53 +416,107 @@
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
+    <!--
+      El estado vacío, con los DOS casos separados: no hay usuarios, o el
+      filtro no dejó ninguno. Se separan porque la acción que sirve es
+      distinta, y ofrecer "Crear el primero" con un filtro puesto invita a
+      crear un duplicado.
+    -->
     @if (buscando() && filas().length === 0) {
-      <p class="vacio">Buscando…</p>
+      <p class="cargando">Buscando…</p>
     } @else if (filas().length === 0) {
-      <p class="vacio">Nadie coincide con eso.</p>
+      <div class="estado-vacio">
+        @if (hayFiltros()) {
+          <h2>Nadie coincide con eso</h2>
+          <p>Prueba con otro nombre, RFC o correo, o quita los filtros aplicados.</p>
+          <button type="button" class="primario" (click)="limpiarFiltros()">Quitar filtros</button>
+        } @else if (puedeCrear()) {
+          <h2>Aún no hay usuarios</h2>
+          <p>Da de alta a la primera persona para que pueda entrar a la app.</p>
+          <button type="button" class="primario" (click)="nuevo()">Crear el primero</button>
+        } @else {
+          <h2>No hay usuarios</h2>
+          <p>Todavía no se ha registrado a nadie.</p>
+        }
+      </div>
     } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Puesto</th>
-            <th>Roles</th>
-            <th>Estado</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of filas(); track fila.id) {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>
-                <strong>{{ nombreCompleto(fila) }}</strong>
-                <span class="tenue">{{ fila.rfc }}</span>
-              </td>
-              <td>{{ fila.puesto ?? '—' }}</td>
-              <td>{{ rolesEnLinea(fila) || '—' }}</td>
-              <td>
-                <span class="estado estado-{{ estadoDeCuenta(fila) }}">
-                  {{ ETIQUETA_ESTADO[estadoDeCuenta(fila)] }}
-                </span>
-              </td>
-              <td class="acciones-celda">
-                <button type="button" class="chico" (click)="ver(fila)">Ver</button>
-                @if (puedeEditar()) {
-                  <button type="button" class="chico" (click)="editar(fila)">Editar</button>
-                }
-              </td>
+              <th scope="col">Nombre</th>
+              <th scope="col">Puesto</th>
+              <th scope="col">Roles</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (fila of filas(); track fila.id) {
+              <tr>
+                <td>
+                  <strong>{{ nombreCompleto(fila) }}</strong>
+                  <span class="tenue">{{ fila.rfc }}</span>
+                </td>
+                <td>{{ fila.puesto ?? '—' }}</td>
+                <td>{{ rolesEnLinea(fila) || '—' }}</td>
+                <td>
+                  <span class="estado estado-{{ estadoDeCuenta(fila) }}">
+                    {{ ETIQUETA_ESTADO[estadoDeCuenta(fila)] }}
+                  </span>
+                </td>
+                <td class="acciones-celda">
+                  <div class="acciones-fila">
+                    <button type="button" class="chico" (click)="ver(fila)">Ver</button>
+                    @if (puedeEditar()) {
+                      <button type="button" class="chico" (click)="editar(fila)">Editar</button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
 
-      @if (hayMas()) {
-        <div class="acciones">
-          <button type="button" (click)="cargarMas()" [disabled]="buscando()">
-            Cargar más ({{ total() - filas().length }})
-          </button>
-        </div>
-      }
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || buscando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || buscando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+
+        <label class="oculto" for="tamano-pagina-usuarios">Personas por página</label>
+        <select
+          id="tamano-pagina-usuarios"
+          class="filtro tamano-pagina"
+          aria-label="Personas por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+          <option value="200">200 por página</option>
+        </select>
+      </div>
     }
   </section>
 }

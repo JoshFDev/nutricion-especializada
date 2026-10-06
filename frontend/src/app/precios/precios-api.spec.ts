@@ -112,7 +112,11 @@ describe('los criterios de cada vista', () => {
   });
 
   it('un filtro que no esta puesto no viaja: no se manda la clave', () => {
-    const criterios = criteriosDe('clientes', { ...filtros, productoId: undefined, clienteId: undefined });
+    const criterios = criteriosDe('clientes', {
+      ...filtros,
+      productoId: undefined,
+      clienteId: undefined,
+    });
     expect(criterios.producto_id).toBeUndefined();
     expect(criterios.cliente_id).toBeUndefined();
   });

@@ -249,11 +249,28 @@
  * El `box-shadow` va en tres capas: el anillo de 1px de luz alrededor del blanco
  * para que el circulo no se coma la foto con un borde duro, la difusa que lo
  * despega, y el contacto de 1px para que se note contra el fondo oscuro.
+ *
+ * Y lo de que el logo no se pueda arrastrar. Sin esto, un `<img>` es un
+ * elemento arrastrable por defecto en todos los navegadores: al pulsar sobre
+ * el y mover un poco, sale el cursor de mano "cerrada" y aparece una copia
+ * translucida del logo pegada al puntero que se puede soltar en cualquier sitio,
+ * incluido fuera de la ventana. En una pantalla de acceso parece un fallo: es
+ * la marca de la empresa moviendose sola, y encima el arrastre tapa justo el
+ * trozo de foto que hay detras.
+ *
+ * El bloqueo va en las dos capas porque ninguna basta sola. `draggable="false"`
+ * es lo unico que respeta Firefox (que ignora la propiedad CSS de abajo), y
+ * `-webkit-user-drag` es lo que para la copia translucida en Chromium y Safari,
+ * que sesaltan el atributo en cuanto el elemento tiene su propio manejador de
+ * `dragstart`. `user-select` va con ellos para que el logo tampoco entre en la
+ * seleccion de texto al hacer clic y arrastrar encima.
  */
 .marca__logo {
   width: var(--e-logo);
   height: var(--e-logo);
   padding: clamp(0.875rem, 1.7vw, 1.625rem);
+  -webkit-user-drag: none;
+  user-select: none;
   object-fit: contain;
   border-radius: 50%;
   background: var(--superficie);

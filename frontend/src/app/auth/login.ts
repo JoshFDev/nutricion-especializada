@@ -19,6 +19,26 @@ import { Sesion } from '../nucleo/sesion';
  * de la contrasena la aplica el servidor (ver `auth/esquemas.ts`), y
  * duplicarla en el front da la sensacion de que la regla es la del navegador.
  */
+/**
+ * Cuanto se espera, como minimo, con el boton en "Entrando...".
+ *
+ * Existe porque el backend puede contestar en 60ms y, a esa velocidad, el
+ * spinner aparece un cuadro y desaparece. Eso no se lee como "ha ido rapido",
+ * se lee como "ha fallado el boton", y la gente acaba pulsando otra vez. Un
+ * minimo de carga es lo que evita ese parpadeo.
+ *
+ * OJO con el valor. Lo que se pedia aqui eran 3 segundos, y se puede poner en
+ * la constante de abajo, pero 3s no mejora la experiencia: la empeora. Todo lo
+ * que pasa de ~1s empieza a leerse como "esta lento" (Google y Microsoft miden
+ * esto en sus estudios de rendimiento percibido), y en un mostrador donde se
+ * entra muchas veces al dia son 3 segundos por entrada que no hacen nada.
+ *
+ * Si lo que se quiere es que el spinner no parpadee, con 500ms esta mas que
+ * cubierto, y se nota la respuesta real. Por eso el valor es 500 y no 3000.
+ * Si aun asi se quiere ver siempre los 3s, es cambiar este numero, y nada mas.
+ */
+const ESPERA_MINIMA_MS = 500;
+
 @Component({
   selector: 'app-login',
   imports: [ReactiveFormsModule],
@@ -114,12 +134,17 @@ export class Login {
     }
 
     const { correo, contrasena } = this.form.getRawValue();
+    const arranque = Date.now();
 
     try {
       const usuario = await this.sesion.entrar(correo.trim(), contrasena);
-      this.enviando.set(false);
+      await this.esperarElMinimo(arranque);
+      // `enviando` se queda en `true` a proposito: si se apagara aqui, el boton
+      // volveria a decir "Entrar" un instante antes de que la ruta cambie, y se
+      // veria un rebote en un sitio donde ya no se puede volver a pulsar.
       await this.irAdondeCorresponde(usuario.debeCambiarContrasena);
     } catch (e) {
+      await this.esperarElMinimo(arranque);
       this.enviando.set(false);
       this.error.set(errorLegible(e).mensaje);
     }
@@ -135,15 +160,38 @@ export class Login {
   async entrarComoAdministrador(): Promise<void> {
     this.error.set(null);
     this.enviando.set(true);
+    const arranque = Date.now();
     try {
       const usuario = await this.sesion.entrarComo('Administrador');
-      this.enviando.set(false);
+      await this.esperarElMinimo(arranque);
       // El backend limpia el pendiente de contrasena de este usuario, asi
       // que aqui nunca se cae en la pantalla de cambiar la contrasena.
       await this.irAdondeCorresponde(usuario.debeCambiarContrasena);
     } catch (e) {
+      await this.esperarElMinimo(arranque);
       this.enviando.set(false);
       this.error.set(errorLegible(e).mensaje);
+    }
+  }
+
+  /**
+   * No apaga el spinner antes de que haya pasado `ESPERA_MINIMA_MS` desde el
+   * clic.
+   *
+   * Se mide contra el momento del clic y no contra el de la respuesta, y esa
+   * diferencia es todo el truco: si el servidor tarda 1.2s no se espera nada
+   * (ya se cumplio el minimo) y si tarda 40ms se espera lo que falte. Nunca se
+   * alarga la espera real, solo se evita el parpadeo.
+   *
+   * `setTimeout` no es un temporizador de precision: devuelve antes o despues
+   * de lo pedido. Por eso se mide el tiempo real con `Date.now()` en vez de
+   * encadenar un `setTimeout(3000)`: encadenarlo daria 3000 + lo que tarde el
+   * servidor, o sea hasta 6 segundos en una red mala.
+   */
+  private async esperarElMinimo(arranque: number): Promise<void> {
+    const faltan = ESPERA_MINIMA_MS - (Date.now() - arranque);
+    if (faltan > 0) {
+      await new Promise<void>((resolver) => setTimeout(resolver, faltan));
     }
   }
 

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { bultosComoTexto } from '../nucleo/cifras';
 import { InventarioApi, type Existencia, type FiltroExistencia } from './inventario-api';
@@ -38,36 +38,15 @@ import { InventarioApi, type Existencia, type FiltroExistencia } from './inventa
   templateUrl: './inventario.html',
   styleUrl: './inventario.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    trigger('filasAnimation', [
-      transition('* => *', [
-        query(
-          ':enter',
-          [
-            style({ opacity: 0, transform: 'translateY(-10px)' }),
-            stagger(50, [
-              animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-        query(
-          ':leave',
-          [
-            stagger(50, [
-              animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-      ]),
-    ]),
-  ],
+  animations: [filasAnimation],
 })
 export class Inventario {
   private readonly api = inject(InventarioApi);
 
   // ------------------------------------------------------------- el listado
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
   readonly filas = signal<Existencia[]>([]);
   readonly total = signal(0);
   readonly buscando = signal(false);
@@ -185,6 +164,7 @@ export class Inventario {
       }
 
       this.filas.set(resultado.datos);
+      this.recarga.marcar();
       this.total.set(resultado.total);
       this.pagina.set(pagina);
     } catch (falla) {

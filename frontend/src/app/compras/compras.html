@@ -426,7 +426,7 @@
             <th scope="col"><span class="oculto">Acciones</span></th>
           </tr>
         </thead>
-        <tbody [@filasAnimation]>
+        <tbody [@filasAnimation]="recarga.valor()">
           @for (compra of filas(); track compra.id) {
             <tr>
               <td>{{ compra.fecha }}</td>

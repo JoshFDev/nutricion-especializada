@@ -6,7 +6,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { crearBuscador } from '../nucleo/buscador';
 import { Sesion } from '../nucleo/sesion';
@@ -83,31 +83,7 @@ type Pantalla = 'lista' | 'cuentas';
   styleUrl: './caja.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ConfirmModal],
-  animations: [
-    trigger('filasAnimation', [
-      transition('* => *', [
-        query(
-          ':enter',
-          [
-            style({ opacity: 0, transform: 'translateY(-10px)' }),
-            stagger(50, [
-              animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-        query(
-          ':leave',
-          [
-            stagger(50, [
-              animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-      ]),
-    ]),
-  ],
+  animations: [filasAnimation],
 })
 export class Caja {
   private readonly api = inject(CajaApi);
@@ -137,6 +113,7 @@ export class Caja {
     this.errorCuentas.set(null);
     try {
       this.cuentas.set(await this.api.cuentas());
+      this.recarga.marcar();
     } catch (falla) {
       this.errorCuentas.set(errorLegible(falla).mensaje);
     }
@@ -167,6 +144,9 @@ export class Caja {
   }
 
   // --------------------------------------------------------------- el listado
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
   readonly filas = signal<MovimientoListado[]>([]);
   readonly totalEncontrado = signal(0);
   readonly cargando = signal(false);
@@ -452,6 +432,7 @@ export class Caja {
     try {
       const resultado = await this.api.movimientos(this.filtros(pagina));
       this.filas.set(resultado.datos);
+      this.recarga.marcar();
       this.totalEncontrado.set(resultado.total);
       this.pagina.set(pagina);
 

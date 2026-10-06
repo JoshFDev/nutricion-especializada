@@ -259,7 +259,7 @@
             <th scope="col">Acciones</th>
           </tr>
         </thead>
-        <tbody [@filasAnimation]>
+        <tbody [@filasAnimation]="recarga.valor()">
           @for (producto of filas(); track producto.id) {
             <tr>
               <td>{{ producto.codigo }}</td>

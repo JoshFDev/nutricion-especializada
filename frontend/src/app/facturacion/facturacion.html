@@ -339,7 +339,7 @@
             <th scope="col"><span class="oculto">Acciones</span></th>
           </tr>
         </thead>
-        <tbody [@filasAnimation]>
+        <tbody [@filasAnimation]="recarga.valor()">
           @for (factura of filas(); track factura.id) {
             <tr>
               <td>{{ factura.cliente }}</td>

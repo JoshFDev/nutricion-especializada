@@ -446,7 +446,7 @@
               <th scope="col">Acciones</th>
             </tr>
           </thead>
-          <tbody [@filasAnimation]>
+          <tbody [@filasAnimation]="recarga.valor()">
             @for (fila of filas(); track fila.id) {
               <tr [class.historico]="fila.vigente_hasta !== null">
                 <td class="celda-producto">

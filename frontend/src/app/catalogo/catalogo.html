@@ -173,7 +173,7 @@
             <th scope="col">Acciones</th>
           </tr>
         </thead>
-        <tbody [@filasAnimation]>
+        <tbody [@filasAnimation]="recarga.valor()">
           @for (fila of filasVisibles(); track fila.id) {
             <tr>
               <td>{{ fila.nombre }}</td>

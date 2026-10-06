@@ -1,12 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
-import {
-  trigger,
-  transition,
-  style,
-  animate,
-  query,
-  stagger,
-} from '@angular/animations';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
@@ -69,26 +62,7 @@ interface FilaPrecio {
   styleUrl: './precios.scss',
   imports: [ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    // Las mismas filas de entrada que en productos y en el catalogo. Antes
-    // esta tabla salia de golpe al cambiar de pagina, y al pasar de esta
-    // pantalla a las otras dos se notaba el salto de una a otra.
-    trigger('filasAnimation', [
-      transition('* => *', [
-        query(':enter', [
-          style({ opacity: 0, transform: 'translateY(-10px)' }),
-          stagger(50, [
-            animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
-          ]),
-        ], { optional: true }),
-        query(':leave', [
-          stagger(50, [
-            animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
-          ]),
-        ], { optional: true }),
-      ]),
-    ]),
-  ],
+  animations: [filasAnimation],
 })
 export class Precios {
   private readonly api = inject(PreciosApi);
@@ -101,6 +75,9 @@ export class Precios {
 
   // ------------------------------------------------------------- la vista
   readonly vista = signal<'publicos' | 'clientes'>('publicos');
+
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
 
   readonly filas = signal<FilaPrecio[]>([]);
   readonly total = signal(0);
@@ -343,6 +320,7 @@ readonly hayFiltros = computed(
     try {
       const [filas, total] = await this.pedir(pagina);
       this.filas.set(filas);
+      this.recarga.marcar();
       this.total.set(total);
       this.pagina.set(pagina);
     } catch (falla) {

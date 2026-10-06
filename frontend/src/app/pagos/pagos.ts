@@ -6,7 +6,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
@@ -67,31 +67,7 @@ import {
   styleUrl: './pagos.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ConfirmModal],
-  animations: [
-    trigger('filasAnimation', [
-      transition('* => *', [
-        query(
-          ':enter',
-          [
-            style({ opacity: 0, transform: 'translateY(-10px)' }),
-            stagger(50, [
-              animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-        query(
-          ':leave',
-          [
-            stagger(50, [
-              animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-      ]),
-    ]),
-  ],
+  animations: [filasAnimation],
 })
 export class Pagos {
   private readonly api = inject(PagosApi);
@@ -101,6 +77,9 @@ export class Pagos {
   readonly confirmModal = viewChild.required(ConfirmModal);
 
   // --------------------------------------------------------------- el listado
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
   readonly listado = signal<PagoListado[]>([]);
   readonly total = signal(0);
   readonly cargando = signal(false);
@@ -289,6 +268,7 @@ export class Pagos {
         offset: (pagina - 1) * this.limite(),
       });
       this.listado.set(resultado.datos);
+      this.recarga.marcar();
       this.total.set(resultado.total);
       this.pagina.set(pagina);
 

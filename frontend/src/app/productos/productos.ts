@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, viewChild } from '@angular/core';
-import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { Sesion } from '../nucleo/sesion';
 import { kilosComoTexto } from '../nucleo/cifras';
@@ -28,23 +28,7 @@ import { ToastService } from '../nucleo/toast.service';
   styleUrl: './productos.scss',
   imports: [ReactiveFormsModule, ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    trigger('filasAnimation', [
-      transition('* => *', [
-        query(':enter', [
-          style({ opacity: 0, transform: 'translateY(-10px)' }),
-          stagger(50, [
-            animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
-          ]),
-        ], { optional: true }),
-        query(':leave', [
-          stagger(50, [
-            animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
-          ]),
-        ], { optional: true }),
-      ]),
-    ]),
-  ],
+  animations: [filasAnimation],
 })
 export class Productos {
   private readonly api = inject(ProductosApi);
@@ -53,6 +37,9 @@ export class Productos {
   private readonly toast = inject(ToastService);
 
   // ------------------------------------------------------------- el listado
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
   readonly filas = signal<Producto[]>([]);
   readonly total = signal(0);
   readonly buscando = signal(false);
@@ -246,6 +233,7 @@ export class Productos {
         offset: (pagina - 1) * this.limite(),
       });
       this.filas.set(resultado.datos);
+      this.recarga.marcar();
       this.total.set(resultado.total);
       this.pagina.set(pagina);
     } catch (falla) {

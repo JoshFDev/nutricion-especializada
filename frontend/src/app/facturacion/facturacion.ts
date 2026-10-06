@@ -6,7 +6,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
+import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { crearBuscador } from '../nucleo/buscador';
 import { Sesion } from '../nucleo/sesion';
@@ -69,31 +69,7 @@ import {
   styleUrl: './facturacion.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ConfirmModal],
-  animations: [
-    trigger('filasAnimation', [
-      transition('* => *', [
-        query(
-          ':enter',
-          [
-            style({ opacity: 0, transform: 'translateY(-10px)' }),
-            stagger(50, [
-              animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-        query(
-          ':leave',
-          [
-            stagger(50, [
-              animate('200ms ease-in', style({ opacity: 0, transform: 'translateX(20px)' })),
-            ]),
-          ],
-          { optional: true },
-        ),
-      ]),
-    ]),
-  ],
+  animations: [filasAnimation],
 })
 export class Facturacion {
   private readonly api = inject(FacturacionApi);
@@ -108,6 +84,9 @@ export class Facturacion {
   readonly puedeEmitir = computed(() => this.sesion.puede('facturas.emitir'));
 
   // --------------------------------------------------------------- el listado
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
   readonly filas = signal<FacturaListada[]>([]);
   readonly totalEncontrado = signal(0);
   readonly cargando = signal(false);
@@ -324,6 +303,7 @@ export class Facturacion {
         offset: (pagina - 1) * this.limite(),
       });
       this.filas.set(resultado.datos);
+      this.recarga.marcar();
       this.totalEncontrado.set(resultado.total);
       this.pagina.set(pagina);
 

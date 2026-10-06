@@ -234,7 +234,7 @@
             <th scope="col">Acciones</th>
           </tr>
         </thead>
-        <tbody [@filasAnimation]>
+        <tbody [@filasAnimation]="recarga.valor()">
           @for (proveedor of filas(); track proveedor.id) {
             <tr>
               <td>{{ proveedor.nombre }}</td>

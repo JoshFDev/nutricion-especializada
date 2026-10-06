@@ -90,7 +90,7 @@
             <th scope="col">Estado</th>
           </tr>
         </thead>
-        <tbody [@filasAnimation]>
+        <tbody [@filasAnimation]="recarga.valor()">
           @for (fila of filas(); track fila.producto_id + '-' + fila.almacen_id) {
             <tr>
               <td>

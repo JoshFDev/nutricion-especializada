@@ -661,6 +661,17 @@ a:hover .menu-icon,
    * principio de una pagina y no como el continuacion de la barra.
    */
   scroll-padding-block-start: 0.5rem;
+
+  /*
+   * Lo que anima `withViewTransitions` al cambiar de pantalla.
+   *
+   * El nombre es el que busca `::view-transition-old(contenido)` en
+   * `styles.scss`. Al ponerlo aqui, el navegador saca esta zona de la foto
+   * general de la pagina y la mezcla sola, y el menu lateral se queda
+   * quieto. Sin nombre se animaria la pagina entera y el menu parpadearia
+   * en cada cambio de pantalla.
+   */
+  view-transition-name: contenido;
 }
 
 /*

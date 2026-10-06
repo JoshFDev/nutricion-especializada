@@ -91,3 +91,87 @@ body {
   outline: 2px solid var(--acento);
   outline-offset: 2px;
 }
+
+/*
+ * El cambio de pantalla.
+ *
+ * Lo que hay aqui son los pseudo-elementos de la View Transitions API, que
+ * `withViewTransitions` en `app.config.ts` activa en cada navegacion. Entre
+ * la pantalla vieja y la nueva hay dos imagenes y estas reglas las mezclan.
+ *
+ * El nombre `contenido` no es inventado: es el `view-transition-name` que
+ * lleva `.contenido` en `shell.scss`. Al ponerle nombre, el navegador saca
+ * esa zona de la foto general y la anima por su cuenta, y el resto de la
+ * pagina (el menu lateral, la barra) se queda como esta. Sin esto la
+ * transicion arrastraria el menu lateral tambien, y el menu parpadeando en
+ * cada cambio de pantalla se ve peor que un corte seco.
+ *
+ * Son 180 ms, sale hacia 6px y entra desde 6px, con el desvanecido al
+ * lado. Un poco de desplazamiento marca el sentido del cambio; solo con el
+ * desvanecido los dos lados se ven igual y no se sabe cual era cual. Los
+ * 180 ms son el punto en el que se percibe el cambio sin esperar a que
+ * termine: mas rapido ya no se ve, mas lento se nota la espera.
+ */
+::view-transition-old(contenido) {
+  animation: 180ms cubic-bezier(0.4, 0, 1, 1) both salida-contenido;
+}
+
+::view-transition-new(contenido) {
+  animation: 220ms cubic-bezier(0, 0, 0.2, 1) both entrada-contenido;
+}
+
+@keyframes salida-contenido {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes entrada-contenido {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/*
+ * El login y la pantalla sin conexion van fuera del shell, asi que no tienen
+ * `.contenido` con nombre. Sin esto su cambio seria el fundido a blanco que
+ * hace el navegador por defecto, que en una pantalla de login se lee como un
+ * fallo.
+ */
+::view-transition-old(root) {
+  animation: 140ms ease-out both salida-root;
+}
+
+::view-transition-new(root) {
+  animation: 200ms ease-out both entrada-root;
+}
+
+@keyframes salida-root {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes entrada-root {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * Sin movimiento para quien lo ha pedido asi en el sistema.
+ *
+ * Solo se quitan las transiciones de pagina. Las de las filas de tabla
+ * tambien deberian caerse, pero van con `@angular/animations` y no con CSS,
+ * asi que no entran aqui: estan en `nucleo/animaciones.ts`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(contenido),
+  ::view-transition-new(contenido),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

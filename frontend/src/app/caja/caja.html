@@ -186,7 +186,7 @@
               <th class="num">El saldo</th>
             </tr>
           </thead>
-          <tbody [@filasAnimation]>
+          <tbody [@filasAnimation]="recarga.valor()">
             @for (cuenta of cuentas(); track cuenta.id) {
               <tr>
                 <td class="nombre-cuenta">{{ cuenta.nombre }}</td>
@@ -773,7 +773,7 @@
               <th class="acciones-celda">Ver</th>
             </tr>
           </thead>
-          <tbody [@filasAnimation]>
+          <tbody [@filasAnimation]="recarga.valor()">
             @for (movimiento of filas(); track movimiento.id) {
               <tr [class.fila-abierta]="detalleAbierto(movimiento.id)">
                 <td>{{ movimiento.fecha }}</td>

@@ -252,12 +252,12 @@ GET /precios      cambios de precio, con la variación
 
 ### `direcciones` — direcciones de entrega de la sucursal (`/api/direcciones-entrega`)
 
-| Endpoint         | Qué hace                                   |
-| ---------------- | ------------------------------------------ |
-| `GET /`          | Lista, ordenadas por nombre                |
-| `POST /`         | Da de alta con nombre corto + texto        |
-| `PUT /:id`       | Corrige (los dos campos se mandan siempre) |
-| `DELETE /:id`    | Borra del catálogo                         |
+| Endpoint      | Qué hace                                   |
+| ------------- | ------------------------------------------ |
+| `GET /`       | Lista, ordenadas por nombre                |
+| `POST /`      | Da de alta con nombre corto + texto        |
+| `PUT /:id`    | Corrige (los dos campos se mandan siempre) |
+| `DELETE /:id` | Borra del catálogo                         |
 
 - Son de la **sucursal**, no del cliente: el POS las ofrece y la persona
   elige o escribe a mano la dirección de la entrega.
@@ -316,6 +316,14 @@ SELECT crypt('lo-que-escribio', contrasena) = contrasena AS ok
 ```
 
 `sesiones.token_hash` guarda el **hash sha256** del token, nunca el token.
+
+En el alta y en el reseteo la clave puede ir en blanco: el backend genera una
+temporal y la API la devuelve una sola vez en el cuerpo (campo
+`contrasenaTemporal`), y únicamente cuando fue el sistema quien la generó.
+Si el administrador la escribe, se usa tal cual y no se obliga a cambiarla.
+En la base y en la bitácora solo queda el hash, nunca la clave ni la temporal:
+la temporal la guarda el hash bcrypt y la entrega el servidor una sola vez,
+porque después de esa respuesta ya no existe en ningún lado.
 
 ### Cómo la base de datos sabe quién está operando
 

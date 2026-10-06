@@ -40,13 +40,15 @@ no se edita nunca y la factura tampoco, lo unico que admite es el cambio de
 estatus) y caja y bancos (`/caja`: el periodo por cuenta, el alta de cuentas
 y los movimientos de ingreso y egreso, con el unico borrado de la app).
 
-Las dos de Sistema son de otra familia. En `/usuarios` casi todo lo que se
-ve es inmutable: el RFC y el correo no se editan porque el `PATCH` no los
-acepta, y los roles van aparte porque cambiarlos cierra las sesiones
-abiertas de esa persona. La contrasena temporal se muestra una vez y sin
-aviso que se vaya, porque en la base solo queda su huella. En `/auditoria`
-hay cinco bitacoras en pestanas, cada una con su permiso, y ninguna se
-puede editar: lo que aparece lo escribieron los triggers de la base.
+Las dos de Sistema son de otra familia. En `/usuarios` la lista sale paginada
+de a 25 filas, y el RFC y el correo no se editan porque el `PATCH` no los
+acepta; los roles van aparte porque cambiarlos cierra las sesiones abiertas
+de esa persona. En el alta el administrador deja la clave en blanco y el
+sistema genera una temporal que la persona cambia al entrar, o la escribe y
+se usa tal cual. La contrasena temporal se muestra una vez y sin aviso que
+se vaya, porque en la base solo queda su huella. En `/auditoria` hay cinco
+bitacoras en pestanas, cada una con su permiso, y ninguna se puede editar:
+lo que aparece lo escribieron los triggers de la base.
 
 ## Donde esta lo que importa
 
@@ -91,7 +93,15 @@ del final. Si el build de desarrollo acabara en un servidor, el boton no
 haria nada. Para quitarlo del proyecto: borrar `auth/rutas-dev.ts` y el
 `if` de `app.ts`.
 
-**Sin tests de componentes.** Hay 272 pruebas y ninguna levanta un
+**Salir no espera al servidor.** `salir()` vacia el token al momento y el
+POST de logout corre en segundo plano tragandose sus propios errores: antes,
+con la red caida la app se congelaba (el interceptor saltaba al `/login`, la
+transicion se quedaba a medias y no habia a quien seguirle dando clics). La
+app ademas salta las animaciones de transicion cuando el destino es
+`/login` o `/cambiar-contrasena`, para que ninguna pantalla se arrastre
+encima de la otra al cerrar la sesion.
+
+**Sin tests de componentes.** Hay 315 pruebas y ninguna levanta un
 componente: cubren el menu, el mapeo de errores, la sesion, las cifras, el
 buscador y el cuerpo de las peticiones de cada pantalla, que es donde esta la
 logica que se rompe en silencio. Probar que un boton se dibuja sale mas caro

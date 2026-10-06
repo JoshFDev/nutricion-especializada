@@ -79,10 +79,16 @@ export interface Paginado<T> {
  * Lo que devuelve POST /api/usuarios. La contrasena temporal viaja aqui
  * y en ningun otro lado: se muestra una vez y nunca se vuelve a poder
  * leer, porque en la base solo esta el hash.
+ *
+ * `contrasenaTemporal` es `string | null` y el null es un caso real, no una
+ * comodidad: si el administrador escribio la clave en el formulario, la eligio
+ * el y no hay nada que mostrar. La pantalla usa ese null para NO sacar el panel
+ * de "esta clave se muestra una sola vez", porque poner ahi una clave que la
+ * persona ya conoce solo confunde.
  */
 export interface UsuarioCreado {
   usuario: Usuario;
-  contrasenaTemporal: string;
+  contrasenaTemporal: string | null;
 }
 
 export const mapeoRol = (fila: RolFila): RolFila => ({

@@ -39,14 +39,21 @@
 </div>
 
 <div class="filtros">
-  <label class="campo">
+  <label class="campo fechas">
     <span>Del</span>
-    <input type="date" [value]="desde() ?? ''" (change)="ponerDesde($any($event.target).value)" />
-  </label>
-
-  <label class="campo">
-    <span>Al</span>
-    <input type="date" [value]="hasta() ?? ''" (change)="ponerHasta($any($event.target).value)" />
+    <input
+      type="date"
+      [value]="desde() ?? ''"
+      (change)="ponerDesde($any($event.target).value)"
+      aria-label="Desde"
+    />
+    <span>al</span>
+    <input
+      type="date"
+      [value]="hasta() ?? ''"
+      (change)="ponerHasta($any($event.target).value)"
+      aria-label="Hasta"
+    />
   </label>
 
   <div class="atajos">
@@ -57,10 +64,11 @@
   @if (conBusqueda()) {
     <input
       type="search"
-      class="buscador"
       placeholder="Buscar en el renglón"
+      aria-label="Buscar en el renglón"
       [value]="buscador()"
       (input)="buscar($any($event.target).value)"
+      (keydown.escape)="buscar('')"
     />
   }
 
@@ -132,270 +140,451 @@
   <p class="error" role="alert">{{ mensaje }}</p>
 }
 
+<!--
+    El "Cargando..." va FUERA del `@switch`, y solo en la primera pagina.
+
+    Primero, fuera: las cinco pestanas repiten el mismo `estado-vacio` y la
+    misma paginacion, y si el "cargando" estuviera dentro habria que escribirlo
+    cinco veces. Ademas el switch ya cambia la tabla al cambiar de pestana, que
+    es una recarga entera.
+
+    Segundo, solo en la primera pagina: en las siguientes las filas viejas se
+    quedan en pantalla mientras llegan las nuevas (la peticion es rapida y la
+    tabla ya tiene contenido), asi que sustituirla por un "Cargando..." sin
+    tabla seria un parpadeo que baja y levanta todo el bloque. Y el boton de
+    la barra ya se apaga mientras carga, que es el mismo aviso.
+  -->
+@if (cargando() && pagina() === 1 && !rangoMalo()) {
+  <p class="cargando">Cargando…</p>
+}
+
 @switch (abierta()) {
   @case ('log') {
     @if (filas.log().length === 0) {
-      <p class="vacio">Nada cambió en este rango.</p>
+      <div class="estado-vacio">
+        <h2>Nada cambió en este rango</h2>
+        <p>
+          Con el filtro de fechas actual no hay altas, cambios ni bajas. Prueba con un rango más
+          ancho.
+        </p>
+        <button type="button" class="primario" (click)="quitarFechas()">Quitar las fechas</button>
+      </div>
     } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Cuándo</th>
-            <th>Quién</th>
-            <th>Qué</th>
-            <th>Operación</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (renglon of filas.log(); track renglon.id) {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>{{ fechaLegible(renglon.fecha) }}</td>
-              <td>
-                {{ renglon.usuario ?? '—' }}
-                @if (renglon.usuario_ip) {
-                  <span class="tenue">{{ renglon.usuario_ip }}</span>
-                }
-              </td>
-              <td>
-                <code>{{ renglon.tabla }}</code>
-                @if (renglon.registro_id !== null) {
-                  <span class="tenue">#{{ renglon.registro_id }}</span>
-                }
-              </td>
-              <td>
-                <span class="operacion operacion-{{ renglon.operacion }}">
-                  {{ ETIQUETA_OPERACION[renglon.operacion] }}
-                </span>
-              </td>
-              <td class="acciones-celda">
-                <button type="button" class="chico" (click)="ver(renglon)">Ver cambios</button>
-              </td>
+              <th scope="col">Cuándo</th>
+              <th scope="col">Quién</th>
+              <th scope="col">Qué</th>
+              <th scope="col">Operación</th>
+              <th scope="col">Acciones</th>
             </tr>
-          }
-        </tbody>
-      </table>
-
-      @if (masPara(filas.log().length)) {
-        <div class="acciones">
-          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
-            Cargar más ({{ total() - filas.log().length }})
-          </button>
-        </div>
-      }
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (renglon of filas.log(); track renglon.id) {
+              <tr>
+                <td>{{ fechaLegible(renglon.fecha) }}</td>
+                <td>
+                  {{ renglon.usuario ?? '—' }}
+                  @if (renglon.usuario_ip) {
+                    <span class="tenue">{{ renglon.usuario_ip }}</span>
+                  }
+                </td>
+                <td>
+                  <code>{{ renglon.tabla }}</code>
+                  @if (renglon.registro_id !== null) {
+                    <span class="tenue">#{{ renglon.registro_id }}</span>
+                  }
+                </td>
+                <td>
+                  <span class="operacion operacion-{{ renglon.operacion }}">
+                    {{ ETIQUETA_OPERACION[renglon.operacion] }}
+                  </span>
+                </td>
+                <td class="acciones-celda">
+                  <button type="button" class="chico" (click)="ver(renglon)">Ver cambios</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-auditoria">Renglones por página</label>
+        <select
+          id="tamano-pagina-auditoria"
+          class="filtro tamano-pagina"
+          aria-label="Filtrar por cantidad de registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
     }
   }
 
   @case ('accesos') {
     @if (filas.accesos().length === 0) {
-      <p class="vacio">Nadie entró ni salió en este rango.</p>
+      <div class="estado-vacio">
+        <h2>Nadie entró ni salió en este rango</h2>
+        <p>No hay accesos registrados con el filtro de fechas actual.</p>
+        <button type="button" class="primario" (click)="quitarFechas()">Quitar las fechas</button>
+      </div>
     } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Cuándo</th>
-            <th>Evento</th>
-            <th>Quién</th>
-            <th>Desde</th>
-            <th>Detalle</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (renglon of filas.accesos(); track renglon.id) {
-            <tr [class.sospechoso]="eventoSospechoso(renglon.evento)">
-              <td>{{ fechaLegible(renglon.fecha) }}</td>
-              <td>
-                <span class="evento" [class.evento-malo]="eventoSospechoso(renglon.evento)">
-                  {{ ETIQUETA_EVENTO[renglon.evento] }}
-                </span>
-              </td>
-              <td>
-                @if (renglon.usuario) {
-                  {{ renglon.usuario }}
-                } @else if (renglon.usuario_intento) {
-                  {{ renglon.usuario_intento }}
-                  <span class="tenue">la cuenta no existe</span>
-                } @else {
-                  —
-                }
-              </td>
-              <td>{{ renglon.ip ?? '—' }}</td>
-              <td class="detalle">{{ renglon.detalle ?? renglon.user_agent ?? '—' }}</td>
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Cuándo</th>
+              <th scope="col">Evento</th>
+              <th scope="col">Quién</th>
+              <th scope="col">Desde</th>
+              <th scope="col">Detalle</th>
             </tr>
-          }
-        </tbody>
-      </table>
-
-      @if (masPara(filas.accesos().length)) {
-        <div class="acciones">
-          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
-            Cargar más ({{ total() - filas.accesos().length }})
-          </button>
-        </div>
-      }
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (renglon of filas.accesos(); track renglon.id) {
+              <tr [class.sospechoso]="eventoSospechoso(renglon.evento)">
+                <td>{{ fechaLegible(renglon.fecha) }}</td>
+                <td>
+                  <span class="evento" [class.evento-malo]="eventoSospechoso(renglon.evento)">
+                    {{ ETIQUETA_EVENTO[renglon.evento] }}
+                  </span>
+                </td>
+                <td>
+                  @if (renglon.usuario) {
+                    {{ renglon.usuario }}
+                  } @else if (renglon.usuario_intento) {
+                    {{ renglon.usuario_intento }}
+                    <span class="tenue">la cuenta no existe</span>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>{{ renglon.ip ?? '—' }}</td>
+                <td class="celda-detalle">{{ renglon.detalle ?? renglon.user_agent ?? '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-accesos">Renglones por página</label>
+        <select
+          id="tamano-pagina-accesos"
+          class="filtro tamano-pagina"
+          aria-label="Filtrar por cantidad de registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
     }
   }
 
   @case ('caja') {
     @if (filas.caja().length === 0) {
-      <p class="vacio">No se movió caja en este rango.</p>
+      <div class="estado-vacio">
+        <h2>No se movió caja en este rango</h2>
+        <p>No hay ingresos ni egresos registrados con el filtro de fechas actual.</p>
+        <button type="button" class="primario" (click)="quitarFechas()">Quitar las fechas</button>
+      </div>
     } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Cuándo</th>
-            <th>Cuenta</th>
-            <th>Concepto</th>
-            <th>Monto</th>
-            <th>Saldo</th>
-            <th>Quién</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (renglon of filas.caja(); track renglon.id) {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>{{ fechaLegible(renglon.fecha) }}</td>
-              <td>
-                {{ renglon.cuenta }}
-                <span class="tenue">{{ renglon.cuenta_tipo }}</span>
-              </td>
-              <td>
-                {{ renglon.categoria }}
-                @if (renglon.descripcion) {
-                  <span class="tenue">{{ renglon.descripcion }}</span>
-                }
-              </td>
-              <td
-                class="num"
-                [class.ingreso]="renglon.tipo === 'ingreso'"
-                [class.egreso]="renglon.tipo === 'egreso'"
-              >
-                {{ renglon.tipo === 'ingreso' ? '+' : '−' }}{{ montoComoTexto(renglon.monto) }}
-              </td>
-              <td class="num tenue">
-                {{ renglon.saldo_despues !== null ? montoComoTexto(renglon.saldo_despues) : '—' }}
-              </td>
-              <td>{{ renglon.usuario }}</td>
+              <th scope="col">Cuándo</th>
+              <th scope="col">Cuenta</th>
+              <th scope="col">Concepto</th>
+              <th scope="col">Monto</th>
+              <th scope="col">Saldo</th>
+              <th scope="col">Quién</th>
             </tr>
-          }
-        </tbody>
-      </table>
-
-      @if (masPara(filas.caja().length)) {
-        <div class="acciones">
-          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
-            Cargar más ({{ total() - filas.caja().length }})
-          </button>
-        </div>
-      }
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (renglon of filas.caja(); track renglon.id) {
+              <tr>
+                <td>{{ fechaLegible(renglon.fecha) }}</td>
+                <td>
+                  {{ renglon.cuenta }}
+                  <span class="tenue">{{ renglon.cuenta_tipo }}</span>
+                </td>
+                <td>
+                  {{ renglon.categoria }}
+                  @if (renglon.descripcion) {
+                    <span class="tenue">{{ renglon.descripcion }}</span>
+                  }
+                </td>
+                <td
+                  class="num"
+                  [class.ingreso]="renglon.tipo === 'ingreso'"
+                  [class.egreso]="renglon.tipo === 'egreso'"
+                >
+                  {{ renglon.tipo === 'ingreso' ? '+' : '−' }}{{ montoComoTexto(renglon.monto) }}
+                </td>
+                <td class="num tenue">
+                  {{ renglon.saldo_despues !== null ? montoComoTexto(renglon.saldo_despues) : '—' }}
+                </td>
+                <td>{{ renglon.usuario }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-caja">Renglones por página</label>
+        <select
+          id="tamano-pagina-caja"
+          class="filtro tamano-pagina"
+          aria-label="Filtrar por cantidad de registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
     }
   }
 
   @case ('inventario') {
     @if (filas.inventario().length === 0) {
-      <p class="vacio">No se movió inventario en este rango.</p>
+      <div class="estado-vacio">
+        <h2>No se movió inventario en este rango</h2>
+        <p>No hay entradas ni salidas de almacén registradas con el filtro de fechas actual.</p>
+        <button type="button" class="primario" (click)="quitarFechas()">Quitar las fechas</button>
+      </div>
     } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Cuándo</th>
-            <th>Producto</th>
-            <th>Almacén</th>
-            <th>Tipo</th>
-            <th>Cantidad</th>
-            <th>Existencia</th>
-            <th>Quién</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (renglon of filas.inventario(); track renglon.id) {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>{{ fechaLegible(renglon.fecha) }}</td>
-              <td>
-                {{ renglon.producto }}
-                <span class="tenue">{{ renglon.producto_codigo }}</span>
-              </td>
-              <td>{{ renglon.almacen }}</td>
-              <td>
-                {{ renglon.tipo }}
-                @if (renglon.motivo) {
-                  <span class="tenue">{{ renglon.motivo }}</span>
-                }
-              </td>
-              <td class="num">{{ renglon.cantidad_bultos }}</td>
-              <td class="num tenue">
-                @if (renglon.existencia_antes !== null && renglon.existencia_despues !== null) {
-                  {{ renglon.existencia_antes }} → {{ renglon.existencia_despues }}
-                } @else {
-                  —
-                }
-              </td>
-              <td>{{ renglon.usuario }}</td>
+              <th scope="col">Cuándo</th>
+              <th scope="col">Producto</th>
+              <th scope="col">Almacén</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Cantidad</th>
+              <th scope="col">Existencia</th>
+              <th scope="col">Quién</th>
             </tr>
-          }
-        </tbody>
-      </table>
-
-      @if (masPara(filas.inventario().length)) {
-        <div class="acciones">
-          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
-            Cargar más ({{ total() - filas.inventario().length }})
-          </button>
-        </div>
-      }
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (renglon of filas.inventario(); track renglon.id) {
+              <tr>
+                <td>{{ fechaLegible(renglon.fecha) }}</td>
+                <td>
+                  {{ renglon.producto }}
+                  <span class="tenue">{{ renglon.producto_codigo }}</span>
+                </td>
+                <td>{{ renglon.almacen }}</td>
+                <td>
+                  {{ renglon.tipo }}
+                  @if (renglon.motivo) {
+                    <span class="tenue">{{ renglon.motivo }}</span>
+                  }
+                </td>
+                <td class="num">{{ renglon.cantidad_bultos }}</td>
+                <td class="num tenue">
+                  @if (renglon.existencia_antes !== null && renglon.existencia_despues !== null) {
+                    {{ renglon.existencia_antes }} → {{ renglon.existencia_despues }}
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>{{ renglon.usuario }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-inventario">Renglones por página</label>
+        <select
+          id="tamano-pagina-inventario"
+          class="filtro tamano-pagina"
+          aria-label="Filtrar por cantidad de registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
     }
   }
 
   @case ('precios') {
     @if (filas.precios().length === 0) {
-      <p class="vacio">No cambiaron precios en este rango.</p>
+      <div class="estado-vacio">
+        <h2>No cambiaron precios en este rango</h2>
+        <p>No hay cambios de precio registrados con el filtro de fechas actual.</p>
+        <button type="button" class="primario" (click)="quitarFechas()">Quitar las fechas</button>
+      </div>
     } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Cuándo</th>
-            <th>Producto</th>
-            <th>Cliente</th>
-            <th>Tipo</th>
-            <th>Antes</th>
-            <th>Después</th>
-            <th>Quién</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (renglon of filas.precios(); track renglon.id) {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>{{ fechaLegible(renglon.fecha) }}</td>
-              <td>
-                {{ renglon.producto }}
-                <span class="tenue">{{ renglon.producto_codigo }}</span>
-              </td>
-              <td>{{ renglon.cliente ?? renglon.proveedor ?? '—' }}</td>
-              <td>{{ renglon.tipo_precio }}</td>
-              <td class="num tenue">
-                {{
-                  renglon.precio_anterior !== null ? montoComoTexto(renglon.precio_anterior) : '—'
-                }}
-              </td>
-              <td class="num">
-                {{ renglon.precio_nuevo !== null ? montoComoTexto(renglon.precio_nuevo) : '—' }}
-                @if (renglon.motivo) {
-                  <span class="tenue">{{ renglon.motivo }}</span>
-                }
-              </td>
-              <td>{{ renglon.usuario }}</td>
+              <th scope="col">Cuándo</th>
+              <th scope="col">Producto</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Antes</th>
+              <th scope="col">Después</th>
+              <th scope="col">Quién</th>
             </tr>
-          }
-        </tbody>
-      </table>
-
-      @if (masPara(filas.precios().length)) {
-        <div class="acciones">
-          <button type="button" (click)="cargarMas()" [disabled]="cargando()">
-            Cargar más ({{ total() - filas.precios().length }})
-          </button>
-        </div>
-      }
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (renglon of filas.precios(); track renglon.id) {
+              <tr>
+                <td>{{ fechaLegible(renglon.fecha) }}</td>
+                <td>
+                  {{ renglon.producto }}
+                  <span class="tenue">{{ renglon.producto_codigo }}</span>
+                </td>
+                <td>{{ renglon.cliente ?? renglon.proveedor ?? '—' }}</td>
+                <td>{{ renglon.tipo_precio }}</td>
+                <td class="num tenue">
+                  {{
+                    renglon.precio_anterior !== null ? montoComoTexto(renglon.precio_anterior) : '—'
+                  }}
+                </td>
+                <td class="num">
+                  {{ renglon.precio_nuevo !== null ? montoComoTexto(renglon.precio_nuevo) : '—' }}
+                  @if (renglon.motivo) {
+                    <span class="tenue">{{ renglon.motivo }}</span>
+                  }
+                </td>
+                <td>{{ renglon.usuario }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-precios">Renglones por página</label>
+        <select
+          id="tamano-pagina-precios"
+          class="filtro tamano-pagina"
+          aria-label="Filtrar por cantidad de registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
     }
   }
 }

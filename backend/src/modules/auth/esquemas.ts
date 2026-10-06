@@ -61,8 +61,16 @@ export const mapearUsuario = (fila: UsuarioFila): UsuarioPublico => ({
  * directo con el API.
  *
  * No imponemos simbolos raros: basta con 12 caracteres y tres clases.
+ *
+ * Se exporta porque el alta de usuario la usa tambien (ver
+ * `usuarios/esquemas.ts`): cuando el administrador escribe la contrasena de la
+ * persona en vez de que la genere el sistema, tiene que pasar por EXACTAMENTE
+ * la misma regla que la que la persona va a tener que cumplir cuando entre a
+ * cambiarla. Dos reglas parecidas en dos archivos son dos reglas distintas en
+ * cuanto una se toca, y el fallo sale como "me deja dar de alta una clave que
+ * despues no me acepta".
  */
-const contrasenaFuerte = z
+export const contrasenaFuerte = z
   .string()
   .min(12, 'La contrasena necesita al menos 12 caracteres')
   .max(200, 'La contrasena es demasiado larga')

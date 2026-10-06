@@ -97,7 +97,29 @@ export async function crear(
   // rapida y asi el error sale limpio, sin dejar una transaccion abierta.
   await rolesValidos(db, datos.roles);
 
-  const contrasenaTemporal = generarContrasenaTemporal();
+  /*
+   * Dos caminos de alta, y no son el mismo codigo con un if suelto.
+   *
+   * - Sin `contrasena` en el cuerpo: se genera la temporal de siempre, el
+   *   usuario nace con `debe_cambiar_contrasena` en TRUE y se le devuelve la
+   *   clave para entregar. Es el camino viejo.
+   * - Con `contrasena`: el administrador eligio la clave, se usa esa, y el
+   *   usuario nace con `debe_cambiar_contrasena` en FALSE.
+   *
+   * El punto que no es obvio es el `debe_cambiar` de FALSE. Es tentador
+   * dejarlo en TRUE "por seguridad", pero seria un bug de flujo: la persona ya
+   * sabe su clave y la eligio el administrador, si se le obliga a cambiarla
+   * lo unico que pasa es que entre, el sistema le pida otra vez y el
+   * administrador se entere de un paso extra que nadie pidio. La clave ya
+   * cumple la politica fuerte porque la valido el MISMO esquema que la del
+   * cambio de clave.
+   *
+   * Y `contrasenaTemporal` sale en null cuando la eligio el administrador:
+   * no hay nada que mostrar y se evita un panel "esta clave se muestra una
+   * sola vez" con una clave que nadie eligio y que ya conoce la persona.
+   */
+  const contrasenaElegida = datos.contrasena ?? null;
+  const contrasenaTemporal = contrasenaElegida ?? generarContrasenaTemporal();
 
   const id = await enTransaccionDe(db, async (t) => {
     let nuevo: { id: number };
@@ -111,6 +133,7 @@ export async function crear(
         puesto: datos.puesto ?? null,
         fecha_contratacion: datos.fecha_contratacion ?? new Date().toISOString().slice(0, 10),
         contrasena: contrasenaTemporal,
+        debeCambiar: contrasenaElegida === null,
       });
     } catch (error) {
       // El UNIQUE de la base es la autoridad; aqui solo se traduce el
@@ -128,7 +151,10 @@ export async function crear(
   });
 
   void actualId;
-  return { usuario: await obtener(db, id), contrasenaTemporal };
+  return {
+    usuario: await obtener(db, id),
+    contrasenaTemporal: contrasenaElegida ? null : contrasenaTemporal,
+  };
 }
 
 export async function actualizar(

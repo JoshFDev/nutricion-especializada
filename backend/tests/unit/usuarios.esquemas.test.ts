@@ -100,6 +100,47 @@ describe('esquema de alta', () => {
   });
 });
 
+describe('contrasena elegida en el alta', () => {
+  const base = {
+    nombre: 'Maria',
+    apellido_paterno: 'Hernandez',
+    rfc: 'GODL900101HDR',
+  };
+
+  it('se acepta si cumple la politica fuerte', () => {
+    const clave = 'Remilton2026';
+    const d = crearUsuarioEsquema.parse({ ...base, contrasena: clave });
+    expect(d.contrasena).toBe(clave);
+  });
+
+  it('si no viene, el alta sigue siendo valida', () => {
+    // Es el camino viejo: el servicio genera la temporal. No se rompe.
+    expect(crearUsuarioEsquema.parse(base).contrasena).toBeUndefined();
+  });
+
+  /*
+   * Estas cuatro son la razon de que el campo exista con validacion propia.
+   * Cada una es una clave que el sistema iba a ACEPTAR en el alta y luego
+   * RECHAZAR en el cambio de clave, dejando al usuario dado de alta con una
+   * contrasena que el sistema no reconoce: no puede ni entrar ni cambiarla.
+   */
+  it.each([
+    ['muy corta', 'Corta1a'],
+    ['sin numero', 'RemiltonDosMil'],
+    ['sin mayuscula', 'remilton2026x'],
+    ['sin minuscula', 'REMILTON2026X'],
+  ])('rechaza una contrasena %s', (_caso, clave) => {
+    expect(crearUsuarioEsquema.safeParse({ ...base, contrasena: clave }).success).toBe(false);
+  });
+
+  it('no recorta los espacios: la clave es la que se teclea', () => {
+    // Con .trim() la clave de la base seria distinta de la que escribe la
+    // persona y no entraria nunca. Aqui se comprueba que NO hay trim.
+    const clave = '  ConEspacios2026  ';
+    expect(crearUsuarioEsquema.parse({ ...base, contrasena: clave }).contrasena).toBe(clave);
+  });
+});
+
 describe('esquema de listado', () => {
   it('pone limites razonables por defecto', () => {
     const q = listarUsuariosEsquema.parse({});

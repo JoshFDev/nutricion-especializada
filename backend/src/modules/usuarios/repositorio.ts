@@ -136,6 +136,16 @@ export async function insertarUsuario(
     puesto: string | null;
     fecha_contratacion: string;
     contrasena: string;
+    /**
+     * Si el usuario nace con que cambiar la clave.
+     *
+     * Va como parametro ($9) y no como `TRUE` fijo: con contrasena temporal
+     * es `true` siempre, pero si el administrador eligio la clave en el
+     * formulario es `false`, porque la persona ya la sabe y forzar el cambio
+     * solo agrega un paso que nadie pidio. Ver el comentario de `crear()` en
+     * `servicio.ts`.
+     */
+    debeCambiar: boolean;
   },
 ): Promise<{ id: number }> {
   const fila = await consultarUno<{ id: number }>(
@@ -145,7 +155,7 @@ export async function insertarUsuario(
          (nombre, apellido_paterno, apellido_materno, rfc, email, puesto,
           fecha_contratacion, contrasena, debe_cambiar_contrasena)
        VALUES ($1, $2, $3, $4, $5, $6, $7::date,
-               crypt($8, gen_salt('bf', 12)), TRUE)
+               crypt($8, gen_salt('bf', 12)), $9)
        RETURNING id
      )
      SELECT id::int AS id FROM nuevo`,
@@ -158,6 +168,7 @@ export async function insertarUsuario(
       datos.puesto,
       datos.fecha_contratacion,
       datos.contrasena,
+      datos.debeCambiar,
     ],
   );
   // El RETURNING garantiza la fila; el null solo aparece por el tipo.

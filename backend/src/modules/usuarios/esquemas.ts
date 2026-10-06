@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { contrasenaFuerte } from '../auth/esquemas.js';
 import { esClaveFondo } from './fondos-login.js';
 
 /**
@@ -69,6 +70,27 @@ export const crearUsuarioEsquema = z.strictObject({
     .regex(RFC, 'El RFC no cumple el formato del SAT (12 o 13 caracteres)'),
   email: z.email('El correo no tiene formato valido').max(200).nullish(),
   puesto: z.string().trim().max(120).nullish(),
+  /**
+   * La contrasena, si el administrador quiere ponerla el.
+   *
+   * Opcional a proposito, y por backwards compatible: si no viene, el servicio
+   * genera la temporal de siempre y el usuario tiene que cambiarla al entrar.
+   * Ese camino se conserva porque hay clientes (y el seed) que no mandan este
+   * campo, y porque sigue siendo valido como opcion.
+   *
+   * Cuando SI viene pasa por `contrasenaFuerte`, la MISMA regla de
+   * `auth/esquemas.ts`. No se relaja para el alta: si se aceptara aqui algo
+   * que despues no pasa `cambiarContrasenaEsquema`, el alta daria exito y el
+   * primer ingreso dejaria al usuario con una clave que el sistema no le
+   * reconoce. Ademas no es univilaje al administrador: el mensaje llega al
+   * momento de dar de alta, no tres minutos despues en el login.
+   *
+   * `.trim()` NO va aqui a proposito. Las contrasenas admiten espacios
+   *-leading y trailing de forma legitima, y recortarlos haria que la que el
+   * administrador escribe no sea la que la persona teclea. El hash es del
+   * valor exacto que llega.
+   */
+  contrasena: contrasenaFuerte.optional(),
   /**
    * Si se omite, se usa la fecha de hoy. Es NOT NULL y sin default en la
    * tabla, asi que o se manda o se rellena aqui.

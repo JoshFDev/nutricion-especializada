@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { errorLegible } from '../nucleo/api';
+import { Recarga, filasAnimation } from '../nucleo/animaciones';
 import { montoComoTexto } from '../nucleo/cifras';
 import { Sesion } from '../nucleo/sesion';
 import {
@@ -76,6 +77,7 @@ const PESTANAS: Pestana[] = [
   templateUrl: './auditoria.html',
   styleUrl: './auditoria.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [filasAnimation],
 })
 export class Auditoria {
   private readonly api = inject(AuditoriaApi);
@@ -131,9 +133,54 @@ export class Auditoria {
   readonly cargando = signal(false);
   readonly error = signal<string | null>(null);
 
-  /** Si hay mas en la pagina actual. La plantilla lo lee por pestana. */
-  private hayMasDe(cantidad: () => number): boolean {
-    return cantidad() < this.total();
+  /**
+   * La paginacion, en vez del "cargar mas" de antes.
+   *
+   * El cambio no es cosmetico. Con "cargar mas" las filas se agregan al final
+   * de la lista, asi que en una bitacora de miles de renglones no habia forma
+   * de volver a donde ya se estaba ni de saber en que pagina se esta: solo de
+   * bajar y bajar. Con paginas, el ultimo renglon del mes se abre con la misma
+   * cantidad de clics que el primero, que en auditoria es justo el caso de uso.
+   *
+   * A diferencia de las otras pantallas, aqui las filas de la pagina anterior
+   * NO se conservan: `cargar` reemplaza la senal de la bitacora abierta en vez
+   * de pegarle al final (antes `pegar`/`cargarMas`). Un renglon de log es de
+   * solo lectura y no se edita desde la tabla, asi que no hay nada que se
+   * pierda de una vista a la otra, y mantener todas las paginas en memoria
+   * solo servia para que el scroll quedara largo.
+   */
+  readonly limite = signal(50);
+  readonly pagina = signal(1);
+
+  /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
+  readonly recarga = new Recarga();
+
+  readonly paginasTotales = computed(() => Math.max(1, Math.ceil(this.total() / this.limite())));
+  readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
+  readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
+  readonly rangoDePagina = computed(() => {
+    const total = this.total();
+    if (total === 0) return '0 de 0';
+    const desde = (this.pagina() - 1) * this.limite() + 1;
+    const hasta = Math.min(this.pagina() * this.limite(), total);
+    return `${desde}-${hasta} de ${total}`;
+  });
+
+  /** El tamano de pagina como texto, para el `[value]` del desplegable. */
+  limiteComoTexto(): string {
+    return String(this.limite());
+  }
+
+  async aTamanoDePagina(valor: string): Promise<void> {
+    this.limite.set(Number(valor));
+    this.pagina.set(1);
+    await this.cargar();
+  }
+
+  async irPagina(pagina: number): Promise<void> {
+    if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
+    this.pagina.set(pagina);
+    await this.cargar();
   }
 
   // ------------------------------------------------------------ el detalle del renglon
@@ -160,7 +207,7 @@ export class Auditoria {
     // arranca en la primera que se pueda ver, y esa es la que se carga.
     const primera = this.pestanas()[0];
     if (primera) this.abierta.set(primera.id);
-    void this.cargar(0);
+    void this.cargar();
   }
 
   // --------------------------------------------------------------- las pestanas
@@ -176,7 +223,11 @@ export class Auditoria {
     this.filtroEvento.set('');
     this.filtroTipo.set('');
     this.buscador.set('');
-    void this.cargar(0);
+    // La paginacion tambien vuelve a la primera: los filtros que se limpian son
+    // de esta bitacora, y la pagina 3 de la anterior no significa nada en la
+    // nueva.
+    this.pagina.set(1);
+    void this.cargar();
   }
 
   // ---------------------------------------------------------------- los filtros
@@ -221,11 +272,12 @@ export class Auditoria {
   // ------------------------------------------------------------------ el listado
 
   recargar(): void {
-    void this.cargar(0);
+    this.pagina.set(1);
+    void this.cargar();
   }
 
   /**
-   * Carga una pagina de la bitacora abierta.
+   * Carga la pagina abierta de la bitacora abierta.
    *
    * El `switch` esta porque cada una tiene su filtro propio y ninguna los
    * acepta todos: mandarle `buscar` a la de caja es un 400 del `strict` del
@@ -233,7 +285,7 @@ export class Auditoria {
    * respuesta cae en la senal de SU tipo, que es lo que hace que la
    * plantilla no tenga que inventarse el tipo del renglon.
    */
-  private async cargar(offset: number): Promise<void> {
+  private async cargar(): Promise<void> {
     if (this.rangoMalo()) return;
     this.cargando.set(true);
     this.error.set(null);
@@ -242,12 +294,9 @@ export class Auditoria {
       desde: this.desde(),
       hasta: this.hasta(),
       buscar: this.buscador().trim() || undefined,
-      limite: 50,
-      offset,
+      limite: this.limite(),
+      offset: (this.pagina() - 1) * this.limite(),
     };
-    // A `true` solo se leen si ya hubo una pagina antes: la primera reemplaza
-    // la lista y las siguientes la alargan.
-    const pegar = offset > 0;
 
     try {
       switch (bitacora) {
@@ -258,7 +307,7 @@ export class Auditoria {
             // no lo descarta solo: son dos estados en una senal, no un enum.
             operacion: (this.filtroOperacion() || null) as Operacion | null,
           });
-          this.filas.log.set(pegar ? [...this.filas.log(), ...r.datos] : r.datos);
+          this.filas.log.set(r.datos);
           this.total.set(r.total);
           break;
         }
@@ -267,7 +316,7 @@ export class Auditoria {
             ...comunes,
             evento: (this.filtroEvento() || null) as EventoAcceso | null,
           });
-          this.filas.accesos.set(pegar ? [...this.filas.accesos(), ...r.datos] : r.datos);
+          this.filas.accesos.set(r.datos);
           this.total.set(r.total);
           break;
         }
@@ -276,13 +325,13 @@ export class Auditoria {
             ...comunes,
             tipo: this.filtroTipo() === '' ? null : (this.filtroTipo() as 'ingreso' | 'egreso'),
           });
-          this.filas.caja.set(pegar ? [...this.filas.caja(), ...r.datos] : r.datos);
+          this.filas.caja.set(r.datos);
           this.total.set(r.total);
           break;
         }
         case 'inventario': {
           const r = await this.api.inventario(comunes);
-          this.filas.inventario.set(pegar ? [...this.filas.inventario(), ...r.datos] : r.datos);
+          this.filas.inventario.set(r.datos);
           this.total.set(r.total);
           break;
         }
@@ -294,7 +343,7 @@ export class Auditoria {
                 ? null
                 : (this.filtroTipo() as 'cliente' | 'publico' | 'costo'),
           });
-          this.filas.precios.set(pegar ? [...this.filas.precios(), ...r.datos] : r.datos);
+          this.filas.precios.set(r.datos);
           this.total.set(r.total);
           break;
         }
@@ -303,34 +352,12 @@ export class Auditoria {
       this.error.set(errorLegible(falla).mensaje);
     } finally {
       this.cargando.set(false);
+      // Aqui y no dentro del `try`: el renglon se marca como recargado tanto si
+      // la respuesta llego como si fallo, porque en los dos casos las filas
+      // cambiaron y la cascada de entrada es lo que avisa de que la tabla se
+      // repinto.
+      this.recarga.marcar();
     }
-  }
-
-  /** Cuantos renglones hay ya en la bitacora abierta. */
-  private cuantos(): number {
-    const bitacora = this.abierta();
-    switch (bitacora) {
-      case 'log':
-        return this.filas.log().length;
-      case 'accesos':
-        return this.filas.accesos().length;
-      case 'caja':
-        return this.filas.caja().length;
-      case 'inventario':
-        return this.filas.inventario().length;
-      case 'precios':
-        return this.filas.precios().length;
-    }
-  }
-
-  cargarMas(): void {
-    if (this.cargando() || this.rangoMalo()) return;
-    void this.cargar(this.cuantos());
-  }
-
-  /** Para el boton de "cargar mas" de cada pestana. */
-  masPara(cantidad: number): boolean {
-    return this.hayMasDe(() => cantidad);
   }
 
   // ------------------------------------------------------------------- el detalle

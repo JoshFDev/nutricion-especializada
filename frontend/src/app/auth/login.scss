@@ -1,400 +1,625 @@
 /*
- * La pantalla de login, partida en dos.
+ * La pantalla de login.
  *
  * Es lo unico de la app que se ve sin sesion, asi que es la pantalla donde se
- * decide de que sistema se trata. Antes era una tarjeta blanca en el centro de
- * un fondo gris; ahora la foto ocupa TODO el fondo y la mitad derecha es un
- * panel de cristal.
+ * decide de que sistema se trata: por eso la marca esta FUERA de la tarjeta y
+ * no dentro, para que un formulario en blanco con un error en rojo siga
+ * diciendo de que sistema se trata.
  *
- * La foto va como fondo de `.pantalla` y no en un `<img>` a la izquierda por
- * dos razones: asi el panel derecho puede ser cristal de verdad (el desenfoque
- * necesita algo detras que difuminar, y si la foto viviera en su propia mitad
- * el cristal no tendria nada que transparentar), y asi el degradado de
- * oscuridad puede ser continuo de un borde al otro en vez de tener una
- * costura en el medio.
+ * ------------------------------------------------------------------
+ * Decisiones que no son obvias y que conviene no deshacer
+ * ------------------------------------------------------------------
  *
- * La foto entra por `--fondo-login`, que el componente pone con la preferencia
- * del usuario (ver `nucleo/fondo-login.ts`). Si nadie lo pone, esta el valor
- * de aqui.
+ * 1. El cristal va en `.tarjeta::before`, no en `.tarjeta`.
+ *    `backdrop-filter` obliga al navegador a crear una superficie de render
+ *    propia, y el texto de dentro se rasteriza a la resolucion de esa
+ *    superficie en vez de a la de la pantalla. Con el desenfoque en la propia
+ *    tarjeta, el titulo, los campos y el boton se ven suaves Y SE SIGUEN
+ *    viendo suaves despues, porque la capa del compositor se queda encendida.
+ *    Con el desenfoque en el pseudoelemento y el texto encima (`z-index: 1`),
+ *    el texto se dibuja a la resolucion real. Ver "Capas y texto" al final.
+ *
+ * 2. Las tres animaciones de entrada terminan en `transform: none`.
+ *    `animation-fill-mode: both` deja el estado final puesto para siempre, y
+ *    cualquier `transform` distinto de `none` mantiene la capa del compositor
+ *    encendida aunque la animacion haya terminado. Un texto borroso que dura
+ *    toda la sesion es exactamente el defecto que este archivo evita.
+ *
+ * 3. No hay ningun `will-change`. Ver "Capas y texto" al final.
+ *
+ * 4. La foto entra por `--fondo-login`, que el componente pone con la
+ *    preferencia del usuario (ver `nucleo/fondo-login.ts`). Si nadie lo pone,
+ *    esta el valor de aqui.
  */
 
+/* ------------------------------------------------------------------ */
+/* La pantalla                                                         */
+/* ------------------------------------------------------------------ */
+
 /*
- * Las dos medidas que el resto del archivo va a necesitar.
+ * La foto va como fondo de `.pantalla` y no en un `<img>` por dos razones: asi
+ * el cristal puede ser cristal de verdad (el desenfoque necesita algo detras que
+ * difuminar) y asi el degradado de oscuridad es continuo de un borde al otro
+ * en vez de tener una costura en el medio.
  *
- * `--alto-banda` es la franja de foto sin panel que queda ARRIBA en el layout
- * apilado. Va con `clamp` y no con un porcentaje fijo porque el problema de
- * este layout es que la foto y la tarjeta compiten por la misma altura: con
- * `32dvh` fijos, en una ventana baja la foto se comia el espacio que
- * necesitaba el formulario y el resultado era una tarjeta empujada hacia
- * abajo, con la parte de arriba inalcanzable al hacer scroll. Un `clamp` le
- * da banda a la foto cuando hay alto y se la recorta cuando no hay.
- *
- * `--alto-panel` es el padding del panel. Tambien con `clamp`, por el mismo
- * motivo: es espacio que la tarjeta necesita.
+ * La foto NO lleva `image-set()` a proposito. Los fondos son archivos del
+ * usuario, elegido en su perfil (`fondos-login.ts` en el backend), y no hay una
+ * variante "@2x" de cada uno: ofrecerla seria pedir un archivo que no existe.
+ * El que viene por defecto, `establo.jpg`, es de 6720x4480, que de sobra
+ * cubre Full HD y 4K. El mas chico, `vacaLengua.jpg` (736x551), si se ve
+ * blando al estirarlo, y eso se arregla con una imagen mas grande en el
+ * backend, no con CSS.
  */
 .pantalla {
   --fondo-login: url('/fondos/establo.jpg');
-  --alto-banda: clamp(6rem, 24dvh, 16rem);
-  --alto-panel: clamp(1.25rem, 4dvh, 2.5rem);
+
+  /*
+   * Una sola fuente de verdad para el tamano de todo lo de aqui. Es lo que
+   * hace que esto se vea "disenado en Full HD" en vez de "un login de 1280
+   * estirado": cada rem lleva `vw` en el `clamp`, asi que en un monitor de
+   * 1920 o de 2560 el texto, los campos y los margenes crecen con la pantalla
+   * hasta un tope, y en una tablet de 800 se encogen. Todo con `clamp` y sin
+   * un solo breakpoint de tamano: si el tipo saltara al cruzar un corte, se
+   * veria escalonado en cuanto se arrastra la ventana.
+   */
+  --t-nota: clamp(0.75rem, 0.12vw + 0.72rem, 0.8125rem);
+  --t-label: clamp(0.8125rem, 0.18vw + 0.76rem, 0.9375rem);
+  --t-texto: clamp(1rem, 0.22vw + 0.94rem, 1.125rem);
+  --t-titulo: clamp(1.125rem, 0.55vw + 0.96rem, 1.5rem);
+  --t-marca: clamp(1.875rem, 1.9vw + 1.2rem, 3.25rem);
+
+  --e-campo: clamp(0.875rem, 0.9vw, 1.375rem);
+  --e-tarjeta: clamp(1.25rem, 1.2vw + 0.8rem, 2.25rem);
+  --e-bloque: clamp(1.5rem, 2.4vw, 3.25rem);
+  /*
+   * El logo llega a 11rem (176px) y ya se queda ahi a partir de 1920 de ancho.
+   *
+   * El coeficiente de `vw` esta calibrado a proposito para eso: la version
+   * anterior (`3.4vw + 3.2rem`) daba 116px en 1920, o sea que el tope de 152px
+   * solo se alcanzaba a partir de 2965px de ancho. En un monitor de Full HD se
+   * veia un logo de 116px al lado de un bloque de marca de 500, y la proporcion
+   * se leia como "logo pequeno". Con `6vw + 3.8rem` el tope se llega justo en
+   * 1920 y de ahi en adelante se queda en 176.
+   *
+   * En HiDPI de 2x, 176px son 352 pixeles reales, y el archivo que baja el
+   * navegador ahi es el de 1254x1254 (ver el `srcset` del HTML): sigue habiendo
+   * margen de sobra, asi que se puede agrandar sin stretching.
+   */
+  --e-logo: clamp(5rem, 6vw + 3.8rem, 11rem);
+  --radio: clamp(1rem, 0.9vw + 0.78rem, 1.5rem);
+
+  /* El grano del vidrio. Un `feTurbulence` en un SVG en linea, en vez de un
+     PNG, porque no es un archivo mas que haya que hostingar ni una peticion
+     mas. Va a un 5% sobre el cristal: es lo que le da grano de vidrio real y
+     quita el aspecto de "caja blanca con sombra". */
+  --grano: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
 
   position: relative;
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  background: #0b0f16;
+  grid-template-columns: minmax(0, 1fr);
 
-  /* `hidden` en horizontal y `auto` en vertical, no `overflow: hidden` como
-     antes. La foto entra con `scale(1.07)` y sin esto aparecia una barra de
-     scroll horizontal durante la animacion. En vertical si hace falta scroll:
-     con la ventana muy baja la tarjeta no cabe, y con `hidden` se recortaba sin
+  /* El color base detras de la foto: sin esto, mientras la imagen descarga se
+     ve un flash blanco en una pantalla que es casi toda foto. */
+  background-color: #080b12;
+
+  /* `hidden` en horizontal y `auto` en vertical. En horizontal hace falta
+     porque la foto entra con `scale(1.06)` y sin esto aparecia una barra de
+     scroll durante la animacion. En vertical si hace falta scroll: con la
+     ventana muy baja la tarjeta no cabe, y con `hidden` se recortaba sin
      salida, que es peor que un scroll. */
   overflow-x: hidden;
   overflow-y: auto;
 }
 
 /*
- * La foto, en un pseudoelemento para que quede detras de todo lo demas sin
- * necesitar `z-index` en cada hijo.
+ * La foto y los degradados, en un pseudoelemento para que queden detras de
+ * todo lo demas sin necesidad de `z-index` en cada hijo.
  *
- * El degradado va encima de la foto, no al reves, y oscurece HACIA la
- * derecha: la izquierda queda casi limpia para que la foto se vea, y la
- * derecha queda oscura para que el panel de cristal y el texto encima tengan
- * contraste. Sin esto, un panel translucido sobre una foto clara es
- * ilegible.
+ * El degradado va ENCIMA de la foto, y hay tres capas ademas:
+ *
+ * - Un azul de marca abajo a la izquierda. Es la unica capa de color de la
+ *   pantalla y ata el login con el azul de `--acento` del resto de la app.
+ * - Una viñeta que apaga las esquinas, para que la foto no compita con el
+ *   borde de la ventana.
+ * - El oscurecido de izquierda a derecha, que es el que hace legible el
+ *   vidrio claro de la derecha. Sin esto, un panel translucido sobre una foto
+ *   clara es ilegible.
  */
 .pantalla::before {
   content: '';
   position: absolute;
   inset: 0;
+  background-color: #080b12;
   background-image:
+    radial-gradient(78% 62% at 8% 84%, rgb(30 64 175 / 0.42), rgb(30 64 175 / 0) 70%),
+    radial-gradient(130% 100% at 50% 0%, rgb(8 11 18 / 0) 38%, rgb(8 11 18 / 0.62) 100%),
     linear-gradient(
-      100deg,
-      rgb(11 15 22 / 0) 0%,
-      rgb(11 15 22 / 0.18) 45%,
-      rgb(11 15 22 / 0.5) 100%
+      102deg,
+      rgb(8 11 18 / 0.58) 0%,
+      rgb(8 11 18 / 0.26) 46%,
+      rgb(8 11 18 / 0.8) 100%
     ),
     var(--fondo-login);
   background-size: cover;
-
-  /* `center` y no `center 40%`: con la foto estirada, mirar mas abajo del
-     centro mete el horizonte en cuadro y hacia que el grano se note todavia mas
-     en la parte de arriba. */
   background-position: center;
   background-repeat: no-repeat;
-
-  /* Sin `will-change`. Ver la nota de "capas y texto" al final del archivo:
-     declararlo aqui dejaba la foto en su propia capa para toda la sesion y el
-     texto de la tarjeta salia borroso. */
-  animation: asentar 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: asentar 1s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes asentar {
   from {
-    transform: scale(1.07);
+    transform: scale(1.06);
     opacity: 0;
   }
+
   to {
-    /* `none`, no `scale(1)`. Un `transform` distinto de `none` mantiene la
-       capa del compositor encendida aunque la animacion ya termino. */
+    /* `none`, no `scale(1)`. Ver la nota 2 de la cabecera del archivo. */
     transform: none;
     opacity: 1;
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* El panel de cristal de la derecha                                   */
+/* El reparto: marca + acceso                                          */
 /* ------------------------------------------------------------------ */
 
-.panel {
+/*
+ * El contenedor unico, y el que decide como se reparte la pantalla.
+ *
+ * El centrado va con `margin: auto` y NO con `align-items: center` o
+ * `place-items: center`, y no es una maniera de escribir: `center` centra un
+ * elemento mas alto que su celda desbordando por los dos lados, y el desborde
+ * de arriba queda fuera de la region que se puede desplazar, asi que al hacer
+ * scroll el contenido empieza en el medio y la cabecera no se ve nunca. Los
+ * margenes `auto` se resuelven a 0 cuando no sobra espacio, de modo que una
+ * tarjeta alta empuja hacia abajo y su parte de arriba sigue siendo
+ * alcanzable.
+ *
+ * En una columna por debajo de 64rem y en dos por encima. El corte es
+ * SOLO de ancho y a proposito: la altura se resuelve con los `clamp` de
+ * arriba, de forma continua, porque la altura no es una categoria sino una
+ * medida. Un corte por altura daria dos saltos discretos y se veria
+ * escalonado en cuanto se arrastra la ventana.
+ */
+.escena {
   position: relative;
   z-index: 1;
-  grid-column: 2;
+  width: 100%;
+  max-width: 34rem;
+  margin: auto;
+  padding: clamp(0.75rem, 3vw, 3rem) clamp(1rem, 4vw, 2rem);
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  align-content: center;
-  padding: var(--alto-panel);
-
-  /* El cristal. `backdrop-filter` es lo que lo hace cristal y no solo una caja
-     blanca: difumina la foto que hay detras. El prefijo dewebkit sigue haciendo
-     falta para Safari, que no lo soporta sin el.
-
-     El desenfoque va BAJO a proposito. Con 22px la mitad derecha de la pantalla
-     quedaba ilegible como foto y ademas se le sumaba el upscale: los fondos son
-     imagenes de 736x551 y 1080x1350, y al estirarlas con `cover` a pantalla
-     completa ya llegan suaves. Un borrón de 22px encima de eso deja la pantalla
-     entumecida. Con 5px el borde sigue leyéndose como vidrio y la foto se ve.
-
-     El `saturate` tambien va bajito: subirlo a 150% recarga los pixeles y con
-     eso se nota mas el desenfoque de origen. */
-  background: rgb(255 255 255 / 0.08);
-  backdrop-filter: blur(5px) saturate(112%);
-  -webkit-backdrop-filter: blur(5px) saturate(112%);
-  border-left: 1px solid rgb(255 255 255 / 0.16);
-
-  animation: vidriar 0.9s ease-out both;
+  gap: var(--e-bloque);
 }
 
-@keyframes vidriar {
-  from {
-    backdrop-filter: blur(0) saturate(100%);
-    -webkit-backdrop-filter: blur(0) saturate(100%);
-    opacity: 0;
-
-    /* Los pixeles que todavia no tienen desenfoque se ven nitidos al lado de
-       los que si, y el corte se nota como una franja. Entrar tambien con un
-       desplazamiento horizontal hace que la transicion se lea como un barrido
-       y no como un fallo de render. */
-    transform: translateX(12px);
-  }
-  to {
-    opacity: 1;
-
-    /* `none`, no `translateX(0)`: ver la nota de `asentar`. */
-    transform: none;
+@media (min-width: 64rem) {
+  .escena {
+    max-width: 84rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+    align-items: center;
+    gap: clamp(2rem, 4vw, 5rem);
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* El contenedor de las credenciales                                   */
+/* La marca                                                            */
+/* ------------------------------------------------------------------ */
+
+.marca {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: emerger 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (min-width: 64rem) {
+  .marca {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/*
+ * El logo sobre un circulo blanco SOLIDO.
+ *
+ * El blanco opaco es a proposito y es lo que hace professional el bloque de
+ * marca: el logo es de tinta oscura, y con la foto de detras se lo come. Con el
+ * circulo blanco el logo va siempre sobre blanco, le cuadre la foto que le
+ * cuadre, y el bloque entero gana el punto de luz mas claro de la pantalla
+ * justo donde el ojo entra.
+ *
+ * Ya no lleva `backdrop-filter` (el de la version con cristal), porque con
+ * relleno blanco casi opaco el desenfoque de la foto no se ve: se estaba
+ * pagando el coste de una superficie de render propia para nada.
+ *
+ * El `object-fit: contain` con el `padding` es lo que hace que la imagen no se
+ * toque al borde del circulo. La tinta del PNG ocupa el 94% del lienzo, asi que
+ * el aire lo pone el `padding` y no hace falta recortar la imagen.
+ *
+ * El tamano llega a 11rem (176px) y ahi se queda desde 1920 de ancho. Antes
+ * topaba en 152px porque el unico archivo que habia en `public/` era de
+ * 256x256 y a 2x eso se acaba justo en 128px. Con el `srcset` del HTML, que
+ * ofrece tambien el de 1254x1254 que ya estaba en el repo sin usarse, a 2x se
+ * pueden pedir 352 pixeles reales sin que el navegador tenga que escalar nada.
+ * En una pantalla de 1x se sigue bajando el de 256x256, que son 76KB, en vez de
+ * los 1.2MB del grande.
+ *
+ * El `box-shadow` va en tres capas: el anillo de 1px de luz alrededor del blanco
+ * para que el circulo no se coma la foto con un borde duro, la difusa que lo
+ * despega, y el contacto de 1px para que se note contra el fondo oscuro.
+ */
+.marca__logo {
+  width: var(--e-logo);
+  height: var(--e-logo);
+  padding: clamp(0.875rem, 1.7vw, 1.625rem);
+  object-fit: contain;
+  border-radius: 50%;
+  background: var(--superficie);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.5),
+    0 2px 6px rgb(2 6 23 / 0.35),
+    0 28px 60px -22px rgb(2 6 23 / 0.8);
+}
+
+/*
+ * El titulo de la marca va en BLANCO y no en `--texto`, porque no esta sobre el
+ * vidrio sino sobre la foto, que es oscura. Con el texto de la app se
+ * desapareceria. La sombra suave no es decoracion: es lo que mantiene el
+ * contraste AA cuando la foto de fondo tiene una zona clara en el centro.
+ */
+.marca__titulo {
+  margin: clamp(1.125rem, 1.8vw, 1.75rem) 0 0;
+  font-size: var(--t-marca);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #fff;
+  text-shadow: 0 2px 20px rgb(2 6 23 / 0.6);
+}
+
+.marca__sub {
+  margin: 0.5rem 0 0;
+  max-width: 30ch;
+  font-size: clamp(0.9375rem, 0.35vw + 0.84rem, 1.125rem);
+  color: rgb(255 255 255 / 0.82);
+  text-shadow: 0 1px 12px rgb(2 6 23 / 0.5);
+}
+
+/* ------------------------------------------------------------------ */
+/* Los tres modulos del sistema                                        */
 /* ------------------------------------------------------------------ */
 
 /*
- * El contenedor va MAS opaco que el panel a proposito. El panel es el cristal
- * decorativo; este es donde se escriben el correo y la contrasena, y un input
- * transparente encima de una foto con vetas claras deja de leerse en cuanto el
- * cursor entra. Aqui la foto solo se intuye por las esquinas.
+ * Icono, modulo y que hay dentro. Cada linea dice una sola cosa, y el par
+ * titulo + descripcion se lee de un vistazo porque el titulo pesa mas y la
+ * descripcion baja de tono.
  *
- * El degradado de arriba hacia abajo es lo que lo hace parecer vidrio y no una
- * caja blanca: el vidrio nunca es igual de claro en toda su superficie, y sin
- * ese cambio la foto de detras se ve con la misma intensidad arriba y abajo,
- * que es justo lo que delata un fondo plano.
+ * Va en columna y no en fila en escritorio porque la columna es lo que deja que
+ * la descripcion quepa debajo del titulo sin acortar ninguno de los dos.
+ */
+/*
+ * El margen de arriba de la lista va con un minimo pequeno a proposito: en
+ * movil, donde el logo ya se lleva 83px de los 667 de alto, este margen es la
+ * primera almohadilla que se puede recortar sin que se note. Con 1.375rem el
+ * formulario entero se iba justisimo fuera de la pantalla.
+ */
+.marca__lista {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.625rem, 1.1vw, 0.9375rem);
+  margin: clamp(0.875rem, 2.4vw, 2.25rem) 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.punto {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.625rem, 1vw, 0.875rem);
+}
+
+/*
+ * El icono va en un cuadrado de cristal, no suelto. El cuadrado le da la
+ * misma caja visual que a los campos del formulario y es lo que hace que la
+ * columna se lea alineada: sin el, cada linea empieza a una distancia
+ * distinta de la foto y el bloque se ve desordenado.
+ *
+ * `backdrop-filter` aqui si se puede, porque dentro del cuadrado no hay texto:
+ * el texto va fuera, en el hermano. Es la unica forma de usar el cristal sin
+ * arrastrar el problema de la nota 1.
+ */
+.punto__icono {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: clamp(2.25rem, 2.2vw, 2.75rem);
+  height: clamp(2.25rem, 2.2vw, 2.75rem);
+  color: #fff;
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.24);
+  border-radius: 0.625rem;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22);
+  backdrop-filter: blur(6px) saturate(130%);
+  -webkit-backdrop-filter: blur(6px) saturate(130%);
+
+  svg {
+    width: clamp(1.125rem, 1.1vw, 1.3125rem);
+    height: clamp(1.125rem, 1.1vw, 1.3125rem);
+  }
+}
+
+.punto__detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.punto__t {
+  font-size: var(--t-label);
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 10px rgb(2 6 23 / 0.55);
+}
+
+.punto__d {
+  font-size: var(--t-nota);
+  color: rgb(255 255 255 / 0.7);
+  text-shadow: 0 1px 10px rgb(2 6 23 / 0.5);
+}
+
+/*
+ * En una columna las tres lineas con descripcion median unos 170px, y con el
+ * logo, el titulo y el subtitulo la marca se iba a casi 400px. En una ventana
+ * de movil de 667 de alto eso empuja el formulario entero fuera de la pantalla
+ * y obliga a hacer scroll para encontrar el boton de entrar, que es el fallo
+ * que mas se nota en una pantalla de login.
+ *
+ * Asi que por debajo de 48rem los tres modulos pasan a una fila de tres, con la
+ * descripcion oculta: se sigue leyendo "Remisiones, Cartera, Almacen" sin
+ * gastar altura, y el formulario entra entero.
+ *
+ * El `width: 100%` no es opcional: `.marca` es `align-items: center`, asi que
+ * la lista se encoge a su contenido y el `flex: 1` de los hijos no tendria
+ * espacio que repartir.
+ */
+@media (max-width: 47.9375rem) {
+  .marca__lista {
+    flex-direction: row;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .punto {
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .punto__d {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* El acceso: la tarjeta de cristal                                    */
+/* ------------------------------------------------------------------ */
+
+.acceso {
+  min-width: 0;
+}
+
+/*
+ * La tarjeta. No tiene fondo ni `backdrop-filter`: las dos cosas van en el
+ * pseudoelemento. Ver la nota 1 de la cabecera del archivo, que es la razon de
+ * que este bloque quede tan vacio de color y tan lleno de sombra.
+ *
+ * Las tres sombras hacen tres cosas distintas: el contacto immediate con la
+ * superficie de detras, la difusa que la despega del fondo, y la muy abierta
+ * hacia abajo que da la sensacion de peso. Sin la ultima la tarjeta se ve
+ * pegada.
  */
 .tarjeta {
+  position: relative;
   width: 100%;
-  max-width: 23rem;
-
-  /* El centrado va con `margin: auto` y no con `align-items: center`. Es la
-     diferencia entre "centrado" y "centrado sin romper". `align-items: center`
-     centra un elemento mas alto que su celda desbordando por los dos lados, y
-     el desborde de arriba queda fuera de la region que se puede desplazar: al
-     hacer scroll el contenido empieza en el medio y la cabecera no se ve
-     nunca. Los margenes auto se resuelven a 0 cuando no sobra espacio, asi que
-     la tarjeta alta empuja hacia abajo y su parte de arriba sigue siendo
-     alcanzable. */
-  margin: auto;
-
-  /* El padding tambien es fluido. En una ventana baja cada pixel cuenta, y
-     quitar 20px fijos por lado es lo que decide si el boton de entrar queda
-     dentro de la pantalla o hay que hacer scroll para encontrarlo. */
-  padding: clamp(1.5rem, 4dvh, 2.25rem) clamp(1.25rem, 4vw, 2rem) clamp(1.25rem, 3dvh, 2rem);
-
-  background:
-    linear-gradient(
-      170deg,
-      rgb(255 255 255 / 0.9) 0%,
-      rgb(255 255 255 / 0.8) 45%,
-      rgb(255 255 255 / 0.72) 100%
-    ),
-    radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 60%);
-  /* SIN `backdrop-filter`, a proposito.
-
-     El fondo de la tarjeta ya es casi opaco (90% arriba, 72% abajo), asi que un
-     desenfoque detras no aporta nada visible. Lo que si hacia era darle al
-     navegador una razon para crear una superficie de render propia alrededor
-     del texto, y el texto se rasteriza a la resolucion de esa capa en vez de a
-     la de la pantalla: de ahi que "Nutricion Especializada", los campos y el boton
-     se vieran suaves. El cristal de verdad lo pone el `.panel`, que si esta
-     sobre la foto y ahi si se nota. */
-  border: 1px solid rgb(255 255 255 / 0.55);
-
-  /* El borde de arriba es mas claro que el de los lados. Es el detalle que mas
-     se nota de "esto es vidrio": la luz pega en el canto de arriba y se va
-     difuminando hacia los lados. Sin el, el contorno se ve uniforme y el
-     efecto se pierde aunque el desenfoque este. */
-  border-top-color: rgb(255 255 255 / 0.85);
-  border-radius: 1.125rem;
-
-  /* Tres capas: la sombra de abajo para que la tarjeta se despegue del panel,
-     una difusa y grande hacia arriba, y el `inset` de 1px que hace de filo
-     interior iluminado. */
+  padding: var(--e-tarjeta);
+  color: var(--texto);
+  border-radius: var(--radio);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.7),
-    0 1px 2px rgb(9 12 20 / 10%),
-    0 22px 50px -20px rgb(9 12 20 / 55%);
-
-  /* Sube desde abajo, con un retardo para que primero entre la foto y el
-     panel, y despues la tarjeta. Encima de la foto y del panel ya puestos, el
-     desfase es lo que hace que se lea como una entrada y no como tres capas
-     que aparecieron a la vez. */
-  animation: emerger 0.7s 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+    0 1px 2px rgb(2 6 23 / 0.18),
+    0 24px 60px -28px rgb(2 6 23 / 0.7),
+    0 60px 120px -60px rgb(2 6 23 / 0.6);
+  animation: emerger 0.65s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /*
- * La cabecera va separada del formulario por una linea fina.
+ * El cristal.
  *
- * Sin ella, el campo de correo parece el primer campo de algo que empieza mas
- * abajo de lo que empieza, y no se distingue donde acaba la identidad de la
- * app y donde empiezan las credenciales.
+ * El `blur` es el que lo hace cristal y no solo una caja blanca: difumina la
+ * foto que hay detras. Va en 22px, un punto por encima de los 5px de la
+ * version anterior, y por una razon concreta: el desenfoque de fondo ya viene
+ * de la foto, y con muy poco el cristal no se distingue de una caja
+ * translucida. El `saturate` sube a 160% porque aqui si interesa: el vidrio de
+ * verdad satura los colores que hay detras, y es lo que hace que se note que
+ * hay algo detras en vez de un color plano.
  *
- * Padding y separacion tambien fluidos: en ventana baja la cabecera es la parte
- * mas easily sacrificable de la pantalla, porque el logo y el titulo se pueden
- * ver al desplazarse, pero los campos de escribir no.
+ * El relleno es un degradado y no un color plano porque el vidrio nunca es
+ * igual de claro en toda su superficie. Encima va un `radial` en la esquina
+ * superior izquierda: es la luz que pega en el canto de arriba, el detalle que
+ * mas dice "esto es vidrio" y el que se pierde antes que ningun otro.
+ *
+ * El borde va con `inset` en las dos esquinas: el filo de arriba es luz y el de
+ * abajo es sombra, porque la luz viene de arriba. Un solo `inset` en el de
+ * arriba hacia que la tarjeta se ve iluminada por los dos lados.
+ */
+.tarjeta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 62% at 14% -8%, rgb(255 255 255 / 0.9) 0%, rgb(255 255 255 / 0) 62%),
+    linear-gradient(
+      168deg,
+      rgb(255 255 255 / 0.78) 0%,
+      rgb(255 255 255 / 0.66) 46%,
+      rgb(255 255 255 / 0.56) 100%
+    );
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid rgb(255 255 255 / 0.55);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    inset 0 -1px 0 rgb(255 255 255 / 0.3);
+}
+
+/* El grano. Detras del texto y encima del cristal. */
+.tarjeta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background-image: var(--grano);
+  background-size: 180px 180px;
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+/* El texto, por encima del cristal y fuera de su superficie de render. */
+.tarjeta > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* El borde se aviva cuando hay un error del servidor: un rojo en el contorno
+   entero, sin parpadeo y sin movimiento, que se queda mientras el aviso este a
+   la vista. */
+.tarjeta.con-error::before {
+  border-color: rgb(179 38 30 / 0.5);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    inset 0 -1px 0 rgb(255 255 255 / 0.3),
+    0 0 0 3px rgb(179 38 30 / 0.18);
+}
+
+/* ------------------------------------------------------------------ */
+/* La cabecera de la tarjeta                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * La cabecera va separada del formulario por una linea fina. Sin ella, el
+ * campo de correo parece el primer campo de algo que empieza mas abajo de lo
+ * que empieza, y no se distingue donde acaba la identidad del formulario y
+ * donde empiezan las credenciales.
+ *
+ * Padding y separacion tambien fluidos: en ventana baja la cabecera es la
+ * parte mas sacrificable de la pantalla, porque el titulo se puede ver al
+ * desplazarse, pero los campos de escribir no.
  */
 .cabecera {
-  padding-bottom: clamp(0.75rem, 2dvh, 1.25rem);
-  margin-bottom: clamp(1rem, 2.5dvh, 1.5rem);
-  border-bottom: 1px solid rgb(27 31 36 / 10%);
+  padding-bottom: clamp(0.875rem, 1.4vw, 1.25rem);
+  margin-bottom: clamp(1rem, 1.6vw, 1.5rem);
+  border-bottom: 1px solid rgb(27 31 36 / 0.12);
 
-  /* El logo va centrado arriba del titulo, y escala con la altura de la
-     ventana. Es lo que mas espacio gasta de todo el login para lo poco que
-     aporta, asi que en pantalla baja encoge de forma continua en vez de dar un
-     salto al cruzar el breakpoint.
-
-     Esta es la marca de la aplicacion: es la unica pantalla donde se ve sin
-     sesion, asi que se le dio el doble que antes y se le dejo respirar (ver
-     `respirar`). Antes de 2.75rem-4.5rem, ahora de 3.5rem-6rem. */
-  .logo {
-    display: block;
-    width: clamp(3.5rem, 11dvh, 6rem);
-    height: clamp(3.5rem, 11dvh, 6rem);
-    margin: 0 auto clamp(0.5rem, 1.5dvh, 0.875rem);
-    animation: respirar 6s ease-in-out 0.8s infinite;
-  }
-
-  h1 {
+  h2 {
     margin: 0;
-    font-size: clamp(1.125rem, 1rem + 0.8vw, 1.375rem);
+    font-size: var(--t-titulo);
+    font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--texto);
   }
-
-  .sub {
-    margin: 0.25rem 0 0;
-    color: var(--texto-suave);
-    font-size: 0.875rem;
-  }
 }
 
-@keyframes emerger {
-  from {
-    transform: translateY(14px);
-    opacity: 0;
-  }
-  to {
-    /* `none` y no `translateY(0)`. Esta es la causa de que el texto se viera
-       borroso: `animation-fill-mode: both` deja el estado final puesto para
-       siempre, y un `transform` que no es `none` mantiene la tarjeta en una
-       capa del compositor aunque la animacion haya acabado a los 0.7s. El
-       navegador rasteriza el texto una vez a la resolucion de esa capa y de ahi
-       en adelante lo reescala al cambiar el tamano de la ventana, que es
-       exactamente el desenfoque que se veía. Con `none` la tarjeta vuelve al
-       flujo normal y el texto se dibuja a la resolucion real. */
-    transform: none;
-    opacity: 1;
-  }
-}
-
-/* El logo respira: sube y baja tres pixeles, muy despacio, y en bucle.
- *
- * Es la unica animacion REPETIDA de la pantalla, y a proposito son tres pixeles:
- * se nota que la pantalla esta viva sin que el ojo tenga que seguir nada. Con mas
- * amplitud se vuelve un distraction en la primera pagina que se ve de la app, y
- * en un mostrador con el logo al centro de la mirada eso no ayuda.
- *
- * El `delay` de 0.8s es para que no se mueva mientras entra la tarjeta: si los
- * dos motions arrancan juntos, el logo sube mientras la tarjeta baja y el
- * conjunto se ve tembloroso en vez de vivo.
- *
- * El keyframe termina en `none` y no en `translateY(0)`, por la misma razon que
- * `asentar` y `emerger`: ver la nota de "Capas y texto" al final del archivo. */
-@keyframes respirar {
-  0%,
-  100% {
-    transform: none;
-  }
-
-  50% {
-    transform: translateY(-3px);
-  }
+.cabecera__ayuda {
+  margin: 0.3125rem 0 0;
+  font-size: var(--t-label);
+  color: var(--texto-suave);
 }
 
 /* ------------------------------------------------------------------ */
-/* El formulario                                                        */
+/* El formulario                                                       */
 /* ------------------------------------------------------------------ */
 
 /*
  * El texto de la tarjeta se dibuja con las sombras de caja de la pantalla, no
  * con su propia sombra.
  *
- * El color viene de las variables de `styles.scss` (ver `--texto` ahi), igual
- * que en el resto de la app. Aqui no se pisan: si el login define sus propios
- * colores, el dia que se cambie el tema de la aplicacion el login se queda
- * atras, y un login con la fuente de otro color se nota mucho mas que un login
- * con la fuente de otro tamano.
+ * El color viene de las variables de `styles.scss`, igual que en el resto de
+ * la app, y aqui no se pisan. Si el login definiera sus propios colores, el dia
+ * que se cambie el tema de la aplicacion el login se queda atras, y un login
+ * con la fuente de otro color se nota mucho mas que con otro tamano.
  *
  * El `-webkit-font-smoothing` NO se pone a proposito. En Windows quita el
  * ClearType y se pasa a suavizado en escala de grises, que en las fuentes de
  * este proyecto se ve mas fina y mas borrosa, no mas nitida. En pantallas HiDPI
  * el problema ya no es el suavizado sino la capa del compositor, y eso se
- * arreglo quitando el `will-change` y el `backdrop-filter` de la tarjeta (ver
- * "Capas y texto" al final).
+ * arreglo con las notas 1, 2 y 3 de la cabecera del archivo.
  */
 .tarjeta {
   text-shadow: none;
 }
 
 /*
-  Cada campo en su bloque: etiqueta, input y el error que le toca.
-
-  Con los campos sueltos, el margen de debajo del input era el que separaba un
-  campo del siguiente, y el error (con su margen negativo) se colaba entre los
-  dos: cuando aparecia, empujaba el boton de entrar hacia abajo y el boton se
-  movia justo cuando ya se esta escribiendo la contrasena, que es cuando mas
-  molesta que se mueva.
-
-  Con el bloque, el input ya no trae margen, el margen vive en el bloque y el
-  error queda DENTRO: sale debajo del input sin empujar nada, porque lo que hay
-  debajo es el margen del bloque.
-
-  El escalonado es lo otro que aporta. Cada bloque baja un poco despues del
-  anterior, encima de la foto y la tarjeta que ya entran: el conjunto se lee
-  como una entrada en orden y no como cinco cosas que aparecieron a la vez. Los
-  retardos son cortos (60ms) y arrancan cuando la tarjeta ya esta (0.32s): mas
-  lento se siente lento, y mas rapido no se percibe el orden. */
-.campo-login {
-  margin-bottom: clamp(0.625rem, 1.8dvh, 1rem);
+ * Cada campo en su bloque: etiqueta, input y el error que le toca.
+ *
+ * Con los campos sueltos, el margen de debajo del input era el que separaba un
+ * campo del siguiente y el error se colaba entre los dos: cuando aparecia
+ * empujaba el boton de entrar hacia abajo, y el boton se movia justo cuando ya
+ * se esta escribiendo la contrasena, que es cuando mas molesta que se mueva.
+ *
+ * Con el bloque, el input no trae margen, el margen vive en el bloque y el
+ * error queda DENTRO: sale debajo del input sin empujar nada.
+ *
+ * El escalonado es lo otro que aporta. Cada bloque baja un poco despues del
+ * anterior, encima de la foto y la tarjeta que ya entran: el conjunto se lee
+ * como una entrada en orden y no como cuatro cosas que aparecieron a la vez. Los
+ * retardos son cortos (60ms) y arrancan cuando la tarjeta ya esta (~0.3s): mas
+ * lento se siente lento, y mas rapido no se percibe el orden.
+ */
+.campo {
+  margin-bottom: var(--e-campo);
   animation: emerger 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.campo-login:nth-of-type(1) {
-  animation-delay: 0.32s;
+.campo:nth-of-type(1) {
+  animation-delay: 0.3s;
 }
 
-.campo-login:nth-of-type(2) {
-  animation-delay: 0.38s;
+.campo:nth-of-type(2) {
+  animation-delay: 0.36s;
 }
 
 label {
   display: block;
   margin-bottom: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--t-label);
   font-weight: 600;
   color: var(--texto);
 }
 
-input {
+.campo input {
   width: 100%;
-  padding: clamp(0.5rem, 1.6dvh, 0.6875rem) 0.8125rem;
+
+  /* `1rem` minimo a proposito: en iOS y Safari, un input con fuente de menos de
+     16px hace zoom automatico al enfocarlo, y el zoom se queda al pasar al
+     siguiente campo. Es el motivo por el que el login se ve distinto de las
+     tablas de la app, y se queda asi a proposito. */
+  padding: clamp(0.625rem, 0.9vw, 0.8125rem) 0.875rem;
   font: inherit;
-  color: inherit;
+  font-size: var(--t-texto);
+  color: var(--texto);
 
   /* Casi blanco en vez de transparente: el input es el campo mas pequeno de la
      pantalla y el que mas sufre con el fondo. */
-  background: rgb(255 255 255 / 0.9);
-  border: 1px solid rgb(27 31 36 / 14%);
+  background: rgb(255 255 255 / 0.82);
+  border: 1px solid rgb(27 31 36 / 0.16);
   border-radius: 0.625rem;
-  box-shadow: inset 0 1px 2px rgb(9 12 20 / 6%);
+  box-shadow: inset 0 1px 2px rgb(9 12 20 / 0.05);
 
   /* El `transition` va en el estado base y no en el `:hover`: si solo se
      declarara en el `:hover`, el primer contacto con el raton tarda el mismo
@@ -405,7 +630,7 @@ input {
     background 0.15s ease;
 
   &:hover {
-    border-color: rgb(27 31 36 / 24%);
+    border-color: rgb(27 31 36 / 0.28);
   }
 
   &:focus {
@@ -413,11 +638,12 @@ input {
     background: #fff;
     border-color: var(--acento);
 
-    /* El halo es lo que marca el foco. El `outline` solo se queda por si el
-       navegador lo dibuja encima del box-shadow. */
+    /* El halo es lo que marca el foco. El `outline` de `styles.scss` sigue
+       puesto como red de seguridad para el navegador, pero aqui el halo es lo
+       que se ve. */
     box-shadow:
-      0 0 0 3px rgb(30 64 175 / 22%),
-      inset 0 1px 2px rgb(9 12 20 / 4%);
+      0 0 0 3px rgb(30 64 175 / 0.25),
+      inset 0 1px 2px rgb(9 12 20 / 0.04);
   }
 
   &.invalido {
@@ -425,53 +651,77 @@ input {
   }
 
   &.invalido:focus {
-    box-shadow: 0 0 0 3px rgb(179 38 30 / 20%);
+    box-shadow: 0 0 0 3px rgb(179 38 30 / 0.22);
   }
 
-  /* El placeholder es la ayuda de ahi: nunca se ve mientras se escribe, asi
-     que va mas claro que el texto y el navegador no lo Borra. */
+  /* El placeholder es la ayuda de ahi: nunca se ve mientras se escribe, asi que
+     va mas claro que el texto y el navegador no lo borra. */
   &::placeholder {
-    color: rgb(27 31 36 / 38%);
+    color: rgb(27 31 36 / 0.42);
+  }
+}
+
+/* El error del campo, dentro del bloque del campo. Ver `.campo`. */
+.campo-error {
+  margin: 0.4375rem 0 0;
+  color: var(--peligro-texto);
+  font-size: var(--t-nota);
+  animation: salir 0.25s ease-out both;
+}
+
+/* El error de un campo aparece de golpe y por lo general mientras se escribe:
+   bajarlo un poco hace que se note sin tener que ir a buscarlo. */
+@keyframes salir {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
 /*
-  El campo de contrasena con el boton de verla.
-
-  El contenedor es `relative` y el boton va pegado a la derecha, a la altura del
-  input. El input cede el espacio del boton con `padding-right`: sin eso el texto
-  llega debajo del ojo justo al final de la contrasena, que es donde se escribe
-  sin mirar. */
+ * El campo de contrasena con el boton de verla.
+ *
+ * El contenedor es `relative` y el boton va pegado a la derecha, a la altura del
+ * input. El input cede el espacio del boton con `padding-right`: sin eso el
+ * texto llega debajo del ojo justo al final de la contrasena, que es donde se
+ * escribe sin mirar.
+ */
 .campo-contrasena {
   position: relative;
 
   input {
-    padding-right: 2.875rem;
+    padding-right: 3rem;
   }
 }
 
 /*
-  El boton de ver la contrasena.
-
-  Va sin fondo y sin borde a proposito: es un control, no un boton de la tarjeta,
-  y si tuviera el fondo azul de "Entrar" se leeria como una segunda accion igual
-  de importante. Se queda en gris y se enciende al pasar el cursor.
-
-  El tamano es de 2.25rem, el minimo comfortable con el dedo para un control de
-  este tamano, y el area pulsable llega a los 44px que piden las guias de
-  accesibilidad tactil sin que se vea un boton enorme: el `padding` invisible
-  hace eso y el icono no crece. */
+ * El boton de ver la contrasena.
+ *
+ * Va sin fondo y sin borde a proposito: es un control, no un boton de la
+ * tarjeta, y si tuviera el fondo azul de "Entrar" se leeria como una segunda
+ * accion igual de importante. Se queda en gris y se enciende al pasar el cursor.
+ *
+ * El tamano es de 2.5rem, el minimo comfortable con el dedo para un control de
+ * este tamano, y el area pulsable llega a los 44px que piden las guias de
+ * accesibilidad tactil sin que se vea un boton enorme: el `padding` invisible
+ * hace eso y el icono no crece.
+ */
 .ver {
   position: absolute;
   top: 50%;
-  right: 0.1875rem;
+  right: 0.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.5rem;
+  height: 2.5rem;
   margin: 0;
-  padding: 0.6875rem 0;
+  padding: 0.75rem 0;
   color: var(--texto-tenue);
   background: transparent;
   border: 0;
@@ -490,9 +740,7 @@ input {
 
   &:hover:not(:disabled) {
     color: var(--acento-texto);
-    background: rgb(30 64 175 / 8%);
-    box-shadow: none;
-    transform: translateY(-50%);
+    background: rgb(30 64 175 / 0.08);
   }
 
   &:focus-visible {
@@ -501,58 +749,40 @@ input {
   }
 }
 
-/* El error del campo, dentro del bloque del campo. Ver `.campo-login`. */
-.campo-error {
-  margin: 0.375rem 0 0;
-  color: var(--peligro-texto);
-  font-size: 0.8125rem;
-
-  animation: salir 0.25s ease-out both;
-}
-
-/* El error de un campo aparece de golpe y por lo general mientras se escribe:
-   bajarlo un poco hace que se note sin tener que ir a buscarlo. */
-@keyframes salir {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
+/* ------------------------------------------------------------------ */
+/* Los avisos                                                          */
+/* ------------------------------------------------------------------ */
 
 .aviso {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  margin: 0 0 var(--e-campo);
+  padding: 0.6875rem 0.875rem;
+  border-radius: 0.625rem;
+  font-size: var(--t-label);
+  line-height: 1.45;
 
   &-info {
-    background: rgb(255 255 255 / 0.75);
+    background: rgb(255 255 255 / 0.7);
     color: var(--acento-texto);
-    border: 1px solid rgb(30 64 175 / 25%);
+    border: 1px solid rgb(30 64 175 / 0.25);
   }
 
   &-error {
-    background: rgb(251 234 233 / 0.9);
+    background: rgb(251 234 233 / 0.85);
     color: var(--peligro-texto);
-    border: 1px solid rgb(179 38 30 / 25%);
+    border: 1px solid rgb(179 38 30 / 0.28);
 
     /* El aviso se sacude, no la tarjeta. La tarjeta ya tiene la animacion de
        entrada con `fill-mode: both`, y ponersela encima dejaria su `transform`
-       puesto para siempre (ver "Capas y texto"), que es exactamente el texto
-       borroso que este archivo lleva tanto cuidado de evitar. Un elemento
-       chico y con su propia animacion no deja capa ninguna. */
-    animation: sacudir 0.36s ease-in-out;
+       puesto para siempre (ver la nota 2), que es exactamente el texto borroso
+       que este archivo lleva tanto cuidado de evitar. Un elemento chico y con
+       su propia animacion no deja capa ninguna. */
+    animation: sacudir 0.4s ease-in-out;
   }
 }
 
 /* Una contrasena mal escrita se lee como "te equivoquiste", y un "no" seco sin
    movimiento pasa desapercibido en una pantalla que acaba de aparecer. Cuatro
-   pixeles y medio segundo: se nota sin insultar a nadie. */
+   pixeles y cuatro decimas: se nota sin insultar a nadie. */
 @keyframes sacudir {
   0%,
   100% {
@@ -576,29 +806,53 @@ input {
   }
 }
 
-/* El borde de la tarjeta se aviva cuando hay un error del servidor: un rojo en
-   el contorno entero, sin parpadeo y sin movimiento, que se queda mientras el
-   aviso este a la vista. */
-.tarjeta.con-error {
-  border-color: rgb(179 38 30 / 32%);
+@keyframes emerger {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    /* `none`, no `translateY(0)`. Ver la nota 2 de la cabecera del archivo. */
+    transform: none;
+    opacity: 1;
+  }
 }
 
-button {
+/* ------------------------------------------------------------------ */
+/* El boton de entrar                                                  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Va con `flex` y no con el texto solo, porque mientras viaja la peticion se
+ * anade el spinner delante: con el texto centrado por `padding`, el conjunto se
+ * ve descuadrado durante la espera, que es justo cuando mas se mira.
+ *
+ * El `filter: brightness` del hover hace el aclarado sin tocar el color del
+ * gradiente, y el `translateY` es de un pixel porque en un mostrador el boton se
+ * pulsa rapido y mas de eso se nota como que la pulsacion no cayo.
+ */
+.principal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
-  margin-top: 0.5rem;
-  padding: clamp(0.5625rem, 1.8dvh, 0.75rem);
+  margin-top: 0.25rem;
+  padding: clamp(0.6875rem, 1vw, 0.875rem) 1rem;
   font: inherit;
+  font-size: var(--t-texto);
   font-weight: 600;
   color: var(--sobre-acento);
 
   /* Un pelo mas claro arriba que abajo: da relieve al boton sin necesidad de
      una sombra que se veria rara encima del vidrio. */
-  background: linear-gradient(180deg, #2b4fbe 0%, var(--acento) 55%);
+  background: linear-gradient(180deg, #2f56d4 0%, var(--acento) 60%);
   border: 0;
   border-radius: 0.625rem;
   box-shadow:
-    0 1px 2px rgb(9 12 20 / 18%),
-    0 6px 16px -6px rgb(30 58 138 / 55%);
+    0 1px 2px rgb(9 12 20 / 0.2),
+    0 10px 24px -12px rgb(30 58 138 / 0.7);
   cursor: pointer;
   transition:
     transform 0.12s ease,
@@ -608,38 +862,40 @@ button {
   &:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow:
-      0 2px 4px rgb(9 12 20 / 20%),
-      0 10px 22px -8px rgb(30 58 138 / 65%);
+      0 2px 4px rgb(9 12 20 / 0.22),
+      0 14px 28px -14px rgb(30 58 138 / 0.75);
+    filter: brightness(1.06);
   }
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgb(9 12 20 / 18%);
+    box-shadow: 0 1px 2px rgb(9 12 20 / 0.2);
+    filter: brightness(0.98);
   }
 
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.62;
     cursor: progress;
     transform: none;
   }
 }
 
 /*
-  El spinner del boton de entrar.
-
-  El login no usa `nucleo/pantallas.scss` (esta pantalla se ve antes de tener
-  sesion y no comparte nada con el resto de las tablas), asi que el spinner se
-  declara aqui. Es el mismo dibujo del partial: un circulo con el borde de arriba
-  del color del texto.
-
-  Va DENTRO del boton y no al lado del texto porque el ancho del boton es el de
-  la tarjeta: el texto ya se centra con el `padding`, y con el spinner al lado
-  el conjunto se ve descuadrado mientras dura la espera. */
+ * El spinner del boton de entrar.
+ *
+ * El login no usa `nucleo/pantallas.scss` (esta pantalla se ve antes de tener
+ * sesion y no comparte nada con el resto de las tablas), asi que el spinner se
+ * declara aqui. Es el mismo dibujo del partial: un circulo con el borde de
+ * arriba del color del texto.
+ *
+ * Va en `em` para que crezca con el boton en pantallas grandes sin tener que
+ * declararlo otra vez, y con `currentColor` para no repetir el color del texto.
+ */
 .spinner {
   display: inline-block;
   flex: none;
-  width: 0.875em;
-  height: 0.875em;
+  width: 1em;
+  height: 1em;
   border: 2px solid transparent;
   border-top-color: currentColor;
   border-radius: 50%;
@@ -653,7 +909,7 @@ button {
 }
 
 /* ------------------------------------------------------------------ */
-/* El acceso directo de desarrollo                                      */
+/* El acceso directo de desarrollo                                     */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -661,111 +917,86 @@ button {
  * desarrollo". El dia que aparezca en una pantalla donde no debe, tiene que
  * verse raro de entrada y no pasar desapercibido.
  *
- * Es lo primero que se oculta cuando la ventana es baja. El boton de entrar
- * tiene que estar visible sin hacer scroll; este es una comodidad de
- * desarrollo y no vale la pena que empuje al formulario fuera de pantalla.
+ * El texto va en `--texto-tenue` y no mas claro: es el gris mas claro de la
+ * paleta, pero pasa de 4.7:1 sobre blanco, y aqui lo que importa es que se lea
+ * en un mostrador con luz de tubo.
  */
 .desarrollo {
-  margin-top: clamp(0.875rem, 2.5dvh, 1.5rem);
-  padding-top: clamp(0.75rem, 2dvh, 1.25rem);
-  border-top: 1px dashed rgb(27 31 36 / 25%);
-
-  .atajo {
-    background: transparent;
-    color: var(--acento-texto);
-    border: 1px dashed var(--acento);
-  }
+  margin-top: clamp(1rem, 1.6vw, 1.5rem);
+  padding-top: clamp(0.875rem, 1.4vw, 1.25rem);
+  border-top: 1px dashed rgb(27 31 36 / 0.25);
+  text-align: center;
 
   p {
     margin: 0.5rem 0 0;
-    font-size: 0.75rem;
-    text-align: center;
+    font-size: var(--t-nota);
     color: var(--texto-tenue);
   }
 }
 
+.atajo {
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  font-size: var(--t-label);
+  font-weight: 600;
+  color: var(--acento-texto);
+  background: rgb(255 255 255 / 0.5);
+  border: 1px dashed var(--acento);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease;
+
+  &:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.85);
+    transform: translateY(-1px);
+  }
+}
+
 /* ------------------------------------------------------------------ */
-/* Pantallas angostas                                                    */
+/* Pantallas angostas                                                   */
 /* ------------------------------------------------------------------ */
 
 /*
- * Aqui es donde estaba el bug que reportaba el usuario, y la eleccion del
- * breakpoint es el arreglo.
+ * Aqui el degradado de la foto cambia a vertical y sube de tono.
  *
- * Antes el corte era solo de ANCHO, a 60rem. Al reducir una ventana de 1920 a la
- * mitad se pasan a 960px justo por ese corte, con lo que una ventana de 960 x
- * 540 (alta y angosta a la vez) se comia el layout de escritorio que si le
- * llegaba bien, y se caia al apilado, donde la foto tomaba `32dvh` fijos y la
- * tarjeta no cabia.
- *
- * El corte ahora es a 52rem y no lleva altura a proposito: 52rem es el ancho
- * real por debajo del cual dos columnas de formulario se estrujan. La ALTURA se
- * resuelve aparte y de forma continua con los `clamp` de arriba, no con un
- * breakpoint, porque la altura disponible no es una categoria sino una medida:
- * el mismo layout tiene que servir a 540px y a 1040px.
- *
- * Y el ancho del panel deja de ser `1fr`: con `minmax(0, 1fr)` la columna puede
- * bajar de la mitad de su contenido en vez de desbordarla, que es lo que
- * pasaba con el padding fijo y las dos mitades en una ventana de 900px.
+ * En una sola columna la foto esta DETRAS de la tarjeta, no al lado, asi que el
+ * oscurecido de izquierda a derecha no hace su trabajo: el extremo derecho,
+ * que es el que se oscurecia mas, es justo el que queda tapado. Con un
+ * degradado vertical la parte de abajo, que es donde esta el formulario, se
+ * apaga, y el de la marca, arriba, se deja ver.
  */
-@media (max-width: 52rem) {
-  .pantalla {
-    grid-template-columns: minmax(0, 1fr);
-
-    /* La fila de la foto es la banda, y la del panel se queda con lo que
-       sobre. `minmax(0, 1fr)` en vez de `1fr` a proposito: el `1fr` de verdad
-       lleva `min-content` como minimo implicito, asi que una tarjeta mas alta
-       que la fila la estira y empuja el contenedor entero hacia abajo. Con
-       `minmax(0, ...)` la fila se respeta y la tarjeta desborda hacia abajo,
-       que es justo lo que se puede desplazar. */
-    grid-template-rows: var(--alto-banda) minmax(0, 1fr);
-  }
-
-  /* El degradado ahora va de arriba abajo y oscurece ABAJO, que es donde
-     queda el formulario. Tambien sube menos que antes: el panel ya no borra la
-     foto, asi que no hace falta taparla tanto para que el formulario se lea. */
+@media (max-width: 63.9375rem) {
   .pantalla::before {
     background-image:
+      radial-gradient(78% 62% at 8% 84%, rgb(30 64 175 / 0.38), rgb(30 64 175 / 0) 70%),
+      radial-gradient(130% 100% at 50% 0%, rgb(8 11 18 / 0) 40%, rgb(8 11 18 / 0.55) 100%),
       linear-gradient(
         180deg,
-        rgb(11 15 22 / 0) 0%,
-        rgb(11 15 22 / 0.18) 55%,
-        rgb(11 15 22 / 0.55) 100%
+        rgb(8 11 18 / 0.5) 0%,
+        rgb(8 11 18 / 0.3) 45%,
+        rgb(8 11 18 / 0.66) 100%
       ),
       var(--fondo-login);
-    background-position: center;
-  }
-
-  .panel {
-    grid-column: 1;
-    grid-row: 2;
-    padding: var(--alto-panel);
-    border-left: 0;
-    border-top: 1px solid rgb(255 255 255 / 0.16);
-  }
-
-  /* En una sola columna la tarjeta puede ocupar todo el ancho. El tope de 23rem
-     se queda como limite de LEGIBILIDAD de la linea, no de espacio. */
-  .tarjeta {
-    max-width: 26rem;
   }
 }
 
 /*
- * NO hay un breakpoint por altura, y esa es la parte que antes estaba mal.
+ * NO hay un breakpoint por altura, y esa es la parte importante.
  *
  * Al reducir una ventana de 1920 a la mitad se queda en 960 x 540, que es
- * angosta de ALTO pero ancha de lado: dos columnas de formulario siguen
- * entrandon bien, y es el layout partido el que funciona, porque la tarjeta
- * tiene toda la altura de la ventana para ella. El problema era que el corte
- * anterior era solo de ancho, asi que 960px caian del lado equivocado.
+ * angosta de alto pero ancha de lado: dos columnas siguen entrandon bien, y es
+ * el layout partido el que funciona, porque la tarjeta tiene toda la altura de
+ * la ventana para ella. El problema seria que el corte fuera solo de ancho, asi
+ * que 960px caerian del lado equivocado.
  *
- * Con el corte en 52rem ese caso ya no cambia de layout, y la falta de alto se
- * resuelve con los `clamp` de arriba, que encogen el logo, los paddings y los
- * campos de forma continua con `dvh`. Un `clamp` y no un `@media (max-height)`
- * porque la altura no es una categoria: entre 540 y 1040px de alto el mismo
- * login tiene que verse bien, y con dos saltos discretos se ve escalonado en
- * cuanto la ventana se arrastra.
+ * Con el corte en 64rem ese caso ya no cambia de layout, y la falta de alto se
+ * resuelve con los `clamp` de `.pantalla`, que encogen el logo, los paddings y
+ * los campos de forma continua con `vw` y `dvh`. Un `clamp` y no un
+ * `@media (max-height)` porque la altura no es una categoria: entre 540 y 1440
+ * de alto el mismo login tiene que verse bien, y con dos saltos discretos se
+ * ve escalonado en cuanto la ventana se arrastra.
  */
 
 /* ------------------------------------------------------------------ */
@@ -777,25 +1008,20 @@ button {
  * molestan. Pero `prefers-reduced-motion` no es solo para gente a quien el
  * movimiento le mareo: tambien esta el ahorro de bateria en equipos sin GPU. Con
  * la foto a pantalla completa, la animacion de `asentar` obliga a repintar toda
- * la pantalla cada cuadro, y la del logo que respira la mantiene encendida
- * mientras la sesion este abierta.
+ * la pantalla cada cuadro.
  *
- * Se quitan todas, no se acortan: dejar el desenfoque puesto desde el
- * principio se ve igual de bien y no hay transicion que fallar.
+ * Se quitan todas, no se acortan: dejar el desenfoque y el escalonado puestos
+ * desde el principio se ve igual de bien y no hay transicion que fallar.
  *
- * La lista incluye las de este archivo ademas de las tres de entrada: el logo
- * que respira, el escalonado de los campos, la bajada de los errores y la
- * sacudida del aviso de contrasena incorrecta. La de girar del spinner NO se
- * quita: un boton que dice "Entrando..." con la palabra quieta sigue diciendo
- * que algo pasa, y quitarle el unico movimiento que le queda seria dejarlo
- * mudo.
+ * La de girar del spinner NO se quita: un boton que dice "Entrando..." con la
+ * palabra quieta sigue diciendo que algo pasa, y quitarle el unico movimiento que
+ * le queda seria dejarlo mudo.
  */
 @media (prefers-reduced-motion: reduce) {
   .pantalla::before,
-  .panel,
+  .marca,
   .tarjeta,
-  .cabecera .logo,
-  .campo-login,
+  .campo,
   .campo-error,
   .aviso-error {
     animation: none;
@@ -809,7 +1035,7 @@ button {
 /*
  * En este archivo no hay ningun `will-change`, y es deliberado.
  *
- * Parece lo contrario: con una foto a pantalla completa y tres animaciones de
+ * Parece lo contrario: con una foto a pantalla completa y cuatro animaciones de
  * entrada, `will-change: transform` es lo que se suele poner para que el
  * navegador no ande promoted cada cuadro. Pero aqui produce el efecto
  * contrario al que se busca.
@@ -817,24 +1043,25 @@ button {
  * `will-change` reserva una capa del compositor para el elemento y la mantiene
  * mientras dure la declaracion, que en la regla base es TODA la sesion. El
  * texto de esa capa se rasteriza una sola vez, a la resolucion que tenia la
- * ventana en ese momento, y a partir de ahi el navegador lo reescala con
- * filter en vez de volver a dibujarlo. Al redimensionar la ventana, que es
- * justo lo que hace el usuario cuando dice "se ve raro a media pantalla", el
- * texto sale suave hasta que algo fuerza un repintado.
+ * ventana en ese momento, y a partir de ahi el navegador lo reescala con filter
+ * en vez de volver a dibujarlo. Al redimensionar la ventana, que es justo lo
+ * que hace el usuario cuando dice "se ve raro a media pantalla", el texto sale
+ * suave hasta que algo fuerza un repintado.
  *
- * Lo mismo pasaba con el `backdrop-filter` de la tarjeta: obliga a crear una
- * superficie de render propia, y el texto de dentro se rasteriza a la
- * resolucion de esa superficie.
+ * Por eso el `backdrop-filter` va en un pseudoelemento y no en la tarjeta: un
+ * `backdrop-filter` obliga a crear una superficie de render propia, y el texto
+ * de dentro se rasteriza a la resolucion de esa superficie. Con el cristal en
+ * `::before` y el texto en `z-index: 1` encima, el texto se dibuja a la
+ * resolucion real de la pantalla y se ve nitido al redimensionar.
  *
  * Ademas, con `animation-fill-mode: both` el estado final de cada keyframe se
  * queda aplicado para siempre, y por eso los tres terminan en `transform: none`
- * y no en `translateY(0)` / `scale(1)` / `translateX(0)`: cualquier `transform`
- * distinto de `none` mantiene la capa encendida aunque la animacion ya haya
- * terminado.
+ * y no en `translateY(0)` / `scale(1)`: cualquier `transform` distinto de
+ * `none` mantiene la capa encendida aunque la animacion haya terminado.
  *
  * El precio es que el primer cuadro de cada animacion puede ir a compositor
- * software. Con duraciones de 0.7 a 1.1s y una sola entrada por carga de
- * pagina, ese cuadro no se nota; un texto borroso que dura toda la sesion, si.
+ * software. Con duraciones de 0.55 a 1s y una sola entrada por carga de pagina,
+ * ese cuadro no se nota; un texto borroso que dura toda la sesion, si.
  *
  * Si alguna vez hace falta una animacion fluida de verdad (un arrastre, un
  * scroll largo), la forma correcta es un `will-change` temporal, puesto desde

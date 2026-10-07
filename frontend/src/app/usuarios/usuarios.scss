@@ -129,13 +129,50 @@ td .tenue {
 
 /* ------------------------------------------------------------- el editor y la ficha */
 
+/*
+ * El editor y la ficha aprovechan el ancho del area de contenido (que es
+ * casi toda la ventana) y no se quedan en una columna angosta con el hueco
+ * vacio a la derecha: con dos columnas de campos, un formulario de 46rem
+ * dejaba media ventana sin resolver. Los campos estiran con `.datos`, la
+ * ficha reparte sus bloques en dos columnas (ver `.ficha`) y en una pantalla
+ * chica ambos vuelven a una columna.
+ */
 .editor,
 .ficha {
-  max-width: 46rem;
+  max-width: 64rem;
 }
 
 .bloque {
   margin-bottom: 1rem;
+}
+
+/*
+ * La ficha en dos columnas. El bloque de datos (la tabla `dl`) abarca las dos
+ * y encima reparte las Acciones y los Roles a la par; antes era una columna
+ * angosta de 46rem y con la ventana ancha se veia el hueco enorme a la
+ * derecha. El `bloque` de arriba es un hijo directo con `max-width: 46rem`
+ * del detalle que no cabe en media columna.
+ */
+.ficha {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem 1.5rem;
+  align-items: start;
+}
+
+.ficha .bloque {
+  margin-bottom: 0;
+}
+
+.ficha > .bloque:first-of-type {
+  grid-column: 1 / -1;
+}
+
+/* Un par etiqueta-valor de cada renglón pasa a dos: con cinco datos, una sola
+   pareja por fila dejaba media tabla vacia. */
+.ficha dl {
+  grid-template-columns: max-content 1fr max-content 1fr;
+  column-gap: 2.5rem;
 }
 
 /*
@@ -203,6 +240,19 @@ td .tenue {
 
 .casilla span {
   font-size: 0.9375rem;
+}
+
+/*
+ * Los roles del ALTA en dos columnas. En la ficha no aplica (los bloques van
+ * a la derecha encima y con media columna ya llenan), pero en el formulario
+ * el hueco esta en el ancho: con cinco roles debajo de los datos, una
+ * columna dejaba la mitad derecha vacia.
+ */
+.rejilla-roles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.125rem 1.5rem;
+  align-items: start;
 }
 
 /* ------------------------------------------------------------------ */
@@ -290,4 +340,63 @@ button.fondo.quitar {
   padding: 0.5rem 0.875rem;
   font-size: 0.8125rem;
   border-style: dashed;
+}
+
+/*
+ * "O con tu propia imagen": una imagen del equipo, guardada en el navegador y
+ * NO en la cuenta ni en el servidor. Se separa de las miniaturas con el borde
+ * superior porque es otra cosa: eso son fondos de la cuenta, esto es un fondo
+ * de esta maquina. El h3 hereda el suave de la pantalla pero aqui va normal,
+ * porque ya no es una seccion de formulario sino una opcion aparte.
+ */
+.fondo-propio {
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--borde);
+}
+
+.fondo-propio h3 {
+  margin: 0 0 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+/* La vista previa de la imagen guardada, con su boton de quitar. */
+.fila-propia {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.miniatura-propia {
+  width: 8.5rem;
+  height: 3.75rem;
+  object-fit: cover;
+  border: 2px solid var(--borde);
+  border-radius: 8px;
+}
+
+/* --------------------------------------------------------- pantallas angostas */
+
+/*
+ * La ficha de dos columnas y los roles en columna no tienen sentido en una
+ * ventana angosta: se vuelve todo a una columna y el `dl` a un par por fila,
+ * que es como se lee mejor en vertical.
+ */
+@media (max-width: 40rem) {
+  .ficha {
+    grid-template-columns: 1fr;
+  }
+
+  .ficha dl {
+    grid-template-columns: 1fr;
+    column-gap: normal;
+  }
+
+  .rejilla-roles {
+    grid-template-columns: 1fr;
+  }
 }

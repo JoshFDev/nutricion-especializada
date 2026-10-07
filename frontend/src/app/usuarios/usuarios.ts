@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+  type ElementRef,
+} from '@angular/core';
 import {
   FormBuilder,
   ReactiveFormsModule,
@@ -8,8 +16,14 @@ import {
 } from '@angular/forms';
 import { errorLegible } from '../nucleo/api';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
-import { guardarFondo } from '../nucleo/fondo-login';
+import {
+  guardarFondo,
+  guardarFondoPropio,
+  leerFondoPropio,
+  quitarFondoPropio,
+} from '../nucleo/fondo-login';
 import { Sesion } from '../nucleo/sesion';
+import { ToastService } from '../nucleo/toast.service';
 import {
   ETIQUETA_ESTADO,
   UsuariosApi,
@@ -139,6 +153,7 @@ export class Usuarios {
   private readonly api = inject(UsuariosApi);
   private readonly fb = inject(FormBuilder);
   private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
 
   // ------------------------------------------------------------- el listado
   /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
@@ -216,6 +231,18 @@ export class Usuarios {
    * valor inicial y dejaria fijada una eleccion que nadie hizo.
    */
   readonly fondoElegido = signal<string | null>(null);
+
+  /**
+   * La imagen propia del LOGIN de ESTE navegador, o `null` si no hay ninguna.
+   *
+   * Vive fuera del servidor (localStorage): es una imagen que la persona
+   * eligio de su equipo y que no se copia al proyecto. Por eso el estado se
+   * lee una vez al entrar y no se guarda con la cuenta (ver los helpers de
+   * `nucleo/fondo-login.ts`).
+   */
+  readonly fondoPropio = signal<string | null>(leerFondoPropio());
+  readonly errorImagen = signal<string | null>(null);
+  readonly selectorImagen = viewChild.required<ElementRef<HTMLInputElement>>('selectorImagen');
 
   // ---------------------------------------------------------------- el editor
   readonly editando = signal<Usuario | null>(null);
@@ -497,6 +524,56 @@ export class Usuarios {
     this.fondoElegido.update((actual) => (actual === clave ? null : clave));
   }
 
+  /** Abre el selector de archivos oculto; el input es accesible y funcional. */
+  abrirSelectorImagen(): void {
+    this.errorImagen.set(null);
+    this.selectorImagen().nativeElement.click();
+  }
+
+  /**
+   * Procesa la imagen elegida de este equipo.
+   *
+   * Se comprime en `nucleo/fondo-login.ts` y se guarda en el navegador, NO en
+   * la cuenta ni en el servidor. El `value = ''` despues de leer es para que
+   * elegir la MISMA imagen dos veces vuelva a disparar el `(change)`.
+   */
+  async seleccionarFondoPropio(evento: Event): Promise<void> {
+    const input = evento.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    if (archivo === undefined) return;
+
+    this.errorImagen.set(null);
+    try {
+      const imagen = await guardarFondoPropio(archivo);
+      this.fondoPropio.set(imagen);
+      this.toast.exito('Se actualizó el fondo del login');
+    } catch {
+      this.errorImagen.set(
+        'No se pudo usar esa imagen: elige un jpg, png o webp y vuelve a intentarlo.',
+      );
+    } finally {
+      input.value = '';
+    }
+  }
+
+  /**
+   * Quita la imagen propia del navegador.
+   *
+   * El login vuelve al fondo de la cuenta que se está viendo (el de `fondo`
+   * del usuario en edición, que el navegador ya recordaba), o al de por
+   * defecto si no hay cuenta que restaurar.
+   */
+  quitarFondoPropio(): void {
+    const usuario = this.editando();
+    if (usuario !== null && usuario.fondo !== undefined) {
+      guardarFondo(usuario.fondo.url);
+    } else {
+      quitarFondoPropio();
+    }
+    this.fondoPropio.set(null);
+    this.toast.exito('Se quitó tu imagen del login');
+  }
+
   /**
    * El fondo por defecto, para el boton de "quitar la eleccion".
    *
@@ -598,8 +675,10 @@ export class Usuarios {
         // Si la persona editada es la de esta maquina, su copia local del
         // login se actualiza tambien. Sin esto habria que esperar al proximo
         // ingreso para que el fondo nuevo se viera, y pareceria que el cambio
-        // no se guardo.
-        if (actualizado.id === this.idActual()) {
+        // no se guardo. Con una imagen propia de este equipo puesta, ESA gana:
+        // es una eleccion local y quitarle el lugar a cada guardado seria
+        // perderla a la primera edicion.
+        if (actualizado.id === this.idActual() && this.fondoPropio() === null) {
           guardarFondo(actualizado.fondo.url);
         }
         this.editando.set(null);

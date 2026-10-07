@@ -164,18 +164,20 @@
       @if (esAlta()) {
         <div class="bloque">
           <h2>Roles</h2>
-          @for (rol of catalogo(); track rol.id) {
-            <label class="casilla">
-              <input
-                type="checkbox"
-                [checked]="rolesMarcados().includes(rol.id)"
-                (change)="alternarRol(rol.id)"
-              />
-              <span>{{ rol.nombre }}</span>
-            </label>
-          } @empty {
-            <p class="vacio">Se están cargando los roles…</p>
-          }
+          <div class="rejilla-roles">
+            @for (rol of catalogo(); track rol.id) {
+              <label class="casilla">
+                <input
+                  type="checkbox"
+                  [checked]="rolesMarcados().includes(rol.id)"
+                  (change)="alternarRol(rol.id)"
+                />
+                <span>{{ rol.nombre }}</span>
+              </label>
+            } @empty {
+              <p class="vacio">Se están cargando los roles…</p>
+            }
+          </div>
           @if (faltaUnRol()) {
             <small class="ayuda">Elige al menos un rol.</small>
           }
@@ -225,6 +227,47 @@
                 Quitar el fondo
               </button>
             }
+          </div>
+
+          <!--
+            Imagen propia del LOGIN DE ESTE EQUIPO (no de la cuenta que se está
+            editando). Se elige con un selector de archivos de este navegador,
+            se comprime, se guarda en el navegador y NO se copia al proyecto ni
+            al servidor: vive solo en esta máquina. Por eso no va con las
+            miniaturas del servidor: esas se guardan en la cuenta, esta no.
+          -->
+          <div class="fondo-propio">
+            <h3>O con tu propia imagen</h3>
+            <p class="pista">
+              Se elige de este equipo (Imágenes, Descargas…), se guarda en el navegador y es el
+              fondo que verá el login a partir de ahora. No se copia nada al proyecto ni al
+              servidor.
+            </p>
+
+            @if (fondoPropio(); as imagen) {
+              <div class="fila-propia">
+                <img [src]="imagen" alt="Tu imagen de fondo" class="miniatura-propia" />
+                <button type="button" class="chico" (click)="quitarFondoPropio()">
+                  Quitar mi imagen
+                </button>
+              </div>
+            } @else {
+              <button type="button" (click)="abrirSelectorImagen()">
+                Elegir una imagen de este equipo
+              </button>
+            }
+
+            @if (errorImagen(); as mensaje) {
+              <small class="ayuda">{{ mensaje }}</small>
+            }
+
+            <input
+              #selectorImagen
+              type="file"
+              accept="image/*"
+              class="oculto"
+              (change)="seleccionarFondoPropio($event)"
+            />
           </div>
         </div>
       }

@@ -71,6 +71,42 @@ export async function crear(cliente: PoolClient, d: CrearCompra): Promise<Compra
 }
 
 /**
+ * Marca la compra como pagada.
+ *
+ * Registra un abono por lo que FALTA, calculado en la base
+ * (`saldoRestante`): total menos lo ya abonado. Asi el saldo del proveedor no
+ * se pasa de ceros, y el estatus lo mueve tu mismo trigger
+ * `trg_estatus_compra_por_pago` a 'pagada'.
+ */
+export async function pagar(cliente: PoolClient, id: number): Promise<Compra> {
+  return enTransaccionDe(cliente, async (c) => {
+    const antes = await repo.consultarCompra(c, id);
+    if (!antes) throw new NoEncontrado('Esa compra no existe');
+
+    if (antes.estatus === 'cancelada') {
+      throw new Conflicto('COMPRA_CANCELADA', 'Una compra cancelada no se puede pagar', { id });
+    }
+    if (antes.estatus === 'pagada') {
+      throw new Conflicto('COMPRA_YA_PAGADA', 'Esta compra ya está pagada', { id });
+    }
+
+    const saldo = await repo.saldoRestante(c, id);
+    const monto = saldo?.restante ?? '0';
+    if (Number(monto) <= 0) {
+      throw new Conflicto('COMPRA_YA_PAGADA', 'Esta compra ya está pagada', { id });
+    }
+
+    await repo.insertarPago(c, {
+      proveedor_id: Number(antes.proveedor_id),
+      compra_id: id,
+      monto,
+    });
+
+    return leer(c, id);
+  });
+}
+
+/**
  * Cancelar una compra.
  *
  * Unica operacion que mueve una compra ya escrita, y existe porque una

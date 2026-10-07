@@ -77,6 +77,17 @@
 } /* Acciones */
 
 /*
+ * En esta pantalla las acciones son dos (pagar + ver) y no caben en una línea
+ * dentro de la columna: se apilan y la tabla no se ensancha. El partial trae
+ * `.acciones-fila` en línea; aquí se la sobreescribe.
+ */
+.listado .acciones-fila {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+/*
  * El código del producto va DEBAJO del nombre y en pequeño.
  *
  * Se llama `.codigo` y no `.tenue` a propósito: en el partial `.tenue` es el

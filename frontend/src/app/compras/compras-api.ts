@@ -27,9 +27,10 @@ import {
  *   - **No hay borrar.** Cancelar no borra: deja el documento con estatus
  *     'cancelada' y su motivo, y el trigger devuelve los bultos a la bodega.
  *   - **`estatus` y `subtotal` NO se mandan.** El estatus lo mueven los pagos
- *     al proveedor (que todavia no tienen API, asi que una compra nace
- *     'pendiente' y ahi se queda) y el `subtotal` es GENERATED en la base.
- *     Los dos los rechazaria el `.strict()` del esquema.
+ *     al proveedor (`pagar`) y el `subtotal` es GENERATED en la base. Los dos
+ *     los rechazaria el `.strict()` del esquema.
+ *   - **Se paga, no se edita.** El abono que deja la compra 'pagada' lo
+ *     registra `POST /:id/pagar` por el monto que falte.
  *   - **`precio_kg` es opcional.** Si no se manda, el servicio lo saca del
  *     ultimo costo vigente de ESE proveedor para ESE producto en la fecha de
  *     la compra (`producto_proveedor_precios`). Si tampoco hay costo, es un
@@ -252,6 +253,18 @@ export class ComprasApi {
   }
 
   /**
+   * Marca la compra como pagada de una vez.
+   *
+   * El abono va por EXACTAMENTE lo que falta (el backend lo calcula: total
+   * menos lo ya abonado), para que el saldo del proveedor no se pase de
+   * ceros. Devuelve la compra ya con su nuevo estatus; la fecha del abono la
+   * pone la base (hoy del servidor).
+   */
+  async pagar(id: number): Promise<Compra> {
+    return firstValueFrom(this.http.post<Compra>(`${API}/compras/${id}/pagar`, {}));
+  }
+
+  /**
    * Busca proveedores ACTIVOS para el selector.
    *
    * `activo=true` porque no se le compra a un proveedor dado de baja: el
@@ -289,7 +302,7 @@ export class ComprasApi {
  * El estatus en palabras, para la tabla.
  *
  * `pendiente` es el unico estatus en el que puede nacer una compra hoy: los
- * otros los mueven los pagos al proveedor, que todavia no tienen pantalla.
+ * otros los mueven los abonos del proveedor (`pagar`).
  */
 export function estatusComoTexto(estatus: EstatusCompra): string {
   switch (estatus) {

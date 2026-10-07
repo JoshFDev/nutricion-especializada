@@ -163,6 +163,49 @@ export async function listarRenglones(
 }
 
 /**
+ * Lo que falta por pagar de la compra, calculado en la base: `monto_total`
+ * menos lo ya abonado en `pagos_proveedor`.
+ *
+ * Se usa como el monto del abono que deja la compra 'pagada': se paga
+ * EXACTAMENTE lo que falta y ni un centavo mas, para que el saldo del
+ * proveedor (que sale de restar la suma de pagos al total) no se pase de
+ * ceros.
+ */
+export async function saldoRestante(
+  cliente: PoolClient,
+  id: number,
+): Promise<{ restante: string } | null> {
+  return consultarUno<{ restante: string }>(
+    cliente,
+    `SELECT (c.monto_total - COALESCE(
+              (SELECT SUM(pp.monto) FROM pagos_proveedor pp WHERE pp.compra_id = c.id), 0
+            ))::TEXT AS restante
+       FROM compras c
+      WHERE c.id = $1`,
+    [id],
+  );
+}
+
+/**
+ * Registra el abono en `pagos_proveedor`.
+ *
+ * El resto lo hacen los triggers de 0001: `trg_saldo_proveedor_por_pago`
+ * recalcula el saldo del proveedor y `trg_estatus_compra_por_pago` mueve el
+ * estatus a 'pagada'/'parcial'. A diferencia del resto de las tablas, aqui no
+ * hay trigger de permiso: el control del `compras.crear` lo pone la ruta.
+ */
+export async function insertarPago(
+  cliente: PoolClient,
+  d: { proveedor_id: number; compra_id: number; monto: string },
+): Promise<void> {
+  await cliente.query(
+    `INSERT INTO pagos_proveedor (proveedor_id, compra_id, monto)
+     VALUES ($1, $2, $3)`,
+    [d.proveedor_id, d.compra_id, d.monto],
+  );
+}
+
+/**
  * Cancela la compra.
  *
  * El `WHERE estatus <> 'cancelada'` hace la operacion idempotente sobre el

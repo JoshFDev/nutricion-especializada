@@ -220,6 +220,8 @@ export class Compras {
   readonly abriendoDetalle = signal(false);
   readonly errorDetalle = signal<string | null>(null);
   readonly cancelando = signal(false);
+  /** Marcar como pagada pasa por el modal de siempre: no se paga por error. */
+  readonly pagando = signal(false);
   /** El motivo se pide en la propia pantalla, no con un `prompt`. */
   readonly pidiendoMotivo = signal(false);
   readonly motivo = signal('');
@@ -574,6 +576,46 @@ export class Compras {
       this.errorDetalle.set(errorLegible(falla).mensaje);
     } finally {
       this.cancelando.set(false);
+    }
+  }
+
+  /**
+   * Marca la compra como pagada.
+   *
+   * Pasa por el modal de confirmación y recarga la página para que el badge
+   * de estatus cambie. Si la fila desplegada es la misma compra, su
+   * comprobante se actualiza con lo que devolvió el pago.
+   */
+  async marcarPagada(compra: CompraListada): Promise<void> {
+    if (
+      this.pagando() ||
+      !this.puedeCrear() ||
+      compra.estatus === 'pagada' ||
+      compra.estatus === 'cancelada'
+    ) {
+      return;
+    }
+
+    const confirmado = await this.confirmModal().abrir({
+      titulo: 'Registrar el pago',
+      mensaje:
+        `Se registrará un abono al proveedor por ${montoComoTexto(compra.monto_total)} ` +
+        `y la compra #${compra.id} quedará como pagada. ¿Continuar?`,
+      textoConfirmar: 'Marcar como pagada',
+    });
+    if (!confirmado) return;
+
+    this.pagando.set(true);
+    this.errorLista.set(null);
+    try {
+      const pagada = await this.api.pagar(compra.id);
+      this.toast.exito(`Compra #${pagada.id} marcada como pagada`);
+      if (this.detalle()?.id === compra.id) this.detalle.set(pagada);
+      await this.cargarPagina(this.pagina());
+    } catch (falla) {
+      this.errorLista.set(errorLegible(falla).mensaje);
+    } finally {
+      this.pagando.set(false);
     }
   }
 

@@ -440,6 +440,18 @@
                 </span>
               </td>
               <td class="acciones-fila">
+                @if (
+                  compra.estatus !== 'pagada' && compra.estatus !== 'cancelada' && puedeCrear()
+                ) {
+                  <button
+                    type="button"
+                    class="chico accion-pagar"
+                    [disabled]="pagando()"
+                    (click)="marcarPagada(compra)"
+                  >
+                    Pagado
+                  </button>
+                }
                 <button
                   type="button"
                   class="chico"

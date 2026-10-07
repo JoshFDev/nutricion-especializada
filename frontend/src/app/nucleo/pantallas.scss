@@ -963,6 +963,19 @@ button:disabled {
   border-color: var(--exito-texto);
 }
 
+/* Pagar es una decisión buena (saldar una deuda) y por eso va en verde. */
+.acciones-fila .accion-pagar {
+  color: var(--exito-texto);
+  background: var(--exito-suave);
+  border-color: var(--exito-texto);
+}
+
+.acciones-fila .accion-pagar:hover:not(:disabled) {
+  color: var(--sobre-acento);
+  background: var(--exito-texto);
+  border-color: var(--exito-texto);
+}
+
 .acciones-fila .accion-eliminar {
   color: var(--peligro-texto);
   background: var(--peligro-suave);

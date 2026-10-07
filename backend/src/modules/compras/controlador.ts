@@ -27,4 +27,8 @@ export const controladorCompras = {
       ),
     );
   },
+
+  pagar: async (req: Request, res: Response): Promise<void> => {
+    res.json(await servicio.pagar(req.db, parametros<{ id: number }>(req).id));
+  },
 };

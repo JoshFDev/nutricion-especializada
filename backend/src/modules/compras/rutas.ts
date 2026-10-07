@@ -60,3 +60,19 @@ rutasCompras.post(
   validarBody(cancelarCompraEsquema),
   controlador.cancelar,
 );
+
+/**
+ * Pagar usa `compras.crear` por el mismo motivo que la cancelacion: el
+ * permiso que la base ya exige para tocar una compra. `pagos_proveedor` no
+ * tiene trigger de permiso (no existia API para escribirlo), asi que la regla
+ * queda en la ruta: sin `compras.crear` no se mueve dinero de la compra.
+ *
+ * No lleva cuerpo: el abono es por EXACTAMENTE lo que falta, y el monto lo
+ * calcula la base para que el saldo del proveedor no se pase de ceros.
+ */
+rutasCompras.post(
+  '/:id/pagar',
+  requierePermiso('compras.crear'),
+  validarParams(idCompraEsquema),
+  controlador.pagar,
+);

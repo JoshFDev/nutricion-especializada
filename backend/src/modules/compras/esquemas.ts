@@ -48,9 +48,9 @@ export const renglonCompraEsquema = z
  * todo el producto.
  *
  * `estatus` NO se acepta. Lo mueven los pagos al proveedor
- * (`pagos_proveedor`), que todavia no tienen API, asi que una compra nueva
- * nace 'pendiente' y ahi se queda. Aceptarlo aqui abriria la puerta a
- * marcar como pagada una compra que no se pago.
+ * (`pagos_proveedor`), que se registran con `POST /:id/pagar`: una compra
+ * nueva nace 'pendiente' y ahi la dejan sus abonos. Aceptarlo aqui abriria la
+ * puerta a marcar como pagada una compra que no se pago.
  */
 export const crearCompraEsquema = z
   .object({

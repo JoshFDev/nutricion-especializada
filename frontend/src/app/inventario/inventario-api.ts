@@ -6,19 +6,20 @@ import { API } from '../nucleo/api';
 /**
  * La API de inventario.
  *
- * Es el espejo de `backend/src/modules/inventario`, y es el modulo mas chico
- * de la API: UNA ruta de SOLO LECTURA. Ajustar y registrar merma ya existen
- * como permisos y como triggers (`inventario.ajustar`, `inventario.merma`),
- * pero ningun endpoint las expone a proposito: escriben en
- * `auditoria_inventario` con el antes y el despues y necesitan un motivo
- * obligatorio, y eso quiere su propia pantalla, no un endpoint colado aqui.
+ * Es el espejo de `backend/src/modules/inventario`. Dos familias:
  *
- * Lo que se lee es la EXISTENCIA por producto y almacen, y no hay tabla de
- * saldos: es la SUMA de `inventario_movimientos` (`fn_existencia_de`). Las
- * notas de venta y las compras ya mueven esos movimientos por trigger, asi
- * que esta pantalla no escribe nada. Un producto que nunca se compro aparece
- * en cero, no desaparece del reporte: el repositorio cruza productos por
- * almacenes.
+ *   - La EXISTENCIA por producto y almacen, de solo lectura. No hay tabla de
+ *     saldos: es la SUMA de `inventario_movimientos` (`fn_existencia_de`).
+ *     Las notas de venta y las compras mueven esos movimientos por trigger.
+ *     Un producto que nunca se compro aparece en cero, no desaparece.
+ *
+ *   - Los MOVIMIENTOS manuales: registrar un ajuste o una merma y borrarlos.
+ *     El alta necesita motivo y el permiso `inventario.ajustar` (el mismo que
+ *     el trigger de la base pide); el borrado queda en `auditoria_inventario`
+ *     con el antes y el despues. El listado de movimientos es el KARDEX: trae
+ *     tambien los de compra y venta, para que la historia del bulto se lea de
+ *     una sola pasada. Solo los manuales se pueden borrar, y el backend lo
+ *     comprueba.
  */
 
 // --------------------------------------------------------------------- tipos
@@ -84,6 +85,66 @@ export function parametrosDe(opciones: OpcionesExistencia): Record<string, strin
   return params;
 }
 
+// ------------------------------------------------------------------ el kardex
+
+/** `inventario/modelo.ts` -> `Movimiento`. La cantidad SIEMPRE es positiva. */
+export interface Movimiento {
+  id: number;
+  producto_id: number;
+  producto_codigo: string;
+  producto: string;
+  almacen_id: number;
+  almacen: string;
+  /** "AAAA-MM-DDThh:mm", sin zona: es hora local del servidor. */
+  fecha: string;
+  tipo: 'entrada_compra' | 'salida_venta' | 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
+  /** Cantidad POSITIVA; el signo lo dice el tipo (`firmaDe`). */
+  cantidad_bultos: number;
+  motivo: string | null;
+  /** Solo los manuales (ajuste o merma) se pueden borrar. */
+  manual: boolean;
+  creado_en: string;
+}
+
+export interface ListaMovimientos {
+  datos: Movimiento[];
+  total: number;
+  limite: number;
+  offset: number;
+}
+
+/** Lo que se puede pedir del kardex: esta pantalla siempre manda producto y almacen. */
+export interface OpcionesMovimientos {
+  producto_id: number;
+  almacen_id: number;
+  tipo?: Movimiento['tipo'];
+  limite?: number;
+  offset?: number;
+}
+
+/** Lo que se manda al registrar un ajuste o una merma. */
+export interface NuevoMovimiento {
+  producto_id: number;
+  almacen_id: number;
+  tipo: 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
+  cantidad_bultos: string;
+  motivo: string;
+}
+
+/** Lo que pide el kardex, aparte de producto y almacen. Ver `parametrosDe`. */
+export function parametrosDeMovimientos(
+  opciones: OpcionesMovimientos,
+): Record<string, string | number> {
+  const params: Record<string, string | number> = {
+    producto_id: opciones.producto_id,
+    almacen_id: opciones.almacen_id,
+    limite: opciones.limite ?? 50,
+    offset: opciones.offset ?? 0,
+  };
+  if (opciones.tipo !== undefined) params['tipo'] = opciones.tipo;
+  return params;
+}
+
 // --------------------------------------------------------------- las llamadas
 
 @Injectable({ providedIn: 'root' })
@@ -97,5 +158,24 @@ export class InventarioApi {
         params: parametrosDe(opciones),
       }),
     );
+  }
+
+  /** El kardex de un producto en un almacen, del mas reciente al mas viejo. */
+  async listarMovimientos(opciones: OpcionesMovimientos): Promise<ListaMovimientos> {
+    return firstValueFrom(
+      this.http.get<ListaMovimientos>(`${API}/inventario/movimientos`, {
+        params: parametrosDeMovimientos(opciones),
+      }),
+    );
+  }
+
+  /** Registra un ajuste o una merma. Pide `inventario.ajustar`. */
+  async crearMovimiento(nuevo: NuevoMovimiento): Promise<Movimiento> {
+    return firstValueFrom(this.http.post<Movimiento>(`${API}/inventario/movimientos`, nuevo));
+  }
+
+  /** Borra un movimiento MANUAL. Los de compra/venta se rechazan. */
+  async eliminarMovimiento(id: number): Promise<void> {
+    await firstValueFrom(this.http.delete<void>(`${API}/inventario/movimientos/${id}`));
   }
 }

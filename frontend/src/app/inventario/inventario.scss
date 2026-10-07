@@ -1,15 +1,13 @@
 /*
  * La pantalla de inventario.
  *
- * El diseño —cabecera, barra de filtros, tabla, estado vacío, paginación y
- * animaciones— sale de `nucleo/pantallas.scss`, el MISMO partial que usan
- * clientes, proveedores, productos, precios y el catálogo.
+ * El diseño —cabecera, barra de filtros, tabla, estado vacío, paginación,
+ * editor, botones y animaciones— sale de `nucleo/pantallas.scss`, el MISMO
+ * partial que usan clientes, proveedores, productos, precios y el catálogo.
  *
- * Como es de SOLO LECTURA no hay editor, y por eso aquí no aparece nada de
- * `.campos` ni de los botones de guardar.
- *
- * Lo único propio son tres cosas: el ancho de las columnas, el código del
- * producto debajo del nombre, y el cero o el negativo en rojo.
+ * Lo propio de aquí son: el ancho de las columnas, el código del producto
+ * debajo del nombre, el cero o el negativo en rojo, el botón "Ajustar" de
+ * cada renglón, y el editor de ajustes/mermas con su kardex.
  */
 
 @use '../nucleo/pantallas';
@@ -50,6 +48,12 @@ th:nth-child(4) {
   width: 12%;
 } /* Estado */
 
+/* La columna de "Ajustar": solo existe cuando el rol alcanza, y entera es
+   para el botón. */
+th:nth-child(5) {
+  width: 6.5rem;
+}
+
 /*
  * El código va DEBAJO del nombre y en pequeño: es con lo que se busca, pero en
  * la tabla lo que identifica al producto es el nombre.
@@ -68,4 +72,77 @@ th:nth-child(4) {
 .sin-existencia {
   font-weight: 600;
   color: var(--peligro-texto);
+}
+
+/* -------------------------------------------------- el editor de ajustes */
+
+/*
+ * La pista de la cabecera del editor lleva el conteo actual en un `<strong>`:
+ * el operador está a punto de mover stock y tiene que ver de dónde arranca.
+ * Queda en `strong` y no en `.sin-existencia` con dos colores, igual que en la
+ * tabla: rojo si no alcanza a surtir.
+ */
+.existencia-actual {
+  font-weight: 600;
+}
+
+/* El kardex cuelga debajo del formulario, dentro del mismo editor. */
+.kardex {
+  margin: 0.5rem 0 0;
+  padding-top: 0.125rem;
+}
+
+.kardex h3 {
+  margin: 0 0 0.375rem;
+  font-size: 0.9375rem;
+}
+
+/* El kardex no pagina: una tabla más ancha que se acomoda con sus propios
+   anchos y deja de apretarse como la de existencias. */
+.kardex-tabla {
+  table-layout: fixed;
+}
+
+.kardex-tabla th:nth-child(1) {
+  width: 10.5rem;
+} /* Cuándo */
+.kardex-tabla th:nth-child(2) {
+  width: 11rem;
+} /* Qué */
+.kardex-tabla th:nth-child(3) {
+  width: 7.5rem;
+} /* Bultos */
+.kardex-tabla th:nth-child(5) {
+  width: 6rem;
+} /* Borrar */
+
+/* El signo del movimiento. Se usa un U+2212 (menos real) para que se vea
+   alineado con el más; el guion del teclado parte el número visualmente. */
+.bultos-subida {
+  color: var(--exito-texto);
+}
+
+.bultos-bajada {
+  color: var(--peligro-texto);
+}
+
+.badge-subida {
+  background: var(--exito-suave);
+  color: var(--exito-texto);
+  border-color: var(--exito-texto);
+}
+
+.badge-bajada {
+  background: var(--peligro-suave);
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
+}
+
+/* Borrar un movimiento manual: el mismo tono de peligro que en caja, que es
+   la otra operación que también deshace. El fondo queda normal para no
+   competir con el botón "Registrar el movimiento". */
+.kardex button.borrar {
+  background: transparent;
+  color: var(--peligro-texto);
+  border-color: var(--peligro);
 }

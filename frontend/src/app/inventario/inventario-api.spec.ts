@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parametrosDe } from './inventario-api';
+import { parametrosDe, parametrosDeMovimientos } from './inventario-api';
 
 /**
  * Los parametros de la lista de inventario.
@@ -38,5 +38,35 @@ describe('los parametros de la existencia', () => {
 
   it('respeta el limite y el offset que se le den', () => {
     expect(parametrosDe({ limite: 10, offset: 40 })).toMatchObject({ limite: 10, offset: 40 });
+  });
+});
+
+/**
+ * Los parametros del kardex.
+ *
+ * A diferencia de la existencia, aquí el producto y el almacen son
+ * OBLIGATORIOS: esta pantalla nunca pregunta por "todos los movimientos", solo
+ * por los de la combinación que se ajusta. El tipo es opcional.
+ */
+describe('los parametros del kardex', () => {
+  it('manda siempre el producto y el almacen', () => {
+    expect(parametrosDeMovimientos({ producto_id: 7, almacen_id: 2 })).toMatchObject({
+      producto_id: 7,
+      almacen_id: 2,
+    });
+  });
+
+  it('pide cincuenta por defecto, desde el inicio', () => {
+    expect(parametrosDeMovimientos({ producto_id: 7, almacen_id: 2 })).toMatchObject({
+      limite: 50,
+      offset: 0,
+    });
+  });
+
+  it('el tipo solo viaja cuando se pidio', () => {
+    expect(parametrosDeMovimientos({ producto_id: 7, almacen_id: 2 })).not.toHaveProperty('tipo');
+    expect(parametrosDeMovimientos({ producto_id: 7, almacen_id: 2, tipo: 'merma' })['tipo']).toBe(
+      'merma',
+    );
   });
 });

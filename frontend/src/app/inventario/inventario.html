@@ -1,5 +1,5 @@
 <!--
-  Inventario: la existencia por producto y almacén, en solo lectura.
+  Inventario: la existencia por producto y almacén, y el kardex de cada uno.
 
   La misma pantalla que clientes, proveedores y el catálogo: cabecera, barra de
   filtros, tabla con estados vacíos y paginación. El diseño sale de
@@ -7,10 +7,11 @@
 
   Lo propio de esta pantalla:
 
-  - No hay botón de guardar ni editor, porque no hay nada que capturar: la
-    existencia es la suma de los movimientos, y los movimientos los escriben las
-    notas de remisión y las compras por trigger. Ajustar y registrar merma son
-    otra pantalla, con su motivo y su rastro en auditoría.
+  - "Ajustar" en un renglón abre el editor de ESE producto en ESE almacén: ahí
+    se registran los ajustes y las mermas (con motivo obligatorio) y se ve el
+    kardex con lo que ha entrado y salido. Solo los movimientos manuales se
+    pueden borrar; los de compra y venta los escribe el trigger de su documento
+    y no se tocan aquí. Todo queda en `auditoria_inventario`.
   - El cero y el negativo se pintan en rojo: el modelo permite vender sin
     existencia (avisa, no bloquea), así que un negativo es una deuda que hay que
     ver.
@@ -20,7 +21,7 @@
     va en línea.
 -->
 <section class="inventario">
-  <!-- Cabecera. Sin acción principal: aquí no se captura nada -->
+  <!-- Cabecera. Sin acción principal: se ajusta desde cada renglón -->
   <div class="cabecera">
     <h1>Inventario</h1>
   </div>
@@ -58,10 +59,189 @@
   }
 
   <!--
+    El editor de ajustes y mermas. No es "nuevo": siempre es de UN renglón que
+    ya existe en la tabla, así que no lleva selectores de producto ni de
+    almacén. Arriba el formulario, abajo el kardex del producto.
+  -->
+  @if (editando(); as fila) {
+    <div class="editor-wrapper" id="editor-ajustes">
+      <div class="editor-cabecera">
+        <div>
+          <h2>Ajustar {{ fila.producto }}</h2>
+          <p class="pista">
+            {{ fila.producto_codigo }} · {{ fila.almacen }} · hay
+            <strong class="existencia-actual" [class.sin-existencia]="sinExistencia(fila)">
+              {{ bultosComoTexto(fila.existencia_bultos) }} bultos
+            </strong>
+          </p>
+        </div>
+        <button type="button" class="chico" (click)="cerrarEditor()">Cerrar</button>
+      </div>
+
+      <div class="editor-inline">
+        <p class="descripcion">
+          Un ajuste es una corrección del conteo y una merma es lo que se dañó o caducó. Los dos
+          necesitan su motivo: ese texto es lo que se revisa después en la bitácora, y por eso es
+          obligatorio.
+        </p>
+
+        <div class="campos">
+          <div class="campo">
+            <label for="ajuste-tipo">El tipo</label>
+            <select
+              id="ajuste-tipo"
+              [value]="tipo()"
+              (change)="cambiarTipo($any($event.target).value)"
+            >
+              <option value="ajuste_positivo">Ajuste que sube (faltaba mercancía)</option>
+              <option value="ajuste_negativo">Ajuste que baja (sobraba mercancía)</option>
+              <option value="merma">Merma (se dañó, se derramó, caducó)</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="ajuste-cantidad">La cantidad (bultos)</label>
+            <input
+              id="ajuste-cantidad"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="0.00"
+              [value]="cantidad()"
+              (input)="cambiarCantidad($any($event.target).value)"
+            />
+            @if (cantidad() !== '' && !cantidadValida()) {
+              <p class="ayuda">Un número positivo, con hasta 2 decimales.</p>
+            }
+          </div>
+
+          <div class="campo ancho">
+            <label for="ajuste-motivo">El motivo</label>
+            <input
+              id="ajuste-motivo"
+              type="text"
+              autocomplete="off"
+              placeholder="Cuenta física del lunes: faltaban 2 bultos…"
+              [value]="motivo()"
+              (input)="cambiarMotivo($any($event.target).value)"
+            />
+            @if (motivo() !== '' && !motivoValido()) {
+              <p class="ayuda">
+                Descríbelo en al menos tres letras: es lo que queda en la bitácora.
+              </p>
+            }
+          </div>
+        </div>
+
+        @if (errorEditor(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+
+        <div class="acciones">
+          <button type="button" (click)="cerrarEditor()" [disabled]="guardando()">Cancelar</button>
+          <button
+            type="button"
+            class="primario"
+            (click)="registrar()"
+            [disabled]="!puedeRegistrar()"
+          >
+            @if (guardando()) {
+              <span class="spinner" aria-hidden="true"></span>
+              Guardando…
+            } @else {
+              Registrar el movimiento
+            }
+          </button>
+        </div>
+      </div>
+
+      <!-- El kardex del producto: lo que ha entrado y salido de este almacén -->
+      <div class="kardex">
+        <h3>El kardex de {{ fila.producto }} en {{ fila.almacen }}</h3>
+
+        @if (cargandoKardex() && movimientos().length === 0) {
+          <p class="cargando">Cargando el kardex…</p>
+        } @else if (errorKardex(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        } @else if (movimientos().length === 0) {
+          <p class="pista">Todavía no hay movimientos en este almacén.</p>
+        } @else {
+          <div class="tabla-wrapper">
+            <table class="tabla kardex-tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Cuándo</th>
+                  <th scope="col">Qué</th>
+                  <th scope="col" class="num">Bultos</th>
+                  <th scope="col">Motivo</th>
+                  @if (puedeAjustar()) {
+                    <th scope="col"></th>
+                  }
+                </tr>
+              </thead>
+              <tbody [@filasAnimation]="recargaKardex.valor()">
+                @for (movimiento of movimientos(); track movimiento.id) {
+                  <tr>
+                    <td class="tenue">{{ fechaDe(movimiento) }}</td>
+                    <td>
+                      <span
+                        class="badge"
+                        [class.badge-subida]="firmaDe(movimiento.tipo) === 1"
+                        [class.badge-bajada]="firmaDe(movimiento.tipo) === -1"
+                      >
+                        {{ etiquetaTipo(movimiento.tipo) }}
+                      </span>
+                    </td>
+                    <td
+                      class="num"
+                      [class.bultos-bajada]="firmaDe(movimiento.tipo) === -1"
+                      [class.bultos-subida]="firmaDe(movimiento.tipo) === 1"
+                    >
+                      {{ firmaDe(movimiento.tipo) === 1 ? '+' : '−'
+                      }}{{ bultosComoTexto(movimiento.cantidad_bultos) }}
+                    </td>
+                    <td class="tenue">
+                      {{
+                        movimiento.motivo ??
+                          (movimiento.tipo === 'entrada_compra'
+                            ? 'Entró con una compra'
+                            : 'Salió con una venta')
+                      }}
+                    </td>
+                    @if (puedeAjustar()) {
+                      <td class="centro">
+                        @if (movimiento.manual) {
+                          <button
+                            type="button"
+                            class="chico borrar"
+                            [disabled]="guardando()"
+                            (click)="eliminar(movimiento)"
+                          >
+                            Borrar
+                          </button>
+                        } @else {
+                          <span class="tenue">—</span>
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (movimientos().length === KARDEX_LIMITE) {
+            <p class="nota">
+              Se muestran los últimos {{ KARDEX_LIMITE }} movimientos del producto.
+            </p>
+          }
+        }
+      </div>
+    </div>
+  }
+
+  <!--
     El estado vacío, sin icono y con los DOS casos separados: no hay productos
-    que cruzar, o el filtro no dejó ninguno. Se separan porque la acción que
-    sirve es distinta, y aquí la de "no hay nada" no es crear sino registrar una
-    compra: la existencia la hacen las compras y las notas de remisión.
+    que cruzar, o el filtro no dejó ninguno.
   -->
   @if (buscando() && filas().length === 0) {
     <p class="cargando">Cargando…</p>
@@ -81,13 +261,16 @@
     </div>
   } @else {
     <div class="tabla-wrapper">
-      <table class="tabla">
+      <table class="tabla listado">
         <thead>
           <tr>
             <th scope="col">Producto</th>
             <th scope="col">Almacén</th>
             <th scope="col" class="num">Existencia (bultos)</th>
             <th scope="col">Estado</th>
+            @if (puedeAjustar()) {
+              <th scope="col" class="ancho-boton"></th>
+            }
           </tr>
         </thead>
         <tbody [@filasAnimation]="recarga.valor()">
@@ -106,6 +289,11 @@
                   {{ fila.producto_activo ? 'Activo' : 'De baja' }}
                 </span>
               </td>
+              @if (puedeAjustar()) {
+                <td class="centro">
+                  <button type="button" class="chico" (click)="ajustar(fila)">Ajustar</button>
+                </td>
+              }
             </tr>
           }
         </tbody>
@@ -152,3 +340,5 @@
     </div>
   }
 </section>
+
+<app-confirm-modal #confirmModal />

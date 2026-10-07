@@ -1,24 +1,41 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
-import { bultosComoTexto } from '../nucleo/cifras';
-import { InventarioApi, type Existencia, type FiltroExistencia } from './inventario-api';
+import { bultosComoTexto, decimalComoTexto } from '../nucleo/cifras';
+import { Sesion } from '../nucleo/sesion';
+import { ToastService } from '../nucleo/toast.service';
+import { ConfirmModal } from '../productos/confirm-modal';
+import {
+  InventarioApi,
+  type Existencia,
+  type FiltroExistencia,
+  type Movimiento,
+} from './inventario-api';
 
 /**
  * La pantalla de inventario.
  *
  * Misma estructura que clientes, proveedores, productos y el catálogo, y por
  * el mismo motivo: el diseño está en `nucleo/pantallas.scss` y aquí solo queda
- * lo que es de inventario. Lo único que NO trae es el editor, y es a
- * propósito: aquí no se captura nada.
- *
- * Es de SOLO LECTURA, y no por falta de tiempo: ajustar y registrar merma
- * necesitan un motivo y dejan rastro en `auditoria_inventario`, así que
- * quieren su propia pantalla. Por eso no hay botón de guardar.
+ * lo que es de inventario.
  *
  * La existencia es por PRODUCTO y ALMACÉN, y en BULTOS. No es un campo que
  * alguien capture: es la suma de `inventario_movimientos`, y los movimientos
  * los escriben las notas de venta y las compras por trigger.
+ *
+ * Lo que esta pantalla SI escribe, a partir de ahora, son los movimientos
+ * MANUALES: el botón "Ajustar" de un renglón abre el editor de ese producto en
+ * ese almacén, registra ajustes y mermas (con su motivo obligatorio) y
+ * muestra el KARDEX para poder borrar uno. El permiso es `inventario.ajustar`,
+ * el mismo que la base pide, y cada alta o borrado queda en
+ * `auditoria_inventario` con la existencia antes y después.
  *
  * El listado pagina de verdad (antes era "cargar más", que pegaba las
  * siguientes al final y con el cruce de productos por almacenes eran cuatro
@@ -33,15 +50,22 @@ import { InventarioApi, type Existencia, type FiltroExistencia } from './inventa
  *     mercancía que hay que ver.
  */
 
+/** El renglón que se está ajustando, o `null` si el editor está cerrado. */
+type TipoManual = 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
+
 @Component({
   selector: 'app-inventario',
   templateUrl: './inventario.html',
   styleUrl: './inventario.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [filasAnimation],
+  imports: [ConfirmModal],
 })
 export class Inventario {
   private readonly api = inject(InventarioApi);
+  private readonly sesion = inject(Sesion);
+  private readonly toast = inject(ToastService);
+  readonly confirmModal = viewChild.required(ConfirmModal);
 
   // ------------------------------------------------------------- el listado
   /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
@@ -206,5 +230,207 @@ export class Inventario {
   /** Cero o negativo: lo que la tabla pinta en rojo. */
   sinExistencia(fila: Existencia): boolean {
     return fila.existencia_bultos <= 0;
+  }
+
+  // ------------------------------------------------- el editor de ajustes
+
+  /** El permiso que pide la base para insertar o borrar un movimiento manual. */
+  readonly puedeAjustar = computed(() => this.sesion.puede('inventario.ajustar'));
+
+  /**
+   * El renglón (producto + almacén) cuyo kardex se está viendo, o `null`.
+   *
+   * No es un editor "nuevo": un ajuste siempre es de UN producto en UN almacén
+   * que ya existen en la tabla, así que este señal ES la combinación y el
+   * formulario no necesita selectores de nada.
+   */
+  readonly editando = signal<Existencia | null>(null);
+
+  readonly tipo = signal<TipoManual>('ajuste_positivo');
+  readonly cantidad = signal('');
+  readonly motivo = signal('');
+  readonly guardando = signal(false);
+  readonly errorEditor = signal<string | null>(null);
+
+  /** El kardex del producto en el almacén, del más reciente al más viejo. */
+  readonly movimientos = signal<Movimiento[]>([]);
+  /** Cascada de entrada del kardex, aparte de la de la tabla grande. */
+  readonly recargaKardex = new Recarga();
+  readonly cargandoKardex = signal(false);
+  readonly errorKardex = signal<string | null>(null);
+  /** Hasta dónde se lee: son "los últimos" movimientos, no la eternidad. */
+  readonly KARDEX_LIMITE = 100;
+
+  readonly cantidadValida = computed(() => /^\d{1,10}(\.\d{1,2})?$/.test(this.cantidad().trim()));
+  readonly motivoValido = computed(() => this.motivo().trim().length >= 3);
+  readonly puedeRegistrar = computed(
+    () =>
+      this.puedeAjustar() &&
+      !this.guardando() &&
+      this.cantidadValida() &&
+      this.motivoValido() &&
+      this.editando() !== null,
+  );
+
+  /** Abre el editor del renglón y carga su kardex. */
+  async ajustar(fila: Existencia): Promise<void> {
+    if (!this.puedeAjustar()) return;
+    this.editando.set(fila);
+    this.tipo.set('ajuste_positivo');
+    this.cantidad.set('');
+    this.motivo.set('');
+    this.errorEditor.set(null);
+    await this.cargarKardex(fila);
+  }
+
+  /** Cierra el editor. La existencia de la tabla no cambió nada mientras se miraba. */
+  cerrarEditor(): void {
+    this.editando.set(null);
+    this.movimientos.set([]);
+    this.errorEditor.set(null);
+    this.errorKardex.set(null);
+  }
+
+  /** El kardex del renglón actual. Se relee tras registrar o borrar. */
+  private async cargarKardex(fila: Existencia): Promise<void> {
+    this.cargandoKardex.set(true);
+    this.errorKardex.set(null);
+    try {
+      const lista = await this.api.listarMovimientos({
+        producto_id: fila.producto_id,
+        almacen_id: fila.almacen_id,
+        limite: this.KARDEX_LIMITE,
+      });
+      this.movimientos.set(lista.datos);
+      this.recargaKardex.marcar();
+    } catch (falla) {
+      this.movimientos.set([]);
+      this.errorKardex.set(errorLegible(falla).mensaje);
+    } finally {
+      this.cargandoKardex.set(false);
+    }
+  }
+
+  cambiarTipo(valor: string): void {
+    this.tipo.set(valor as TipoManual);
+  }
+
+  cambiarCantidad(texto: string): void {
+    this.cantidad.set(texto);
+  }
+
+  cambiarMotivo(texto: string): void {
+    this.motivo.set(texto);
+  }
+
+  /**
+   * Registra el ajuste o la merma.
+   *
+   * El editor se queda abierto: quien está corrigiendo el kardex suele
+   * registrar varios renglones del mismo producto (una merma y un ajuste en
+   * la misma revisión), y obligar a cerrar y abrir entre uno y otro solo
+   * gasta tiempo. La cantidad y el motivo se limpian para el siguiente.
+   */
+  async registrar(): Promise<void> {
+    const fila = this.editando();
+    if (fila === null || !this.puedeRegistrar()) return;
+
+    this.guardando.set(true);
+    this.errorEditor.set(null);
+    try {
+      let cantidad: string;
+      try {
+        cantidad = decimalComoTexto(this.cantidad(), 2);
+      } catch {
+        this.errorEditor.set('La cantidad debe ser un número con hasta 2 decimales.');
+        return;
+      }
+
+      const creado = await this.api.crearMovimiento({
+        producto_id: fila.producto_id,
+        almacen_id: fila.almacen_id,
+        tipo: this.tipo(),
+        cantidad_bultos: cantidad,
+        motivo: this.motivo().trim(),
+      });
+
+      this.toast.exito(
+        `${this.etiquetaTipo(creado.tipo)}: ${bultosComoTexto(creado.cantidad_bultos)} bultos`,
+      );
+      this.cantidad.set('');
+      this.motivo.set('');
+      await this.recargarKardexYExistencia();
+    } catch (falla) {
+      this.errorEditor.set(errorLegible(falla).mensaje);
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  /** Borra un movimiento manual, con confirmación. */
+  async eliminar(movimiento: Movimiento): Promise<void> {
+    if (!movimiento.manual || !this.puedeAjustar() || this.guardando()) return;
+
+    const confirmado = await this.confirmModal().abrir({
+      titulo: 'Borrar el movimiento',
+      mensaje: `Se borra el ${this.etiquetaTipo(movimiento.tipo).toLowerCase()} de ${bultosComoTexto(
+        movimiento.cantidad_bultos,
+      )} bultos y el stock de esa fila regresa. Queda en la bitácora.`,
+      textoConfirmar: 'Borrar',
+      variante: 'peligro',
+    });
+    if (!confirmado) return;
+
+    this.guardando.set(true);
+    this.errorEditor.set(null);
+    try {
+      await this.api.eliminarMovimiento(movimiento.id);
+      this.toast.exito('Movimiento borrado y stock regresado');
+      await this.recargarKardexYExistencia();
+    } catch (falla) {
+      this.errorEditor.set(errorLegible(falla).mensaje);
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  /** El kardex cambió: se relee el kardex y la existencia de la tabla también. */
+  private async recargarKardexYExistencia(): Promise<void> {
+    const fila = this.editando();
+    if (fila !== null) await this.cargarKardex(fila);
+    await this.cargarPagina(this.pagina());
+  }
+
+  // ------------------------------------------------------------- el kardex
+
+  /** +1 si el movimiento SUBE stock, -1 si lo baja. Es la firma del tipo. */
+  firmaDe(tipo: Movimiento['tipo']): -1 | 1 {
+    return tipo === 'entrada_compra' || tipo === 'ajuste_positivo' ? 1 : -1;
+  }
+
+  /** La cantidad del renglón, ya con su signo. Positivo se deja también con +. */
+  cantidadConFirma(movimiento: Pick<Movimiento, 'tipo' | 'cantidad_bultos'>): number {
+    return this.firmaDe(movimiento.tipo) * movimiento.cantidad_bultos;
+  }
+
+  /** Cómo se lee el tipo en la pantalla. */
+  etiquetaTipo(tipo: Movimiento['tipo']): string {
+    switch (tipo) {
+      case 'entrada_compra':
+        return 'Entrada (compra)';
+      case 'salida_venta':
+        return 'Salida (venta)';
+      case 'ajuste_positivo':
+        return 'Ajuste arriba';
+      case 'ajuste_negativo':
+        return 'Ajuste abajo';
+      case 'merma':
+        return 'Merma';
+    }
+  }
+
+  /** "AAAA-MM-DDThh:mm" -> "AAAA-MM-DD hh:mm", que se lee igual en todo el país. */
+  fechaDe(movimiento: Movimiento): string {
+    return movimiento.fecha.replace('T', ' ');
   }
 }

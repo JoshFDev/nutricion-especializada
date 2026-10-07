@@ -2,9 +2,11 @@ import ExcelJS from 'exceljs';
 import { kilosComoTexto, montoComoTexto, numeroComoTexto } from '../../core/valores.js';
 import {
   BLOQUES_DETALLE,
+  CELDAS_PAPEL,
   FILAS_POR_RENGLON,
   MAX_RENGLONES,
   PRIMERA_FILA_DETALLE,
+  RANGO_PAPEL,
   fechaCorta,
   leerPlantilla,
 } from './plantilla.js';
@@ -34,9 +36,10 @@ import type { ClienteImprimible, Nota, NotaListada } from './modelo.js';
  *
  * Los datos que se imprimen son los de la base, nunca un recalculo. El
  * total es el `subtotal` de `notas_remision` y los precios los del renglon,
- * y por eso la celda E40 se llena con `nota.subtotal` en vez de sumar la
- * hoja: si aqui se recalculara y los dos no coincidieran, el Excel estaria
- * mostrando una cifra que el sistema no reconoce.
+ * y por eso las celdas E40 (original) y N40 (copia) se llenan con
+ * `nota.subtotal` en vez de sumar la hoja: si aqui se recalculara y los dos
+ * no coincidieran, el Excel estaria mostrando una cifra que el sistema no
+ * reconoce.
  *
  * La hoja sale PROTEGIDA (`ws.protect`): el archivo termina en manos de
  * quien recibe la mercancia, y la proteccion hace que no se pueda cambiar
@@ -47,13 +50,13 @@ import type { ClienteImprimible, Nota, NotaListada } from './modelo.js';
  */
 
 /**
- * La diagonal que tacha los renglones vacios.
+ * La diagonal que tacha los renglones vacios, en las DOS copias.
  *
  * En la plantilla cada renglon de detalle son 5 bloques combinados en
- * vertical (A, B:C, D, E, F:G). El borde diagonal se pone en LA CELDA
- * PRINCIPAL de cada bloque (la de arriba), y la diagonal se dibuja a lo
- * largo de todo el rango combinado: es como lo dibuja Excel cuando se le
- * pone un borde a una celda combinada.
+ * vertical (A, B:C, D, E, F:G) y otros 5 en la copia (J, K:L, M, N, O:P).
+ * El borde diagonal se pone en LA CELDA PRINCIPAL de cada bloque (la de
+ * arriba), y la diagonal se dibuja a lo largo de todo el rango combinado:
+ * es como lo dibuja Excel cuando se le pone un borde a una celda combinada.
  *
  * ## Por que se clona el `style` y no se asigna el `border` directo
  *
@@ -75,19 +78,21 @@ import type { ClienteImprimible, Nota, NotaListada } from './modelo.js';
  */
 const tacharRenglon = (hoja: ExcelJS.Worksheet, fila: number): void => {
   for (const bloque of BLOQUES_DETALLE) {
-    const celda = hoja.getCell(`${bloque.celda}${fila}`);
-    celda.style = {
-      ...celda.style,
-      border: {
-        ...celda.border,
-        diagonal: { up: true, down: true, style: 'thin', color: { argb: 'FF000000' } },
-      },
-    };
+    for (const celda of [bloque.celda, bloque.copia]) {
+      const casilla = hoja.getCell(`${celda}${fila}`);
+      casilla.style = {
+        ...casilla.style,
+        border: {
+          ...casilla.border,
+          diagonal: { up: true, down: true, style: 'thin', color: { argb: 'FF000000' } },
+        },
+      };
+    }
   }
 };
 
 /**
- * Quita la diagonal de un renglon que SI lleva datos.
+ * Quita la diagonal de un renglon que SI lleva datos, en las dos copias.
  *
  * Con el clonado de arriba ya no hace falta, y aun asi esta, por dos
  * razones que si existen aqui.
@@ -106,15 +111,17 @@ const tacharRenglon = (hoja: ExcelJS.Worksheet, fila: number): void => {
  */
 const destacharRenglon = (hoja: ExcelJS.Worksheet, fila: number): void => {
   for (const bloque of BLOQUES_DETALLE) {
-    const celda = hoja.getCell(`${bloque.celda}${fila}`);
-    const borde = celda.border;
-    // La guarda va sobre el borde ORIGINAL: despues de desestructurar,
-    // `resto.diagonal` no puede existir, y preguntar ahi daria "siempre
-    // falso" y esta funcion no haria NUNCA nada.
-    const tachado = borde?.diagonal?.up === true || borde?.diagonal?.down === true;
-    if (!tachado) continue;
-    const { diagonal: _fuera, ...resto } = borde;
-    celda.style = { ...celda.style, border: resto };
+    for (const celda of [bloque.celda, bloque.copia]) {
+      const casilla = hoja.getCell(`${celda}${fila}`);
+      const borde = casilla.border;
+      // La guarda va sobre el borde ORIGINAL: despues de desestructurar,
+      // `resto.diagonal` no puede existir, y preguntar ahi daria "siempre
+      // falso" y esta funcion no haria NUNCA nada.
+      const tachado = borde?.diagonal?.up === true || borde?.diagonal?.down === true;
+      if (!tachado) continue;
+      const { diagonal: _fuera, ...resto } = borde;
+      casilla.style = { ...casilla.style, border: resto };
+    }
   }
 };
 
@@ -129,6 +136,12 @@ export const renglonesFuera = (nota: Nota): number =>
 
 /**
  * El Excel de una nota.
+ *
+ * La hoja trae la nota DOS veces, lado a lado: el ORIGINAL (que se queda
+ * quien recibe) y la COPIA (que archiva la tienda), los dos con los mismos
+ * datos y en una sola impresion, para que el papel se corte por la mitad y
+ * cada quien se quede con la suya. Aqui se rellena las dos, porque son el
+ * mismo documento con el mismo folio.
  *
  * Devuelve ademas cuantos renglones se quedaron fuera y no caben en el
  * papel: la plantilla tiene 9 bloques de detalle fijos, y quien imprime
@@ -155,18 +168,28 @@ export async function excelNotaRemision(
   libro.title = `Nota de remision ${nota.folio}`;
   libro.creator = cliente.nombre;
 
+  // La hoja trae la nota dos veces (original y copia): los datos van en las
+  // dos, cada quien en su celda. La pluma no cambia de dato, solo de celda.
+  const escribirEnAmbas = (campo: keyof typeof CELDAS_PAPEL, valor: string): void => {
+    const celdas = CELDAS_PAPEL[campo];
+    poner(hoja, celdas.celda, valor);
+    poner(hoja, celdas.copia, valor);
+  };
+
   // Cabecera: folio, cliente, fecha y destino de entrega. Cada valor va en
-  // la celda principal de su bloque combinado (B7, B8, E8, B10).
-  poner(hoja, 'B7', nota.folio);
-  poner(hoja, 'B8', cliente.nombre);
-  poner(hoja, 'E8', fechaCorta(nota.fecha));
+  // la celda principal de su bloque combinado (B7, B8, E8, B10, y su copia
+  // en K7, K8, N8, K10).
+  escribirEnAmbas('folio', nota.folio);
+  escribirEnAmbas('cliente', cliente.nombre);
+  escribirEnAmbas('fecha', fechaCorta(nota.fecha));
   // El destino es el de la nota, y si la nota no trae direccion de entrega
   // (el producto se quedo en el almacen), el de la ficha del cliente. Igual
   // que el PDF (`pdf.ts`), no se inventa una direccion que no se mando.
-  poner(hoja, 'B10', nota.direccion_entrega ?? cliente.direccion ?? '');
+  escribirEnAmbas('direccion', nota.direccion_entrega ?? cliente.direccion ?? '');
 
-  // Detalle: 9 bloques fijos. Los que la nota no llena se tachan con la
-  // diagonal, para que despues de impresa nadie escriba productos.
+  // Detalle: 9 bloques fijos en cada copia. Los que la nota no llena se
+  // tachan con la diagonal, para que despues de impresa nadie escriba
+  // productos.
   for (let i = 0; i < MAX_RENGLONES; i += 1) {
     const fila = PRIMERA_FILA_DETALLE + i * FILAS_POR_RENGLON;
     const renglon = nota.renglones[i];
@@ -176,11 +199,20 @@ export async function excelNotaRemision(
       continue;
     }
 
+    // Original y copia reciben lo mismo (A,J cantidad; B,K concepto; D,M
+    // kilos; E,N precio; F,O subtotal). El dato es uno solo y la pluma solo
+    // cambia de celda, como cambiaba ya en los bloques de `tacharRenglon`.
     poner(hoja, `A${fila}`, numeroComoTexto(renglon.cantidad_bultos, 2));
+    poner(hoja, `J${fila}`, numeroComoTexto(renglon.cantidad_bultos, 2));
     poner(hoja, `B${fila}`, renglon.producto_nombre);
+    poner(hoja, `K${fila}`, renglon.producto_nombre);
     poner(hoja, `D${fila}`, kilosComoTexto(renglon.kg_bulto));
+    poner(hoja, `M${fila}`, kilosComoTexto(renglon.kg_bulto));
     poner(hoja, `E${fila}`, montoComoTexto(renglon.precio_unit_kg));
+    poner(hoja, `N${fila}`, montoComoTexto(renglon.precio_unit_kg));
     poner(hoja, `F${fila}`, montoComoTexto(renglon.subtotal));
+    poner(hoja, `O${fila}`, montoComoTexto(renglon.subtotal));
+
     // Este renglon va lleno, asi que no puede quedar con la raya encima.
     // `poner` solo cambia el valor de la celda y `destacharRenglon` solo le
     // cambia el estilo, asi que los dos no se estorban; se deja la limpieza
@@ -189,8 +221,19 @@ export async function excelNotaRemision(
     destacharRenglon(hoja, fila);
   }
 
-  // El total de la nota, el de la base, no el de sumar la hoja.
-  poner(hoja, 'E40', montoComoTexto(nota.subtotal));
+  // El total de la nota, el de la base, no el de sumar la hoja: sale en el
+  // original y en la copia, igual que los renglones.
+  const total = montoComoTexto(nota.subtotal);
+  poner(hoja, CELDAS_PAPEL.total.celda, total);
+  poner(hoja, CELDAS_PAPEL.total.copia, total);
+
+  // Lo que se imprime: las DOS copias en una sola hoja. La plantilla solo
+  // traia el area de la primera nota, y sin esto quien imprimiera se
+  // llevaria la copia de la tienda en el archivo pero no en el papel.
+  hoja.pageSetup.printArea = RANGO_PAPEL;
+  hoja.pageSetup.fitToPage = true;
+  hoja.pageSetup.fitToWidth = 1;
+  hoja.pageSetup.fitToHeight = 1;
 
   // `protect` bloquea la edicion de las celdas bloqueadas (todas las de la
   // plantilla) dejando libre solo la seleccion: se puede marcar un renglon

@@ -106,26 +106,40 @@ describe('excel de la nota de remision', () => {
     expect(bytes.byteLength).toBeGreaterThan(10_000);
   });
 
-  it('pone la cabecera: folio, fecha y total', async () => {
+  it('pone la cabecera en las dos copias: folio, fecha y total', async () => {
     const { bytes } = await excelNotaRemision(nota(), cliente());
     const hoja = await recargar(bytes);
 
-    // La fecha va "27-sep-26" y el total es el de la base, formateado.
+    // La fecha va "27-sep-26" y el total es el de la base, formateado. La
+    // hoja trae la nota dos veces: el original en A-G y la copia en J-P,
+    // con los mismos datos en cada celda de su copia.
     expect(hoja.getCell('B7').value).toBe('A-1001');
+    expect(hoja.getCell('K7').value).toBe('A-1001');
     expect(hoja.getCell('E8').value).toBe('27-sep-26');
+    expect(hoja.getCell('N8').value).toBe('27-sep-26');
     expect(hoja.getCell('E40').value).toBe('9,375.00');
+    expect(hoja.getCell('N40').value).toBe('9,375.00');
   });
 
-  it('escribe el primer renglon en su bloque', async () => {
+  it('escribe el primer renglon en su bloque, en original y copia', async () => {
     const { bytes } = await excelNotaRemision(
       nota({ renglones: [renglon({ cantidad_bultos: 10, kg_bulto: 25, precio_unit_kg: 37.5 })] }),
       cliente(),
     );
     const hoja = await recargar(bytes);
+
+    // Original (A, B:C, D, E, F:G) y copia (J, K:L, M, N, O:P) reciben lo
+    // mismo, porque el folio es el mismo documento.
     expect(hoja.getCell('A13').value).toBe('10.00');
+    expect(hoja.getCell('J13').value).toBe('10.00');
+    expect(hoja.getCell('B13').value).toBe('VIMILAC 400');
+    expect(hoja.getCell('K13').value).toBe('VIMILAC 400');
     expect(hoja.getCell('D13').value).toBe('25.000');
+    expect(hoja.getCell('M13').value).toBe('25.000');
     expect(hoja.getCell('E13').value).toBe('37.50');
+    expect(hoja.getCell('N13').value).toBe('37.50');
     expect(hoja.getCell('F13').value).toBe('9,375.00');
+    expect(hoja.getCell('O13').value).toBe('9,375.00');
   });
 
   it('mueve el segundo renglon al bloque siguiente', async () => {
@@ -133,7 +147,9 @@ describe('excel de la nota de remision', () => {
     const { bytes } = await excelNotaRemision(nota({ renglones: [renglon(), segundo] }), cliente());
     const hoja = await recargar(bytes);
     expect(hoja.getCell('B16').value).toBe('MAIZ');
+    expect(hoja.getCell('K16').value).toBe('MAIZ');
     expect(hoja.getCell('A16').value).toBe('3.00');
+    expect(hoja.getCell('J16').value).toBe('3.00');
   });
 
   it('usa la direccion de entrega de la nota, no la del cliente', async () => {
@@ -143,6 +159,19 @@ describe('excel de la nota de remision', () => {
     );
     const hoja = await recargar(bytes);
     expect(hoja.getCell('B10').value).toBe('Zacatepec 400');
+    expect(hoja.getCell('K10').value).toBe('Zacatepec 400');
+  });
+
+  it('imprime las dos copias en una sola hoja', async () => {
+    const { bytes } = await excelNotaRemision(nota(), cliente());
+    const hoja = await recargar(bytes);
+
+    // El area de impresion cubre de la A a la P: sin esto, quien imprime
+    // desde Excel se llevaria la copia del original y no la de la tienda.
+    expect(hoja.pageSetup.printArea).toBe('A1:P49');
+    expect(hoja.pageSetup.fitToPage).toBe(true);
+    expect(hoja.pageSetup.fitToWidth).toBe(1);
+    expect(hoja.pageSetup.fitToHeight).toBe(1);
   });
 
   it('tacha los renglones que la nota no llena', async () => {
@@ -175,10 +204,11 @@ describe('excel de la nota de remision', () => {
       });
     });
 
-    // 9 bloques de detalle, 2 con datos: los 7 que sobran van tachados,
-    // 5 celdas cada uno (A, B, D, E, F), en las filas 19, 22, ... 37.
+    // 9 bloques de detalle en cada copia, 2 con datos: los 7 que sobran van
+    // tachados, 5 celdas cada uno (A, B, D, E, F en el original y J, K, M,
+    // N, O en la copia), en las filas 19, 22, ... 37.
     const esperadas = [19, 22, 25, 28, 31, 34, 37].flatMap((fila) =>
-      ['A', 'B', 'D', 'E', 'F'].map((col) => `${col}${fila}`),
+      ['A', 'B', 'D', 'E', 'F', 'J', 'K', 'M', 'N', 'O'].map((col) => `${col}${fila}`),
     );
     expect(conDiagonal.sort()).toEqual(esperadas.sort());
   });

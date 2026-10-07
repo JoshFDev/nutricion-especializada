@@ -46,25 +46,59 @@ export const FILAS_POR_RENGLON = 3;
 export const MAX_RENGLONES = 9;
 
 /**
- * Los 5 bloques combinados de cada renglon, con su celda principal.
+ * Los 5 bloques combinados de cada renglon, en cada copia.
  *
  * La plantilla no tiene una columna "producto": el nombre ocupa DOS columnas
- * (B:C) porque los nombres largos no caben en una, y el subtotal tambien
- * (F:G). Las medidas estan en la plantilla; esto es solo el mapa de donde va
- * cada dato, y es el mismo que usa `excel.ts`.
+ * porque los nombres largos no caben en una, y el subtotal tambien (F:G).
+ * `celda` es la celda principal del bloque en la copia del ORIGINAL (A-G) y
+ * `copia`, la misma celda en la copia que se queda la tienda (J-P). Las
+ * medidas estan en la plantilla; esto es solo el mapa de donde va cada dato,
+ * y es el mismo que usa `excel.ts`.
  */
 export const BLOQUES_DETALLE = [
-  { celda: 'A' },
-  { celda: 'B' },
-  { celda: 'D' },
-  { celda: 'E' },
-  { celda: 'F' },
+  { celda: 'A', copia: 'J' },
+  { celda: 'B', copia: 'K' },
+  { celda: 'D', copia: 'M' },
+  { celda: 'E', copia: 'N' },
+  { celda: 'F', copia: 'O' },
 ] as const;
+
+/**
+ * Las celdas de la cabecera y del total, en el original y en la copia.
+ *
+ * La hoja trae la nota DOS veces, lado a lado (original en A-G, copia en
+ * J-P), para que en una sola impresion salgan las dos y el cliente y la
+ * tienda se queden cada quien con la suya. El dato es el mismo en las dos y
+ * se escribe en las dos; la pluma solo cambia de celda.
+ */
+export const CELDAS_PAPEL = {
+  folio: { celda: 'B7', copia: 'K7' },
+  cliente: { celda: 'B8', copia: 'K8' },
+  fecha: { celda: 'E8', copia: 'N8' },
+  direccion: { celda: 'B10', copia: 'K10' },
+  total: { celda: 'E40', copia: 'N40' },
+} as const;
+
+/**
+ * Lo que cubre la impresion: las DOS copias, de la A a la P.
+ *
+ * La plantilla no lo trae bien puesto (solo cubria la primera nota, que era
+ * la unica que habia), y quien imprime directamente desde Excel se quedaria
+ * sin la copia de la tienda sin que nada avisara. Aqui se declara cuanto
+ * papel hay, y `excel.ts` lo pone en cada archivo que genera.
+ */
+export const RANGO_PAPEL = 'A1:P49';
 
 /** Cuantas filas tiene el papel, de la 1 a esta. */
 export const FILAS_PAPEL = 49;
 
-/** Cuantas columnas tiene el papel. */
+/**
+ * Las columnas que dibuja el PDF.
+ *
+ * El PDF es el documento de UNA nota (el digital, para el archivo o para
+ * mandar por correo), asi que mide solo la copia del original, A-G: la que
+ * se queda la tienda es una decision de impresion, no del PDF.
+ */
 export const COLUMNAS_PAPEL = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 const MESES_CORTOS = [

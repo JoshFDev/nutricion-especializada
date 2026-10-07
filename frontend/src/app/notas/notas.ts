@@ -53,6 +53,16 @@ import {
 } from '../pagos/pagos-api';
 
 /**
+ * Cuantos renglones caben en el papel de la nota.
+ *
+ * La plantilla del Excel (que tambien imprime el PDF) trae 9 bloques de
+ * detalle en cada una de sus dos copias. Es un tope del PAPEL, no del
+ * sistema, y por eso vive aqui arriba, con la cara del formulario: la captura
+ * no deja pasar un producto que luego no se pueda imprimir.
+ */
+export const MAX_RENGLONES_NOTA = 9;
+
+/**
  * El mostrador: capturar una nota de remision y ver las que ya se guardaron.
  *
  * La pantalla son DOS cosas en una sola vista, sin paginas entre ellas:
@@ -432,6 +442,10 @@ export class Notas {
    * cuando todavia no se capturo nada.
    *
    * Y si ya estaba, `agregar` suma la cantidad en vez de duplicar la fila.
+   *
+   * La plantilla del papel trae 9 bloques de detalle (en cada una de sus
+   * dos copias), asi que aqui no se deja pasar el decimo producto distinto:
+   * una nota con 10 renglones nunca cabria en el papel que se imprime.
    */
   async agregarProducto(producto: Producto): Promise<void> {
     const cliente = this.cliente();
@@ -440,6 +454,16 @@ export class Notas {
       return;
     }
     if (this.preguntando() === producto.id) return;
+
+    // `agregar` fusiona cuando el producto ya trae renglon: esos no cuentan
+    // como fila nueva. Solo se topa al producto distinto numero 10.
+    const yaEsta = this.lineas().some((linea) => linea.producto_id === producto.id);
+    if (!yaEsta && this.lineas().length >= MAX_RENGLONES_NOTA) {
+      this.error.set(
+        `El papel de la nota solo tiene ${MAX_RENGLONES_NOTA} renglones. Quita uno antes de agregar otro producto.`,
+      );
+      return;
+    }
 
     this.preguntando.set(producto.id);
     this.error.set(null);

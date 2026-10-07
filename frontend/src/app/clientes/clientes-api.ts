@@ -2,15 +2,18 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { API, descargarExcel } from '../nucleo/api';
+import { rfcNormalizado } from '../usuarios/usuarios-api';
 
 /**
  * La API de clientes.
  *
  * Los tipos son un espejo de `backend/src/modules/clientes`. El RFC y la
- * razón social vienen de `datos_fiscales_cliente` (LEFT JOIN en el listado)
- * pero NO se pueden escribir por esta API: el esquema de alta/edición no
- * los acepta, igual que el del backend. Por eso la forma del editor no los
- * lleva, y la fila si, para que se puedan ver.
+ * razón social vienen de `datos_fiscales_cliente` (LEFT JOIN en el
+ * listado). El RFC SÍ se escribe por esta API: vive en esa tabla y no en
+ * `clientes`, así que el backend lo recibe junto con el resto y escribe en
+ * los dos lados. La razón social no: no se captura, y el servidor la guarda
+ * con el nombre del cliente. Por eso la forma del editor lleva rfc y no
+ * razón social, y la fila sí enseña las dos.
  *
  * La lista responde con forma DISTINTA a la de productos: aquí es
  * `{ datos, paginación: { limite, offset, total } }` (ver
@@ -65,6 +68,7 @@ export interface FormaCliente {
   especie_id: string;
   estatus: 'Activo' | 'Inactivo';
   telefono: string;
+  rfc: string;
   direccion: string;
 }
 
@@ -76,6 +80,7 @@ export interface CuerpoCliente {
   especie_id: number | null;
   estatus: 'Activo' | 'Inactivo';
   telefono: string | null;
+  rfc: string | null;
   direccion: string | null;
 }
 
@@ -85,6 +90,12 @@ export interface CuerpoCliente {
  * El código va en MAYUSCULAS y limpio de espacios: el esquema del backend
  * ya lo transforma así, y hacerlo aquí evita que el listado refrescado
  * muestre el código con mayúsculas distinto al que se tecleó.
+ *
+ * El RFC pasa por lo mismo (`rfcNormalizado`): si no, un tecleo en
+ * minusculas llegaria al servidor y volveria en mayusculas, con la tabla
+ * mostrando algo distinto a lo que quedo en el campo. En blanco va
+ * `null`, que es como el backend lo entiende como "sin RFC" y lo usa para
+ * borrar el dato fiscal.
  */
 export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
   return {
@@ -94,6 +105,7 @@ export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
     especie_id: forma.especie_id === '' ? null : Number(forma.especie_id),
     estatus: forma.estatus,
     telefono: textoONull(forma.telefono),
+    rfc: textoONull(rfcNormalizado(forma.rfc)),
     direccion: textoONull(forma.direccion),
   };
 }

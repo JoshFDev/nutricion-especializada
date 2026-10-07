@@ -48,7 +48,18 @@ export async function crear(cliente: PoolClient, datos: CrearCliente): Promise<C
       `Ya existe un cliente con el codigo ${datos.codigo_cliente}`,
     );
   }
-  return mapeoCliente(await repo.crear(cliente, datos));
+
+  let fila = await repo.crear(cliente, datos);
+
+  // El RFC vive en otra tabla, y el INSERT de arriba no lo trae de
+  // vuelta: hay que releer para que la respuesta lo lleve. Solo cuando vino
+  // RFC, para no agregarle una consulta al alta comun.
+  if (datos.rfc) {
+    await repo.escribirRfc(cliente, Number(fila.id), datos.rfc, datos.nombre);
+    fila = (await repo.obtenerPorId(cliente, Number(fila.id))) ?? fila;
+  }
+
+  return mapeoCliente(fila);
 }
 
 export async function actualizar(
@@ -63,7 +74,21 @@ export async function actualizar(
     );
   }
 
-  const fila = await repo.actualizar(cliente, id, datos);
+  let fila = await repo.actualizar(cliente, id, datos);
+
+  if ('rfc' in datos) {
+    // Un PATCH que solo trae el rfc no toca ninguna columna de `clientes`,
+    // y entonces `repo.actualizar` no devuelve fila aunque el cliente
+    // exista: hay que buscarla para no confundir "no existe" (404) con
+    // "no cambio nada".
+    fila ??= await repo.obtenerPorId(cliente, id);
+
+    if (fila) {
+      await repo.escribirRfc(cliente, id, datos.rfc ?? null, datos.nombre ?? null);
+      fila = (await repo.obtenerPorId(cliente, id)) ?? fila;
+    }
+  }
+
   if (!fila) {
     throw new NoEncontrado(`No existe el cliente ${id}`);
   }

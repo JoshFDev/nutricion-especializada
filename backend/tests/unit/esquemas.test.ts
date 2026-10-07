@@ -5,7 +5,11 @@ import {
   mapearUsuario,
   type UsuarioFila,
 } from '../../src/modules/auth/esquemas.js';
-import { crearClienteEsquema, listarClientesEsquema } from '../../src/modules/clientes/esquemas.js';
+import {
+  actualizarClienteEsquema,
+  crearClienteEsquema,
+  listarClientesEsquema,
+} from '../../src/modules/clientes/esquemas.js';
 
 /**
  * Pruebas de los esquemas de Zod: son la primera linea de defensa y son
@@ -120,6 +124,42 @@ describe('crearClienteEsquema', () => {
   it('recorta los espacios del nombre', () => {
     const r = crearClienteEsquema.parse({ codigo_cliente: 'C1', nombre: '  Granja Uno  ' });
     expect(r.nombre).toBe('Granja Uno');
+  });
+
+  it('acepta un cliente sin rfc y lo deja en null', () => {
+    const r = crearClienteEsquema.parse({ codigo_cliente: 'C1', nombre: 'Granja Uno' });
+    expect(r.rfc).toBeNull();
+  });
+
+  it('un rfc en blanco tambien significa "sin dato"', () => {
+    const r = crearClienteEsquema.parse({ codigo_cliente: 'C1', nombre: 'G', rfc: '   ' });
+    expect(r.rfc).toBeNull();
+  });
+
+  it('pone el rfc en mayusculas antes de validarlo', () => {
+    const r = crearClienteEsquema.parse({
+      codigo_cliente: 'C1',
+      nombre: 'G',
+      rfc: '  xaxx010101000 ',
+    });
+    expect(r.rfc).toBe('XAXX010101000');
+  });
+
+  it('rechaza un rfc que no cumple el formato del SAT', () => {
+    const r = crearClienteEsquema.safeParse({ codigo_cliente: 'C1', nombre: 'G', rfc: '12345' });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe('actualizarClienteEsquema', () => {
+  it('la clave rfc ausente no se inventa: no es lo mismo que borrarlo', () => {
+    const r = actualizarClienteEsquema.parse({ nombre: 'Otro nombre' });
+    expect('rfc' in r).toBe(false);
+  });
+
+  it('el rfc vacio llega como null, que es lo que borra el dato fiscal', () => {
+    const r = actualizarClienteEsquema.parse({ rfc: '' });
+    expect(r.rfc).toBeNull();
   });
 });
 

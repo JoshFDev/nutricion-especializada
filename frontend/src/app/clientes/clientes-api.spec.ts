@@ -26,6 +26,7 @@ function forma(parcial: Partial<FormaCliente> = {}): FormaCliente {
     especie_id: '',
     estatus: 'Activo',
     telefono: '',
+    rfc: '',
     direccion: '',
     ...parcial,
   };
@@ -48,6 +49,14 @@ describe('el cuerpo del cliente', () => {
     expect(cuerpo.especie_id).toBeNull();
     expect(cuerpo.telefono).toBeNull();
     expect(cuerpo.direccion).toBeNull();
+    // Sin RFC tambien es `null`: es lo que le dice al backend que borre el
+    // dato fiscal, no que guarde un string vacio.
+    expect(cuerpo.rfc).toBeNull();
+  });
+
+  it('el RFC va en mayusculas, como lo va a guardar el backend', () => {
+    const cuerpo = cuerpoDeCliente(forma({ rfc: '  xaxx010101000 ' }));
+    expect(cuerpo.rfc).toBe('XAXX010101000');
   });
 
   it('la especie elegida va como numero', () => {

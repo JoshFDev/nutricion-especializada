@@ -188,8 +188,44 @@ export async function actualizar(
 }
 
 export async function eliminar(cliente: PoolClient, id: number): Promise<boolean> {
+  // `datos_fiscales_cliente` referencia a `clientes` SIN ON DELETE CASCADE,
+  // asi que sin este DELETE el borrado se caeria con un 23503 en cuanto
+  // algun cliente tuviera RFC, y saldria un 409 que dice "esta en uso" de
+  // un registro que no usa nada.
+  await cliente.query('DELETE FROM datos_fiscales_cliente WHERE cliente_id = $1', [id]);
   const resultado = await cliente.query('DELETE FROM clientes WHERE id = $1', [id]);
   return (resultado.rowCount ?? 0) > 0;
+}
+
+/**
+ * Escribe o borra el RFC del cliente en `datos_fiscales_cliente`.
+ *
+ * Esa tabla guarda juntos el RFC y la razon social, con UNA fila por
+ * cliente (indice unico). La razon social no se captura en la pantalla: si
+ * no existe se guarda con el nombre del cliente, y si ya existe se queda
+ * como esta (`DO UPDATE` solo cambia el rfc), porque reescribirla a
+ * escondidas cambiaria lo que ya se facturo.
+ *
+ * `rfc = null` borra la fila entera. Es lo que manda el editor cuando el
+ * campo queda vacio: sin RFC no hay dato fiscal que conservar.
+ */
+export async function escribirRfc(
+  cliente: PoolClient,
+  clienteId: number,
+  rfc: string | null,
+  nombre: string | null,
+): Promise<void> {
+  if (rfc === null) {
+    await cliente.query('DELETE FROM datos_fiscales_cliente WHERE cliente_id = $1', [clienteId]);
+    return;
+  }
+
+  await cliente.query(
+    `INSERT INTO datos_fiscales_cliente (cliente_id, rfc, razon_social)
+     VALUES ($1, $2, COALESCE($3::TEXT, (SELECT nombre FROM clientes WHERE id = $1)))
+     ON CONFLICT (cliente_id) DO UPDATE SET rfc = EXCLUDED.rfc`,
+    [clienteId, rfc, nombre],
+  );
 }
 
 export async function existeCodigo(

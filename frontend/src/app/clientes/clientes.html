@@ -9,11 +9,13 @@
   Lo propio de esta pantalla:
 
   - El editor tiene mas campos que las demas (codigo, nombre, establo,
-    especie, estatus, telefono y direccion), asi que su rejilla es de cuatro
-    columnas con la direccion haciendo de campo ancho. Ver `clientes.scss`.
-  - El RFC se ve en la fila pero NO se edita: vive en
-    `datos_fiscales_cliente` y la API de clientes no lo acepta. Por eso la
-    columna esta y el formulario no.
+    especie, estatus, telefono, rfc y direccion), asi que su rejilla es de
+    cuatro columnas con la direccion haciendo de campo ancho. Ver
+    `clientes.scss`.
+  - El RFC vive en `datos_fiscales_cliente` y no en `clientes`, pero la API
+    de clientes SI lo acepta y escribe en las dos tablas. Por eso la
+    columna esta y el formulario tambien. La razon social no: no se
+    captura, y el servidor la guarda con el nombre del cliente.
   - La columna de estatus es un badge y no texto: "Inactivo" es la manera de
     que un cliente deje de ofrecerse, y tiene que verse de un vistazo.
 -->
@@ -160,6 +162,28 @@
               autocomplete="off"
               placeholder="427 123 4567"
             />
+          </div>
+
+          <div class="campo">
+            <label for="rfc">RFC</label>
+            <input
+              id="rfc"
+              type="text"
+              formControlName="rfc"
+              maxlength="13"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="XAXX010101000"
+              (input)="alEscribirRfc($event)"
+              [attr.aria-invalid]="
+                forma.controls.rfc.invalid &&
+                (forma.controls.rfc.dirty || forma.controls.rfc.touched)
+              "
+              [attr.aria-describedby]="problemaDe('rfc') ? 'rfc-error' : null"
+            />
+            @if (problemaDe('rfc'); as problema) {
+              <span class="ayuda" id="rfc-error">{{ problema }}</span>
+            }
           </div>
 
           <div class="campo ancho">

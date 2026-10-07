@@ -14,6 +14,7 @@ import { ToastService } from '../nucleo/toast.service';
 import { montoComoTexto } from '../nucleo/cifras';
 import { ConfirmModal } from '../productos/confirm-modal';
 import { ClientesApi, cuerpoDeCliente, type Cliente, type Especie } from './clientes-api';
+import { rfcNormalizado, rfcValido } from '../usuarios/usuarios-api';
 
 /**
  * La pantalla de clientes.
@@ -32,10 +33,29 @@ import { ClientesApi, cuerpoDeCliente, type Cliente, type Especie } from './clie
  *
  * Las reglas del editor son las del backend (`clientes/esquemas.ts`): el
  * código se pasa a mayúsculas, los campos opcionales en blanco se mandan
- * como `null`, y el estatus es 'Activo'/'Inactivo'. El RFC no se edita aquí:
- * la API de clientes no lo acepta (vive en `datos_fiscales_cliente`), por
- * eso el editor no lo muestra como campo, aunque la fila sí lo enseña.
+ * como `null`, y el estatus es 'Activo'/'Inactivo'.
+ *
+ * El RFC es el único campo que NO es columna de `clientes`: vive en
+ * `datos_fiscales_cliente`, y el backend lo recibe igual que los demás y
+ * escribe en las dos tablas. Es opcional y se valida con la misma regla del
+ * SAT que usa `usuarios` (`rfcValido`), para que el error salga pegado al
+ * campo y no después del viaje al servidor. La razón social no se captura:
+ * el servidor la guarda con el nombre del cliente.
  */
+
+/**
+ * El RFC, con la MISMA regla que usa `usuarios` mientras se escribe.
+ *
+ * El campo es OPCIONAL: vacío no es error, de eso se encarga el backend
+ * (`null` = sin RFC). Pero si trae algo tiene que cumplir el formato del
+ * SAT, y el error sale aquí abajo en cuanto se teclea en vez de después
+ * de un 400 que obliga a buscar cuál de los ocho campos se equivocó.
+ */
+function validaRfc(control: { value: string }): Record<string, boolean> | null {
+  const valor = control.value.trim();
+  if (valor === '') return null;
+  return rfcValido(valor) ? null : { rfc: true };
+}
 
 @Component({
   selector: 'app-clientes',
@@ -143,6 +163,7 @@ export class Clientes {
     especie_id: [''],
     estatus: this.fb.nonNullable.control<'Activo' | 'Inactivo'>('Activo'),
     telefono: [''],
+    rfc: ['', validaRfc],
     direccion: [''],
   });
 
@@ -153,11 +174,12 @@ export class Clientes {
    *
    * El error va DEBAJO del campo y no solo en el aviso de arriba del
    * formulario: lo que hay que corregir es el campo, y un mensaje suelto
-   * obliga a buscar cuál de los siete es.
+   * obliga a buscar cuál de los ocho es.
    */
-  problemaDe(campo: 'codigo_cliente' | 'nombre'): string | null {
+  problemaDe(campo: 'codigo_cliente' | 'nombre' | 'rfc'): string | null {
     const control = this.forma.controls[campo];
     if (control.hasError('requerido')) return 'Este campo es obligatorio.';
+    if (control.hasError('rfc')) return 'El RFC no cumple el formato del SAT.';
     if (control.hasError('duplicado')) return 'Ya existe un cliente con ese código.';
     return null;
   }
@@ -331,6 +353,7 @@ export class Clientes {
       especie_id: '',
       estatus: 'Activo',
       telefono: '',
+      rfc: '',
       direccion: '',
     });
     this.errorEditor.set(null);
@@ -346,11 +369,26 @@ export class Clientes {
       especie_id: cliente.especie_id === null ? '' : String(cliente.especie_id),
       estatus: cliente.estatus,
       telefono: cliente.telefono ?? '',
+      rfc: cliente.rfc ?? '',
       direccion: cliente.direccion ?? '',
     });
     this.errorEditor.set(null);
     this.editando.set(cliente);
     this.editorVisible.set(true);
+  }
+
+  /**
+   * El RFC en mayúsculas mientras se escribe.
+   *
+   * El backend lo pone en mayúsculas antes de validar, y si aquí se
+   * guardara tal cual lo tecleado el campo diría `xaxx010101000` mientras
+   * la tabla recargada diría `XAXX010101000`: dos vistas del mismo dato
+   * que no coinciden. `setValue` revalida solo, así que el formato sigue
+   * vigilándose con cada letra.
+   */
+  alEscribirRfc(evento: Event): void {
+    const input = evento.target as HTMLInputElement;
+    this.forma.controls.rfc.setValue(rfcNormalizado(input.value));
   }
 
   /**

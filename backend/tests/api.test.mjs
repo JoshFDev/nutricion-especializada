@@ -356,6 +356,57 @@ revisar(
   JSON.stringify(actualizado.cuerpo).slice(0, 120),
 );
 
+// --------------------------------------------------------------- rfc
+// El RFC no es columna de `clientes`: vive en `datos_fiscales_cliente`,
+// que el backend escribe aparte. Aqui se comprueba lo que la pantalla
+// necesita: que se guarde, que salga en mayusculas en el listado, que el
+// formato se valide y que un campo vacio lo borre.
+const rfcEscrito = await pedir(`/api/clientes/${id}`, token, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rfc: '  xaxx010101000 ' }),
+});
+revisar(
+  'PATCH con rfc lo guarda en mayusculas',
+  rfcEscrito.status === 200 && rfcEscrito.cuerpo.rfc === 'XAXX010101000',
+  JSON.stringify(rfcEscrito.cuerpo).slice(0, 160),
+);
+
+const porRfcNuevo = await pedir('/api/clientes?buscar=XAXX010101000', token);
+revisar(
+  'el listado busca por el rfc recien guardado',
+  porRfcNuevo.status === 200 &&
+    porRfcNuevo.cuerpo.datos?.some((c) => c.id === id && c.rfc === 'XAXX010101000'),
+  JSON.stringify(porRfcNuevo.cuerpo).slice(0, 160),
+);
+
+const rfcInvalido = await pedir(`/api/clientes/${id}`, token, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rfc: '12345' }),
+});
+revisar('PATCH con rfc mal formado -> 400', rfcInvalido.status === 400, String(rfcInvalido.status));
+
+const sinRfc = await pedir(`/api/clientes/${id}`, token, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rfc: '' }),
+});
+revisar(
+  'PATCH con rfc vacio lo borra',
+  sinRfc.status === 200 && sinRfc.cuerpo.rfc === null,
+  JSON.stringify(sinRfc.cuerpo).slice(0, 160),
+);
+
+// Se vuelve a poner rfc para que el DELETE de abajo pruebe el caso que
+// rompia: `datos_fiscales_cliente` referencia a `clientes` sin ON DELETE
+// CASCADE, y sin el borrado previo de esa fila el 204 seria un 409.
+await pedir(`/api/clientes/${id}`, token, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rfc: 'XAXX010101000' }),
+});
+
 const duplicado = await pedir('/api/clientes', token, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -368,7 +419,7 @@ revisar(
 );
 
 const borrado = await pedir(`/api/clientes/${id}`, token, { method: 'DELETE' });
-revisar('DELETE borra', borrado.status === 204);
+revisar('DELETE borra', borrado.status === 204, JSON.stringify(borrado.cuerpo));
 
 // ---------------------------------------------------------------- permisos
 // Los roles estan definidos en 0001_init.sql: la Empleada opera el mostrador

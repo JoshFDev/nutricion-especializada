@@ -655,18 +655,16 @@ th {
   background: var(--fondo);
 }
 
-/* El dinero y las cantidades a la derecha: se comparan de columna. */
+/*
+ * El dinero y las cantidades a la derecha: se comparan de columna. Va el
+ * encabezado Y el valor, con la misma clase: antes los encabezados de bultos
+ * y kilos iban centrados (`.centrado`) y el titulo quedaba en un punto y los
+ * valores, que estan a la derecha, en otro, asi que había que trazar la linea
+ * a mano para saber que iba con que.
+ */
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-/* Los encabezados de la cantidad (bultos y kilos) van al centro, porque su
-   columna no se compara con la de al lado: el data es un input de captura
-   y el centro le dice "esto se escribe aqui" sin competir ni con el nombre
-   del producto ni con el importe. */
-.renglones thead th.centrado {
-  text-align: center;
 }
 
 tbody tr:last-child td {

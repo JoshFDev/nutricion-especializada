@@ -346,10 +346,10 @@
           <thead>
             <tr>
               <th scope="col">Producto</th>
-              <th scope="col" class="num centrado">Bultos</th>
-              <th scope="col" class="num centrado">Kg</th>
+              <th scope="col" class="num">Bultos</th>
+              <th scope="col" class="num">Kg</th>
               <th scope="col" class="num">Importe</th>
-              <th scope="col"><span class="oculto">Quitar</span></th>
+              <th scope="col" class="num"><span class="oculto">Quitar</span></th>
             </tr>
           </thead>
           <tbody>
@@ -409,11 +409,19 @@
                     }
                   </span>
                 </td>
-                <td>
+                <!--
+                  `step="1"` y no el `0.001` de antes: en el mostrador la
+                  flecha sube kilos redondos (25 -> 26), y con `0.001` subia
+                  25.001 -> 25.002, que no es como se captura. Los decimales
+                  se escriben a mano y aqui si entran: no hay validacion de
+                  formulario que los rechace, solo `ponerKilos`, que acepta
+                  cualquier numero mayor que cero.
+                -->
+                <td class="num">
                   <input
                     type="number"
                     min="0"
-                    step="0.001"
+                    step="1"
                     inputmode="decimal"
                     [value]="linea.kg_bulto"
                     (change)="ponerKilos(linea.uid, $any($event.target).value)"
@@ -421,7 +429,7 @@
                   />
                 </td>
                 <td class="num dinero">{{ montoDeLinea(linea) }}</td>
-                <td>
+                <td class="num">
                   <button
                     type="button"
                     class="peligro chico"

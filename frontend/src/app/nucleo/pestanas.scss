@@ -1,0 +1,61 @@
+/*
+ * Las pestañas, en un solo lugar.
+ *
+ * Dos pantallas las usan: notas (Notas emitidas / Talonario de folios) y
+ * auditoria (Log, Accesos, Caja, Inventario, Precios). Cada una traia su
+ * propia copia de estas reglas y se veian distintas la una de la otra:
+ * padding, tamano de letra y peso del texto cambiaban de una pantalla a la
+ * otra, y una pestaña es el mismo control en las dos. Aqui esta la forma
+ * comun; lo propio de cada pantalla (el `role="tablist"` de notas, el
+ * `aria-current` de auditoria) se queda en su plantilla.
+ *
+ * Este archivo se `@use`a desde el `.scss` de cada pantalla, igual que
+ * `pantallas.scss`: Angular mete el partial dentro del estilo del
+ * componente, asi que solo aplica a quien lo importe.
+ */
+
+.pestanas {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.pestana {
+  /* `font: inherit` porque el boton no hereda la tipografia de la pagina:
+     sin esto la pestana se compone en la fuente del navegador y no en la
+     de la app. */
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.375rem 0.75rem;
+  color: var(--texto-suave);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  /* Menos un pixel para que el `border-bottom` de la activa encaje sobre
+     el separador de abajo en vez de doblarlo. */
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+/*
+ * El hover generico de los botones trae su borde azul, y en una pestana ese
+ * borde es justo lo que marca la pestana activa: sin esto, pasar el cursor
+ * por una pestana la hacia ver seleccionada.
+ */
+.pestana:hover:not(.activa) {
+  border-bottom-color: transparent;
+}
+
+.pestana:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+  border-radius: 4px 4px 0 0;
+}
+
+.pestana.activa {
+  color: var(--acento-texto);
+  border-bottom-color: var(--acento);
+}

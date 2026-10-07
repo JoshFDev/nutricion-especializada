@@ -8,6 +8,7 @@
  */
 
 @use '../nucleo/pantallas';
+@use '../nucleo/pestanas';
 
 :host {
   display: block;
@@ -33,43 +34,11 @@
  * Las pestañas van arriba de la cabecera y no dentro de un panel: el filtro de
  * fechas es el mismo para las cinco, y separarlo del resto haria que se
  * buscara el rango donde no esta.
+ *
+ * Su forma (padding, tipografia, el subrayado de la activa y el hover) vive en
+ * `nucleo/pestanas.scss`, que es la misma que usa notas: antes cada pantalla
+ * traia la suya y una pestaña se veia distinto en un modulo y en el otro.
  */
-.pestanas {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--borde);
-}
-
-.pestanas button:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: -2px;
-  border-radius: 4px 4px 0 0;
-}
-
-.pestanas button {
-  padding: 0.5rem 0.875rem;
-  font: inherit;
-  color: var(--texto-suave);
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  cursor: pointer;
-}
-
-.pestanas button.activa {
-  font-weight: 600;
-  color: var(--acento-texto);
-  border-bottom-color: var(--acento);
-}
-
-/* El hover del compartido trae su borde azul, y en una pestana ese borde es
-   justo lo que marca la pestana activa: sin esto, pasar el cursor por una
-   pestana la hacia ver seleccionada. */
-.pestanas button:hover:not(.activa) {
-  border-bottom-color: transparent;
-}
 
 /* ------------------------------------------------------------------ el filtro */
 

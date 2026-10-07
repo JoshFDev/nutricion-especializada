@@ -19,6 +19,7 @@
     @for (pestana of pestanas(); track pestana.id) {
       <button
         type="button"
+        class="pestana"
         [class.activa]="pestana.id === abierta()"
         [attr.aria-current]="pestana.id === abierta() ? 'page' : null"
         (click)="cambiarDePestana(pestana.id)"

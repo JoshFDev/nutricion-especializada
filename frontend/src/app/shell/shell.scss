@@ -47,6 +47,27 @@
   overflow: hidden;
 
   /*
+   * El `position: relative` es la otra mitad del sistema de scroll, y no es
+   * decorativo: sin el, el documento vuelve a tener scroll y con el se
+   * mueve el marco entero.
+   *
+   * Lo absoluto sin un posicionado arriba NO lo recorta el
+   * `overflow: hidden` de este marco: solo se recorta a lo absoluto cuyo
+   * bloque contenedor esta por encima del que recorta, y si no hay
+   * posicionado, ese bloque es el de la pagina, que esta fuera de aqui.
+   * La etiqueta `.oculto` de la paginacion vive al fondo de la tabla, a
+   * miles de pixeles del techo, asi que estiraba el DOCUMENTO hasta alla:
+   * aparecia la barra de scroll de la pagina, y al arrastrarla subia la
+   * barra azul y el menu junto con el contenido.
+   *
+   * Con el marco posicionado, esas etiquetas caen dentro de el y las
+   * recorta el propio `overflow: hidden`. El punto no se mueve: el marco
+   * empieza en la esquina del documento, y lo `fixed` (el cajon en
+   * celular, el velo de auditoria) sigue amarrado a la ventana.
+   */
+  position: relative;
+
+  /*
    * Que el(scroll) del contenido no se siga en el documento al llegar al
    * tope o al fondo. Sin esto, en celular el scroll de la tabla arrastra la
    * pagina entera y el menu se va con ella.

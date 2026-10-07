@@ -68,6 +68,8 @@ export class Catalogo implements OnInit {
    * plural. Los dos son femeninos, asi que el genero no hace falta.
    */
   readonly singular = input.required<string>();
+  /** La frase que explica para qué es la pantalla, bajo el título. */
+  readonly descripcion = input.required<string>();
 
   private readonly api = inject(CatalogoApi);
   private readonly fb = inject(FormBuilder);

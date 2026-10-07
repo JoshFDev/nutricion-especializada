@@ -1,5 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { errorLegible } from '../nucleo/api';
+import { ConfirmModal } from '../productos/confirm-modal';
 import { Sesion } from '../nucleo/sesion';
 import { bultosComoTexto, kilosComoTexto, montoComoTexto } from '../nucleo/cifras';
 import { DireccionesApi, type DireccionEntrega } from './direcciones-api';
@@ -111,6 +119,7 @@ export const MAX_RENGLONES_NOTA = 9;
   selector: 'app-notas',
   templateUrl: './notas.html',
   styleUrl: './notas.scss',
+  imports: [ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Notas {
@@ -118,6 +127,9 @@ export class Notas {
   private readonly apiPagos = inject(PagosApi);
   private readonly apiDirecciones = inject(DireccionesApi);
   private readonly sesion = inject(Sesion);
+
+  /** La confirmacion de cambiar de cliente va por el modal, no por `window.confirm`. */
+  readonly confirmModal = viewChild.required(ConfirmModal);
 
   // ------------------------------------------------------------- la captura
   readonly cliente = signal<Cliente | null>(null);
@@ -418,10 +430,23 @@ export class Notas {
     this.error.set(null);
   }
 
-  /** Cambiar de cliente con renglones puestos no se puede: el precio es de el. */
-  cambiarCliente(): void {
-    if (this.hayLineas() && !confirmar('Si cambias de cliente se borra la nota que llevas.')) {
-      return;
+  /**
+   * Cambiar de cliente con renglones puestos no se puede: el precio es de el.
+   *
+   * La confirmacion va por el modal (no por `window.confirm`) porque el aviso
+   * es largo y peligroso: el mensaje dice que se pierde la nota capturada y
+   * el de `confirm` del navegador no se puede estilar, asi que en el mostrador
+   * se le da que sí de corrido sin leer.
+   */
+  async cambiarCliente(): Promise<void> {
+    if (this.hayLineas()) {
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Cambiar de cliente',
+        mensaje: 'Si cambias de cliente se borra la nota que llevas.',
+        textoConfirmar: 'Cambiar',
+        variante: 'advertencia',
+      });
+      if (!confirmado) return;
     }
     this.cliente.set(null);
     this.lineas.set(vaciar(this.lineas()));

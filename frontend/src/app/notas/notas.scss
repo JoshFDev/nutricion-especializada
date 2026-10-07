@@ -659,6 +659,14 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
+/* Los encabezados de la cantidad (bultos y kilos) van al centro, porque su
+   columna no se compara con la de al lado: el data es un input de captura
+   y el centro le dice "esto se escribe aqui" sin competir ni con el nombre
+   del producto ni con el importe. */
+.renglones thead th.centrado {
+  text-align: center;
+}
+
 tbody tr:last-child td {
   border-bottom: 0;
 }

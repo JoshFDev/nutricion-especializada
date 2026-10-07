@@ -57,6 +57,8 @@
     }
   </div>
 
+  <p class="descripcion">{{ descripcion() }}</p>
+
   <!-- Editor inline (alta/renombrado) - colapsable arriba de la tabla -->
   @if (puedeCrear()) {
     <div class="editor-wrapper" [class.colapsado]="!editorVisible()">

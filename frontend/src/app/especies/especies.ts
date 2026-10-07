@@ -14,7 +14,12 @@ import { Catalogo } from '../catalogo/catalogo';
 @Component({
   selector: 'app-especies',
   imports: [Catalogo],
-  template: `<app-catalogo recurso="especies" titulo="Especies" singular="Especie" />`,
+  template: `<app-catalogo
+    recurso="especies"
+    titulo="Especies"
+    singular="Especie"
+    descripcion="La clasificación del producto que complementa a la categoría. Conviene darlas de alta primero: el formulario de /productos las ofrece para elegir."
+  />`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Especies {}

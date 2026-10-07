@@ -51,11 +51,7 @@ rutasUsuarios.get(
 // Los fondos de login. Mismo permiso que el listado por la misma razon que
 // /roles: el formulario de edicion los necesita para el selector, y quien
 // puede ver cuentas ya puede verlas todas.
-rutasUsuarios.get(
-  '/fondos',
-  requierePermiso('usuarios.ver'),
-  controlador.listarFondos,
-);
+rutasUsuarios.get('/fondos', requierePermiso('usuarios.ver'), controlador.listarFondos);
 
 rutasUsuarios.get(
   '/',

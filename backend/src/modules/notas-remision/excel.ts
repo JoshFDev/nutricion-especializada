@@ -212,9 +212,7 @@ export async function excelNotaRemision(
  * No usa la plantilla de nota individual, genera una hoja limpia con
  * las columnas que se ven en la tabla: Folio, Cliente, Fecha, Total, Estatus, Kg.
  */
-export async function excelListaNotas(
-  notas: NotaListada[],
-): Promise<Buffer> {
+export async function excelListaNotas(notas: NotaListada[]): Promise<Buffer> {
   const libro = new ExcelJS.Workbook();
   const hoja = libro.addWorksheet('Notas de remision');
 

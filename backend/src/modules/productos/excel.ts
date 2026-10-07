@@ -8,9 +8,7 @@ import type { Producto } from './modelo.js';
  * Genera una hoja limpia con las columnas que se ven en la tabla:
  * Codigo, Nombre, Presentacion (kg), Categoria, Especie, Estado.
  */
-export async function excelListaProductos(
-  productos: Producto[],
-): Promise<Buffer> {
+export async function excelListaProductos(productos: Producto[]): Promise<Buffer> {
   const libro = new ExcelJS.Workbook();
   const hoja = libro.addWorksheet('Productos');
 
@@ -85,8 +83,12 @@ export async function excelListaProductos(
       const columna = hoja.getColumn(col.key);
       let maxWidth = col.width ?? 10;
       columna.eachCell({ includeEmpty: false }, (cell) => {
-        const valor = String(cell.value ?? '');
-        const ancho = Math.max(valor.length + 2, col.width ?? 10);
+        const valor = cell.value;
+        const texto =
+          typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean'
+            ? String(valor)
+            : '';
+        const ancho = Math.max(texto.length + 2, col.width ?? 10);
         if (ancho > maxWidth) maxWidth = ancho;
       });
       columna.width = Math.min(maxWidth, 50); // tope máximo 50

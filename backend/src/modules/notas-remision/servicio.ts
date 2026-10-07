@@ -130,10 +130,7 @@ export async function excel(
  * Descarga TODAS las notas que coincidan con el filtro (sin paginación),
  * no solo la página visible.
  */
-export async function exportarExcel(
-  cliente: PoolClient,
-  q: ListarNotas,
-): Promise<Buffer> {
+export async function exportarExcel(cliente: PoolClient, q: ListarNotas): Promise<Buffer> {
   // Usar la misma consulta de listar pero SIN límite ni offset
   const { valores, donde } = repo.construirFiltro(q);
 

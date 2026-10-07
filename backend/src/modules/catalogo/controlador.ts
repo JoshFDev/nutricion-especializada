@@ -25,7 +25,10 @@ export const controladorCatalogo = (clave: ClaveRecurso) => {
   const exportarExcel: Resp = async (req, res) => {
     const bytes = await servicio.exportarExcel(req.db, clave);
     res
-      .setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
       .setHeader('Content-Disposition', `attachment; filename="${servicio.rutaDe(clave)}.xlsx"`)
       .send(bytes);
   };

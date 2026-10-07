@@ -35,7 +35,7 @@ export const listarRoles = async (req: Request, res: Response): Promise<void> =>
  * duplicarla en el cliente seria tener dos verdades que se desincronizan sin
  * que nada avise.
  */
-export const listarFondos = async (_req: Request, res: Response): Promise<void> => {
+export const listarFondos = (_req: Request, res: Response): void => {
   res.json({ datos: FONDOS_LOGIN });
 };
 

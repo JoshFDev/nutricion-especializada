@@ -49,7 +49,10 @@ const exportarExcel: Resp = async (req, res) => {
   });
   const buffer = await excel.excelListaProductos(datos);
   const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  );
   res.setHeader('Content-Disposition', `attachment; filename="productos-${fecha}.xlsx"`);
   res.send(buffer);
 };

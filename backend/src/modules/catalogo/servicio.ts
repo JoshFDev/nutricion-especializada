@@ -139,10 +139,7 @@ export async function borrar(db: PoolClient, clave: ClaveRecurso, id: number): P
  * y letra blanca centrada, limitado a las dos columnas de datos para que
  * no sangre al imprimir.
  */
-export async function exportarExcel(
-  db: PoolClient,
-  clave: ClaveRecurso,
-): Promise<Buffer> {
+export async function exportarExcel(db: PoolClient, clave: ClaveRecurso): Promise<Buffer> {
   const filas = await repo.listar(db, definicion(clave));
   const datos = filas.map(mapeoFila);
 

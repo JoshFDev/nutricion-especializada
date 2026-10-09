@@ -8,7 +8,7 @@ import ExcelJS from 'exceljs';
 
 /** Nombre del recurso en la URL (para nombres de archivo). */
 export const rutaDe = (clave: ClaveRecurso): string =>
-  clave === 'categorias' ? 'categorias-producto' : 'especies';
+  clave === 'categorias' ? 'categorias-producto' : clave;
 
 /**
  * Reglas del catalogo.

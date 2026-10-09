@@ -6,21 +6,23 @@ import { controladorCatalogo } from './controlador.js';
 import type { ClaveRecurso } from './repositorio.js';
 
 /**
- * Rutas del catalogo: /api/especies y /api/categorias-producto.
+ * Rutas del catalogo: /api/especies, /api/categorias-producto y /api/almacenes.
  *
- * Las dos se construyen con una funcion porque el recurso solo cambia en
+ * Las tres se construyen con una funcion porque el recurso solo cambia en
  * tres cosas: el permiso, la tabla y los mensajes. El resto del camino
- * (validar, autorizar, ejecutar) es identico, y duplicarlo seria dos
+ * (validar, autorizar, ejecutar) es identico, y duplicarlo seria tres
  * copias que se van a desincronizar.
  *
  * A diferencia de /api/usuarios, aqui NO todo es de admin: leer el
- * catalogo es necesario para vender, asi que va por permiso granular
- * (`especies.ver`, `categorias.ver`) y la migracion 0003 se lo da a los
- * tres roles. Escribir y borrar si son solo del admin.
+ * catalogo es necesario para vender y para registrar compras, asi que va
+ * por permiso granular (`especies.ver`, `categorias.ver`, `almacenes.ver`)
+ * y las migraciones 0003 y 0015 se lo dan a los tres roles. Escribir y
+ * borrar si son solo del admin.
  */
 export const rutasCatalogo: Record<ClaveRecurso, Router> = {
   especies: construir('especies', 'especies'),
   categorias: construir('categorias', 'categorias'),
+  almacenes: construir('almacenes', 'almacenes'),
 };
 
 function construir(clave: ClaveRecurso, moduloPermiso: string): Router {

@@ -28,8 +28,8 @@ export interface DefinicionRecurso {
 /**
  * El catalogo completo, en un solo lugar.
  *
- * Agregar un recurso aqui (por ejemplo, cuando lleguen los alarmedores)
- * es agregar una entrada, no escribir otro repositorio.
+ * Agregar un recurso aqui (por ejemplo, cuando lleguen los almacenes) es
+ * agregar una entrada, no escribir otro repositorio.
  */
 export const RECURSOS = {
   especies: {
@@ -46,6 +46,22 @@ export const RECURSOS = {
     singular: 'La categoría',
     plural: 'las categorías',
     usos: [{ etiqueta: 'producto', tabla: 'productos', columna: 'categoria_id' }],
+  },
+  almacenes: {
+    tabla: 'almacenes',
+    singular: 'El almacén',
+    plural: 'los almacenes',
+    usos: [
+      { etiqueta: 'compra', tabla: 'compra_detalle', columna: 'almacen_id' },
+      { etiqueta: 'nota de remision', tabla: 'nota_remision_detalle', columna: 'almacen_id' },
+      { etiqueta: 'existencia semanal', tabla: 'inventario_semanal', columna: 'almacen_id' },
+      {
+        etiqueta: 'movimiento de inventario',
+        tabla: 'inventario_movimientos',
+        columna: 'almacen_id',
+      },
+      { etiqueta: 'registro de auditoria', tabla: 'auditoria_inventario', columna: 'almacen_id' },
+    ],
   },
 } as const satisfies Record<string, DefinicionRecurso>;
 

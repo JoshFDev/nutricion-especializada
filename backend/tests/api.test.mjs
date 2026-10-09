@@ -976,9 +976,10 @@ revisar(
 );
 
 // ================================================================ catalogo
-// Especies y categorias de producto. Son la misma tabla con distinto
-// nombre, asi que la suite recorre las dos rutas con el mismo codigo.
-console.log('\n--- catalogo (especies y categorias) ---');
+// Especies, categorias y almacenes de producto. Son la misma tabla con
+// distinto nombre, asi que la suite recorre las tres rutas con el mismo
+// codigo.
+console.log('\n--- catalogo (especies, categorias y almacenes) ---');
 
 // `tabla` NO es lo mismo que `plural`: la tabla real se llama
 // categorias_producto, no categorias. Confundir las dos hace que el SQL
@@ -986,6 +987,7 @@ console.log('\n--- catalogo (especies y categorias) ---');
 const CATALOGO = [
   { ruta: 'especies', plural: 'especies', tabla: 'especies' },
   { ruta: 'categorias-producto', plural: 'categorias', tabla: 'categorias_producto' },
+  { ruta: 'almacenes', plural: 'almacenes', tabla: 'almacenes' },
 ];
 
 for (const { ruta, plural, tabla } of CATALOGO) {
@@ -1208,6 +1210,45 @@ if (especieEnUso.cuerpo?.nombre) {
   );
   const sigueAhí = await pedir('/api/especies/1', tokenAdmin);
   revisar('la especie en uso NO se borro', sigueAhí.status === 200);
+}
+
+// --- borrar un almacen que ya recibio mercancia ---
+// Mismo caso que la especie: el almacen 1 del seed tiene inventario y
+// compras detras, asi que el borrado directo no se deja y el 409 tiene que
+// decir quién mas lo apunta.
+const almacenEnUso = await pedir('/api/almacenes/1', tokenAdmin);
+revisar(
+  'el almacen 1 del seed existe',
+  almacenEnUso.status === 200,
+  JSON.stringify(almacenEnUso.cuerpo),
+);
+if (almacenEnUso.cuerpo?.nombre) {
+  const borrarAlmacenEnUso = await pedir('/api/almacenes/1', tokenAdmin, { method: 'DELETE' });
+  revisar(
+    'borrar un almacen con mercancia -> 409',
+    borrarAlmacenEnUso.status === 409,
+    JSON.stringify(borrarAlmacenEnUso.cuerpo),
+  );
+  revisar(
+    'el 409 dice EN_USO',
+    borrarAlmacenEnUso.cuerpo?.codigo === 'EN_USO',
+    JSON.stringify(borrarAlmacenEnUso.cuerpo),
+  );
+  // El recurso cuenta los usos en el orden de su arreglo `usos`; el mensaje
+  // tiene que mencionar al menos las compras (lo que mas le preocupa a quien
+  // lo lee) y tambien el resto.
+  revisar(
+    'el mensaje explica cuantas compras lo usan',
+    /\d+ compras?/.test(borrarAlmacenEnUso.cuerpo?.error ?? ''),
+    borrarAlmacenEnUso.cuerpo?.error,
+  );
+  revisar(
+    'y menciona el inventario',
+    /\d+ movimiento/.test(borrarAlmacenEnUso.cuerpo?.error ?? ''),
+    borrarAlmacenEnUso.cuerpo?.error,
+  );
+  const almacenSigueAhí = await pedir('/api/almacenes/1', tokenAdmin);
+  revisar('el almacen en uso NO se borro', almacenSigueAhí.status === 200);
 }
 
 // --- productos ---

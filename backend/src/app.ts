@@ -90,6 +90,7 @@ export function crearApp(): Express {
   app.use('/api/clientes', rutasClientes);
   app.use('/api/especies', rutasCatalogo.especies);
   app.use('/api/categorias-producto', rutasCatalogo.categorias);
+  app.use('/api/almacenes', rutasCatalogo.almacenes);
   app.use('/api/precios', rutasPrecios);
   app.use('/api/productos', rutasProductos);
   app.use('/api/notas-remision', rutasNotasRemision);

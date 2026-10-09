@@ -86,6 +86,51 @@ th:nth-child(5) {
   font-weight: 600;
 }
 
+/*
+ * La rejilla del editor de ajustes.
+ *
+ * En las demás pantallas el partial la deja en tres columnas y el campo
+ * `.ancho` (el que manda) ocupa la fila entera. Aquí son tres campos cortos
+ * —el tipo, la cantidad y el motivo—: con esa rejilla el motivo se iba a un
+ * segundo renglón y en el primero quedaba el tercer hueco vacío, así que el
+ * formulario se veía apilado a la izquierda con todo el aire a la derecha.
+ *
+ * Van los tres en UNA sola fila. El motivo se queda con la columna más ancha
+ * porque su texto es el más largo ("Cuenta física del lunes…"); el tipo pide
+ * lo suyo para que no se le corte la opción ("Ajuste que sube…") y la
+ * cantidad, que es un número, se queda con la más corta.
+ */
+.campos {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.6fr) minmax(0, 1.8fr);
+}
+
+/* El motivo ya no manda sobre el ancho: comparte fila con los otros dos. */
+.campo.ancho {
+  grid-column: auto;
+}
+
+/*
+ * En una pantalla angosta los tres bajan primero a dos columnas y después a
+ * una. El motivo, que es el campo largo, recupera ahí la fila completa; si no,
+ * quedaría a media fila con el hueco de al lado que justamente se quiere
+ * quitar.
+ */
+@media (max-width: 52rem) {
+  .campos {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .campo.ancho {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 40rem) {
+  .campos {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* El kardex cuelga debajo del formulario, dentro del mismo editor. */
 .kardex {
   margin: 0.5rem 0 0;

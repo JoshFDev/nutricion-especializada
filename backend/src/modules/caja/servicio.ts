@@ -1,15 +1,24 @@
 import type { PoolClient } from 'pg';
-import { enTransaccionDe, hoyEnLaBase } from '../../db/transaccion.js';
+import { enTransaccionDe, hoyEnLaBase, momentoEnLaBase } from '../../db/transaccion.js';
 import { Conflicto, ErrorValidacion, NoEncontrado } from '../../core/errores.js';
 import { fechaComoTexto } from '../../core/valores.js';
 import type {
+  Cierre,
   CrearCuenta,
   CrearMovimiento,
   ListarCuentas,
   ListarMovimientos,
   Resumen,
 } from './esquemas.js';
-import type { Cuenta, Listado, Movimiento, MovimientoListado, ResumenCuenta } from './modelo.js';
+import type {
+  CierreCuenta,
+  CierreDeCaja,
+  Cuenta,
+  Listado,
+  Movimiento,
+  MovimientoListado,
+  ResumenCuenta,
+} from './modelo.js';
 import * as repo from './repositorio.js';
 
 /**
@@ -178,6 +187,43 @@ export async function eliminarMovimiento(cliente: PoolClient, id: number): Promi
 
 export async function resumen(cliente: PoolClient, q: Resumen): Promise<ResumenCuenta[]> {
   return repo.resumenPorCuenta(cliente, q);
+}
+
+/**
+ * El cierre de caja de un dia.
+ *
+ * Es de SOLO LECTURA: no captura el conteo fisico ni la diferencia, solo
+ * calcula lo que la base dice que deberia haber en cada cuenta al terminar el
+ * dia. Sin fecha, el dia es el de HOY segun la base (`hoyEnLaBase`), no el del
+ * navegador: es la misma regla que usa el alta de un movimiento, y mezclar los
+ * dos relojes es como se cierra el dia equivocado.
+ *
+ * `generado_en` sale del reloj de la base por el mismo motivo y es el "hasta
+ * ahora": el cierre es del dia hasta el momento en que se corre, y el sello lo
+ * deja escrito en la pantalla.
+ */
+export async function cierre(cliente: PoolClient, q: Cierre): Promise<CierreDeCaja> {
+  const fechaDia = q.fecha ?? (await hoyEnLaBase(cliente));
+  const [filas, generadoEn] = await Promise.all([
+    repo.cierrePorCuenta(cliente, { ...q, fecha: fechaDia }),
+    momentoEnLaBase(cliente),
+  ]);
+
+  return {
+    fecha: fechaDia,
+    generado_en: generadoEn,
+    cuentas: filas.map((f): CierreCuenta => ({
+      cuenta_id: f.cuenta_id,
+      cuenta: f.cuenta,
+      tipo: f.tipo,
+      fondo: Number(f.fondo),
+      ingresos: Number(f.ingresos),
+      egresos: Number(f.egresos),
+      esperado: Number(f.esperado),
+      saldo_actual: Number(f.saldo_actual),
+      movimientos: Number(f.movimientos),
+    })),
+  };
 }
 
 const mapear = (f: {

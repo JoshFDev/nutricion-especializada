@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { contar, consultar, consultarUno } from '../../db/transaccion.js';
 import { fechaComoTexto } from '../../core/valores.js';
 import type {
+  Cierre,
   CrearCuenta,
   CrearMovimiento,
   ListarCuentas,
@@ -9,6 +10,7 @@ import type {
   Resumen,
 } from './esquemas.js';
 import type {
+  FilaCierre,
   FilaCuenta,
   FilaMovimiento,
   Listado,
@@ -387,4 +389,60 @@ export async function resumenPorCuenta(cliente: PoolClient, q: Resumen): Promise
       movimientos: Number(f.movimientos),
     };
   });
+}
+
+/**
+ * El arqueo esperado de cada cuenta para UN dia.
+ *
+ * A diferencia del resumen, que suma un rango, aqui el dia parte la historia
+ * en dos y las tres cifras salen de la MISMA pasada sobre los movimientos de
+ * la cuenta:
+ *
+ *   - `fondo`: lo que entro menos lo que salio con `fecha < dia`. Es el saldo
+ *     con el que arranca la manana, y sale de la base y no de restar a mano,
+ *     porque el saldo de la cuenta arrastra toda su historia.
+ *   - `ingresos` / `egresos`: lo del dia exacto (`fecha = dia`).
+ *   - `esperado`: el fondo mas lo del dia, o sea `fecha <= dia`. Esa es la
+ *     cifra contra la que se cuenta el efectivo al cerrar.
+ *
+ * `saldo_actual` se lee de `cuentas_financieras` y no de la suma: es el saldo
+ * del sistema AHORA. Coincide con el esperado cuando el dia es hoy y no hay
+ * movimientos con fecha futura; cuando no coincide, la diferencia son esos
+ * movimientos futuros, que es justo lo que hay que ver al cerrar.
+ *
+ * El `LEFT JOIN` y el `GROUP BY` son los del resumen y por la misma razon:
+ * una cuenta sin movimientos tiene que salir en cero, que es informacion, y
+ * una cuenta con veinte movimientos es una sola fila.
+ */
+export async function cierrePorCuenta(
+  cliente: PoolClient,
+  q: Cierre & { fecha: string },
+): Promise<FilaCierre[]> {
+  return consultar<FilaCierre>(
+    cliente,
+    `SELECT cf.id AS cuenta_id, cf.nombre AS cuenta, cf.tipo,
+            cf.saldo_actual,
+            COALESCE(SUM(
+              CASE WHEN m.fecha < $1::date THEN
+                CASE WHEN m.tipo = 'ingreso' THEN m.monto ELSE -m.monto END
+              END
+            ), 0)::TEXT AS fondo,
+            COALESCE(SUM(
+              CASE WHEN m.fecha = $1::date AND m.tipo = 'ingreso' THEN m.monto ELSE 0 END
+            ), 0)::TEXT AS ingresos,
+            COALESCE(SUM(
+              CASE WHEN m.fecha = $1::date AND m.tipo = 'egreso' THEN m.monto ELSE 0 END
+            ), 0)::TEXT AS egresos,
+            COALESCE(SUM(
+              CASE WHEN m.fecha <= $1::date THEN
+                CASE WHEN m.tipo = 'ingreso' THEN m.monto ELSE -m.monto END
+              END
+            ), 0)::TEXT AS esperado,
+            count(m.id) FILTER (WHERE m.fecha = $1::date)::TEXT AS movimientos
+       FROM cuentas_financieras cf
+       LEFT JOIN movimientos_financieros m ON m.cuenta_id = cf.id
+      GROUP BY cf.id, cf.nombre, cf.tipo, cf.saldo_actual
+      ORDER BY cf.tipo, cf.nombre`,
+    [q.fecha],
+  );
 }

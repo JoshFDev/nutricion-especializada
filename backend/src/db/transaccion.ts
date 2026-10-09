@@ -58,6 +58,24 @@ export async function hoyEnLaBase(cliente: PoolClient): Promise<string> {
 }
 
 /**
+ * El momento actual segun la base, como `AAAA-MM-DD HH:MM`.
+ *
+ * Hermano de `hoyEnLaBase` y por el mismo motivo: la hora del servidor de la
+ * base es la que vale, no la de Node. Se usa para el sello del cierre de caja,
+ * donde "hasta ahora" tiene que salir del mismo reloj que las fechas.
+ *
+ * Se devuelve ya en texto porque es lo que se muestra tal cual en la pantalla,
+ * sin pasar por `Date` y sin el corrimiento de huso horario.
+ */
+export async function momentoEnLaBase(cliente: PoolClient): Promise<string> {
+  const fila = await consultarUno<{ ahora: string }>(
+    cliente,
+    `SELECT to_char(now(), 'YYYY-MM-DD HH24:MI') AS ahora`,
+  );
+  return fila?.ahora ?? '';
+}
+
+/**
  * Unidad de trabajo: todo lo que hay dentro es una sola transaccion.
  * Si la funcion lanza, ROLLBACK; si termina, COMMIT.
  *

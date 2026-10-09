@@ -121,8 +121,27 @@ export const listarCategoriasEsquema = z
   })
   .strict();
 
+/**
+ * El cierre de caja de un dia.
+ *
+ * Una sola fecha y opcional: sin ella el cierre es del dia de HOY segun la
+ * base, que es el caso normal (se cierra al terminar). Elegir otro dia sirve
+ * para volver a ver el cierre de ayer sin tocar nada.
+ *
+ * No hay mas campos a proposito. El cierre es de SOLO CONSULTA: no se captura
+ * el conteo fisico ni la diferencia contra lo esperado, solo se calcula lo
+ * que la base dice que deberia haber. Guardar el conteo pediria una tabla y
+ * un permiso nuevos, y eso no es lo que se pidio.
+ */
+export const cierreEsquema = z
+  .object({
+    fecha: fecha('fecha').optional(),
+  })
+  .strict();
+
 export type CrearCuenta = z.infer<typeof crearCuentaEsquema>;
 export type ListarCuentas = z.infer<typeof listarCuentasEsquema>;
 export type CrearMovimiento = z.infer<typeof crearMovimientoEsquema>;
 export type ListarMovimientos = z.infer<typeof listarMovimientosEsquema>;
 export type Resumen = z.infer<typeof resumenEsquema>;
+export type Cierre = z.infer<typeof cierreEsquema>;

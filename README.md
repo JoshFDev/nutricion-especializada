@@ -182,6 +182,7 @@ Los tres módulos del último lote, y lo que cada uno decide.
 | `GET /movimientos/:id`    | Un movimiento                                  |
 | `DELETE /movimientos/:id` | **El único DELETE de todo el proyecto**        |
 | `GET /resumen`            | Ingresos, egresos y saldo por cuenta y periodo |
+| `GET /cierre`             | El arqueo **esperado** de un día               |
 | `GET /categorias`         | Categorías usadas, para los desplegables       |
 
 - El saldo **no se manda nunca**: lo calcula el trigger
@@ -198,6 +199,13 @@ Los tres módulos del último lote, y lo que cada uno decide.
   permiso (`caja.eliminar`, que la Cajera tiene y la Empleada no): en los
   demás módulos el registro tiene nombre y aparece en documentos viejos; un
   movimiento de caja solo existe en `auditoria_caja`.
+- El cierre (`GET /cierre`) es **solo consulta** y usa `caja.ver`, como el
+  resumen: no captura el conteo físico ni la diferencia, solo el arqueo
+  esperado de UN día. Sin fecha es el de hoy según la base (no el del
+  navegador), de donde sale también el sello de generación. Por cuenta
+  responde fondo (lo que traía antes del día), entradas, salidas y el
+  esperado; cuando el día no es hoy, el esperado y el saldo actual pueden no
+  coincidir porque el saldo actual arrastra los movimientos con fecha futura.
 
 ### `facturacion` — factura al cliente (`/api/facturas`)
 

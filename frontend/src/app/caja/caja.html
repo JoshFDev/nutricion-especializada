@@ -231,6 +231,23 @@
         <h1>Caja y bancos</h1>
       </div>
       <div class="acciones-cabecera">
+        <button type="button" (click)="abrirCierre()">
+          <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M3 2.5h10v11l-2-1.4-2 1.4-2-1.4-2 1.4v-11z"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M6 6h4M6 8.5h4"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+          Cierre de caja
+        </button>
         <button type="button" (click)="verCuentas()">
           <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path
@@ -270,6 +287,108 @@
       cada cuenta lo rehace el servidor sumando sus movimientos, y por eso aquí solo se capturan
       movimientos.
     </p>
+
+    <!--
+      El cierre de caja: el arqueo ESPERADO de un día, normalmente el de hoy.
+
+      Es de solo consulta: no captura el conteo físico ni la diferencia, solo
+      dice lo que la base espera que haya. Va con su propia fecha porque el
+      cierre es de UN día y el periodo de abajo es un rango que se elige; son
+      dos preguntas distintas y compartir fechas las mezclaría.
+    -->
+    @if (cierreVisible()) {
+      <section class="resumen cierre">
+        <div class="resumen-cabecera">
+          <h2 class="resumen-titulo">Cierre de caja</h2>
+          <div class="fechas">
+            <label class="fecha">
+              El día
+              <input
+                type="date"
+                [value]="fechaCierre()"
+                (change)="cambiarFechaCierre($any($event.target).value)"
+              />
+            </label>
+          </div>
+          <button type="button" class="chico" (click)="cerrarCierre()">
+            <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M4.5 4.5l7 7M11.5 4.5l-7 7"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+            Cerrar
+          </button>
+        </div>
+
+        @if (cargandoCierre() && cierre() === null) {
+          <p class="cargando">Calculando el cierre…</p>
+        } @else if (errorCierre()) {
+          <p class="error">{{ errorCierre() }}</p>
+        } @else if (cierre(); as dia) {
+          @if (dia.cuentas.length === 0) {
+            <p class="aviso">
+              No hay ninguna cuenta. Abre una en "Las cuentas" para poder cerrar caja.
+            </p>
+          } @else {
+            <dl class="cifras cuatro">
+              <div class="cifra">
+                <dt>El fondo</dt>
+                <dd>{{ montoComoTexto(totalesCierre().fondo) }}</dd>
+              </div>
+              <div class="cifra">
+                <dt>Entró</dt>
+                <dd class="ingreso">{{ montoComoTexto(totalesCierre().ingresos) }}</dd>
+              </div>
+              <div class="cifra">
+                <dt>Salió</dt>
+                <dd class="egreso">{{ montoComoTexto(totalesCierre().egresos) }}</dd>
+              </div>
+              <div class="cifra">
+                <dt>Esperado al cierre</dt>
+                <dd>{{ montoComoTexto(totalesCierre().esperado) }}</dd>
+              </div>
+            </dl>
+
+            <table class="por-cuenta">
+              <thead>
+                <tr>
+                  <th>La cuenta</th>
+                  <th class="num">Fondo</th>
+                  <th class="num">Entró</th>
+                  <th class="num">Salió</th>
+                  <th class="num">Esperado al cierre</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (cuenta of dia.cuentas; track cuenta.cuenta_id) {
+                  <tr>
+                    <td>{{ cuenta.cuenta }}</td>
+                    <td class="num" [class.egreso]="cuenta.fondo < 0">
+                      {{ montoComoTexto(cuenta.fondo) }}
+                    </td>
+                    <td class="num ingreso">{{ montoComoTexto(cuenta.ingresos) }}</td>
+                    <td class="num egreso">{{ montoComoTexto(cuenta.egresos) }}</td>
+                    <td class="num esperado" [class.egreso]="cuenta.esperado < 0">
+                      {{ montoComoTexto(cuenta.esperado) }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            <p class="nota">
+              El cierre es del día {{ dia.fecha }} y se calculó a las {{ dia.generado_en }}. El
+              <strong>esperado</strong> es lo que debería haber en cada cuenta: el fondo con el que
+              abrió más lo que entró y menos lo que salió ese día. Cuenta lo que hay y compáralo con
+              esta cifra; aquí no se guarda el conteo.
+            </p>
+          }
+        }
+      </section>
+    }
 
     <!--
       El periodo va arriba porque el resumen y el listado lo comparten. Son las

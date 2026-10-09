@@ -83,6 +83,33 @@ export interface ResumenCuenta {
   movimientos: number;
 }
 
+/**
+ * `caja/modelo.ts` -> `CierreCuenta`, el arqueo de una cuenta en un dia.
+ *
+ * `fondo` es lo que traia la cuenta antes del dia y `esperado` el fondo mas lo
+ * del dia: lo que deberia haber al cerrar. `saldo_actual` es el saldo del
+ * sistema AHORA y solo coincide con el esperado si el dia es hoy y no hay
+ * movimientos con fecha futura.
+ */
+export interface CierreCuenta {
+  cuenta_id: number;
+  cuenta: string;
+  tipo: TipoCuenta;
+  fondo: number;
+  ingresos: number;
+  egresos: number;
+  esperado: number;
+  saldo_actual: number;
+  movimientos: number;
+}
+
+/** `caja/modelo.ts` -> `CierreDeCaja`. El `generado_en` es el "hasta ahora". */
+export interface CierreDeCaja {
+  fecha: string;
+  generado_en: string;
+  cuentas: CierreCuenta[];
+}
+
 export interface Listado<T> {
   datos: T[];
   total: number;
@@ -312,6 +339,31 @@ export function totalesDeResumen(resumen: ResumenCuenta[]): {
   );
 }
 
+/**
+ * Los totales del cierre, para la linea de arriba.
+ *
+ * Se suma el `esperado` de cada cuenta y no el `saldo_actual`: el cierre es de
+ * lo que deberia haber al terminar el dia, y el saldo actual arrastra los
+ * movimientos con fecha futura. Se suman los cuatro y no se recalcula el
+ * esperado a partir de los otros tres, porque el del servidor es el que vale.
+ */
+export function totalesDeCierre(cuentas: CierreCuenta[]): {
+  fondo: number;
+  ingresos: number;
+  egresos: number;
+  esperado: number;
+} {
+  return cuentas.reduce(
+    (acumulado, cuenta) => ({
+      fondo: redondearMonto(acumulado.fondo + cuenta.fondo),
+      ingresos: redondearMonto(acumulado.ingresos + cuenta.ingresos),
+      egresos: redondearMonto(acumulado.egresos + cuenta.egresos),
+      esperado: redondearMonto(acumulado.esperado + cuenta.esperado),
+    }),
+    { fondo: 0, ingresos: 0, egresos: 0, esperado: 0 },
+  );
+}
+
 // ---------------------------------------------------------------- las llamadas
 
 @Injectable({ providedIn: 'root' })
@@ -403,6 +455,19 @@ export class CajaApi {
     if (desde) params['desde'] = desde;
     if (hasta) params['hasta'] = hasta;
     return firstValueFrom(this.http.get<ResumenCuenta[]>(`${API}/caja/resumen`, { params }));
+  }
+
+  /**
+   * El cierre de caja de un dia.
+   *
+   * Sin fecha el backend usa el dia de HOY segun la base, no el del navegador:
+   * es la misma regla que el alta de un movimiento. Es de solo lectura, asi
+   * que no hay cuerpo ni estado que mandar.
+   */
+  async cierre(fecha?: string): Promise<CierreDeCaja> {
+    const params: Record<string, string> = {};
+    if (fecha) params['fecha'] = fecha;
+    return firstValueFrom(this.http.get<CierreDeCaja>(`${API}/caja/cierre`, { params }));
   }
 
   /** Clientes para el buscador del editor. */

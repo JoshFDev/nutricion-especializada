@@ -96,6 +96,53 @@ export interface ResumenCuenta {
   movimientos: number;
 }
 
+/**
+ * Una fila cruda del cierre: los NUMERIC y los count llegan como texto.
+ *
+ * `fondo` es el saldo que traia la cuenta ANTES del dia (lo que entro menos
+ * lo que salio en todo su historial anterior) y `esperado` es ese fondo mas lo
+ * del dia, o sea lo que deberia haber al cerrar. El `saldo_actual` se lee de
+ * `cuentas_financieras` y puede no coincidir con el esperado si hay
+ * movimientos con fecha FUTURA.
+ */
+export interface FilaCierre {
+  cuenta_id: number;
+  cuenta: string;
+  tipo: TipoCuenta;
+  fondo: string;
+  ingresos: string;
+  egresos: string;
+  esperado: string;
+  saldo_actual: string;
+  movimientos: string;
+}
+
+/** El arqueo de UNA cuenta para el dia que se esta cerrando. */
+export interface CierreCuenta {
+  cuenta_id: number;
+  cuenta: string;
+  tipo: TipoCuenta;
+  fondo: number;
+  ingresos: number;
+  egresos: number;
+  esperado: number;
+  saldo_actual: number;
+  movimientos: number;
+}
+
+/**
+ * El cierre de caja de un dia.
+ *
+ * `fecha` es el dia de negocio que se cerro y `generado_en` la marca de
+ * cuando se pidio: el cierre es "el dia hasta la hora en que se corre", y el
+ * sello lo deja escrito. Las cuentas van una por fila, como el resumen.
+ */
+export interface CierreDeCaja {
+  fecha: string;
+  generado_en: string;
+  cuentas: CierreCuenta[];
+}
+
 export interface Listado<T> {
   datos: T[];
   total: number;

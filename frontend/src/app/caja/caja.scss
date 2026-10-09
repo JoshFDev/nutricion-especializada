@@ -12,6 +12,9 @@
  *     y lo que salió DENTRO del rango, y los tres totales de arriba. El aviso
  *     del pie va aquí porque el error clásico de esta pantalla es leer el
  *     "saldo del periodo" como si fuera el saldo de la cuenta.
+ *   - `.cierre`, la tarjeta del arqueo de un día: reusa la caja de `.resumen` y
+ *     se distingue con un filo, porque es la cifra que se lee de pie junto a la
+ *     caja. Cuatro columnas (el fondo es una más) y el esperado más pesado.
  *   - `.cifras` y `.ingreso` / `.egreso`, el signo del monto. Es la única forma
  *     de distinguir a simple vista un saldo de una deuda, y el color es
  *     justamente lo que hace falta para no leerlo al revés.
@@ -268,6 +271,30 @@
   margin: 0.125rem 0;
 }
 
+/* ------------------------------------------------------------------ cierre */
+
+/*
+ * El cierre de caja, arriba del periodo.
+ *
+ * Reusa la caja de `.resumen` (mismo fondo y marco) porque es otra tarjeta, y
+ * se distingue con un filo de color a la izquierda: es la única que se calcula
+ * contra un solo día y la que se lee de pie junto a la caja. Los cuatro números
+ * van en cuatro columnas y no en tres, porque el fondo es una cifra más del
+ * arqueo y no un total del periodo.
+ */
+.cierre {
+  border-left: 3px solid var(--acento);
+}
+
+.cierre .cifras.cuatro {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* El esperado es la cifra contra la que se cuenta: se lee más pesado. */
+.cierre .por-cuenta .esperado {
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------------ borrar */
 
 /*
@@ -319,7 +346,8 @@
 }
 
 @media (max-width: 40rem) {
-  .cifras {
+  .cifras,
+  .cifras.cuatro {
     grid-template-columns: 1fr;
   }
 

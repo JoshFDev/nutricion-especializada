@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { cuerpo, consulta, parametros } from '../../core/validacion.js';
 import * as servicio from './servicio.js';
 import type {
+  Cierre,
   CrearCuenta,
   CrearMovimiento,
   ListarCuentas,
@@ -51,6 +52,10 @@ export const controladorCaja = {
 
   resumen: async (req: Request, res: Response): Promise<void> => {
     res.json(await servicio.resumen(req.db, consulta<Resumen>(req)));
+  },
+
+  cierre: async (req: Request, res: Response): Promise<void> => {
+    res.json(await servicio.cierre(req.db, consulta<Cierre>(req)));
   },
 
   listarCategorias: async (req: Request, res: Response): Promise<void> => {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requierePermiso, requiereSesion } from '../../middleware/permisos.js';
 import { validarBody, validarParams, validarQuery } from '../../core/validacion.js';
 import {
+  cierreEsquema,
   crearCuentaEsquema,
   crearMovimientoEsquema,
   idCuentaEsquema,
@@ -98,6 +99,22 @@ rutasCaja.get(
   requierePermiso('caja.ver'),
   validarQuery(resumenEsquema),
   controlador.resumen,
+);
+
+/**
+ * El arqueo esperado de un dia.
+ *
+ * Es de solo lectura y usa `caja.ver`, como el resumen: ver cuanto deberia
+ * haber en caja no es capturar ni borrar nada, y quien puede ver los
+ * movimientos ya puede hacer esta suma. No se invento un `caja.cerrar` por la
+ * misma razon que el alta de cuenta no tiene permiso propio: un permiso nuevo
+ * solo para el admin dejaria a la cajera sin poder cerrar su propio turno.
+ */
+rutasCaja.get(
+  '/cierre',
+  requierePermiso('caja.ver'),
+  validarQuery(cierreEsquema),
+  controlador.cierre,
 );
 
 rutasCaja.get(

@@ -22,8 +22,10 @@ import {
   problemaDeMonto,
   problemaDeNombreCuenta,
   saldoNegativo,
+  totalesDeCierre,
   totalesDeResumen,
   type CategoriaEnUso,
+  type CierreDeCaja,
   type Cuenta,
   type Movimiento,
   type MovimientoListado,
@@ -141,6 +143,64 @@ export class Caja {
     } finally {
       this.cargandoResumen.set(false);
     }
+  }
+
+  // ----------------------------------------------------------------- el cierre
+  /**
+   * El cierre de caja: el arqueo esperado de un dia.
+   *
+   * Va en su propia tarjeta y no comparte fechas con el resumen porque son dos
+   * preguntas distintas: el resumen es un rango que se elige, y el cierre es UN
+   * dia, normalmente el de hoy, y lo que deberia haber al terminarlo. Es de
+   * solo lectura: no captura el conteo fisico ni la diferencia, solo dice lo
+   * que la base espera.
+   *
+   * Empieza oculto y se calcula al abrirlo: es una consulta de otro dia, no
+   * algo que haya que traer en cada carga de la lista.
+   */
+  readonly cierreVisible = signal(false);
+  readonly cierre = signal<CierreDeCaja | null>(null);
+  readonly cargandoCierre = signal(false);
+  readonly errorCierre = signal<string | null>(null);
+  /** El dia a cerrar. Vacio la primera vez: lo pone el backend con su "hoy". */
+  readonly fechaCierre = signal('');
+
+  readonly totalesCierre = computed(() => totalesDeCierre(this.cierre()?.cuentas ?? []));
+
+  async abrirCierre(): Promise<void> {
+    this.cierreVisible.set(true);
+    await this.cargarCierre();
+  }
+
+  cerrarCierre(): void {
+    this.cierreVisible.set(false);
+  }
+
+  /**
+   * Pide el cierre del dia elegido.
+   *
+   * Sin fecha, el backend decide (hoy segun la base) y devuelve el dia que
+   * cerro; se copia al campo para que el `date` muestre que dia se esta
+   * mirando en vez de quedarse en blanco.
+   */
+  private async cargarCierre(): Promise<void> {
+    this.cargandoCierre.set(true);
+    this.errorCierre.set(null);
+    try {
+      const resultado = await this.api.cierre(this.fechaCierre() || undefined);
+      this.cierre.set(resultado);
+      if (this.fechaCierre() === '') this.fechaCierre.set(resultado.fecha);
+    } catch (falla) {
+      this.cierre.set(null);
+      this.errorCierre.set(errorLegible(falla).mensaje);
+    } finally {
+      this.cargandoCierre.set(false);
+    }
+  }
+
+  cambiarFechaCierre(valor: string): void {
+    this.fechaCierre.set(valor);
+    void this.cargarCierre();
   }
 
   // --------------------------------------------------------------- el listado
@@ -344,6 +404,9 @@ export class Caja {
     await Promise.all([
       this.cargarCuentas(),
       this.cargarResumen(),
+      // El cierre solo se refresca si su tarjeta esta a la vista: si no, seria
+      // otra consulta por cada alta o borrado sin que nadie la este mirando.
+      this.cierreVisible() ? this.cargarCierre() : Promise.resolve(),
       this.cargarPagina(inicio ? 1 : this.pagina()),
     ]);
   }

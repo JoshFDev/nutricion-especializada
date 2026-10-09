@@ -7,8 +7,10 @@ import {
   problemaDeMonto,
   problemaDeNombreCuenta,
   saldoNegativo,
+  totalesDeCierre,
   totalesDeResumen,
   unaLinea,
+  type CierreCuenta,
   type EditorMovimiento,
   type ResumenCuenta,
 } from './caja-api';
@@ -193,5 +195,53 @@ describe('los totales del periodo', () => {
       resumen({ ingresos: 0.2, egresos: 0, saldo_periodo: 0.2 }),
     ]);
     expect(totales.saldo).toBe(0.3);
+  });
+});
+
+describe('los totales del cierre', () => {
+  function cierre(over: Partial<CierreCuenta>): CierreCuenta {
+    return {
+      cuenta_id: 1,
+      cuenta: 'Caja chica',
+      tipo: 'efectivo',
+      fondo: 0,
+      ingresos: 0,
+      egresos: 0,
+      esperado: 0,
+      saldo_actual: 0,
+      movimientos: 0,
+      ...over,
+    };
+  }
+
+  it('suma el fondo, lo que entró, lo que salió y lo esperado de todas las cuentas', () => {
+    const totales = totalesDeCierre([
+      cierre({ fondo: 500, ingresos: 1000, egresos: 400, esperado: 1100 }),
+      cierre({ fondo: -200, ingresos: 250, egresos: 900, esperado: -850 }),
+    ]);
+    expect(totales).toEqual({ fondo: 300, ingresos: 1250, egresos: 1300, esperado: 250 });
+  });
+
+  it('suma el esperado tal como viene, sin recalcularlo de los otros tres', () => {
+    // Un 1500 que no cuadra con fondo + entrado - salido: si el servidor lo
+    // manda, es porque hay movimientos con fecha fuera del rango, y aqui no
+    // se maquilla.
+    const totales = totalesDeCierre([
+      cierre({ fondo: 1000, ingresos: 0, egresos: 0, esperado: 1500 }),
+    ]);
+    expect(totales.esperado).toBe(1500);
+  });
+
+  it('sin cuentas son cero, no NaN', () => {
+    expect(totalesDeCierre([])).toEqual({ fondo: 0, ingresos: 0, egresos: 0, esperado: 0 });
+  });
+
+  it('se suma con redondeo de centavo', () => {
+    const totales = totalesDeCierre([
+      cierre({ fondo: 0.1, esperado: 0.1 }),
+      cierre({ fondo: 0.2, esperado: 0.2 }),
+    ]);
+    expect(totales.fondo).toBe(0.3);
+    expect(totales.esperado).toBe(0.3);
   });
 });

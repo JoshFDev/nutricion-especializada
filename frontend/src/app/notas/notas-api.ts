@@ -249,11 +249,11 @@ export interface RenglonNotaBody {
  *     rehacen: una devolucion terminaria con el kardoex lleno de ruido.
  *     Los que la persona quito de la tabla (una devolucion completa) no
  *     vienen, y el backend los borra de verdad.
- *   - `almacen_id`: se toma del renglon (`RenglonNota.almacen_id`), no del
- *     `ALMACEN_ID` de este archivo. En el alta no hay de donde sacarlo porque
- *     la nota es nueva; al corregir una nota, el producto puede haber salido
- *     de otra bodega, y mandarle el almacen equivocado descuenta el stock de
- *     la que no es.
+ *   - `almacen_id`: se toma del renglon (`RenglonNota.almacen_id`). En el
+ *     alta la nota es nueva y la bodega la elige la pantalla; al corregir una
+ *     nota, el producto puede haber salido de otra bodega, y mandarle el
+ *     almacen equivocado descuenta el stock de la que no es. La bodega de la
+ *     pantalla solo rellena los renglones NUEVOS que se agreguen.
  *   - `precio_unit_kg`: tampoco se manda, y por la misma razon que en el
  *     alta. El backend conserva el precio de los renglones que ya estaban
  *     (ver `prepararRenglones` -> `aConservar` en el servicio), que es lo
@@ -277,23 +277,28 @@ export interface RenglonEdicionBody {
 /**
  * El almacen del que sale la venta.
  *
- * `almacenes.id` es un SMALLINT y no hay endpoint de almacenes todavia (no
- * hay un modulo de almacenes en la API). La semilla crea una sola bodega y
- * el POS vende de ahi.
+ * `almacenes.id` es un SMALLINT y el catalogo se sirve por `/api/almacenes`
+ * (`catalogo/`), el mismo modulo que especies y categorias. La pantalla lo
+ * elige en la captura y lo pasa aqui por parametro: ya no hay un 1 escrito a
+ * mano, y si no hay bodega el guardado se bloquea ANTES de llegar al backend
+ * en vez de responder "El almacen 1 no existe".
  *
- * Es lo unico del POS que esta escrito a mano, y es el primer lugar donde
- * hay que tocar cuando se carguen mas de una: o llega el endpoint de
- * almacenes y esta constante se sustituye por el almacen que elija la
- * persona, o se deja asi y se admite que solo hay una bodega. Lo que no
- * puede ser es que quede en un 1 sin que nadie lo sepa, porque el dia que
- * haya dos bodegas la segunda vende de la primera sin avisar.
+ * En el ALTA la bodega es una sola para toda la nota. En la EDICION cada
+ * renglon conserva la suya (`RenglonNota.almacen_id`): el producto puede
+ * haber salido de otra bodega, y mandarle el almacen equivocado descuenta el
+ * stock de la que no es. La bodega elegida solo rellena los renglones NUEVOS
+ * que se agreguen al corregir.
  */
-export const ALMACEN_ID = 1;
+export interface Almacen {
+  id: number;
+  nombre: string;
+}
 
 /** Arma el cuerpo de la nota. */
 export function cuerpoDeNota(
   clienteId: number,
   lineas: Linea[],
+  almacenId: number,
   direccion?: string | null,
 ): CuerpoNota {
   if (lineas.length === 0) {
@@ -306,7 +311,7 @@ export function cuerpoDeNota(
       const kilos = kgComoTextoSiHayQueMandarlo(linea);
       return {
         producto_id: linea.producto_id,
-        almacen_id: ALMACEN_ID,
+        almacen_id: almacenId,
         cantidad_bultos: cantidadComoTexto(linea),
         ...(kilos === null ? {} : { kg_bulto: kilos }),
       };
@@ -335,6 +340,7 @@ export function cuerpoDeNota(
 export function cuerpoDeEdicion(
   clienteId: number,
   lineas: Linea[],
+  almacenId: number,
   direccion: string,
 ): CuerpoEdicion {
   if (lineas.length === 0) {
@@ -351,7 +357,9 @@ export function cuerpoDeEdicion(
       return {
         ...(linea.renglon_id === undefined ? {} : { id: linea.renglon_id }),
         producto_id: linea.producto_id,
-        almacen_id: linea.almacen_id ?? ALMACEN_ID,
+        // La bodega del renglon manda; la elegida solo rellena los NUEVOS
+        // que se agreguen al corregir, que no traen la suya.
+        almacen_id: linea.almacen_id ?? almacenId,
         cantidad_bultos: cantidadComoTexto(linea),
         ...(kilos === null ? {} : { kg_bulto: kilos }),
       };
@@ -426,7 +434,7 @@ export class NotasApi {
    * cajera en alguna base rara, o la consulta fallo -- y la pantalla se
    * queda sin contador, que es mejor que bloquear la captura por saberlo.
    */
-  async existencia(productoId: number, almacenId: number = ALMACEN_ID): Promise<number | null> {
+  async existencia(productoId: number, almacenId: number): Promise<number | null> {
     try {
       const respuesta = await firstValueFrom(
         this.http.get<Listado<Existencia>>(`${API}/inventario/existencia`, {
@@ -438,6 +446,31 @@ export class NotasApi {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Las bodegas de las que puede salir la venta.
+   *
+   * Llenan el selector de la captura. Antes esto era un 1 escrito a mano y si
+   * la bodega faltaba el guardado respondia "El almacen 1 no existe": ahora
+   * la pantalla ofrece las que hay, y si no hay ninguna, crear una en el acto
+   * (solo quien tenga `almacenes.crear`).
+   */
+  async almacenes(): Promise<Almacen[]> {
+    const respuesta = await firstValueFrom(this.http.get<{ datos: Almacen[] }>(`${API}/almacenes`));
+    return respuesta.datos;
+  }
+
+  /**
+   * Crea una bodega desde el mismo mostrador.
+   *
+   * Solo aparece cuando la lista esta vacia y quien captura tiene permiso
+   * (`almacenes.crear`, del Administrador): con el sistema recien entregado
+   * la base va limpia y la primera venta no se topa con un "almacen 1 no
+   * existe". El 409 `NOMBRE_DUPLICADO` lo traduce la pantalla en su aviso.
+   */
+  async crearAlmacen(nombre: string): Promise<Almacen> {
+    return firstValueFrom(this.http.post<Almacen>(`${API}/almacenes`, { nombre: nombre.trim() }));
   }
 
   /**

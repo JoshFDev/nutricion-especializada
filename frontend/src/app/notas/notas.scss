@@ -370,6 +370,27 @@ h2 {
   opacity: 0.5;
 }
 
+/* El selector de bodega se estira como los buscadores de arriba, no al ancho
+   de la opcion mas corta: una "Bodega principal" cortada no se lee de un
+   vistazo. */
+.bloque > .campo select {
+  width: 100%;
+}
+
+/* Crear la primera bodega en la misma captura (cuando la entregan sin datos):
+   el campo y el boton van en una fila, no apilados. */
+.nueva-bodega {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.nueva-bodega input {
+  flex: 1;
+  min-width: 0;
+}
+
 label {
   display: block;
   margin-bottom: 0.25rem;

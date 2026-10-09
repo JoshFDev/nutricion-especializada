@@ -170,6 +170,68 @@
       </div>
 
       <!--
+        La bodega de la que sale la venta. Se elige aqui y no es un numero
+        escrito a mano: si la lista viene sin bodegas (sistema recien
+        entregado), quien tenga permiso la crea en el acto. Los renglones de
+        una nota que ya se emitio guardan su propia bodega, asi que al
+        corregirla este selector no los mueve: solo rige los nuevos.
+      -->
+      <div class="bloque">
+        <label class="etiqueta" for="bodega">Bodega</label>
+
+        @if (almacenes().length > 0) {
+          <div class="campo">
+            <select
+              id="bodega"
+              [value]="almacenId() ?? ''"
+              (change)="elegirAlmacen($any($event.target).value)"
+              [attr.aria-label]="
+                'Bodega de la que sale la venta, seleccionada: ' + (almacen()?.nombre ?? 'ninguna')
+              "
+            >
+              @for (bodega of almacenes(); track bodega.id) {
+                <option [value]="bodega.id">{{ bodega.nombre }}</option>
+              }
+            </select>
+          </div>
+        } @else if (puedeCrearBodega()) {
+          <div class="nueva-bodega">
+            <input
+              type="text"
+              id="bodega"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="Nombre de la bodega, ej. «Bodega principal»"
+              [value]="nuevaBodega()"
+              (input)="nuevaBodega.set($any($event.target).value)"
+              (keydown.enter)="crearBodega()"
+              aria-label="Nombre de la nueva bodega"
+            />
+            <button
+              type="button"
+              class="primario chico"
+              (click)="crearBodega()"
+              [disabled]="creandoBodega() || nuevaBodega().trim() === ''"
+            >
+              @if (creandoBodega()) {
+                <span class="spinner" aria-hidden="true"></span> Creando…
+              } @else {
+                Crear bodega
+              }
+            </button>
+          </div>
+          @if (errorBodega(); as mensaje) {
+            <p class="error" role="alert">{{ mensaje }}</p>
+          }
+        } @else {
+          <p class="aviso">
+            No hay bodegas configuradas. Pídele al administrador que cree una en Catálogo ›
+            Almacenes para vender.
+          </p>
+        }
+      </div>
+
+      <!--
     La direccion de la sucursal: de la lista guardada o escrita a mano.
     Es del MOSTRADOR y no del cliente: se guarda en `direcciones_entrega`
     (migracion 0011) y se copia al documento, no se enlaza con una tabla de

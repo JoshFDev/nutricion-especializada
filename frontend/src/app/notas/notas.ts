@@ -31,10 +31,10 @@ import {
   type Linea,
 } from './linea';
 import {
-  ALMACEN_ID,
   NotasApi,
   cuerpoDeEdicion,
   cuerpoDeNota,
+  type Almacen,
   type Cliente,
   type EstatusNota,
   type Folio,
@@ -205,6 +205,35 @@ export class Notas {
   readonly guardandoDireccion = signal(false);
   readonly errorDireccion = signal<string | null>(null);
 
+  // ------------------------------------------------------------- la bodega
+  /**
+   * La bodega de la que sale la mercancia.
+   *
+   * Se elige en la captura (no es una constante): las bodegas viven en el
+   * catalogo (`/api/almacenes`) y el operador ve cual elige. Si no hay
+   * ninguna, la captura ofrece crear una en el acto a quien tenga
+   * `almacenes.crear` -- el administrador. Sin bodega, el guardado se bloquea
+   * con un aviso en vez de mandar un "almacen 1" que el backend va a rechazar
+   * con un error raro.
+   *
+   * En una edicion (devolucion) los renglones que ya estaban conservan su
+   * bodega; la elegida solo rellena los productos NUEVOS que se agreguen.
+   */
+  readonly almacenes = signal<Almacen[]>([]);
+  /** El id de la bodega elegida; `null` cuando no hay ninguna. */
+  readonly almacenId = signal<number | null>(null);
+  /** La bodega elegida, o `null` si no hay ninguna o no se ha elegido. */
+  readonly almacen = computed(
+    () => this.almacenes().find((a) => a.id === this.almacenId()) ?? null,
+  );
+
+  /** El nombre que se teclea para crear la primera bodega en la misma captura. */
+  readonly nuevaBodega = signal('');
+  readonly creandoBodega = signal(false);
+  readonly errorBodega = signal<string | null>(null);
+  /** Solo quien pueda ve el formulario de crearla: una bodega es config. */
+  readonly puedeCrearBodega = computed(() => this.sesion.puede('almacenes.crear'));
+
   // ------------------------------------------------------ la tabla de notas
   readonly notas = signal<NotaListada[]>([]);
   /**
@@ -361,15 +390,15 @@ export class Notas {
   }
 
   /**
-   * Lo que se carga al abrir la pantalla: las direcciones (que se eligen al
-   * capturar) y la tabla de notas (que es lo que hay abajo).
+   * Lo que se carga al abrir la pantalla: las direcciones y las bodegas (que
+   * se eligen al capturar) y la tabla de notas (que es lo que hay abajo).
    *
    * Van juntas con `Promise.all` y no en serie porque no dependen una de la
-   * otra, y una pantalla de mostrador que tarda lo que las dos mas lo que
-   * cada una se siente lenta aunque las dos esten bien.
+   * otra, y una pantalla de mostrador que tarda lo que las tres mas lo que
+   * cada una se siente lenta aunque las tres esten bien.
    */
   private async cargar(): Promise<void> {
-    await Promise.all([this.cargarDirecciones(), this.recargar()]);
+    await Promise.all([this.cargarDirecciones(), this.cargarAlmacenes(), this.recargar()]);
   }
 
   /**
@@ -507,7 +536,8 @@ export class Notas {
       }
       this.lineas.update((lineas) => agregar(lineas, conPrecio(lineaVacia(producto), precio)));
       this.resultadosProducto.set([]);
-      void this.saberDisponible(producto.id);
+      const bodega = this.almacen();
+      if (bodega !== null) void this.saberDisponible(producto.id, bodega.id);
     } catch (falla) {
       this.error.set(errorLegible(falla).mensaje);
     } finally {
@@ -524,7 +554,7 @@ export class Notas {
    * se forma. Un fallo no echa la captura abajo; el renglon se queda sin
    * contador, que es lo que ya se veia antes de saber cuanto habia.
    */
-  private async saberDisponible(productoId: number, almacenId: number = ALMACEN_ID): Promise<void> {
+  private async saberDisponible(productoId: number, almacenId: number): Promise<void> {
     const disponibles = await this.api.existencia(productoId, almacenId);
     if (disponibles === null) return;
     this.lineas.update((lineas) =>
@@ -544,9 +574,11 @@ export class Notas {
   private refrescarDisponibles(): void {
     const porProducto = new Map<number, number>();
     for (const linea of this.lineas()) {
-      if (!porProducto.has(linea.producto_id)) {
-        porProducto.set(linea.producto_id, linea.almacen_id ?? ALMACEN_ID);
-      }
+      if (porProducto.has(linea.producto_id)) continue;
+      // La bodega del renglon manda; la elegida solo rellena los NUEVOS.
+      const almacenId = linea.almacen_id ?? this.almacen()?.id;
+      if (almacenId === undefined) continue;
+      porProducto.set(linea.producto_id, almacenId);
     }
     for (const [productoId, almacenId] of porProducto) {
       void this.saberDisponible(productoId, almacenId);
@@ -639,16 +671,17 @@ export class Notas {
   async guardar(): Promise<void> {
     const cliente = this.cliente();
     const enEdicion = this.editando();
-    if (cliente === null || this.guardando()) return;
+    const bodega = this.almacen();
+    if (cliente === null || bodega === null || this.guardando()) return;
 
     this.guardando.set(true);
     this.error.set(null);
     try {
       if (enEdicion === null) {
-        const cuerpo = cuerpoDeNota(cliente.id, this.lineas(), this.direccion());
+        const cuerpo = cuerpoDeNota(cliente.id, this.lineas(), bodega.id, this.direccion());
         this.ultimaGuardada.set(await this.api.crear(cuerpo));
       } else {
-        const cuerpo = cuerpoDeEdicion(cliente.id, this.lineas(), this.direccion());
+        const cuerpo = cuerpoDeEdicion(cliente.id, this.lineas(), bodega.id, this.direccion());
         this.ultimaGuardada.set(await this.api.editar(enEdicion.id, cuerpo));
         this.editando.set(null);
       }
@@ -876,6 +909,7 @@ export class Notas {
   readonly puedeGuardar = computed(
     () =>
       this.cliente() !== null &&
+      this.almacen() !== null &&
       this.hayLineas() &&
       this.lineas().every((linea) => Object.keys(problemasDe(linea)).length === 0) &&
       this.editable() &&
@@ -892,6 +926,69 @@ export class Notas {
       // puede cargar, la pantalla sigue sirviendo para capturar y escribir la
       // direccion a mano. Un fallo aqui NO se pinta como error de la nota.
       this.direcciones.set([]);
+    }
+  }
+
+  // ------------------------------------------------------------- la bodega
+  /**
+   * La bodega de la que sale la mercancia.
+   *
+   * Se consulta al abrir la pantalla, aunque ya se conozca: si el
+   * administrador la crea, la renombra o la borra en otra pestana, al volver
+   * al mostrador ya aparecen las buenas. Cuando la lista ya habia cargado y
+   * la elegida sigue viva, la seleccion no se mueve.
+   */
+  private async cargarAlmacenes(): Promise<void> {
+    try {
+      const lista = await this.api.almacenes();
+      this.almacenes.set(lista);
+      if (!lista.some((a) => a.id === this.almacenId())) {
+        this.almacenId.set(lista[0]?.id ?? null);
+      }
+    } catch {
+      // Sin bodegas (o sin conexion para leerlas) el guardado se bloquea con
+      // el aviso del selector; el listado ya tiene su propio error.
+      this.almacenes.set([]);
+      this.almacenId.set(null);
+    }
+  }
+
+  /**
+   * Cambia la bodega elegida por la del selector.
+   *
+   * Los renglones NUEVOS salen de aqui en adelante de la bodega elegida, asi
+   * que los "Disponibles" se vuelven a pedir: el saldo que se ve es el de la
+   * bodega que se acaba de elegir y no el de la anterior. Los renglones que
+   * ya estaban conservan su bodega y su saldo (ver `refrescarDisponibles`).
+   */
+  elegirAlmacen(valor: string): void {
+    this.almacenId.set(valor === '' ? null : Number(valor));
+    this.refrescarDisponibles();
+  }
+
+  /**
+   * Crea la primera bodega desde la MISMA captura.
+   *
+   * Con el sistema recien entregado no hay bodega, y hacer que el operador
+   * salte a Catalogo > Almacenes para crearla (o que llame a otro lado) es
+   * justo lo que se queria evitar. Solo se ofrece a quien tenga el permiso;
+   * el resto ve el aviso de pedirlo. Al crearla, se selecciona sola.
+   */
+  async crearBodega(): Promise<void> {
+    const nombre = this.nuevaBodega().trim();
+    if (nombre === '' || this.creandoBodega()) return;
+
+    this.creandoBodega.set(true);
+    this.errorBodega.set(null);
+    try {
+      const bodega = await this.api.crearAlmacen(nombre);
+      this.almacenes.update((lista) => [...lista, bodega]);
+      this.almacenId.set(bodega.id);
+      this.nuevaBodega.set('');
+    } catch (falla) {
+      this.errorBodega.set(errorLegible(falla).mensaje);
+    } finally {
+      this.creandoBodega.set(false);
     }
   }
 

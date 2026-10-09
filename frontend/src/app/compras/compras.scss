@@ -383,7 +383,9 @@ label {
 }
 
 .campo input,
-.bloque > input {
+.campo select,
+.bloque > input,
+.bloque > select {
   width: 100%;
   padding: 0.5rem 0.625rem;
   font: inherit;
@@ -397,7 +399,36 @@ label {
     box-shadow 0.15s;
 }
 
-.campo input:focus {
+.campo input:focus,
+.campo select:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+/*
+ * Crear la primera bodega en el mismo alta (cuando la entregan sin datos):
+ * el campo y el boton van en una fila, no apilados.
+ */
+.nueva-bodega {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.nueva-bodega input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+}
+
+.nueva-bodega input:focus {
   outline: none;
   border-color: var(--acento);
   box-shadow: 0 0 0 3px var(--acento-suave);

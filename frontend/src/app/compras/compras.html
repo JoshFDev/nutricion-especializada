@@ -73,11 +73,6 @@
           <h2>Nueva compra</h2>
         </div>
 
-        <p class="descripcion">
-          La mercancía que entra a la bodega: al guardar, sube el inventario y el saldo del
-          proveedor.
-        </p>
-
         @if (errorCaptura(); as mensaje) {
           <p class="error" role="alert">{{ mensaje }}</p>
         }
@@ -120,6 +115,66 @@
                 <p class="aviso">{{ aviso }}</p>
               }
             </div>
+          }
+        </div>
+
+        <!--
+          La bodega a donde entra la mercancia. Se elige aqui y no es un
+          numero escrito a mano: si la lista viene sin bodegas (sistema recien
+          entregado), quien tenga permiso la crea en el acto.
+        -->
+        <div class="bloque">
+          <label for="bodega">Bodega donde entra</label>
+
+          @if (almacenes().length > 0) {
+            <select
+              id="bodega"
+              [value]="almacenId() ?? ''"
+              (change)="elegirAlmacen($any($event.target).value)"
+              [attr.aria-label]="
+                'Bodega que recibira la mercancia, seleccionada: ' +
+                (almacen()?.nombre ?? 'ninguna')
+              "
+            >
+              @for (bodega of almacenes(); track bodega.id) {
+                <option [value]="bodega.id">{{ bodega.nombre }}</option>
+              }
+            </select>
+            <p class="ayuda tenue">La que elijas es la que va a subir el inventario al guardar.</p>
+          } @else if (puedeCrearBodega()) {
+            <div class="nueva-bodega">
+              <input
+                type="text"
+                id="bodega"
+                maxlength="100"
+                autocomplete="off"
+                placeholder="Nombre de la bodega, ej. «Bodega principal»"
+                [value]="nuevaBodega()"
+                (input)="nuevaBodega.set($any($event.target).value)"
+                (keydown.enter)="crearBodega()"
+                aria-label="Nombre de la nueva bodega"
+              />
+              <button
+                type="button"
+                class="primario chico"
+                (click)="crearBodega()"
+                [disabled]="creandoBodega() || nuevaBodega().trim() === ''"
+              >
+                @if (creandoBodega()) {
+                  <span class="spinner" aria-hidden="true"></span> Creando…
+                } @else {
+                  Crear bodega
+                }
+              </button>
+            </div>
+            @if (errorBodega(); as mensaje) {
+              <p class="error" role="alert">{{ mensaje }}</p>
+            }
+          } @else {
+            <p class="error" role="alert">
+              No hay bodegas configuradas. Pídele al administrador que cree una en Catálogo ›
+              Almacenes para registrar compras.
+            </p>
           }
         </div>
 

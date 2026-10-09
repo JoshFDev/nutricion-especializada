@@ -17,6 +17,7 @@ import {
   ComprasApi,
   cuerpoDeCompra,
   estatusComoTexto,
+  type Almacen,
   type Compra,
   type CompraListada,
   type EstatusCompra,
@@ -173,6 +174,31 @@ export class Compras {
   readonly guardando = signal(false);
   readonly errorCaptura = signal<string | null>(null);
 
+  /**
+   * La bodega a donde entra la mercancia.
+   *
+   * Se elige en el alta con un selector (no es una constante): las bodegas
+   * viven en el catalogo (`/api/almacenes`) y el operador ve cual elige.
+   * Si no hay ninguna, el alta ofrece crear una en el acto a quien tenga
+   * `almacenes.crear` — el administrador. Sin bodega, el guardado se
+   * bloquea con un aviso en vez de mandar un "almacen 1" que el backend va
+   * a rechazar con un error raro.
+   */
+  readonly almacenes = signal<Almacen[]>([]);
+  /** El id de la bodega elegida; `null` cuando no hay ninguna. */
+  readonly almacenId = signal<number | null>(null);
+  /** La bodega elegida, o `null` si no hay ninguna o no se ha elegido. */
+  readonly almacen = computed(
+    () => this.almacenes().find((a) => a.id === this.almacenId()) ?? null,
+  );
+
+  /** El nombre que se teclea para crear la primera bodega en el mismo alta. */
+  readonly nuevaBodega = signal('');
+  readonly creandoBodega = signal(false);
+  readonly errorBodega = signal<string | null>(null);
+  /** Solo quien pueda, ve el formulario de crearla: una bodega es config. */
+  readonly puedeCrearBodega = computed(() => this.sesion.puede('almacenes.crear'));
+
   readonly buscadorProveedor = crearBuscador({
     cargar: (texto) => this.api.proveedores(texto),
     minimo: 2,
@@ -195,6 +221,9 @@ export class Compras {
   /** Por qué no se puede guardar todavía, o `null` si sí se puede. */
   readonly problemaParaGuardar = computed(() => {
     if (this.proveedor() === null) return 'Elige el proveedor de la compra.';
+    if (this.almacen() === null) {
+      return 'No hay una bodega configurada todavía. Créala en Catálogo › Almacenes.';
+    }
     if (!this.hayLineas()) return 'Agrega al menos un producto.';
     const renglon = this.lineas().find((linea) => !lineaValida(linea));
     if (renglon) return `Revisa el renglón de ${renglon.producto_nombre}.`;
@@ -233,6 +262,7 @@ export class Compras {
 
   constructor() {
     void this.recargar();
+    void this.cargarAlmacen();
   }
 
   // --------------------------------------------------------------- el listado
@@ -333,6 +363,61 @@ export class Compras {
     }
   }
 
+  /**
+   * La bodega a la que entra la mercancia.
+   *
+   * Se consulta cada vez que se abre el alta (y al entrar a la pantalla),
+   * aunque ya se conozca: si el administrador la crea, la renombra o la
+   * borra en otra pestana, al volver a abrir el alta ya aparecen las buenas.
+   * Cuando la lista ya habia cargado y la elegida sigue viva, la seleccion
+   * no se mueve.
+   */
+  private async cargarAlmacen(): Promise<void> {
+    try {
+      const lista = await this.api.almacenes();
+      this.almacenes.set(lista);
+      if (!lista.some((a) => a.id === this.almacenId())) {
+        this.almacenId.set(lista[0]?.id ?? null);
+      }
+    } catch {
+      // Sin bodegas (o sin conexion para leerlas) el alta se bloquea con el
+      // aviso de `problemaParaGuardar`; el listado ya tiene su propio error.
+      this.almacenes.set([]);
+      this.almacenId.set(null);
+    }
+  }
+
+  /** Cambia la bodega elegida por la del selector. */
+  elegirAlmacen(valor: string): void {
+    this.almacenId.set(valor === '' ? null : Number(valor));
+  }
+
+  /**
+   * Crea la primera bodega desde el MISMO alta.
+   *
+   * Con el sistema recien entregado no hay bodega, y hacer que el operador
+   * salte a Catálogo › Almacenes para crearla (o que llame a otro lado) es
+   * justo lo que se queria evitar. Solo se ofrece a quien tenga el permiso;
+   * el resto ve el aviso de pedirlo. Al crearla, se selecciona sola.
+   */
+  async crearBodega(): Promise<void> {
+    const nombre = this.nuevaBodega().trim();
+    if (nombre === '' || this.creandoBodega()) return;
+
+    this.creandoBodega.set(true);
+    this.errorBodega.set(null);
+    try {
+      const bodega = await this.api.crearAlmacen(nombre);
+      this.almacenes.update((lista) => [...lista, bodega]);
+      this.almacenId.set(bodega.id);
+      this.nuevaBodega.set('');
+    } catch (falla) {
+      this.errorBodega.set(errorLegible(falla).mensaje);
+    } finally {
+      this.creandoBodega.set(false);
+    }
+  }
+
   /** Cambia de página y sube la tabla a la vista. */
   async irPagina(pagina: number): Promise<void> {
     if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
@@ -387,6 +472,7 @@ export class Compras {
     this.buscadorProveedor.limpiar();
     this.buscadorProducto.limpiar();
     this.editorVisible.set(true);
+    void this.cargarAlmacen();
   }
 
   /**
@@ -409,7 +495,11 @@ export class Compras {
       this.descartarCaptura();
     }
 
-    this.editorVisible.update((visible) => !visible);
+    this.editorVisible.update((visible) => {
+      const abriendo = !visible;
+      if (abriendo) void this.cargarAlmacen();
+      return !visible;
+    });
   }
 
   /** Vuelve el alta a blanco. */
@@ -517,7 +607,7 @@ export class Compras {
     this.errorCaptura.set(null);
     try {
       const compra = await this.api.crear(
-        cuerpoDeCompra(proveedor.id, this.lineas(), this.folio(), this.fecha()),
+        cuerpoDeCompra(proveedor.id, this.lineas(), this.almacen()!.id, this.folio(), this.fecha()),
       );
       this.descartarCaptura();
       this.editorVisible.set(false);

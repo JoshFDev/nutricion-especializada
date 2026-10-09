@@ -137,17 +137,24 @@ export interface CuerpoCompra {
 /**
  * El almacen que recibe la mercancia.
  *
- * `almacenes.id` es un SMALLINT y no hay endpoint de almacenes todavia. La
- * semilla crea una sola bodega ('Bodega BUAP') y compras entra ahi. Es lo
- * unico de la pantalla escrito a mano, y es el primer lugar que hay que tocar
- * cuando haya mas de una: o llega el endpoint y se sustituye por la que elija
- * la persona, o se admite que solo hay una. Lo que no puede ser es que quede
- * en un 1 sin que nadie lo sepa.
+ * `almacenes.id` es un SMALLINT y el catalogo de almacenes se sirve por
+ * `/api/almacenes` (`catalogo/`), el mismo modulo que especies y
+ * categorias. La pantalla lo elige al abrir el alta y lo pasa aqui por
+ * parametro: ya no hay un 1 escrito a mano, y si la bodega falta, el alta
+ * se bloquea ANTES de llegar al backend en vez de responder "El almacen 1
+ * no existe".
  */
-export const ALMACEN_ID = 1;
+export interface Almacen {
+  id: number;
+  nombre: string;
+}
 
 /**
  * Arma el cuerpo de la compra.
+ *
+ * El almacen va por parametro: es el que la pantalla consulta al abrir el
+ * alta (`Catálogo › Almacenes`) y no una constante, porque si mañana hay
+ * mas de una bodega esto ya no se toca.
  *
  * La fecha NO se manda si viene vacia: sin ella la usa la base
  * (`hoyEnLaBase`), que es la fecha del servidor y no la del navegador. La
@@ -160,6 +167,7 @@ export const ALMACEN_ID = 1;
 export function cuerpoDeCompra(
   proveedorId: number,
   lineas: LineaCompra[],
+  almacenId: number,
   folio?: string | null,
   fecha?: string | null,
 ): CuerpoCompra {
@@ -174,7 +182,7 @@ export function cuerpoDeCompra(
       const precio = precioComoTextoSiEscrito(linea);
       return {
         producto_id: linea.producto_id,
-        almacen_id: ALMACEN_ID,
+        almacen_id: almacenId,
         cantidad_bultos: cantidadComoTexto(linea),
         ...(kilos === null ? {} : { kg_bulto: kilos }),
         ...(precio === null ? {} : { precio_kg: precio }),
@@ -295,6 +303,32 @@ export class ComprasApi {
       }),
     );
     return respuesta.datos;
+  }
+
+  /**
+   * Las bodegas a donde puede entrar la mercancia.
+   *
+   * Llenan el selector del alta. Antes esto era un 1 escrito a mano y si la
+   * bodega faltaba el alta respondia "El almacen 1 no existe": ahora la
+   * pantalla ofrece las que hay, y si no hay ninguna, crear una en el acto
+   * (solo quien tenga `almacenes.crear`).
+   */
+  async almacenes(): Promise<Almacen[]> {
+    const respuesta = await firstValueFrom(this.http.get<{ datos: Almacen[] }>(`${API}/almacenes`));
+    return respuesta.datos;
+  }
+
+  /**
+   * Crea una bodega desde el mismo alta de compras.
+   *
+   * Solo aparece cuando la lista esta vacia y el que captura tiene permiso
+   * (`almacenes.crear`, del Administrador): con el sistema recien entregado
+   * la base va limpia y la primera compra no se topa con un "almacen 1 no
+   * existe". El 409 `NOMBRE_DUPLICADO` lo traduce la pantalla en el aviso
+   * del editor.
+   */
+  async crearAlmacen(nombre: string): Promise<Almacen> {
+    return firstValueFrom(this.http.post<Almacen>(`${API}/almacenes`, { nombre: nombre.trim() }));
   }
 }
 

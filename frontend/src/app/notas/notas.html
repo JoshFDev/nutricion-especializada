@@ -374,27 +374,19 @@
                   </span>
                 </td>
                 <!--
-                  El input de bultos y el contador de disponibilidad van en la
-                  MISMA linea, uno al lado del otro.
+                  El input de bultos va PEGADO al borde derecho de la celda y el
+                  contador de disponibilidad a su izquierda. Asi el encabezado
+                  "Bultos" —que va alineado a la derecha, como el de kilos y el
+                  de importe— cae justo sobre el campo. Antes iba al reves (el
+                  input y luego el contador) y el titulo quedaba encima de
+                  "quedan 7", corrido respecto de los otros encabezados.
 
-                  Antes el contador era un bloque (`.disponibles { display:
-                  block }`) dentro de la misma celda, asi que caia DEBAJO del
-                  input y se partia en dos lineas: con "12 disp." a la izquierda
-                  del input y "quedan 3" debajo, el renglon se leia como si el
-                  contador fuera otro renglon y no su disponibilidad. Ahora es
-                  una fila de dos, que es lo que es.
+                  Los dos van en la MISMA linea (fila de flex, no bloque): con el
+                  contador debajo, "quedan 3" se leia como si fuera otro renglon
+                  y no la disponibilidad del campo.
                 -->
                 <td class="celda-bultos">
                   <span class="bultos-celda">
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      inputmode="numeric"
-                      [value]="linea.cantidad_bultos"
-                      (input)="ponerCantidad(linea.uid, $any($event.target).value)"
-                      [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
-                    />
                     @if (linea.disponible_bultos !== undefined) {
                       <span class="disponibles" [class.falta]="(restanteDeLinea(linea) ?? 0) < 0">
                         {{ linea.disponible_bultos }} disp.
@@ -407,6 +399,15 @@
                         }
                       </span>
                     }
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputmode="numeric"
+                      [value]="linea.cantidad_bultos"
+                      (input)="ponerCantidad(linea.uid, $any($event.target).value)"
+                      [attr.aria-label]="'Bultos de ' + linea.producto_nombre"
+                    />
                   </span>
                 </td>
                 <!--

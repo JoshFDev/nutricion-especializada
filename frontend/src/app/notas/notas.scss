@@ -716,6 +716,11 @@ tbody tr:last-child td {
  * debajo, y el renglon se leia como si el contador fuera un dato aparte del
  * campo en vez de su disponibilidad. Con `display: flex` los dos van en fila y
  * la columna no se estira mas de lo que necesita.
+ *
+ * El input va AL FINAL del flex y el contador antes: `justify-content: flex-end`
+ * pega el grupo a la derecha, asi que el campo queda en el borde y el encabezado
+ * "Bultos" (alineado a la derecha) cae justo sobre el, como el de kilos e
+ * importe. Al reves, el titulo quedaba encima del contador.
  */
 .celda-bultos {
   /* La columna es la unica con dos cosas en el renglon. Sin un ancho minimo la

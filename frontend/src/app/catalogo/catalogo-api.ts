@@ -4,12 +4,12 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
 
 /**
- * La API de especies y categorias.
+ * La API de especies, categorias y almacenes.
  *
  * El backend las ATIENDE como una sola cosa: `catalogo/rutas.ts` construye
- * las dos rutas con la misma fabrica, y aqui el cliente hace lo mismo. La
+ * las tres rutas con la misma fabrica, y aqui el cliente hace lo mismo. La
  * unica diferencia de verdad es el nombre en la URL (`categorias-producto`
- * vs `especies`), que se resuelve con `rutaDe`.
+ * vs `especies` vs `almacenes`), que se resuelve con `rutaDe`.
  *
  * La lista de estas tablas es CHICA (una docena de filas), por eso
  * `listar` no lleva filtros ni paginacion: el backend devuelve el catalogo
@@ -17,12 +17,13 @@ import { API } from '../nucleo/api';
  * que si pagina.
  */
 
-/** Especies y categorias comparten forma: id + nombre. `catalogo/modelo.ts`. */
+/** Especies, categorias y almacenes comparten forma: id + nombre. `catalogo/modelo.ts`. */
 export interface FilaCatalogo {
   id: number;
   nombre: string;
   /**
-   * Cuantas filas la apuntan (productos, y clientes en las especies).
+   * Cuantas filas la apuntan (productos y clientes en las especies,
+   * mercancia en los almacenes).
    *
    * Lo trae el listado (`FilaCatalogoConUsos` en el backend) y es lo que
    * permite el filtro "En uso / Sin uso". Sin el, el unico filtro posible
@@ -33,21 +34,25 @@ export interface FilaCatalogo {
   usos: number;
 }
 
-/** Las dos tablas del catalogo. `ClaveRecurso` en `catalogo/repositorio.ts`. */
-export type ClaveRecurso = 'categorias' | 'especies';
+/** Las tres tablas del catalogo. `ClaveRecurso` en `catalogo/repositorio.ts`. */
+export type ClaveRecurso = 'categorias' | 'especies' | 'almacenes';
 
-/** La URL de cada una. Cuidado con la unica diferencia del modulo. */
+/**
+ * La URL de cada una. Solo `categorias` se llama distinto en el backend;
+ * las otras dos llevan el nombre del recurso.
+ */
 export function rutaDe(recurso: ClaveRecurso): string {
-  return recurso === 'categorias' ? 'categorias-producto' : 'especies';
+  return recurso === 'categorias' ? 'categorias-producto' : recurso;
 }
 
 /**
  * El permiso de una accion sobre un recurso.
  *
- * El backend los separa: `categorias.ver/crear/editar/eliminar` y
- * `especies.*`. Leer va por permiso granular (los tres roles lo tienen),
- * escribir es del administrador (migracion 0003), y la pantalla muestra los
- * botones segun lo que la persona pueda hacer de verdad.
+ * El backend los separa: `categorias.ver/crear/editar/eliminar`,
+ * `especies.*` y `almacenes.*`. Leer va por permiso granular (los tres
+ * roles lo tienen), escribir es del administrador (migraciones 0003 y
+ * 0015), y la pantalla muestra los botones segun lo que la persona pueda
+ * hacer de verdad.
  */
 export function permisoDe(recurso: ClaveRecurso, accion: 'crear' | 'editar' | 'eliminar'): string {
   return `${recurso}.${accion}`;

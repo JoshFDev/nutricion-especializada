@@ -24,14 +24,14 @@ import {
 } from './catalogo-api';
 
 /**
- * La pantalla de Especies y Categorias.
+ * La pantalla de Especies, Categorias y Almacenes.
  *
- * Es LA MISMA pantalla para las dos tablas, igual que el backend usa la
+ * Es LA MISMA pantalla para las tres tablas, igual que el backend usa la
  * misma fabrica para sus rutas: lo unico que cambia es el recurso y el
  * titulo, y eso llega por `@Input` desde el wrapper de cada ruta
- * (`especies.ts` y `categorias.ts`). El resto —el listado, el editor de
- * nombre, el borrado con su confirmacion— es identico porque en la base lo
- * es.
+ * (`especies.ts`, `categorias.ts` y `almacenes.ts`). El resto —el listado,
+ * el editor de nombre, el borrado con su confirmacion— es identico porque
+ * en la base lo es.
  *
  * Son listas CHICAS, sin filtros ni paginacion: se traen enteras y se
  * pintan. El editor solo tiene nombre porque eso es todo lo que tiene la
@@ -57,7 +57,7 @@ type FiltroUso = 'todas' | 'en-uso' | 'sin-uso';
   animations: [filasAnimation],
 })
 export class Catalogo implements OnInit {
-  /** `'especies'` o `'categorias'`. Lo decide el wrapper de cada ruta. */
+  /** `'especies'`, `'categorias'` o `'almacenes'`. Lo decide el wrapper de cada ruta. */
   readonly recurso = input.required<ClaveRecurso>();
   readonly titulo = input.required<string>();
   /**
@@ -65,11 +65,37 @@ export class Catalogo implements OnInit {
    *
    * Va aparte del `titulo` porque los mensajes necesitan concordar
    * ("Categoría creada", no "Categorias creada") y `titulo` llega en
-   * plural. Los dos son femeninos, asi que el genero no hace falta.
+   * plural.
    */
   readonly singular = input.required<string>();
+  /**
+   * El género del singular, para que las concordancias no se rompan.
+   *
+   * Especies y categorías son femeninas ("Nueva especie", "Categoría
+   * creada"); el almacén es masculino ("Nuevo almacén", "Almacén creado").
+   * A los mensajes les llega el nombre pelado (singular), así que sin esto
+   * un recurso masculino diría "Almacén creada".
+   */
+  readonly genero = input<'f' | 'm'>('f');
   /** La frase que explica para qué es la pantalla, bajo el título. */
   readonly descripcion = input.required<string>();
+
+  // ------------------------------------------------------- concordancias
+  // El singular no lleva artículo, así que estas palabras son las que se
+  // declinan según el género del recurso. Femenino por defecto: las dos
+  // primeras pantallas son femeninas y esto no debería tocar sus textos.
+  /** "Nueva"/"Nuevo": el indefinido que abre el alta. */
+  readonly nuevo = computed(() => (this.genero() === 'f' ? 'Nueva' : 'Nuevo'));
+  /** "Ninguna"/"Ningún": el estado vacío con filtros puesto. */
+  readonly ninguno = computed(() => (this.genero() === 'f' ? 'Ninguna' : 'Ningún'));
+  /** "la primera"/"el primero": el botón y la frase del estado vacío. */
+  readonly primer = computed(() => (this.genero() === 'f' ? 'la primera' : 'el primero'));
+  /** "usarla"/"usarlo": en la misma frase del estado vacío. */
+  readonly usarlo = computed(() => (this.genero() === 'f' ? 'usarla' : 'usarlo'));
+  /** "creada"/"creado", "guardada"/"guardado", "eliminada"/"eliminado". */
+  readonly creada = computed(() => (this.genero() === 'f' ? 'creada' : 'creado'));
+  readonly guardada = computed(() => (this.genero() === 'f' ? 'guardada' : 'guardado'));
+  readonly eliminada = computed(() => (this.genero() === 'f' ? 'eliminada' : 'eliminado'));
 
   private readonly api = inject(CatalogoApi);
   private readonly fb = inject(FormBuilder);
@@ -365,10 +391,10 @@ export class Catalogo implements OnInit {
       if (actual === null) return;
       if (actual.id === undefined) {
         await this.api.crear(this.recurso(), nombre);
-        this.toast.exito(`${this.singular()} creada con éxito`);
+        this.toast.exito(`${this.singular()} ${this.creada()} con éxito`);
       } else {
         await this.api.renombrar(this.recurso(), actual.id, nombre);
-        this.toast.exito(`${this.singular()} guardada con éxito`);
+        this.toast.exito(`${this.singular()} ${this.guardada()} con éxito`);
       }
       this.editando.set(null);
       this.editorVisible.set(false);
@@ -409,7 +435,7 @@ export class Catalogo implements OnInit {
     this.error.set(null);
     try {
       await this.api.eliminar(this.recurso(), fila.id);
-      this.toast.exito(`${this.singular()} eliminada con éxito`);
+      this.toast.exito(`${this.singular()} ${this.eliminada()} con éxito`);
       await this.recargar();
     } catch (falla) {
       const legible = errorLegible(falla);

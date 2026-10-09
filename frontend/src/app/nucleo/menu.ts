@@ -102,6 +102,14 @@ export const MENU: Grupo[] = [
         pendiente: 'Listas de precios por especie y las vigorencias.',
         carga: () => import('../precios/precios').then((m) => m.Precios),
       },
+      {
+        ruta: 'almacenes',
+        etiqueta: 'Almacenes',
+        permiso: 'almacenes.ver',
+        icon: 'warehouse',
+        pendiente: 'Las bodegas a donde entra la mercancía; las usa el alta de compras.',
+        carga: () => import('../almacenes/almacenes').then((m) => m.Almacenes),
+      },
     ],
   },
   {

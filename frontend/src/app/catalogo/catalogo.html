@@ -51,7 +51,7 @@
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          Nueva {{ singular() }}
+          {{ nuevo() }} {{ singular() }}
         }
       </button>
     }
@@ -69,7 +69,9 @@
         (keydown)="onKeydown($event)"
       >
         <div class="editor-cabecera">
-          <h2>{{ esAlta() ? 'Nueva ' + singular() : 'Renombrar ' + singular().toLowerCase() }}</h2>
+          <h2>
+            {{ esAlta() ? nuevo() + ' ' + singular() : 'Renombrar ' + singular().toLowerCase() }}
+          </h2>
         </div>
 
         @if (errorEditor(); as mensaje) {
@@ -176,13 +178,15 @@
     -->
     <div class="estado-vacio">
       @if (hayFiltros()) {
-        <h2>Ninguna {{ singular() | lowercase }} coincide</h2>
+        <h2>{{ ninguno() }} {{ singular() | lowercase }} coincide</h2>
         <p>Prueba con otro nombre o quita el filtro de uso.</p>
         <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar filtros</button>
       } @else if (puedeCrear()) {
         <h2>Aún no hay {{ titulo() | lowercase }}</h2>
-        <p>Crea la primera para empezar a usarla en los productos.</p>
-        <button type="button" class="primario" (click)="alternarEditor()">Crear la primera</button>
+        <p>Crea {{ primer() }} para empezar a {{ usarlo() }} en el sistema.</p>
+        <button type="button" class="primario" (click)="alternarEditor()">
+          Crear {{ primer() }}
+        </button>
       } @else {
         <h2>No hay {{ titulo() | lowercase }}</h2>
         <p>Todavía no se ha creado ninguna.</p>

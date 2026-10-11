@@ -1,0 +1,127 @@
+<!--
+  Estado de cuenta por cliente.
+
+  Es una pantalla de SOLO LECTURA: no hay formulario ni boton de guardar,
+  porque la cuenta la calcula la base con las ventas y los abonos. La unica
+  accion es el boton "Ver" de cada fila, que baja la hoja en Excel; no abre
+  nada en pantalla porque un .xlsx se descarga, no se ve en el navegador.
+-->
+<div class="cabecera">
+  <div>
+    <h1>Estado de cuenta</h1>
+    <p class="tenue">
+      Lo que debe cada cliente, y su hoja para cobrar. Lo calcula la base con las ventas y los
+      pagos.
+    </p>
+  </div>
+</div>
+
+<div class="filtros">
+  <input
+    type="search"
+    placeholder="Buscar por nombre o código"
+    aria-label="Buscar cliente"
+    [value]="buscador()"
+    (input)="buscar($any($event.target).value)"
+    (keydown.escape)="buscar('')"
+  />
+
+  <label class="casilla">
+    <input type="checkbox" [checked]="soloConSaldo()" (change)="toggleSoloConSaldo()" />
+    <span>Solo con saldo pendiente</span>
+  </label>
+
+  @if (hayFiltros()) {
+    <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
+  }
+</div>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+@if (cargando() && pagina() === 1) {
+  <p class="cargando">Cargando…</p>
+}
+
+@if (filas().length === 0 && !cargando()) {
+  <div class="estado-vacio">
+    <h2>Sin clientes que mostrar</h2>
+    <p>No hay clientes que coincidan con la búsqueda.</p>
+    @if (hayFiltros()) {
+      <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar los filtros</button>
+    }
+  </div>
+} @else {
+  <div class="tabla-wrapper">
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th scope="col">Cliente</th>
+          <th scope="col" class="num">Saldo</th>
+          <th scope="col">Última venta</th>
+          <th scope="col">Último pago</th>
+          <th scope="col" class="acciones-celda">Hoja</th>
+        </tr>
+      </thead>
+      <tbody [@filasAnimation]="recarga.valor()">
+        @for (renglon of filas(); track renglon.cliente_id) {
+          <tr [class.a-favor]="renglon.saldo_actual < 0">
+            <td>{{ renglon.cliente }}</td>
+            <td class="num" [class.saldo]="renglon.saldo_actual > 0">
+              {{ montoComoTexto(renglon.saldo_actual) }}
+            </td>
+            <td>{{ fecha(renglon.ultima_venta) }}</td>
+            <td>{{ fecha(renglon.ultimo_pago) }}</td>
+            <td class="acciones-celda">
+              <span class="acciones-fila">
+                <button
+                  type="button"
+                  class="chico"
+                  [disabled]="bajando() !== null"
+                  (click)="ver(renglon)"
+                >
+                  {{ bajando() === renglon.cliente_id ? 'Bajando…' : 'Ver' }}
+                </button>
+              </span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <div class="paginacion">
+    <button
+      type="button"
+      class="chico"
+      [disabled]="!hayPaginaAnterior() || cargando()"
+      (click)="irPagina(pagina() - 1)"
+    >
+      ‹ Anterior
+    </button>
+    <span class="contador">
+      {{ rangoDePagina() }}
+      <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+    </span>
+    <button
+      type="button"
+      class="chico"
+      [disabled]="!hayPaginaSiguiente() || cargando()"
+      (click)="irPagina(pagina() + 1)"
+    >
+      Siguiente ›
+    </button>
+    <label class="oculto" for="tamano-pagina-estado-cuenta">Renglones por página</label>
+    <select
+      id="tamano-pagina-estado-cuenta"
+      class="filtro tamano-pagina"
+      aria-label="Registros por página"
+      [value]="limiteComoTexto()"
+      (change)="aTamanoDePagina($any($event.target).value)"
+    >
+      <option value="25">25 por página</option>
+      <option value="50">50 por página</option>
+      <option value="100">100 por página</option>
+    </select>
+  </div>
+}

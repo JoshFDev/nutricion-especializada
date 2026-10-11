@@ -1,0 +1,55 @@
+/*
+ * La pantalla de estado de cuenta.
+ *
+ * Misma familia que las demas: la cabecera, los filtros, la tabla, el estado
+ * vacio y la paginacion se `@use`an de `nucleo/pantallas.scss`. Aqui solo queda
+ * lo propio: la casilla del filtro y el color de un saldo.
+ */
+
+@use '../nucleo/pantallas';
+
+:host {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ la casilla */
+
+/* La casilla es una linea, no un campo con etiqueta encima. */
+.casilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--texto);
+  white-space: nowrap;
+}
+
+.casilla input {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.casilla span {
+  font-size: 0.9375rem;
+}
+
+/* ------------------------------------------------------------------ el saldo */
+
+/* Los numeros no se parten a la mitad. */
+.num {
+  white-space: nowrap;
+}
+
+/*
+ * Lo que se cobra es lo POSITIVO: el cliente debe. Va marcado para que la
+ * lista se recorra de un vistazo buscando a quien cobrar. El saldo a favor
+ * (negativo) es lo raro y va en verde, no en rojo: un saldo a favor no es una
+ * deuda.
+ */
+.num.saldo {
+  color: var(--peligro-texto);
+  font-weight: 600;
+}
+
+.a-favor .num {
+  color: var(--exito-texto);
+}

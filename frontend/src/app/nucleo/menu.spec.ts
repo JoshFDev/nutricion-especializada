@@ -7,8 +7,11 @@ import { MENU, MODULOS, menuPara, primerModulo, rutaDeInicio } from './menu';
  */
 describe('el catalogo de modulos', () => {
   it('cada modulo tiene un permiso con la forma que espera el backend', () => {
+    // Espejo del CHECK de `permisos.codigo` en la base (0001_init.sql):
+    // `^[a-z_]+\.[a-z_]+$`. Minusculas y guion BAJO; el guion medio NO cabe, asi
+    // que un permiso como `estado-cuenta.ver` reventaria al insertarlo.
     for (const modulo of MODULOS) {
-      expect(modulo.permiso, modulo.ruta).toMatch(/^[a-z]+\.[a-z]+$/);
+      expect(modulo.permiso, modulo.ruta).toMatch(/^[a-z_]+\.[a-z_]+$/);
     }
   });
 

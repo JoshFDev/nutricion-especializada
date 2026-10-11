@@ -166,12 +166,12 @@ export const MENU: Grupo[] = [
         carga: () => import('../pagos/pagos').then((m) => m.Pagos),
       },
       {
-        ruta: 'facturacion',
-        etiqueta: 'Facturacion',
-        permiso: 'facturas.ver',
+        ruta: 'estado-cuenta',
+        etiqueta: 'Estado de cuenta',
+        permiso: 'estado_cuenta.ver',
         icon: 'file-text',
-        pendiente: 'Emitir facturas y ver las ya emitidas.',
-        carga: () => import('../facturacion/facturacion').then((m) => m.Facturacion),
+        pendiente: 'Saldo por cliente y su hoja de estado de cuenta para cobrar.',
+        carga: () => import('../estado-cuenta/estado-cuenta').then((m) => m.EstadoCuenta),
       },
       {
         ruta: 'caja',

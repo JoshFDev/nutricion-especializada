@@ -23,6 +23,7 @@ import { rutasInventario } from './modules/inventario/rutas.js';
 import { rutasCaja } from './modules/caja/rutas.js';
 import { rutasFacturacion } from './modules/facturacion/rutas.js';
 import { rutasAuditoria } from './modules/auditoria/rutas.js';
+import { rutasReportes } from './modules/reportes/rutas.js';
 
 /**
  * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
@@ -104,6 +105,7 @@ export function crearApp(): Express {
   app.use('/api/caja', rutasCaja);
   app.use('/api/facturas', rutasFacturacion);
   app.use('/api/auditoria', rutasAuditoria);
+  app.use('/api/reportes', rutasReportes);
   app.use('/api/usuarios', rutasUsuarios);
 
   /**

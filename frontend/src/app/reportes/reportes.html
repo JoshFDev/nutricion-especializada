@@ -1,0 +1,299 @@
+<!--
+  Reportes: tres vistas del negocio en tres pestanas.
+
+  Es una pantalla de SOLO LECTURA. No hay formulario ni boton de guardar
+  porque no hay nada que capturar: lo que se ve lo calcula la base a partir de
+  las ventas, las compras y los pagos. La pantalla solo filtra y muestra.
+
+  Cada `@case` trae sus propias columnas porque cada reporte cuenta otra cosa:
+  en la existencia se leen los bultos por bodega, en el consumo los kilos por
+  semana y en el estado de cuenta el saldo y las dos fechas. Las filas salen de
+  `filas.existencia`, `filas.consumo` y `filas.estado`, cada una con el tipo de
+  su renglon, asi que una columna mal escrita no compila.
+-->
+<nav class="pestanas" aria-label="Reporte">
+  @for (pestana of pestanas; track pestana.id) {
+    <button
+      type="button"
+      class="pestana"
+      [class.activa]="pestana.id === abierta()"
+      [attr.aria-current]="pestana.id === abierta() ? 'page' : null"
+      (click)="cambiarDePestana(pestana.id)"
+    >
+      {{ pestana.etiqueta }}
+    </button>
+  }
+</nav>
+
+<div class="cabecera">
+  <div>
+    <h1>Reportes</h1>
+    <p class="tenue">
+      Solo lectura. Lo que aparece aquí lo calcula la base con las ventas, las compras y los pagos.
+    </p>
+  </div>
+</div>
+
+<div class="filtros">
+  <input
+    type="search"
+    placeholder="Buscar por nombre o código"
+    aria-label="Buscar en el reporte"
+    [value]="buscador()"
+    (input)="buscar($any($event.target).value)"
+    (keydown.escape)="buscar('')"
+  />
+
+  @switch (abierta()) {
+    @case ('existencia') {
+      <label class="casilla">
+        <input
+          type="checkbox"
+          [checked]="soloConExistencia()"
+          (change)="toggleSoloConExistencia()"
+        />
+        <span>Solo lo que hay</span>
+      </label>
+    }
+    @case ('estado') {
+      <label class="casilla">
+        <input type="checkbox" [checked]="soloConSaldo()" (change)="toggleSoloConSaldo()" />
+        <span>Solo con saldo pendiente</span>
+      </label>
+    }
+  }
+
+  @if (hayFiltros()) {
+    <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
+  }
+</div>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+@if (cargando() && pagina() === 1) {
+  <p class="cargando">Cargando…</p>
+}
+
+@switch (abierta()) {
+  @case ('existencia') {
+    @if (filas.existencia().length === 0) {
+      <div class="estado-vacio">
+        <h2>Sin existencia que mostrar</h2>
+        <p>{{ actual().vacio }}</p>
+        @if (hayFiltros()) {
+          <button type="button" class="primario" (click)="limpiarFiltros()">
+            Limpiar los filtros
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Producto</th>
+              <th scope="col">Almacén</th>
+              <th scope="col" class="num">Existencia (bultos)</th>
+            </tr>
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (
+              renglon of filas.existencia();
+              track renglon.producto_id + '-' + renglon.almacen_id
+            ) {
+              <tr [class.negativo]="renglon.existencia_bultos < 0">
+                <td>
+                  {{ renglon.producto }}
+                  <span class="tenue">{{ renglon.codigo }}</span>
+                </td>
+                <td>{{ renglon.almacen }}</td>
+                <td class="num">{{ bultosComoTexto(renglon.existencia_bultos) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-existencia">Renglones por página</label>
+        <select
+          id="tamano-pagina-existencia"
+          class="filtro tamano-pagina"
+          aria-label="Registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
+    }
+  }
+
+  @case ('consumo') {
+    @if (filas.consumo().length === 0) {
+      <div class="estado-vacio">
+        <h2>Sin consumo que mostrar</h2>
+        <p>{{ actual().vacio }}</p>
+        @if (hayFiltros()) {
+          <button type="button" class="primario" (click)="limpiarFiltros()">
+            Limpiar los filtros
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Cliente</th>
+              <th scope="col">Producto</th>
+              <th scope="col" class="num">Kilos por semana</th>
+            </tr>
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (
+              renglon of filas.consumo();
+              track renglon.cliente_id + '-' + renglon.producto_id
+            ) {
+              <tr>
+                <td>{{ renglon.cliente }}</td>
+                <td>{{ renglon.producto }}</td>
+                <td class="num">{{ kilosComoTexto(renglon.kg_promedio_semanal) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-consumo">Renglones por página</label>
+        <select
+          id="tamano-pagina-consumo"
+          class="filtro tamano-pagina"
+          aria-label="Registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
+    }
+  }
+
+  @case ('estado') {
+    @if (filas.estado().length === 0) {
+      <div class="estado-vacio">
+        <h2>Sin clientes que mostrar</h2>
+        <p>{{ actual().vacio }}</p>
+        @if (hayFiltros()) {
+          <button type="button" class="primario" (click)="limpiarFiltros()">
+            Limpiar los filtros
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Cliente</th>
+              <th scope="col" class="num">Saldo</th>
+              <th scope="col">Última venta</th>
+              <th scope="col">Último pago</th>
+            </tr>
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (renglon of filas.estado(); track renglon.cliente_id) {
+              <tr [class.a-favor]="renglon.saldo_actual < 0">
+                <td>{{ renglon.cliente }}</td>
+                <td class="num" [class.saldo]="renglon.saldo_actual > 0">
+                  {{ montoComoTexto(renglon.saldo_actual) }}
+                </td>
+                <td>{{ fecha(renglon.ultima_venta) }}</td>
+                <td>{{ fecha(renglon.ultimo_pago) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaAnterior() || cargando()"
+          (click)="irPagina(pagina() - 1)"
+        >
+          ‹ Anterior
+        </button>
+        <span class="contador">
+          {{ rangoDePagina() }}
+          <span class="tenue">· página {{ pagina() }} de {{ paginasTotales() }}</span>
+        </span>
+        <button
+          type="button"
+          class="chico"
+          [disabled]="!hayPaginaSiguiente() || cargando()"
+          (click)="irPagina(pagina() + 1)"
+        >
+          Siguiente ›
+        </button>
+        <label class="oculto" for="tamano-pagina-estado">Renglones por página</label>
+        <select
+          id="tamano-pagina-estado"
+          class="filtro tamano-pagina"
+          aria-label="Registros por página"
+          [value]="limiteComoTexto()"
+          (change)="aTamanoDePagina($any($event.target).value)"
+        >
+          <option value="25">25 por página</option>
+          <option value="50">50 por página</option>
+          <option value="100">100 por página</option>
+        </select>
+      </div>
+    }
+  }
+}

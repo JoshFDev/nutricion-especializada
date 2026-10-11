@@ -106,12 +106,12 @@ describe('primerModulo', () => {
 });
 
 describe('el catalogo', () => {
-  it('tiene los quince modulos del backend', () => {
+  it('tiene los dieciseis modulos del backend', () => {
     // Es un candado, no una descripcion: si el backend gana un modulo y
     // este archivo no, el modulo nuevo es invisible en la app y nadie se
-    // da cuenta hasta que alguien lo pide. Son los quince routers de
+    // da cuenta hasta que alguien lo pide. Son los dieciseis routers de
     // negocio que monta `app.ts`, sin `salud` ni `auth`.
-    expect(MODULOS).toHaveLength(15);
+    expect(MODULOS).toHaveLength(16);
     expect(MENU.length).toBeGreaterThan(1);
   });
 });

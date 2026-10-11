@@ -261,7 +261,7 @@
                       <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="1"
                         inputmode="decimal"
                         [value]="linea.cantidad_bultos"
                         (change)="ponerCantidad(linea.uid, $any($event.target).value)"
@@ -272,7 +272,7 @@
                       <input
                         type="number"
                         min="0"
-                        step="0.001"
+                        step="1"
                         inputmode="decimal"
                         [value]="linea.kg_bulto"
                         (change)="ponerKilos(linea.uid, $any($event.target).value)"

@@ -1,0 +1,81 @@
+/*
+ * La pantalla de reportes.
+ *
+ * Misma familia que las demas: la cabecera, los filtros, la tabla, el estado
+ * vacio y la paginacion se `@use`an de `nucleo/pantallas.scss`, y las pestanas
+ * de `nucleo/pestanas.scss`. Aqui solo queda lo que es propio de un reporte:
+ * la casilla de un filtro y el color de un saldo o una existencia en rojo.
+ */
+
+@use '../nucleo/pantallas';
+@use '../nucleo/pestanas';
+
+:host {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ la casilla */
+
+/*
+ * La casilla de "Solo lo que hay" / "Solo con saldo pendiente" es una linea,
+ * no un campo con etiqueta encima: el texto va al lado del cuadrito. Se
+ * redefine aqui y no se hereda de otro modulo porque los estilos de Angular
+ * estan encapsulados por componente.
+ */
+.casilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--texto);
+  white-space: nowrap;
+}
+
+.casilla input {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.casilla span {
+  font-size: 0.9375rem;
+}
+
+/* ------------------------------------------------------------------ el listado */
+
+/*
+ * Los dos datos de una celda van apilados: el codigo debajo del nombre. El
+ * `display: block` va acotado a `td` y no en `.tenue` del compartido, porque
+ * ahi dentro de `.contador` romperia la linea de la paginacion.
+ */
+td .tenue {
+  display: block;
+}
+
+/* Los numeros no se parten a la mitad. */
+.num {
+  white-space: nowrap;
+}
+
+/*
+ * La existencia NEGATIVA se pinta en rojo. No es un error: es una venta
+ * capturada antes que su compra, y un negativo en el papel es justo lo que
+ * hay que ir a revisar. Mismo criterio que el inventario.
+ */
+.negativo .num {
+  color: var(--peligro-texto);
+  font-weight: 600;
+}
+
+/*
+ * En el estado de cuenta lo que se cobra es lo POSITIVO: el cliente debe. Va
+ * marcado para que la lista se recorra de un vistazo buscando a quien cobrar.
+ * El saldo a favor (negativo) es lo raro y va en verde, no en rojo: un saldo
+ * a favor no es una deuda.
+ */
+.num.saldo {
+  color: var(--peligro-texto);
+  font-weight: 600;
+}
+
+.a-favor .num {
+  color: var(--exito-texto);
+}

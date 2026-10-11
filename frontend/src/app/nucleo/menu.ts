@@ -184,6 +184,19 @@ export const MENU: Grupo[] = [
     ],
   },
   {
+    titulo: 'Reportes',
+    modulos: [
+      {
+        ruta: 'reportes',
+        etiqueta: 'Reportes',
+        permiso: 'reportes.ver',
+        icon: 'pie-chart',
+        pendiente: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
+        carga: () => import('../reportes/reportes').then((m) => m.Reportes),
+      },
+    ],
+  },
+  {
     titulo: 'Sistema',
     colapsable: true,
     colapsadoPorDefecto: true,

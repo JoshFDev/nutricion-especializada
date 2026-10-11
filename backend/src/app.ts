@@ -24,6 +24,7 @@ import { rutasCaja } from './modules/caja/rutas.js';
 import { rutasFacturacion } from './modules/facturacion/rutas.js';
 import { rutasAuditoria } from './modules/auditoria/rutas.js';
 import { rutasReportes } from './modules/reportes/rutas.js';
+import { rutasEstadoCuenta } from './modules/estado-cuenta/rutas.js';
 
 /**
  * Composicion de la aplicacion: aqui se decide el ORDEN en que corre el
@@ -106,6 +107,10 @@ export function crearApp(): Express {
   app.use('/api/facturas', rutasFacturacion);
   app.use('/api/auditoria', rutasAuditoria);
   app.use('/api/reportes', rutasReportes);
+  // El estado de cuenta del cliente cuelga junto a reportes porque es la
+  // misma vista `vw_estado_cuenta_cliente` y cambia solo lo que se hace con
+  // ella: aqui se baja la hoja de UN cliente para la cobranza del dia.
+  app.use('/api/estado-cuenta', rutasEstadoCuenta);
   app.use('/api/usuarios', rutasUsuarios);
 
   /**

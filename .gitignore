@@ -25,6 +25,10 @@ db/data/
 # del negocio. Lo que se versiona es `nota-remision.example.xlsx`.
 backend/plantillas/nota-remision.xlsx
 
+# La plantilla de estado de cuenta por cliente: se llena con el saldo real de
+# cada cliente y no se versiona. Ver `nota-remision.example.xlsx` para el molde.
+backend/plantillas/EstadoCuentaCliente.xlsx
+
 # La letra del papel, por la misma razon: Bahnschrift y Arial Black son de
 # Microsoft y no se pueden redistribuir. Si dejas aqui un `.ttf` de la variante
 # condensada, el PDF deja de dibujar con Helvetica y sale con la misma letra

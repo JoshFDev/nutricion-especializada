@@ -184,19 +184,6 @@ export const MENU: Grupo[] = [
     ],
   },
   {
-    titulo: 'Reportes',
-    modulos: [
-      {
-        ruta: 'reportes',
-        etiqueta: 'Reportes',
-        permiso: 'reportes.ver',
-        icon: 'pie-chart',
-        pendiente: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
-        carga: () => import('../reportes/reportes').then((m) => m.Reportes),
-      },
-    ],
-  },
-  {
     titulo: 'Sistema',
     colapsable: true,
     colapsadoPorDefecto: true,
@@ -217,6 +204,14 @@ export const MENU: Grupo[] = [
         pendiente: 'Las cinco bitacoras en solo lectura.',
         carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },
+      {
+        ruta: 'reportes',
+        etiqueta: 'Reportes',
+        permiso: 'reportes.ver',
+        icon: 'pie-chart',
+        pendiente: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
+        carga: () => import('../reportes/reportes').then((m) => m.Reportes),
+      },
     ],
   },
 ];
@@ -227,9 +222,9 @@ export const MODULOS: Modulo[] = MENU.flatMap((grupo) => grupo.modulos);
 /**
  * Los grupos con lo que la persona SI puede ver.
  *
- * Un grupo que se queda sin modulos no se devuelve: es el caso de la
- * cajera, que no tiene nada de Sistema ni de Catalogo, y dejar un
- * "SISTEMA" con nada adentro es ruido que hace dudar de si algo fallo.
+ * Un grupo que se queda sin modulos no se devuelve: es el caso de la cajera
+ * con Catalogo, y dejar un "CATALOGO" con nada adentro es ruido que hace
+ * dudar de si algo fallo.
  */
 export function menuPara(permisos: ReadonlySet<string>): Grupo[] {
   return MENU.map((grupo) => ({

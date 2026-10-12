@@ -53,3 +53,57 @@
 .a-favor .num {
   color: var(--exito-texto);
 }
+/* ------------------------------------------------------------------ dialogo */
+
+.dialogo {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.dialogo-contenido {
+  background: var(--fondo);
+  color: var(--texto);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  min-width: 20rem;
+  max-width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.dialogo-contenido h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+}
+
+.opciones {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.especificas {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.especificas label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.dialogo-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

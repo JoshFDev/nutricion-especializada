@@ -50,6 +50,15 @@ export class EstadoCuenta {
   /** El cliente del que se esta bajando la hoja, para no disparar dos veces. */
   readonly bajando = signal<number | null>(null);
 
+  // ------------------------------------------------------------------ seleccion
+  readonly seleccionados = signal<Set<number>>(new Set());
+  readonly todosSeleccionados = computed(() => {
+    const filas = this.filas();
+    if (filas.length === 0) return false;
+    const sel = this.seleccionados();
+    return filas.every((f) => sel.has(f.cliente_id));
+  });
+
   /** Paginacion, igual que en el resto de los listados. */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -134,6 +143,47 @@ export class EstadoCuenta {
    * sale con los primeros 20 y aqui se avisa cuantos quedaron fuera, para que
    * no se entregue un estado de cuenta a medias como si estuviera completo.
    */
+
+  toggleTodo(): void {
+    const set = new Set(this.seleccionados());
+    if (this.todosSeleccionados()) {
+      for (const f of this.filas()) set.delete(f.cliente_id);
+    } else {
+      for (const f of this.filas()) set.add(f.cliente_id);
+    }
+    this.seleccionados.set(set);
+  }
+
+  toggleFila(id: number): void {
+    const set = new Set(this.seleccionados());
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    this.seleccionados.set(set);
+  }
+
+  limpiarSeleccion(): void {
+    this.seleccionados.set(new Set());
+  }
+
+  async imprimirGeneral(): Promise<void> {
+    const ids = [...this.seleccionados()];
+    if (ids.length === 0) return;
+    this.bajando.set(-1);
+    try {
+      const r = await this.api.generarGeneral(ids);
+      if (r.fuera > 0) {
+        this.avisos.advertencia(
+          `Solo caben 18 clientes en la hoja. Quedaron fuera ${r.fuera} cliente${r.fuera === 1 ? '' : 's'}.`,
+        );
+      }
+      this.limpiarSeleccion();
+    } catch (falla) {
+      this.avisos.error(errorLegible(falla).mensaje);
+    } finally {
+      this.bajando.set(null);
+    }
+  }
+
   async ver(cliente: RenglonEstadoCuenta): Promise<void> {
     if (this.bajando() !== null) return;
     this.bajando.set(cliente.cliente_id);

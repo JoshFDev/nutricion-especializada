@@ -34,6 +34,19 @@
   @if (hayFiltros()) {
     <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
   }
+  @if (seleccionados().size > 0) {
+    <button
+      type="button"
+      class="primario"
+      (click)="imprimirGeneral()"
+      [disabled]="bajando() !== null"
+    >
+      {{
+        bajando() === -1 ? 'Generando...' : 'Imprimir seleccionados (' + seleccionados().size + ')'
+      }}
+    </button>
+    <button type="button" class="chico" (click)="limpiarSeleccion()">Quitar selección</button>
+  }
 </div>
 
 @if (error(); as mensaje) {
@@ -67,6 +80,13 @@
       <tbody [@filasAnimation]="recarga.valor()">
         @for (renglon of filas(); track renglon.cliente_id) {
           <tr [class.a-favor]="renglon.saldo_actual < 0">
+            <td>
+              <input
+                type="checkbox"
+                [checked]="seleccionados().has(renglon.cliente_id)"
+                (change)="toggleFila(renglon.cliente_id)"
+              />
+            </td>
             <td>{{ renglon.cliente }}</td>
             <td class="num" [class.saldo]="renglon.saldo_actual > 0">
               {{ montoComoTexto(renglon.saldo_actual) }}

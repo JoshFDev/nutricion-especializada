@@ -101,4 +101,22 @@ export class EstadoCuentaApi {
     descargarExcel(respuesta, `estado-cuenta-cliente-${clienteId}.xlsx`);
     return Number(respuesta.headers.get('x-renglones-fuera') ?? 0);
   }
+
+  async generarGeneral(clienteIds: number[]): Promise<{ fuera: number; escritos: number }> {
+    const respuesta: HttpResponse<Blob> = await firstValueFrom(
+      this.http.post(
+        `${API}/estado-cuenta/general`,
+        { cliente_ids: clienteIds },
+        {
+          responseType: 'blob',
+          observe: 'response',
+        },
+      ),
+    );
+    descargarExcel(respuesta, 'estado-cuenta-general.xlsx');
+    return {
+      fuera: Number(respuesta.headers.get('x-renglones-fuera') ?? 0),
+      escritos: Number(respuesta.headers.get('x-renglones-escritos') ?? 0),
+    };
+  }
 }

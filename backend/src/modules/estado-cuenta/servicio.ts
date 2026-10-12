@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { NoEncontrado } from '../../core/errores.js';
 import { componerFolio } from '../notas-remision/modelo.js';
 import * as excel from './excel.js';
+import * as excelGeneral from './excel-general.js';
 import type { HojaCliente, Movimiento } from './modelo.js';
 import { fechaDiaMesAnio } from './plantilla.js';
 import * as repo from './repositorio.js';
@@ -123,5 +124,25 @@ export async function hoja(
     bytes,
     nombreArchivo: `estado-cuenta-cliente-${nuevo.cliente_id}-${hoy}.xlsx`,
     renglonesFuera,
+  };
+}
+
+export async function general(
+  cliente: PoolClient,
+  clienteIds: number[],
+): Promise<{ bytes: Buffer; nombreArchivo: string; renglonesFuera: number; escritos: number }> {
+  const filas = await repo.listarClientesPorIds(cliente, clienteIds);
+  const renglones = filas.map((f) => ({
+    cliente: f.cliente,
+    saldo_actual: Number(f.saldo_actual),
+  }));
+  const { bytes, renglonesFuera, escritos } =
+    await excelGeneral.excelEstadoCuentaGeneral(renglones);
+  const hoy = new Date().toISOString().split('T')[0];
+  return {
+    bytes,
+    nombreArchivo: `estado-cuenta-general-${hoy}.xlsx`,
+    renglonesFuera,
+    escritos,
   };
 }

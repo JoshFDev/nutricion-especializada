@@ -159,3 +159,21 @@ export async function leerMovimientos(
 
   return { ventas, abonos };
 }
+
+export async function listarClientesPorIds(
+  cliente: PoolClient,
+  clienteIds: number[],
+): Promise<{ cliente_id: number; cliente: string; saldo_actual: string }[]> {
+  if (clienteIds.length === 0) return [];
+  const valores = clienteIds;
+  const placeholders = valores.map((_, i) => `$${i + 1}`).join(', ');
+  const filas = await consultar<{ cliente_id: string; cliente: string; saldo_actual: string }>(
+    cliente,
+    `SELECT id AS cliente_id, nombre AS cliente, saldo_actual
+       FROM clientes
+      WHERE id IN (${placeholders})
+      ORDER BY nombre`,
+    valores,
+  );
+  return filas.map((f) => ({ ...f, cliente_id: Number(f.cliente_id) }));
+}

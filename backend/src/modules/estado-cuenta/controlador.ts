@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { consulta, parametros } from '../../core/validacion.js';
 import * as servicio from './servicio.js';
-import type { HojaEstadoCuenta, ListarEstadoCuenta } from './esquemas.js';
+import type { GeneralEstadoCuenta, HojaEstadoCuenta, ListarEstadoCuenta } from './esquemas.js';
 
 /**
  * Traduce HTTP a servicio. No decide nada: si hay una regla, vive en
@@ -38,6 +38,25 @@ export const controladorEstadoCuenta = {
       .setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`)
       .setHeader('Cache-Control', 'no-store')
       .setHeader('X-Renglones-Fuera', String(renglonesFuera))
+      .send(bytes);
+  },
+
+  general: async (req: Request, res: Response): Promise<void> => {
+    const cuerpo = req.body as GeneralEstadoCuenta | undefined;
+    const clienteIds = cuerpo?.cliente_ids ?? [];
+    const { bytes, nombreArchivo, renglonesFuera, escritos } = await servicio.general(
+      req.db,
+      clienteIds,
+    );
+    res
+      .setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`)
+      .setHeader('Cache-Control', 'no-store')
+      .setHeader('X-Renglones-Fuera', String(renglonesFuera))
+      .setHeader('X-Renglones-Escritos', String(escritos))
       .send(bytes);
   },
 };

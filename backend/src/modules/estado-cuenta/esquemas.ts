@@ -37,5 +37,15 @@ export const listarEstadoCuentaEsquema = z
 /** El `:id` de la ruta de la hoja. */
 export const hojaEstadoCuentaEsquema = z.object({ id: idPositivo }).strict();
 
+export const generalEstadoCuentaEsquema = z
+  .object({
+    cliente_ids: z
+      .array(idPositivo)
+      .min(1, 'Selecciona al menos un cliente')
+      .max(100, 'Demasiados clientes seleccionados'),
+  })
+  .strict();
+
 export type ListarEstadoCuenta = z.infer<typeof listarEstadoCuentaEsquema>;
 export type HojaEstadoCuenta = z.infer<typeof hojaEstadoCuentaEsquema>;
+export type GeneralEstadoCuenta = z.infer<typeof generalEstadoCuentaEsquema>;

@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import { requierePermiso, requiereSesion } from '../../middleware/permisos.js';
-import { validarParams, validarQuery } from '../../core/validacion.js';
+import { validarBody, validarParams, validarQuery } from '../../core/validacion.js';
 import { controladorEstadoCuenta as ctrl } from './controlador.js';
-import { hojaEstadoCuentaEsquema, listarEstadoCuentaEsquema } from './esquemas.js';
+import {
+  generalEstadoCuentaEsquema,
+  hojaEstadoCuentaEsquema,
+  listarEstadoCuentaEsquema,
+} from './esquemas.js';
 
 /**
  * Rutas de /api/estado-cuenta.
@@ -40,4 +44,11 @@ rutasEstadoCuenta.get(
   requierePermiso('estado_cuenta.ver'),
   validarParams(hojaEstadoCuentaEsquema),
   ctrl.hoja,
+);
+
+rutasEstadoCuenta.post(
+  '/general',
+  requierePermiso('estado_cuenta.ver'),
+  validarBody(generalEstadoCuentaEsquema),
+  ctrl.general,
 );

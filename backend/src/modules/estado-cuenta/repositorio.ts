@@ -177,3 +177,36 @@ export async function listarClientesPorIds(
   );
   return filas.map((f) => ({ ...f, cliente_id: Number(f.cliente_id) }));
 }
+
+export async function leerAplicacionesPorCliente(
+  cliente: PoolClient,
+  clienteId: number,
+): Promise<
+  {
+    nota_id: number;
+    pago_id: number;
+    monto_aplicado: string;
+    pago_fecha: string;
+    pago_metodo: string | null;
+  }[]
+> {
+  return consultar(
+    cliente,
+    `SELECT pa.nota_id::TEXT AS nota_id, pa.pago_id::TEXT AS pago_id, pa.monto_aplicado::TEXT AS monto_aplicado,
+            p.fecha::TEXT AS pago_fecha, p.metodo AS pago_metodo
+       FROM pagos_aplicacion pa
+       JOIN pagos p ON p.id = pa.pago_id
+       JOIN notas_remision n ON n.id = pa.nota_id
+      WHERE n.cliente_id = $1
+      ORDER BY pa.id`,
+    [clienteId],
+  ).then((f) => {
+    return (f as Record<string, unknown>[]).map((x) => ({
+      nota_id: Number(x.nota_id),
+      pago_id: Number(x.pago_id),
+      monto_aplicado: String(x.monto_aplicado),
+      pago_fecha: String(x.pago_fecha),
+      pago_metodo: (x.pago_metodo as string | null) ?? null,
+    }));
+  });
+}

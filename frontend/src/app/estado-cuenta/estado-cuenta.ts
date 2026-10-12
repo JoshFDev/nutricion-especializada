@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { montoComoTexto } from '../nucleo/cifras';
@@ -29,6 +30,7 @@ import { EstadoCuentaApi, type RenglonEstadoCuenta } from './estado-cuenta-api';
   styleUrl: './estado-cuenta.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [filasAnimation],
+  imports: [FormsModule],
 })
 export class EstadoCuenta {
   private readonly api = inject(EstadoCuentaApi);
@@ -49,6 +51,8 @@ export class EstadoCuenta {
 
   /** El cliente del que se esta bajando la hoja, para no disparar dos veces. */
   readonly bajando = signal<number | null>(null);
+
+  readonly rangoHoja = signal<'todo' | 'semana' | 'mes'>('todo');
 
   // ------------------------------------------------------------------ seleccion
   readonly seleccionados = signal<Set<number>>(new Set());
@@ -184,11 +188,14 @@ export class EstadoCuenta {
     }
   }
 
-  async ver(cliente: RenglonEstadoCuenta): Promise<void> {
+  async ver(
+    cliente: RenglonEstadoCuenta,
+    rango: 'todo' | 'semana' | 'mes' = this.rangoHoja(),
+  ): Promise<void> {
     if (this.bajando() !== null) return;
     this.bajando.set(cliente.cliente_id);
     try {
-      const fuera = await this.api.abrirHoja(cliente.cliente_id);
+      const fuera = await this.api.abrirHoja(cliente.cliente_id, rango);
       if (fuera > 0) {
         this.avisos.advertencia(
           `La cuenta de ${cliente.cliente} tiene ${fuera} movimiento${fuera === 1 ? '' : 's'} de mas para la hoja: el Excel va con los primeros 20.`,

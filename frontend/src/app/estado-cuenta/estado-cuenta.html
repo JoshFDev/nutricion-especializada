@@ -34,6 +34,14 @@
   @if (hayFiltros()) {
     <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
   }
+  <label class="casilla">
+    <select [ngModel]="rangoHoja()" (ngModelChange)="rangoHoja.set($event)">
+      <option value="todo">Todo</option>
+      <option value="semana">Esta semana</option>
+      <option value="mes">Este mes</option>
+    </select>
+    <span>Rango</span>
+  </label>
   @if (seleccionados().size > 0) {
     <button
       type="button"

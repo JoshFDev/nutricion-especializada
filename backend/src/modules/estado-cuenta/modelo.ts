@@ -47,4 +47,17 @@ export interface HojaCliente {
   cliente_id: number;
   cliente: string;
   movimientos: Movimiento[];
+  renglones?: RenglonHoja[];
+}
+/**
+ * Un renglon de la hoja: puede contener una venta y un abono aplicado a la misma nota.
+ */
+export interface RenglonHoja {
+  fecha: string;
+  esVenta: boolean;
+  folio?: string;
+  montoVenta?: number;
+  esAbono: boolean;
+  metodoAbono?: string;
+  montoAbono?: number;
 }

@@ -33,6 +33,37 @@ export async function excelEstadoCuentaGeneral(renglones: RenglonGeneral[]): Pro
   if (hoja === undefined) {
     throw new Error('La plantilla de estado de cuenta general no trae ninguna hoja de calculo');
   }
+  // Elimina posibles tablas/autofiltros que provoquen "Hemos encontrado un problema con el contenido"
+  try {
+    const tbls = (hoja as { tables?: unknown }).tables as
+      { size?: number; clear: () => void } | undefined;
+    if (tbls?.size && tbls.size > 0) {
+      tbls.clear();
+    }
+  } catch {
+    // noop
+  }
+  try {
+    delete (hoja as { autoFilter?: unknown }).autoFilter;
+  } catch {
+    // noop
+  }
+
+  // Elimina posibles tablas/autofiltros que provoquen "Hemos encontrado un problema con el contenido"
+  try {
+    const tbls = (hoja as { tables?: unknown }).tables as
+      { size?: number; clear: () => void } | undefined;
+    if (tbls?.size && tbls.size > 0) {
+      tbls.clear();
+    }
+  } catch {
+    // noop
+  }
+  try {
+    delete (hoja as { autoFilter?: unknown }).autoFilter;
+  } catch {
+    // noop
+  }
 
   libro.title = 'Estado de cuenta general';
   libro.creator = 'Nutricion Especializada';
@@ -41,15 +72,9 @@ export async function excelEstadoCuentaGeneral(renglones: RenglonGeneral[]): Pro
   const PRIMERA_FILA = 8;
 
   const hoy = new Date();
-  const fechaTexto = hoy
-    .toLocaleDateString('es-MX', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })
-    .replace('.', '');
   const celdaFecha = hoja.getCell('B6');
-  celdaFecha.value = fechaTexto;
+  celdaFecha.value = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  celdaFecha.numFmt = 'DD-MMM-YY';
   celdaFecha.alignment = { horizontal: 'right', vertical: 'middle' };
 
   const visibles = renglones.slice(0, MAX_RENGLONES);

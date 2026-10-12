@@ -35,7 +35,9 @@ export const listarEstadoCuentaEsquema = z
   .strict();
 
 /** El `:id` de la ruta de la hoja. */
-export const hojaEstadoCuentaEsquema = z.object({ id: idPositivo }).strict();
+export const hojaEstadoCuentaEsquema = z
+  .object({ id: idPositivo, rango: z.enum(['todo', 'semana', 'mes']).optional() })
+  .strict();
 
 export const generalEstadoCuentaEsquema = z
   .object({

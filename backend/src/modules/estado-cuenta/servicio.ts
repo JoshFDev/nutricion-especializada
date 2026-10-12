@@ -105,13 +105,27 @@ export async function listar(
 export async function hoja(
   cliente: PoolClient,
   clienteId: number,
+  rango: 'todo' | 'semana' | 'mes' = 'todo',
 ): Promise<{ bytes: Buffer; nombreArchivo: string; renglonesFuera: number }> {
   const nuevo = await repo.buscarCliente(cliente, clienteId);
   if (nuevo === null) {
     throw new NoEncontrado('Ese cliente no existe.');
   }
 
-  const { ventas, abonos } = await repo.leerMovimientos(cliente, clienteId);
+  let { ventas, abonos } = await repo.leerMovimientos(cliente, clienteId);
+  const hoy = new Date();
+  let inicio: Date | null = null;
+  if (rango === 'semana') {
+    const dia = hoy.getDay();
+    inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - dia);
+  } else if (rango === 'mes') {
+    inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  }
+  if (inicio !== null) {
+    const desdeIso = inicio.toISOString().split('T')[0]!;
+    ventas = ventas.filter((v) => v.fecha >= desdeIso);
+    abonos = abonos.filter((a) => a.fecha >= desdeIso);
+  }
   const cuenta: HojaCliente = {
     cliente_id: nuevo.cliente_id,
     cliente: nuevo.cliente,
@@ -119,10 +133,10 @@ export async function hoja(
   };
 
   const { bytes, renglonesFuera } = await excel.excelEstadoCuenta(cuenta);
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoyArchivo = new Date().toISOString().split('T')[0];
   return {
     bytes,
-    nombreArchivo: `estado-cuenta-cliente-${nuevo.cliente_id}-${hoy}.xlsx`,
+    nombreArchivo: `estado-cuenta-cliente-${nuevo.cliente_id}-${hoyArchivo}.xlsx`,
     renglonesFuera,
   };
 }

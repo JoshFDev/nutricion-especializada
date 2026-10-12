@@ -3,7 +3,7 @@ import { NoEncontrado } from '../../core/errores.js';
 import { componerFolio } from '../notas-remision/modelo.js';
 import * as excel from './excel.js';
 import * as excelGeneral from './excel-general.js';
-import type { HojaCliente, Movimiento } from './modelo.js';
+import type { HojaCliente, Movimiento, RenglonHoja } from './modelo.js';
 import { fechaDiaMesAnio } from './plantilla.js';
 import * as repo from './repositorio.js';
 import type { ListarEstadoCuenta } from './esquemas.js';
@@ -33,61 +33,128 @@ import type { Listado, RenglonEstadoCuenta } from './modelo.js';
  * venta y un abono de la misma fecha en listas distintas, el sort miraria la
  * hora que no existe y el orden del empate estaria a la suerte.
  */
+export interface VentaConId {
+  nota_id: number;
+  fecha: string;
+  serie: string;
+  folio_numero: string;
+  monto: string;
+}
+
+export interface AplicacionSimple {
+  nota_id: number;
+  pago_id: number;
+  monto_aplicado: string;
+  pago_fecha: string;
+  pago_metodo: string | null;
+}
+
 export function armarMovimientos(
   ventas: { fecha: string; serie: string; folio_numero: string; monto: string }[],
   abonos: { fecha: string; metodo: string | null; monto: string }[],
 ): Movimiento[] {
-  const ventasLista: Movimiento[] = ventas.map((v) => ({
-    fecha: v.fecha,
-    esAbono: false,
-    folio: componerFolio(v.serie, Number(v.folio_numero)),
-    monto: Number(v.monto),
-  }));
-
-  const abonosLista: Movimiento[] = abonos.map((a) => ({
-    fecha: a.fecha,
-    esAbono: true,
-    monto: Number(a.monto),
-    // Un abono sin metodo anotado no es un metodo vacio: se deja la columna F
-    // sin texto en vez de escribir una cadena vacia. El spread condicional es
-    // lo que `exactOptionalPropertyTypes` pide: la propiedad se OMITE, no se
-    // pone en undefined.
-    ...(a.metodo === null ? {} : { metodo: a.metodo }),
-  }));
-
   const mezclados: Movimiento[] = [];
   let i = 0;
   let j = 0;
-  while (i < ventasLista.length || j < abonosLista.length) {
-    const venta = ventasLista[i];
-    const abono = abonosLista[j];
-
+  while (i < ventas.length || j < abonos.length) {
+    const venta = ventas[i];
+    const abono = abonos[j];
     if (venta === undefined) {
-      mezclados.push(abono!);
+      mezclados.push({
+        fecha: fechaDiaMesAnio(abono!.fecha),
+        esAbono: true,
+        monto: Number(abono!.monto),
+        ...(abono!.metodo === null ? {} : { metodo: abono!.metodo }),
+      });
       j += 1;
       continue;
     }
     if (abono === undefined) {
-      mezclados.push(venta);
+      mezclados.push({
+        fecha: fechaDiaMesAnio(venta.fecha),
+        esAbono: false,
+        folio: componerFolio(venta.serie, Number(venta.folio_numero)),
+        monto: Number(venta.monto),
+      });
       i += 1;
       continue;
     }
-
-    // Mismo dia -> venta primero. El empate no lo rompe el contenido de las
-    // listas sino el orden en que se lee: venta y luego abono.
     if (venta.fecha <= abono.fecha) {
-      mezclados.push(venta);
+      mezclados.push({
+        fecha: fechaDiaMesAnio(venta.fecha),
+        esAbono: false,
+        folio: componerFolio(venta.serie, Number(venta.folio_numero)),
+        monto: Number(venta.monto),
+      });
       i += 1;
     } else {
-      mezclados.push(abono);
+      mezclados.push({
+        fecha: fechaDiaMesAnio(abono.fecha),
+        esAbono: true,
+        monto: Number(abono.monto),
+        ...(abono.metodo === null ? {} : { metodo: abono.metodo }),
+      });
       j += 1;
     }
   }
-
-  return mezclados.map((m) => ({ ...m, fecha: fechaDiaMesAnio(m.fecha) }));
+  return mezclados;
 }
 
-/** El listado de clientes con su saldo. */
+export function armarRenglones(
+  ventas: VentaConId[],
+  abonos: { fecha: string; metodo: string | null; monto: string }[],
+  aplicaciones: AplicacionSimple[] = [],
+): RenglonHoja[] {
+  const aplicPorNota = new Map<number, AplicacionSimple[]>();
+  for (const a of aplicaciones) {
+    const arr = aplicPorNota.get(a.nota_id) ?? [];
+    arr.push(a);
+    aplicPorNota.set(a.nota_id, arr);
+  }
+
+  const renglones: RenglonHoja[] = [];
+  for (const v of ventas) {
+    const apps = aplicPorNota.get(v.nota_id);
+    if (apps && apps.length > 0) {
+      for (const app of apps) {
+        renglones.push({
+          fecha: fechaDiaMesAnio(v.fecha),
+          esVenta: true,
+          folio: componerFolio(v.serie, Number(v.folio_numero)),
+          montoVenta: Number(v.monto),
+          esAbono: true,
+          ...(app.pago_metodo === null ? {} : { metodoAbono: app.pago_metodo }),
+          montoAbono: Number(app.monto_aplicado),
+        });
+      }
+      aplicPorNota.delete(v.nota_id);
+    } else {
+      renglones.push({
+        fecha: fechaDiaMesAnio(v.fecha),
+        esVenta: true,
+        folio: componerFolio(v.serie, Number(v.folio_numero)),
+        montoVenta: Number(v.monto),
+        esAbono: false,
+      });
+    }
+  }
+
+  for (const [, apps] of aplicPorNota) {
+    for (const app of apps) {
+      renglones.push({
+        fecha: fechaDiaMesAnio(app.pago_fecha),
+        esVenta: false,
+        esAbono: true,
+        ...(app.pago_metodo === null ? {} : { metodoAbono: app.pago_metodo }),
+        montoAbono: Number(app.monto_aplicado),
+      });
+    }
+  }
+
+  renglones.sort((x, y) => (x.fecha < y.fecha ? -1 : x.fecha > y.fecha ? 1 : 0));
+  return renglones;
+}
+
 export async function listar(
   cliente: PoolClient,
   consulta: ListarEstadoCuenta,
@@ -126,10 +193,41 @@ export async function hoja(
     ventas = ventas.filter((v) => v.fecha >= desdeIso);
     abonos = abonos.filter((a) => a.fecha >= desdeIso);
   }
+  const aplicaciones = await repo.leerAplicacionesPorCliente(cliente, clienteId);
+  const renglones = armarRenglones(
+    ventas.map((v) => ({ ...v, nota_id: Number(v.nota_id) })),
+    abonos,
+    aplicaciones,
+  );
+  // convert to movimiento form for current excel? or write new excel
+  const movimientos: Movimiento[] = renglones.map((r) => {
+    if (r.esVenta && r.esAbono) {
+      return {
+        fecha: r.fecha,
+        esAbono: true,
+        metodo: r.metodoAbono,
+        monto: r.montoAbono ?? 0,
+      } as Movimiento;
+    }
+    if (r.esVenta) {
+      return {
+        fecha: r.fecha,
+        esAbono: false,
+        folio: r.folio,
+        monto: r.montoVenta ?? 0,
+      } as Movimiento;
+    }
+    return {
+      fecha: r.fecha,
+      esAbono: true,
+      metodo: r.metodoAbono,
+      monto: r.montoAbono ?? 0,
+    } as Movimiento;
+  });
   const cuenta: HojaCliente = {
     cliente_id: nuevo.cliente_id,
     cliente: nuevo.cliente,
-    movimientos: armarMovimientos(ventas, abonos),
+    movimientos,
   };
 
   const { bytes, renglonesFuera } = await excel.excelEstadoCuenta(cuenta);

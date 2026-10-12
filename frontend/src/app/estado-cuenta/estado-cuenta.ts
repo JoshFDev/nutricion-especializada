@@ -188,26 +188,6 @@ export class EstadoCuenta {
     }
   }
 
-  async ver(
-    cliente: RenglonEstadoCuenta,
-    rango: 'todo' | 'semana' | 'mes' = this.rangoHoja(),
-  ): Promise<void> {
-    if (this.bajando() !== null) return;
-    this.bajando.set(cliente.cliente_id);
-    try {
-      const fuera = await this.api.abrirHoja(cliente.cliente_id, rango);
-      if (fuera > 0) {
-        this.avisos.advertencia(
-          `La cuenta de ${cliente.cliente} tiene ${fuera} movimiento${fuera === 1 ? '' : 's'} de mas para la hoja: el Excel va con los primeros 20.`,
-        );
-      }
-    } catch (falla) {
-      this.avisos.error(errorLegible(falla).mensaje);
-    } finally {
-      this.bajando.set(null);
-    }
-  }
-
   // ------------------------------------------------------------------ el listado
 
   private async cargarPagina(pagina: number): Promise<void> {
@@ -233,5 +213,66 @@ export class EstadoCuenta {
       // repinto, tanto si la respuesta llego como si fallo.
       this.recarga.marcar();
     }
+  }
+  mostrandoDialogo = signal(false);
+  clienteSeleccionado = signal<RenglonEstadoCuenta | null>(null);
+  fechaInicio = signal('');
+  fechaFin = signal('');
+
+  abrirDialogo(cliente: RenglonEstadoCuenta): void {
+    this.clienteSeleccionado.set(cliente);
+    this.mostrandoDialogo.set(true);
+  }
+
+  cerrarDialogo(): void {
+    this.mostrandoDialogo.set(false);
+    this.clienteSeleccionado.set(null);
+    this.fechaInicio.set('');
+    this.fechaFin.set('');
+  }
+
+  async generarHoja(rango: 'todo' | 'semana' | 'mes'): Promise<void> {
+    const c = this.clienteSeleccionado();
+    if (c === null) return;
+    if (this.bajando() !== null) return;
+    this.bajando.set(c.cliente_id);
+    try {
+      const fuera = await this.api.abrirHoja(c.cliente_id, rango);
+      if (fuera > 0) {
+        this.avisos.advertencia(
+          `El estado de cuenta trae ${fuera} movimiento${fuera === 1 ? '' : 's'} que no caben en la hoja.`,
+        );
+      }
+    } catch (falla) {
+      this.avisos.error(errorLegible(falla).mensaje);
+    } finally {
+      this.bajando.set(null);
+      this.cerrarDialogo();
+    }
+  }
+
+  async generarHojaFechas(): Promise<void> {
+    const c = this.clienteSeleccionado();
+    if (c === null) return;
+    if (!this.fechaInicio() || !this.fechaFin()) return;
+    if (this.bajando() !== null) return;
+    this.bajando.set(c.cliente_id);
+    try {
+      const fuera = await this.api.abrirHoja(c.cliente_id, 'todo');
+      if (fuera > 0) {
+        this.avisos.advertencia(
+          `El estado de cuenta trae ${fuera} movimiento${fuera === 1 ? '' : 's'} que no caben en la hoja.`,
+        );
+      }
+    } catch (falla) {
+      this.avisos.error(errorLegible(falla).mensaje);
+    } finally {
+      this.bajando.set(null);
+      this.cerrarDialogo();
+    }
+  }
+
+  ver(cliente: RenglonEstadoCuenta): void {
+    this.abrirDialogo(cliente);
   }
 }

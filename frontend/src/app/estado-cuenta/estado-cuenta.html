@@ -153,3 +153,35 @@
     </select>
   </div>
 }
+@if (mostrandoDialogo()) {
+  <div class="dialogo">
+    <div class="dialogo-contenido">
+      <h2>Estado de cuenta - {{ clienteSeleccionado()?.cliente }}</h2>
+      <div class="opciones">
+        <button type="button" (click)="generarHoja('todo')">Todo</button>
+        <button type="button" (click)="generarHoja('semana')">Esta semana</button>
+        <button type="button" (click)="generarHoja('mes')">Este mes</button>
+      </div>
+      <div class="especificas">
+        <label
+          >Fecha inicio
+          <input
+            type="date"
+            [value]="fechaInicio()"
+            (change)="fechaInicio.set($any($event.target).value)"
+        /></label>
+        <label
+          >Fecha fin
+          <input
+            type="date"
+            [value]="fechaFin()"
+            (change)="fechaFin.set($any($event.target).value)"
+        /></label>
+        <button type="button" (click)="generarHojaFechas()">Fechas específicas</button>
+      </div>
+      <div class="dialogo-botones">
+        <button type="button" class="chico" (click)="cerrarDialogo()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+}

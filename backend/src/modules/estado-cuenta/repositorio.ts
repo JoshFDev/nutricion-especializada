@@ -109,6 +109,7 @@ export async function buscarCliente(
 
 /** La venta cruda de la que la hoja saca su reglon. */
 interface VentaCruda {
+  nota_id: string;
   fecha: string;
   serie: string;
   folio_numero: string;
@@ -139,7 +140,7 @@ export async function leerMovimientos(
   const [ventas, abonos] = await Promise.all([
     consultar<VentaCruda>(
       cliente,
-      `SELECT n.fecha::TEXT AS fecha, f.serie, f.folio_numero::TEXT, n.subtotal::TEXT AS monto
+      `SELECT n.id::TEXT AS nota_id, n.fecha::TEXT AS fecha, f.serie, f.folio_numero::TEXT, n.subtotal::TEXT AS monto
          FROM notas_remision n
          JOIN folios f ON f.id = n.folio_id
         WHERE n.cliente_id = $1

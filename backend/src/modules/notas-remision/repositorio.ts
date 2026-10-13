@@ -767,6 +767,8 @@ export async function eliminarNota(cliente: PoolClient, id: number): Promise<boo
   if (!filaNota) return false;
 
   const folioId = Number(filaNota.folio_id);
+  await cliente.query(`DELETE FROM pagos_aplicacion WHERE nota_id = $1`, [id]);
+  await cliente.query(`DELETE FROM factura_nota WHERE nota_id = $1`, [id]);
   const r = await consultar<{ id: string }>(
     cliente,
     `DELETE FROM notas_remision WHERE id = $1 AND estatus = 'cancelada' RETURNING id`,

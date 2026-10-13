@@ -255,7 +255,7 @@
       <option value="a_favor">Saldo a favor</option>
     </select>
 
-    <button type="button" class="chico" (click)="alternarSaldos()" title="Mostrar/ocultar saldos">
+    <button type="button" class="boton-icono" (click)="alternarSaldos()" title="Mostrar/ocultar saldos">
       @if (saldosOcultos()) {
         <span class="icono" [innerHTML]="icono('eye')"></span>
       } @else {

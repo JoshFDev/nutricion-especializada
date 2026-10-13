@@ -155,3 +155,26 @@ th:nth-child(8) {
 .rfc {
   font-variant-numeric: tabular-nums;
 }
+
+.filtros .boton-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+  cursor: pointer;
+}
+
+.filtros .boton-icono .icono {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.tabla tfoot td {
+  border-top: 1px solid var(--borde);
+  font-weight: 600;
+  background: var(--fondo);
+}

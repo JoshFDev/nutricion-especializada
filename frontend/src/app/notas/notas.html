@@ -389,8 +389,8 @@
           parece que va a romper las notas viejas, y no es el caso.
         -->
         <p class="aviso">
-          De la sucursal, no del cliente. Cada nota copia el texto al guardarse, asi que borrar una
-          direccion de la lista NO cambia las notas ya emitidas.
+          Esta lista es de la sucursal, no de un cliente. Al borrar una dirección de aquí, las notas
+          que ya se emitieron quedan igual.
         </p>
       </details>
     </div>
@@ -532,7 +532,7 @@
               <span class="tenue">&middot; antes {{ montoComoTexto(nota.subtotal) }}</span>
             }
           </p>
-          <p class="aviso-inline">Preview: lo calcula la base al guardar.</p>
+          <p class="aviso-inline">El total se confirma al guardar.</p>
         </div>
         <p class="total">{{ totalComoTexto() }}</p>
       </div>
@@ -610,9 +610,9 @@
         }
 
         <p class="aviso">
-          El POS quema el folio de la serie en uso: ahora es
+          Cada nota toma el siguiente folio de la serie en uso: ahora es
           <strong>{{ serieActivaComoTexto() }}</strong
-          >. Vaciar el prefijo deja folios de puros numeros ("2704"); un prefijo los imprime
+          >. Si dejas el prefijo vacío, los folios son solo números ("2704"); con prefijo se ven
           adelante ("RE-2704").
         </p>
 

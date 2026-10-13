@@ -33,37 +33,17 @@ export async function excelEstadoCuentaGeneral(renglones: RenglonGeneral[]): Pro
   if (hoja === undefined) {
     throw new Error('La plantilla de estado de cuenta general no trae ninguna hoja de calculo');
   }
-  // Elimina posibles tablas/autofiltros que provoquen "Hemos encontrado un problema con el contenido"
-  try {
-    const tbls = (hoja as { tables?: unknown }).tables as
-      { size?: number; clear: () => void } | undefined;
-    if (tbls?.size && tbls.size > 0) {
-      tbls.clear();
-    }
-  } catch {
-    // noop
+  // La plantilla trae una tabla ("SALDO2") con su autofiltro. ExcelJS la
+  // recarga, pero al volver a escribir el libro emite un `table1.xml` invalido
+  // y Excel abre el archivo pidiendo reparar el contenido. Como la tabla no
+  // aporta nada al estado de cuenta, la sacamos del modelo antes de escribir.
+  // Ojo: `hoja.tables` es un objeto con el nombre de cada tabla como clave (no
+  // un Map), por eso se borra clave por clave y no con `.clear()`.
+  const tablas = (hoja as unknown as { tables: Record<string, unknown> }).tables;
+  for (const nombre of Object.keys(tablas)) {
+    delete tablas[nombre];
   }
-  try {
-    delete (hoja as { autoFilter?: unknown }).autoFilter;
-  } catch {
-    // noop
-  }
-
-  // Elimina posibles tablas/autofiltros que provoquen "Hemos encontrado un problema con el contenido"
-  try {
-    const tbls = (hoja as { tables?: unknown }).tables as
-      { size?: number; clear: () => void } | undefined;
-    if (tbls?.size && tbls.size > 0) {
-      tbls.clear();
-    }
-  } catch {
-    // noop
-  }
-  try {
-    delete (hoja as { autoFilter?: unknown }).autoFilter;
-  } catch {
-    // noop
-  }
+  delete (hoja as unknown as { autoFilter?: unknown }).autoFilter;
 
   libro.title = 'Estado de cuenta general';
   libro.creator = 'Nutricion Especializada';

@@ -150,8 +150,8 @@
  * desaparece a medias sobre el azul de la barra (ver el HTML).
  */
 .logo {
-  width: 2rem;
-  height: 2rem;
+  width: 2.25rem;
+  height: 2.25rem;
   padding: 0.25rem;
   background: var(--superficie);
   border-radius: 0.5rem;
@@ -159,14 +159,11 @@
   /* La placa no se encoge: si el espacio falta, lo que se recorta es el
      nombre de al lado, no el logo. */
   flex: 0 0 auto;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
   transition:
-    transform 0.2s ease,
     box-shadow 0.2s ease;
-}
-
-.logo:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
 }
 
 .hamburguesa {

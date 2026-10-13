@@ -42,6 +42,17 @@ function construirFiltro(q: ListarClientes): { donde: string; valores: unknown[]
     condiciones.push(`c.estatus = $${valores.length}`);
   }
 
+  const s = q.saldo ?? 'todos';
+  if (s === 'adeudado') {
+    condiciones.push('c.saldo_actual > 0');
+  } else if (s === 'a_favor') {
+    condiciones.push('c.saldo_actual < 0');
+  } else if (s === 'sin_saldo') {
+    condiciones.push('c.saldo_actual = 0');
+  } else if (s === 'con_saldo') {
+    condiciones.push('c.saldo_actual <> 0');
+  }
+
   return {
     donde: condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : '',
     valores,

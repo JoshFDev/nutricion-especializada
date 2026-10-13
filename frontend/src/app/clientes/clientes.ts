@@ -298,6 +298,7 @@ export class Clientes {
       const resultado = await this.api.listar({
         buscar: this.textoBusqueda(),
         estatus: this.estatusConsulta(),
+        saldo: this.saldoConsulta(),
         limite: this.limite(),
         offset: (pagina - 1) * this.limite(),
       } as any);

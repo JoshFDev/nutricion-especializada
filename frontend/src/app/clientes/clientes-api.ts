@@ -133,6 +133,7 @@ export class ClientesApi {
   async listar(opciones: {
     buscar?: string;
     estatus?: 'Activo' | 'Inactivo';
+    saldo?: 'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado';
     limite?: number;
     offset?: number;
   }): Promise<ListaClientes> {
@@ -142,6 +143,7 @@ export class ClientesApi {
     };
     if (opciones.buscar) params['buscar'] = opciones.buscar;
     if (opciones.estatus) params['estatus'] = opciones.estatus;
+    if (opciones.saldo) params['saldo'] = opciones.saldo;
     return firstValueFrom(this.http.get<ListaClientes>(`${API}/clientes`, { params }));
   }
 

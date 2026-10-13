@@ -182,6 +182,7 @@ export async function actualizar(
     'estatus',
     'telefono',
     'direccion',
+    'saldo_actual',
   ]);
   const seguros = campos.filter((c) => permitidos.has(c));
   if (seguros.length === 0) return null;

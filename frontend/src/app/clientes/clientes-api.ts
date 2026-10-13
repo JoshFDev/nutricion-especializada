@@ -70,6 +70,7 @@ export interface FormaCliente {
   telefono: string;
   rfc: string;
   direccion: string;
+  saldo_actual?: string;
 }
 
 /** El cuerpo de `POST/PATCH /api/clientes`, tal como lo quiere el esquema. */
@@ -82,6 +83,7 @@ export interface CuerpoCliente {
   telefono: string | null;
   rfc: string | null;
   direccion: string | null;
+  saldo_actual?: number;
 }
 
 /**
@@ -98,7 +100,7 @@ export interface CuerpoCliente {
  * borrar el dato fiscal.
  */
 export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
-  return {
+  const cuerpo: CuerpoCliente = {
     codigo_cliente: forma.codigo_cliente.trim().toUpperCase(),
     nombre: forma.nombre.trim(),
     establo: textoONull(forma.establo),
@@ -108,6 +110,10 @@ export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
     rfc: textoONull(rfcNormalizado(forma.rfc)),
     direccion: textoONull(forma.direccion),
   };
+  if (forma.saldo_actual !== undefined && forma.saldo_actual !== '') {
+    cuerpo.saldo_actual = Number(forma.saldo_actual);
+  }
+  return cuerpo;
 }
 
 /** Un campo opcional que llegó en blanco se manda como `null`, que es como

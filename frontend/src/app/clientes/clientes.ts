@@ -173,6 +173,7 @@ export class Clientes {
     telefono: [''],
     rfc: ['', validaRfc],
     direccion: [''],
+    saldo_actual: [''],
   });
 
   montoComoTexto = montoComoTexto;
@@ -392,6 +393,7 @@ export class Clientes {
       telefono: '',
       rfc: '',
       direccion: '',
+      saldo_actual: '',
     });
     this.errorEditor.set(null);
     this.editando.set({} as Cliente);
@@ -408,6 +410,7 @@ export class Clientes {
       telefono: cliente.telefono ?? '',
       rfc: cliente.rfc ?? '',
       direccion: cliente.direccion ?? '',
+      saldo_actual: String(cliente.saldo_actual ?? ''),
     });
     this.errorEditor.set(null);
     this.editando.set(cliente);
@@ -475,13 +478,27 @@ export class Clientes {
     this.forma.markAllAsTouched();
     if (this.forma.invalid) return;
 
+    const cuerpo = cuerpoDeCliente(this.forma.getRawValue());
+    const actual = this.editando();
+    if (actual === null) return;
+
+    if (actual.id !== undefined) {
+      const saldoForm = Number(this.forma.getRawValue().saldo_actual);
+      if (!Number.isNaN(saldoForm) && Math.abs(saldoForm - Number(actual.saldo_actual)) > 0.001) {
+        const ok = await this.confirmModal().abrir({
+          titulo: 'Modificar saldo',
+          mensaje: `Estás cambiando el saldo del cliente de ${montoComoTexto(Number(actual.saldo_actual))} a ${montoComoTexto(saldoForm)}. ¿Confirmas que deseas modificarlo manualmente?`,
+          textoConfirmar: 'Confirmar',
+          variante: 'advertencia',
+        });
+        if (!ok) return;
+      }
+    }
+
     this.guardando.set(true);
     this.errorEditor.set(null);
-    const cuerpo = cuerpoDeCliente(this.forma.getRawValue());
 
     try {
-      const actual = this.editando();
-      if (actual === null) return;
       if (actual.id === undefined) {
         await this.api.crear(cuerpo);
         this.toast.exito('Cliente creado con éxito');
@@ -493,8 +510,6 @@ export class Clientes {
       await this.recargar();
     } catch (falla) {
       const legible = errorLegible(falla);
-      // El código repetido se marca en el campo, no solo en el aviso de
-      // arriba: el operador tiene que saber QUÉ campo corregir.
       if (legible.codigo === 'CODIGO_DUPLICADO') {
         this.forma.controls.codigo_cliente.setErrors({ duplicado: true });
       }

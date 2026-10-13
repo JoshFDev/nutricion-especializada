@@ -61,6 +61,8 @@ const textoOpcional = (max: number) =>
     .nullish()
     .transform((v) => (v === '' || v === undefined ? null : v));
 
+const saldo = z.coerce.number().multipleOf(0.01).min(-9999999).max(9999999).nullish();
+
 export const crearClienteEsquema = z.object({
   codigo_cliente: codigoCliente,
   nombre: z.string().trim().min(1, 'El nombre es obligatorio').max(200),
@@ -70,6 +72,7 @@ export const crearClienteEsquema = z.object({
   telefono: textoOpcional(40),
   direccion: textoOpcional(400),
   rfc: rfcCliente,
+  saldo_actual: saldo,
 });
 
 /**

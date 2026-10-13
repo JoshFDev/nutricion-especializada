@@ -15,6 +15,8 @@ import { montoComoTexto } from '../nucleo/cifras';
 import { ConfirmModal } from '../productos/confirm-modal';
 import { ClientesApi, cuerpoDeCliente, type Cliente, type Especie } from './clientes-api';
 import { rfcNormalizado, rfcValido } from '../usuarios/usuarios-api';
+import { ICONOS } from '../nucleo/iconos/iconos';
+import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 
 /**
  * La pantalla de clientes.
@@ -70,6 +72,7 @@ export class Clientes {
   private readonly fb = inject(FormBuilder);
   private readonly sesion = inject(Sesion);
   private readonly toast = inject(ToastService);
+  private readonly sanitizer = inject(DomSanitizer);
 
   // ------------------------------------------------------------- el listado
   /** Para la cascada de entrada de la tabla. Ver `nucleo/animaciones.ts`. */
@@ -82,6 +85,8 @@ export class Clientes {
   readonly error = signal<string | null>(null);
   readonly buscador = signal('');
   readonly estatusFiltro = signal<'todos' | 'Activo' | 'Inactivo'>('todos');
+  readonly saldoFiltro = signal<'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado'>('todos');
+  readonly saldosOcultos = signal(false);
 
   readonly especies = signal<Especie[]>([]);
 
@@ -116,7 +121,10 @@ export class Clientes {
    * dos letras confunde más de lo que ayuda.
    */
   readonly hayFiltros = computed(
-    () => this.buscador().trim().length >= 2 || this.estatusFiltro() !== 'todos',
+    () =>
+      this.buscador().trim().length >= 2 ||
+      this.estatusFiltro() !== 'todos' ||
+      this.saldoFiltro() !== 'todos',
   );
 
   // -------------------------------------------------------------- el editor
@@ -169,6 +177,24 @@ export class Clientes {
 
   montoComoTexto = montoComoTexto;
 
+  readonly totalSaldo = computed(() => {
+    return this.filas().reduce((acc, c) => acc + Number(c.saldo_actual || 0), 0);
+  });
+
+  alternarSaldos(): void {
+    this.saldosOcultos.update((v) => !v);
+  }
+
+  icono(nombre: string): SafeHtml {
+    const svg = ICONOS[nombre] ?? ICONOS['clipboard'];
+    return this.sanitizer.bypassSecurityTrustHtml(svg);
+  }
+
+  formatoSaldo(valor: number): string {
+    if (this.saldosOcultos()) return '***';
+    return montoComoTexto(valor);
+  }
+
   /**
    * El mensaje de un campo, si el formulario lo sabe.
    *
@@ -216,11 +242,17 @@ export class Clientes {
     void this.recargar();
   }
 
+  filtrarSaldo(tipo: string): void {
+    this.saldoFiltro.set(tipo as 'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado');
+    void this.recargar();
+  }
+
   /** Quita busqueda y filtro de golpe, y vuelve a la primera página. */
   limpiarFiltros(): void {
     clearTimeout(this.temporizador);
     this.buscador.set('');
     this.estatusFiltro.set('todos');
+    this.saldoFiltro.set('todos');
     void this.recargar();
   }
 
@@ -249,6 +281,10 @@ export class Clientes {
     return estatus === 'todos' ? undefined : estatus;
   });
 
+  private readonly saldoConsulta = computed<'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado'>(() => {
+    return this.saldoFiltro();
+  });
+
   /** Vuelve a la primera página con el filtro que se tenga puesto. */
   private async recargar(): Promise<void> {
     await this.cargarPagina(1);
@@ -264,7 +300,7 @@ export class Clientes {
         estatus: this.estatusConsulta(),
         limite: this.limite(),
         offset: (pagina - 1) * this.limite(),
-      });
+      } as any);
 
       // Se borró la última fila de la última página: la que se pide ya no
       // existe. Se retrocede una en vez de dejar una tabla vacía con el
@@ -334,7 +370,7 @@ export class Clientes {
       await this.api.exportarExcel({
         buscar: this.textoBusqueda(),
         estatus: this.estatusConsulta(),
-      });
+      } as any);
       this.toast.exito('Clientes exportados a Excel');
     } catch (falla) {
       this.toast.error(errorLegible(falla).mensaje);

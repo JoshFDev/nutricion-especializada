@@ -418,6 +418,25 @@ export async function cancelar(cliente: PoolClient, id: number, motivo: string):
   });
 }
 
+export async function eliminar(cliente: PoolClient, id: number): Promise<void> {
+  return enTransaccionDe(cliente, async (c) => {
+    const fila = await repo.consultarNota(c, id);
+    if (!fila) throw new NoEncontrado('Esa nota de remision no existe');
+
+    if (fila.estatus !== 'cancelada') {
+      throw new Conflicto(
+        'NOTA_NO_CANCELADA',
+        'Solo se puede eliminar una nota que ya fue cancelada',
+        { estatus: fila.estatus },
+      );
+    }
+
+    if (!(await repo.eliminarNota(c, id))) {
+      throw new NoEncontrado('Esa nota de remision no existe');
+    }
+  });
+}
+
 // =====================================================================
 // FOLIOS
 // =====================================================================

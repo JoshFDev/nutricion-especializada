@@ -158,3 +158,10 @@ rutasNotasRemision.post(
   validarBody(cancelarNotaEsquema),
   ctrl.cancelar,
 );
+
+rutasNotasRemision.delete(
+  '/:id',
+  requierePermiso('notas.cancelar'),
+  validarParams(idNotaEsquema),
+  ctrl.eliminar,
+);

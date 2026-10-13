@@ -948,14 +948,26 @@
                   >
                     Devolver
                   </button>
-                  <button
-                    type="button"
-                    class="chico peligro"
-                    (click)="abrirCancelacion(nota)"
-                    [disabled]="!puedeCancelar() || !sePuedeCancelar(nota)"
-                  >
-                    Cancelar
-                  </button>
+                  @if (sePuedeCancelar(nota)) {
+                    <button
+                      type="button"
+                      class="chico peligro"
+                      (click)="abrirCancelacion(nota)"
+                      [disabled]="!puedeCancelar()"
+                    >
+                      Cancelar
+                    </button>
+                  }
+                  @if (sePuedeEliminar(nota)) {
+                    <button
+                      type="button"
+                      class="chico peligro"
+                      (click)="eliminar(nota)"
+                      [disabled]="!puedeCancelar()"
+                    >
+                      Eliminar
+                    </button>
+                  }
                 </td>
               </tr>
 

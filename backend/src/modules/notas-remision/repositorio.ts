@@ -757,3 +757,23 @@ export async function resumenDeTalonarios(cliente: PoolClient): Promise<ResumenT
     cancelados: Number(f.cancelados),
   }));
 }
+
+export async function eliminarNota(cliente: PoolClient, id: number): Promise<boolean> {
+  const filaNota = await consultarUno<{ folio_id: string }>(
+    cliente,
+    `SELECT folio_id FROM notas_remision WHERE id = $1 AND estatus = 'cancelada'`,
+    [id],
+  );
+  if (!filaNota) return false;
+
+  const folioId = Number(filaNota.folio_id);
+  const r = await consultar<{ id: string }>(
+    cliente,
+    `DELETE FROM notas_remision WHERE id = $1 AND estatus = 'cancelada' RETURNING id`,
+    [id],
+  );
+  if (r.length === 0) return false;
+
+  await cliente.query(`UPDATE folios SET estatus = 'disponible' WHERE id = $1`, [folioId]);
+  return true;
+}

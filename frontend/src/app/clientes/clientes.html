@@ -243,6 +243,26 @@
       <option value="Inactivo">Inactivos</option>
     </select>
 
+    <select
+      class="filtro"
+      aria-label="Filtrar por saldo"
+      [value]="saldoFiltro()"
+      (change)="filtrarSaldo($any($event.target).value)"
+    >
+      <option value="todos">Saldo: Todos</option>
+      <option value="adeudado">Con saldo</option>
+      <option value="sin_saldo">Sin saldo</option>
+      <option value="a_favor">Saldo a favor</option>
+    </select>
+
+    <button type="button" class="chico" (click)="alternarSaldos()" title="Mostrar/ocultar saldos">
+      @if (saldosOcultos()) {
+        <span class="icono" [innerHTML]="icono('eye')"></span>
+      } @else {
+        <span class="icono" [innerHTML]="icono('eye-off')"></span>
+      }
+    </button>
+
     @if (hayFiltros()) {
       <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
     }
@@ -309,7 +329,7 @@
               <td>{{ cliente.especie ?? '—' }}</td>
               <td class="rfc">{{ cliente.rfc ?? '—' }}</td>
               <td>{{ cliente.telefono ?? '—' }}</td>
-              <td class="num">{{ montoComoTexto(cliente.saldo_actual) }}</td>
+              <td class="num">{{ formatoSaldo(cliente.saldo_actual) }}</td>
               <td class="centro">
                 <span class="badge" [class.badge-apagado]="cliente.estatus === 'Inactivo'">
                   {{ cliente.estatus }}
@@ -344,6 +364,13 @@
             </tr>
           }
         </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="5" class="num">Total</td>
+            <td class="num">{{ formatoSaldo(totalSaldo()) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 

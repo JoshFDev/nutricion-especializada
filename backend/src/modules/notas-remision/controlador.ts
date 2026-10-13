@@ -133,6 +133,11 @@ export const controladorNotas = {
     );
   },
 
+  eliminar: async (req: Request, res: Response): Promise<void> => {
+    await servicio.eliminar(req.db, parametros<{ id: number }>(req).id);
+    res.status(204).send();
+  },
+
   exportarExcel: async (req: Request, res: Response): Promise<void> => {
     const bytes = await servicio.exportarExcel(req.db, consulta<ListarNotas>(req));
     const nombre = `notas-remision-${new Date().toISOString().split('T')[0]}.xlsx`;

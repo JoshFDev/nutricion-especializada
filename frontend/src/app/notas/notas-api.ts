@@ -729,6 +729,10 @@ export class NotasApi {
       ),
     );
   }
+
+  async eliminar(id: number): Promise<void> {
+    await firstValueFrom(this.http.delete(`${API}/notas-remision/${id}`));
+  }
 }
 
 /**

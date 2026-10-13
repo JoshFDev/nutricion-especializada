@@ -10,7 +10,7 @@ import {
   ULTIMA_FILA,
   leerPlantilla,
 } from './plantilla.js';
-import type { HojaCliente } from './modelo.js';
+import type { HojaCliente, RenglonHoja } from './modelo.js';
 
 /**
  * La hoja de estado de cuenta en Excel.
@@ -71,29 +71,46 @@ export async function excelEstadoCuenta(
 
   // Los movimientos, del mas antiguo al mas reciente. La hoja solo trae 20
   // filas y los que no cupieron se cuentan en `renglonesFuera` para avisar.
-  const visibles = cuenta.movimientos.slice(0, MAX_MOVIMIENTOS);
+  let renglones = (cuenta as { renglones?: RenglonHoja[] }).renglones;
+  if (!renglones || renglones.length === 0) {
+    renglones = cuenta.movimientos.map((m): RenglonHoja => {
+      if (m.esAbono) {
+        return {
+          fecha: m.fecha,
+          esVenta: false,
+          esAbono: true,
+          ...(m.metodo === undefined ? {} : { metodoAbono: m.metodo }),
+          montoAbono: m.monto,
+        };
+      }
+      return {
+        fecha: m.fecha,
+        esVenta: true,
+        esAbono: false,
+        ...(m.folio === undefined ? {} : { folio: m.folio }),
+        montoVenta: m.monto,
+      };
+    });
+  }
+  const visibles = renglones.slice(0, MAX_MOVIMIENTOS);
   for (let i = 0; i < visibles.length; i += 1) {
     const fila = PRIMERA_FILA + i;
     const movimiento = visibles[i];
-    // `noUncheckedIndexedAccess` marca el indice como posiblemente indefinido
-    // aunque el `for` no lo deje salir del arreglo; el guardia es solo para
-    // que el tipo lo sepa.
     if (movimiento === undefined) continue;
 
-    if (movimiento.esAbono) {
-      // El abono llena la mitad derecha: fecha, metodo y monto.
-      hoja.getCell(`${CELDAS_ABONO.fecha}${fila}`).value = movimiento.fecha;
-      hoja.getCell(`${CELDAS_ABONO.metodo}${fila}`).value = movimiento.metodo ?? '';
-      const montoAbono = hoja.getCell(`${CELDAS_ABONO.monto}${fila}`);
-      montoAbono.value = movimiento.monto;
-      montoAbono.numFmt = '#,##0.00';
-    } else {
-      // La venta llena la mitad izquierda: fecha, folio y monto.
+    if (movimiento.esVenta) {
       hoja.getCell(`${CELDAS_VENTA.fecha}${fila}`).value = movimiento.fecha;
       hoja.getCell(`${CELDAS_VENTA.folio}${fila}`).value = movimiento.folio ?? '';
       const montoVenta = hoja.getCell(`${CELDAS_VENTA.monto}${fila}`);
-      montoVenta.value = movimiento.monto;
+      montoVenta.value = movimiento.montoVenta ?? 0;
       montoVenta.numFmt = '#,##0.00';
+    }
+    if (movimiento.esAbono) {
+      hoja.getCell(`${CELDAS_ABONO.fecha}${fila}`).value = movimiento.fecha;
+      hoja.getCell(`${CELDAS_ABONO.metodo}${fila}`).value = movimiento.metodoAbono ?? '';
+      const montoAbono = hoja.getCell(`${CELDAS_ABONO.monto}${fila}`);
+      montoAbono.value = movimiento.montoAbono ?? 0;
+      montoAbono.numFmt = '#,##0.00';
     }
   }
 

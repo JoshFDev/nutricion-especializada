@@ -228,6 +228,7 @@ export async function hoja(
     cliente_id: nuevo.cliente_id,
     cliente: nuevo.cliente,
     movimientos,
+    renglones,
   };
 
   const { bytes, renglonesFuera } = await excel.excelEstadoCuenta(cuenta);

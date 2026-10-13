@@ -58,6 +58,6 @@ export interface RenglonHoja {
   folio?: string;
   montoVenta?: number;
   esAbono: boolean;
-  metodoAbono?: string;
+  metodoAbono?: string | null;
   montoAbono?: number;
 }

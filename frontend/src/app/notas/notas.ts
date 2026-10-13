@@ -265,8 +265,16 @@ export class Notas {
   readonly cargandoLista = signal(false);
   readonly errorLista = signal<string | null>(null);
 
-  /** `'todo'` no se manda: es la ausencia de periodo. Ver `Periodo`. */
-  readonly periodo = signal<Periodo | 'todo'>('hoy');
+  /**
+   * `'todo'` no se manda: es la ausencia de periodo. Ver `Periodo`.
+   *
+   * Arranca en `'todo'` y NO en `'hoy'`: con `'hoy'` la tabla se abria
+   * mostrando solo las notas del dia de hoy, y al volver a entrar otro dia
+   * (o al cambiar de turno) las notas ya emitidas desaparecian de la vista
+   * y parecia que se habian borrado. Las notas estan en la base; el filtro
+   * era lo que las escondia. Quien quiera acotar al dia lo elige a mano.
+   */
+  readonly periodo = signal<Periodo | 'todo'>('todo');
   readonly buscar = signal('');
 
   /** Filtro de fechas personalizado (AAAA-MM-DD). */

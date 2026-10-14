@@ -1043,8 +1043,9 @@
                         (input)="motivo.set($any($event.target).value)"
                       ></textarea>
                       <p class="ayuda">
-                        Es obligatorio: cancelar la {{ notaCancelando.folio }} devuelve la
-                        mercancia.
+                        El motivo es obligatorio y queda en la nota. Cancelar la
+                        {{ notaCancelando.folio }} regresa la mercancia al inventario y deja el
+                        importe a favor del cliente.
                       </p>
                       <div class="acciones">
                         <button
@@ -1053,9 +1054,7 @@
                           [disabled]="!motivoValido()"
                           (click)="confirmarCancelacion()"
                         >
-                          {{
-                            guardandoCancelacion() ? 'Cancelando...' : 'Confirmar la cancelacion'
-                          }}
+                          {{ guardandoCancelacion() ? 'Cancelando...' : 'Continuar' }}
                         </button>
                         <button type="button" (click)="cerrarCancelacion()">No</button>
                       </div>

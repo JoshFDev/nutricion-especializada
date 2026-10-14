@@ -21,6 +21,13 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-titulo">
         <h3 id="confirm-titulo">{{ titulo() }}</h3>
         <p>{{ mensaje() }}</p>
+        @if (detalles().length > 0) {
+          <ul class="detalles">
+            @for (detalle of detalles(); track detalle) {
+              <li>{{ detalle }}</li>
+            }
+          </ul>
+        }
         <div class="acciones">
           <button type="button" class="chico" (click)="cerrar()">Cancelar</button>
           <button
@@ -76,6 +83,17 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
         margin: 0 0 1.25rem;
         color: var(--texto-suave);
         line-height: 1.5;
+      }
+
+      .detalles {
+        margin: -0.5rem 0 1.25rem;
+        padding-left: 1.25rem;
+        color: var(--texto-suave);
+        line-height: 1.5;
+      }
+
+      .detalles li + li {
+        margin-top: 0.25rem;
       }
 
       .acciones {
@@ -167,6 +185,7 @@ export class ConfirmModal {
   mensaje = signal('');
   textoConfirmar = signal('Confirmar');
   variante = signal<'peligro' | 'advertencia' | 'normal'>('normal');
+  detalles = signal<string[]>([]);
 
   private resolveFn: ((value: boolean) => void) | null = null;
 
@@ -175,11 +194,13 @@ export class ConfirmModal {
     mensaje: string;
     textoConfirmar?: string;
     variante?: 'peligro' | 'advertencia' | 'normal';
+    detalles?: string[];
   }): Promise<boolean> {
     this.titulo.set(opciones.titulo ?? 'Confirmar');
     this.mensaje.set(opciones.mensaje);
     this.textoConfirmar.set(opciones.textoConfirmar ?? 'Confirmar');
     this.variante.set(opciones.variante ?? 'normal');
+    this.detalles.set(opciones.detalles ?? []);
     this.visible.set(true);
 
     return new Promise((resolve) => {

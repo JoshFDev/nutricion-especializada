@@ -1439,6 +1439,19 @@ export class Notas {
     const nota = this.cancelando();
     if (nota === null || !this.motivoValido()) return;
 
+    const ok = await this.confirmModal().abrir({
+      titulo: 'Confirmar la cancelacion',
+      mensaje: `Al confirmar la cancelacion de la nota ${nota.folio} ocurrira lo siguiente:`,
+      detalles: [
+        'Se cancela la nota y ya no se puede corregir ni cobrar.',
+        'La mercancia regresa al inventario.',
+        `El importe de ${this.montoComoTexto(nota.subtotal)} se le devuelve a ${nota.cliente} como saldo a favor: queda en su cuenta y se descuenta de lo que deba.`,
+      ],
+      textoConfirmar: 'Si, cancelar la nota',
+      variante: 'peligro',
+    });
+    if (!ok) return;
+
     this.guardandoCancelacion.set(true);
     this.errorLista.set(null);
     try {

@@ -163,21 +163,34 @@
         <button type="button" (click)="generarHoja('mes')">Este mes</button>
       </div>
       <div class="especificas">
-        <label
-          >Fecha inicio
+        <div class="campo-fecha">
+          <label for="f-inicio">Fecha inicio</label>
           <input
+            id="f-inicio"
             type="date"
+            class="fecha-input"
             [value]="fechaInicio()"
             (change)="fechaInicio.set($any($event.target).value)"
-        /></label>
-        <label
-          >Fecha fin
+          />
+        </div>
+        <div class="campo-fecha">
+          <label for="f-fin">Fecha fin</label>
           <input
+            id="f-fin"
             type="date"
+            class="fecha-input"
             [value]="fechaFin()"
             (change)="fechaFin.set($any($event.target).value)"
-        /></label>
-        <button type="button" (click)="generarHojaFechas()">Fechas específicas</button>
+          />
+        </div>
+        <button
+          type="button"
+          class="primario"
+          (click)="generarHojaFechas()"
+          [disabled]="!fechaInicio() || !fechaFin()"
+        >
+          Fechas específicas
+        </button>
       </div>
       <div class="dialogo-botones">
         <button type="button" class="chico" (click)="cerrarDialogo()">Cancelar</button>

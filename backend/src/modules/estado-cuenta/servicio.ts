@@ -172,7 +172,8 @@ export async function listar(
 export async function hoja(
   cliente: PoolClient,
   clienteId: number,
-  rango: 'todo' | 'semana' | 'mes' = 'todo',
+  rango: 'todo' | 'semana' | 'mes' | 'personalizado' = 'todo',
+  opts?: { fecha_inicio?: string; fecha_fin?: string },
 ): Promise<{ bytes: Buffer; nombreArchivo: string; renglonesFuera: number }> {
   const nuevo = await repo.buscarCliente(cliente, clienteId);
   if (nuevo === null) {
@@ -181,17 +182,24 @@ export async function hoja(
 
   let { ventas, abonos } = await repo.leerMovimientos(cliente, clienteId);
   const hoy = new Date();
-  let inicio: Date | null = null;
+  let desdeIso: string | null = null;
   if (rango === 'semana') {
     const dia = hoy.getDay();
-    inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - dia);
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - dia);
+    desdeIso = inicio.toISOString().split('T')[0]!;
   } else if (rango === 'mes') {
-    inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    desdeIso = inicio.toISOString().split('T')[0]!;
+  } else if (rango === 'personalizado' && opts?.fecha_inicio) {
+    desdeIso = opts.fecha_inicio;
   }
-  if (inicio !== null) {
-    const desdeIso = inicio.toISOString().split('T')[0]!;
+  if (desdeIso !== null) {
     ventas = ventas.filter((v) => v.fecha >= desdeIso);
     abonos = abonos.filter((a) => a.fecha >= desdeIso);
+  }
+  if (rango === 'personalizado' && opts?.fecha_fin) {
+    ventas = ventas.filter((v) => v.fecha <= opts.fecha_fin);
+    abonos = abonos.filter((a) => a.fecha <= opts.fecha_fin);
   }
   const aplicaciones = await repo.leerAplicacionesPorCliente(cliente, clienteId);
   const renglones = armarRenglones(

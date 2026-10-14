@@ -90,10 +90,19 @@ export class EstadoCuentaApi {
    * que se puede leer de una respuesta que es un archivo y no JSON. La
    * pantalla lo usa para avisar que la cuenta trae mas de lo que cabe.
    */
-  async abrirHoja(clienteId: number, rango: 'todo' | 'semana' | 'mes' = 'todo'): Promise<number> {
+  async abrirHoja(
+    clienteId: number,
+    rango: 'todo' | 'semana' | 'mes' | 'personalizado' = 'todo',
+    opts?: { fecha_inicio?: string; fecha_fin?: string },
+  ): Promise<number> {
+    const params: any = { rango };
+    if (rango === 'personalizado') {
+      if (opts?.fecha_inicio) params.fecha_inicio = opts.fecha_inicio;
+      if (opts?.fecha_fin) params.fecha_fin = opts.fecha_fin;
+    }
     const respuesta: HttpResponse<Blob> = await firstValueFrom(
       this.http.get(`${API}/estado-cuenta/${clienteId}/hoja`, {
-        params: { rango },
+        params,
         responseType: 'blob',
         observe: 'response',
       }),

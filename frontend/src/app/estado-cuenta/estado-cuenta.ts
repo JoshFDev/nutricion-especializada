@@ -232,6 +232,7 @@ export class EstadoCuenta {
   }
 
   async generarHoja(rango: 'todo' | 'semana' | 'mes'): Promise<void> {
+    if (!confirm('¿Generar el estado de cuenta en Excel?')) return;
     const c = this.clienteSeleccionado();
     if (c === null) return;
     if (this.bajando() !== null) return;
@@ -256,9 +257,16 @@ export class EstadoCuenta {
     if (c === null) return;
     if (!this.fechaInicio() || !this.fechaFin()) return;
     if (this.bajando() !== null) return;
+    if (this.fechaInicio() > this.fechaFin()) {
+      this.avisos.error('La fecha de inicio debe ser anterior o igual a la fecha de fin');
+      return;
+    }
     this.bajando.set(c.cliente_id);
     try {
-      const fuera = await this.api.abrirHoja(c.cliente_id, 'todo');
+      const fuera = await this.api.abrirHoja(c.cliente_id, 'personalizado', {
+        fecha_inicio: this.fechaInicio(),
+        fecha_fin: this.fechaFin(),
+      });
       if (fuera > 0) {
         this.avisos.advertencia(
           `El estado de cuenta trae ${fuera} movimiento${fuera === 1 ? '' : 's'} que no caben en la hoja.`,

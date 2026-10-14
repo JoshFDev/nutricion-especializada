@@ -26,11 +26,14 @@ export const controladorEstadoCuenta = {
    * frontend puede avisar que la cuenta tiene mas movimientos de los que caben.
    */
   hoja: async (req: Request, res: Response): Promise<void> => {
-    const p = parametros<HojaEstadoCuenta>(req);
+    const p = parametros<HojaEstadoCuenta>(req) as any;
     const { bytes, nombreArchivo, renglonesFuera } = await servicio.hoja(
       req.db,
       p.id,
       p.rango ?? 'todo',
+      p.rango === 'personalizado'
+        ? { fecha_inicio: p.fecha_inicio, fecha_fin: p.fecha_fin }
+        : undefined,
     );
     res
       .setHeader(

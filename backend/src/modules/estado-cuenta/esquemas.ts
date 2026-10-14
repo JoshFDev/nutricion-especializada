@@ -36,8 +36,30 @@ export const listarEstadoCuentaEsquema = z
 
 /** El `:id` de la ruta de la hoja. */
 export const hojaEstadoCuentaEsquema = z
-  .object({ id: idPositivo, rango: z.enum(['todo', 'semana', 'mes']).optional() })
-  .strict();
+  .object({
+    id: idPositivo,
+    rango: z.enum(['todo', 'semana', 'mes', 'personalizado']).optional(),
+    fecha_inicio: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de fecha inválido (AAAA-MM-DD)')
+      .optional(),
+    fecha_fin: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de fecha inválido (AAAA-MM-DD)')
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (datos) => {
+      if (datos.fecha_inicio && datos.fecha_fin && datos.fecha_inicio > datos.fecha_fin) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'La fecha de inicio debe ser anterior o igual a la fecha de fin' },
+  );
 
 export const generalEstadoCuentaEsquema = z
   .object({

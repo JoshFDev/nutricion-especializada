@@ -1266,6 +1266,104 @@ button.peligro:not(:disabled):hover {
   margin-left: 0.375rem;
 }
 
+/*
+ * ------------------------------------------------- Notas emitidas (la lista)
+ *
+ * La lista de notas lleva su propio modificador (`.tabla-notas`) porque es la
+ * unica tabla de la pantalla que se repite 25, 50 o 100 veces y la que se lee
+ * de reojo desde el mostrador. El modificador permite darle su propio reparto
+ * de anchos y su propia jerarquia de texto sin tocar las tablas de la captura
+ * ni la del detalle, que comparten la clase `.tabla`.
+ *
+ * Las columnas son: Folio, Cliente, Fecha, Kilos, Total, Estatus, Acciones.
+ *
+ *  - Folio, Fecha, Estatus y Acciones se aprietan a su contenido (`width: 1%`
+ *    + `nowrap`): son datos cortos y con ancho fijo, y dejarlos crecer era lo
+ *    que estiraba la fila y desperdiciaba el ancho en huecos.
+ *  - Cliente se queda con TODO lo que sobra (`width: auto`, con las otras
+ *    apretadas): es el dato que se busca cuando no se trae el folio a mano, y
+ *    el unico que puede partirse en dos lineas sin desalinear el resto.
+ *  - Kilos y Total tienen un ancho fijo para que las cifras queden en columna.
+ */
+.tabla-notas {
+  table-layout: auto;
+}
+
+.tabla-pos .tabla-notas thead th {
+  /*
+   * La cabecera es sticky y VA OPACA. Venia transparente por la regla general
+   * de `.tabla-pos`, y con la cabecera pegada eso dejaba ver las filas que
+   * pasaban por detras al bajar: el texto de la nota se traslucia bajo el
+   * titulo de la columna. Con el fondo de la tarjeta, la fila se desliza por
+   * debajo y el encabezado la tapa.
+   */
+  background: var(--superficie);
+  box-shadow: 0 1px 0 var(--borde);
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--borde);
+  letter-spacing: 0.05em;
+}
+
+.tabla-notas tbody td {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Columnas que se ajustan a lo que miden y no se parten. */
+.tabla-notas th:first-child,
+.tabla-notas td:first-child,
+.tabla-notas th:nth-child(3),
+.tabla-notas td:nth-child(3),
+.tabla-notas th:nth-child(6),
+.tabla-notas td:nth-child(6) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* Cifras en columna: ancho fijo y alineadas a la derecha. */
+.tabla-notas th:nth-child(4),
+.tabla-notas td:nth-child(4),
+.tabla-notas th:nth-child(5),
+.tabla-notas td:nth-child(5) {
+  width: 7rem;
+  white-space: nowrap;
+}
+
+/* El cliente se lleva el ancho que sobra y puede partirse en dos lineas. */
+.tabla-pos .tabla-notas .col-cliente {
+  width: auto;
+}
+
+/*
+ * El cliente deja de ser letra tenue: en la lista, la mayoria de las veces se
+ * busca la nota por el nombre y no por el folio, asi que va en la tinta y con
+ * un peso medio. La fecha sigue tenue (es contexto, no identidad).
+ */
+.tabla-pos .tabla-notas tbody td:nth-child(2) {
+  color: var(--texto);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* El folio con el que se busca la nota: el mas negro de la fila. */
+.tabla-pos .tabla-notas tbody td:first-child {
+  color: var(--texto);
+  font-weight: 700;
+}
+
+/*
+ * Pasar la mano por una fila la tiñe de azul, que es una señal que el rayado
+ * gris de las filas pares no da (antes el hover caia en el MISMO gris que el
+ * rayado, asi que en la mitad de las filas la señal no se veia). La fila recien
+ * guardada conserva su verde (`tr.resaltada`), y las filas de detalle, su
+ * propio fondo: por eso el `:not(.fila-detalle)`.
+ */
+.tabla-notas tbody tr:not(.fila-detalle):hover > td {
+  background: var(--acento-suave);
+}
+
 /* ---------------------------------------------------------- IMPRESIÓN */
 /*
  * Al imprimir la lista de notas emitidas solo interesa la informacion

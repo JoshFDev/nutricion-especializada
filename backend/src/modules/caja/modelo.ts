@@ -143,6 +143,47 @@ export interface CierreDeCaja {
   cuentas: CierreCuenta[];
 }
 
+/**
+ * Una fila cruda del corte: los NUMERIC y el count llegan como texto.
+ *
+ * Solo hay entrada y salida. El corte no arquea nada -- no hay fondo ni
+ * esperado --: es lo que se movio entre dos momentos, y el `creado_en` de la
+ * captura es lo que decide si cae dentro.
+ */
+export interface FilaCorte {
+  cuenta_id: number;
+  cuenta: string;
+  tipo: TipoCuenta;
+  ingresos: string;
+  egresos: string;
+  movimientos: string;
+}
+
+/** Lo que entro y salio de UNA cuenta dentro del rango del corte. */
+export interface CorteCuenta {
+  cuenta_id: number;
+  cuenta: string;
+  tipo: TipoCuenta;
+  ingresos: number;
+  egresos: number;
+  movimientos: number;
+}
+
+/**
+ * El corte de caja de un rango de dia y hora.
+ *
+ * `desde` y `hasta` son el rango ya resuelto (lo que el servidor uso, con sus
+ * valores por defecto incluidos) y `generado_en` la marca de cuando se pidio:
+ * los tres se muestran en la pantalla, porque un corte de un rango que no se
+ * sabe cual fue no se puede leer en voz alta junto a la caja.
+ */
+export interface CorteDeCaja {
+  desde: string;
+  hasta: string;
+  generado_en: string;
+  cuentas: CorteCuenta[];
+}
+
 export interface Listado<T> {
   datos: T[];
   total: number;

@@ -110,6 +110,35 @@ export interface CierreDeCaja {
   cuentas: CierreCuenta[];
 }
 
+/**
+ * `caja/modelo.ts` -> `CorteCuenta`, lo que entró y salió de una cuenta dentro
+ * del rango del corte.
+ *
+ * Sin fondo ni esperado, a diferencia del cierre: el corte no arquea la cuenta,
+ * solo mira la ventana de horas.
+ */
+export interface CorteCuenta {
+  cuenta_id: number;
+  cuenta: string;
+  tipo: TipoCuenta;
+  ingresos: number;
+  egresos: number;
+  movimientos: number;
+}
+
+/**
+ * `caja/modelo.ts` -> `CorteDeCaja`.
+ *
+ * `desde` y `hasta` son el rango ya resuelto por el servidor (con sus valores
+ * por defecto) y `generado_en` la marca de cuando se pidió.
+ */
+export interface CorteDeCaja {
+  desde: string;
+  hasta: string;
+  generado_en: string;
+  cuentas: CorteCuenta[];
+}
+
 export interface Listado<T> {
   datos: T[];
   total: number;
@@ -364,6 +393,26 @@ export function totalesDeCierre(cuentas: CierreCuenta[]): {
   );
 }
 
+/**
+ * Los totales del corte, para la línea de arriba.
+ *
+ * Solo lo que entró y lo que salió: el corte no arquea la cuenta, así que no
+ * hay fondo ni esperado que sumar. Es la misma suma del resumen pero sobre la
+ * ventana de horas, que es lo único que cambia.
+ */
+export function totalesDeCorte(cuentas: CorteCuenta[]): {
+  ingresos: number;
+  egresos: number;
+} {
+  return cuentas.reduce(
+    (acumulado, cuenta) => ({
+      ingresos: redondearMonto(acumulado.ingresos + cuenta.ingresos),
+      egresos: redondearMonto(acumulado.egresos + cuenta.egresos),
+    }),
+    { ingresos: 0, egresos: 0 },
+  );
+}
+
 // ---------------------------------------------------------------- las llamadas
 
 @Injectable({ providedIn: 'root' })
@@ -468,6 +517,21 @@ export class CajaApi {
     const params: Record<string, string> = {};
     if (fecha) params['fecha'] = fecha;
     return firstValueFrom(this.http.get<CierreDeCaja>(`${API}/caja/cierre`, { params }));
+  }
+
+  /**
+   * El corte de caja de un rango de día y hora.
+   *
+   * Los dos momentos son opcionales: sin `desde` el backend arranca en la
+   * medianoche de hoy y sin `hasta` termina ahora, los dos según el reloj de la
+   * base. La pantalla manda los valores tal como salen del `datetime-local`
+   * (`AAAA-MM-DDTHH:MM`), que es el formato que el esquema acepta.
+   */
+  async corte(desde?: string, hasta?: string): Promise<CorteDeCaja> {
+    const params: Record<string, string> = {};
+    if (desde) params['desde'] = desde;
+    if (hasta) params['hasta'] = hasta;
+    return firstValueFrom(this.http.get<CorteDeCaja>(`${API}/caja/corte`, { params }));
   }
 
   /** Clientes para el buscador del editor. */

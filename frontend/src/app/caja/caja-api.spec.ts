@@ -8,9 +8,11 @@ import {
   problemaDeNombreCuenta,
   saldoNegativo,
   totalesDeCierre,
+  totalesDeCorte,
   totalesDeResumen,
   unaLinea,
   type CierreCuenta,
+  type CorteCuenta,
   type EditorMovimiento,
   type ResumenCuenta,
 } from './caja-api';
@@ -243,5 +245,36 @@ describe('los totales del cierre', () => {
     ]);
     expect(totales.fondo).toBe(0.3);
     expect(totales.esperado).toBe(0.3);
+  });
+});
+
+describe('los totales del corte', () => {
+  function corte(over: Partial<CorteCuenta>): CorteCuenta {
+    return {
+      cuenta_id: 1,
+      cuenta: 'Caja chica',
+      tipo: 'efectivo',
+      ingresos: 0,
+      egresos: 0,
+      movimientos: 0,
+      ...over,
+    };
+  }
+
+  it('suma solo lo que entró y lo que salió, sin fondo ni esperado', () => {
+    const totales = totalesDeCorte([
+      corte({ ingresos: 1000, egresos: 400 }),
+      corte({ ingresos: 250, egresos: 900 }),
+    ]);
+    expect(totales).toEqual({ ingresos: 1250, egresos: 1300 });
+  });
+
+  it('sin cuentas son cero, no NaN', () => {
+    expect(totalesDeCorte([])).toEqual({ ingresos: 0, egresos: 0 });
+  });
+
+  it('se suma con redondeo de centavo', () => {
+    const totales = totalesDeCorte([corte({ ingresos: 0.1 }), corte({ ingresos: 0.2 })]);
+    expect(totales.ingresos).toBe(0.3);
   });
 });

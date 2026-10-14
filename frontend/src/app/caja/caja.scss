@@ -32,6 +32,18 @@
   display: block;
 }
 
+/*
+ * Las acciones de la cabecera se envuelven.
+ *
+ * El partial las pone en una fila sin `flex-wrap`, y esta pantalla es la que
+ * más botones tiene (el corte, el cierre, las cuentas y el alta): en un
+ * teléfono, cuatro botones no caben en un renglón y sin esto se desbordan a lo
+ * ancho. Se envolvieron en dos renglones antes que salirse de la pantalla.
+ */
+.acciones-cabecera {
+  flex-wrap: wrap;
+}
+
 /* --------------------------------------------------------------- la tarjeta */
 
 /*
@@ -43,6 +55,14 @@
  * dejaría de cuadrar con lo que hay en la tabla sin que nada lo dijera.
  */
 .resumen {
+  /*
+   * `display: block` explícito, y no es de más: `nucleo/pantallas.scss` define
+   * un `.cierre` que es un grid de dos columnas (la cabecera y las cifras de
+   * los editores). Esta pantalla reusa `.cierre` como simple filo de color, así
+   * que sin esto el grid del partial se metía en la tarjeta y la partía en dos
+   * columnas. Esta regla va DESPUÉS del partial, así que gana.
+   */
+  display: block;
   max-width: 52rem;
   margin-bottom: 1.25rem;
   padding: 1rem 1.25rem;
@@ -295,6 +315,29 @@
   font-weight: 600;
 }
 
+/* ------------------------------------------------------------------- corte */
+
+/*
+ * El corte de caja, arriba del periodo.
+ *
+ * Misma caja que `.resumen` (y por eso el mismo `display`), y se distingue con
+ * el mismo filo que el cierre: son las dos tarjetas que se leen de pie junto a
+ * la caja. Solo dos cifras —entró y salió— porque el corte no arquea la cuenta
+ * y no tiene fondo ni esperado que sumar.
+ */
+.corte {
+  border-left: 3px solid var(--acento);
+}
+
+.corte .cifras {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* El atajo de "hoy hasta ahora" vive pegado a las fechas del corte. */
+.corte .fechas .chico {
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------------ borrar */
 
 /*
@@ -346,15 +389,34 @@
 }
 
 @media (max-width: 40rem) {
+  /*
+   * Las columnas van a una. Se incluyen `.cierre .cifras.cuatro` y
+   * `.corte .cifras` con su clase de tarjeta porque el partial y el `@use`
+   * dejan esos selectores con más especificidad que un `.cifras` pelado: sin
+   * nombrarlos, en un teléfono el cierre seguía en cuatro columnas y el corte
+   * en dos.
+   */
   .cifras,
-  .cifras.cuatro {
+  .cifras.cuatro,
+  .cierre .cifras.cuatro,
+  .corte .cifras {
     grid-template-columns: 1fr;
   }
 
+  /*
+   * En las tablas de cinco columnas (el periodo y el cierre) se esconden las
+   * del medio para que quepa lo importante. La del corte tiene TRES columnas
+   * (cuenta, entró, salió) y ahí el "entró" es una de las dos cifras que
+   * importan, así que se vuelve a mostrar.
+   */
   .por-cuenta .num:nth-child(2),
   .por-cuenta td:nth-child(2),
   .por-cuenta .num:nth-child(5),
   .por-cuenta td:nth-child(5) {
     display: none;
+  }
+
+  .corte .por-cuenta td:nth-child(2) {
+    display: table-cell;
   }
 }

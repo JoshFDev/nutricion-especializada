@@ -3,6 +3,7 @@ import { requierePermiso, requiereSesion } from '../../middleware/permisos.js';
 import { validarBody, validarParams, validarQuery } from '../../core/validacion.js';
 import {
   cierreEsquema,
+  corteEsquema,
   crearCuentaEsquema,
   crearMovimientoEsquema,
   idCuentaEsquema,
@@ -116,6 +117,16 @@ rutasCaja.get(
   validarQuery(cierreEsquema),
   controlador.cierre,
 );
+
+/**
+ * El corte de caja de un rango de dia y hora.
+ *
+ * Mismo permiso que el cierre (`caja.ver`) y por la misma razon: ver cuanto
+ * entro y salio en una ventana no es capturar ni borrar nada, y quien ya ve
+ * los movimientos ya puede hacer esta suma. Ver la nota del corte en
+ * `servicio.ts` para la diferencia con el cierre.
+ */
+rutasCaja.get('/corte', requierePermiso('caja.ver'), validarQuery(corteEsquema), controlador.corte);
 
 rutasCaja.get(
   '/categorias',

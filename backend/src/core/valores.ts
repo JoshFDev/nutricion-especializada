@@ -84,6 +84,45 @@ export const fecha = (campo: string) =>
     }, `${campo} no es una fecha real`);
 
 /**
+ * Fechas CON hora, como las manda un `datetime-local`: `AAAA-MM-DDTHH:MM`.
+ *
+ * El separador es la `T` porque es lo que produce el control del navegador, y
+ * el espacio en blanco tambien se acepta porque es como lo devuelve
+ * `momentoEnLaBase` (`AAAA-MM-DD HH:MM`): asi el mismo validador sirve para lo
+ * que teclea la persona y para lo que ya viene de la base.
+ */
+const MOMENTO = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}$/;
+
+/**
+ * Un dia y una hora, normalizados a `AAAA-MM-DD HH:MM`.
+ *
+ * La razon para validar el TEXTO antes de castear es la misma que en `fecha`:
+ * `new Date('2026-02-30T08:00')` se normaliza al 2 de marzo sin decir nada, y
+ * el operador creeria que guardo el 30 de febrero. Aqui ademas se valida la
+ * hora (0-23) y el minuto (0-59), que `Date` tambien normalizaria en silencio.
+ *
+ * Se devuelve con espacio y no con `T` porque ese es el formato con el que
+ * Postgres compara un `timestamp` sin huso, y es el que `momentoEnLaBase` ya
+ * usa: dos formatos para lo mismo son dos lugares donde un dia se corre.
+ */
+export const momento = (campo: string) =>
+  z
+    .string()
+    .regex(MOMENTO, `${campo} debe tener formato AAAA-MM-DD HH:MM`)
+    .transform((v) => v.replace('T', ' '))
+    .refine((v) => {
+      const [textoDia, textoHora] = v.split(' ') as [string, string];
+      const [anio, mes, dia] = textoDia.split('-').map(Number) as [number, number, number];
+      const [hora, minuto] = textoHora.split(':').map(Number) as [number, number];
+      if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return false;
+      if (hora > 23 || minuto > 59) return false;
+      const utc = new Date(Date.UTC(anio, mes - 1, dia));
+      return (
+        utc.getUTCFullYear() === anio && utc.getUTCMonth() === mes - 1 && utc.getUTCDate() === dia
+      );
+    }, `${campo} no es una fecha y hora reales`);
+
+/**
  * Cantidades y montos: positivos, con sus decimales, y manipulados como
  * TEXTO de punta a punta.
  *

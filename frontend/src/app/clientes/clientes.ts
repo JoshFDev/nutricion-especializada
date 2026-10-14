@@ -85,7 +85,9 @@ export class Clientes {
   readonly error = signal<string | null>(null);
   readonly buscador = signal('');
   readonly estatusFiltro = signal<'todos' | 'Activo' | 'Inactivo'>('todos');
-  readonly saldoFiltro = signal<'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado'>('todos');
+  readonly saldoFiltro = signal<'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado'>(
+    'todos',
+  );
   readonly saldosOcultos = signal(false);
 
   readonly especies = signal<Especie[]>([]);
@@ -282,7 +284,9 @@ export class Clientes {
     return estatus === 'todos' ? undefined : estatus;
   });
 
-  private readonly saldoConsulta = computed<'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado'>(() => {
+  private readonly saldoConsulta = computed<
+    'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado'
+  >(() => {
     return this.saldoFiltro();
   });
 

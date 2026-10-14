@@ -104,7 +104,10 @@ const paginacion = z.object({
 export const listarClientesEsquema = paginacion.extend({
   buscar: z.string().trim().min(1).max(200).optional(),
   estatus: estatusCliente.optional(),
-  saldo: z.enum(['todos', 'con_saldo', 'sin_saldo', 'a_favor', 'adeudado']).optional().default('todos'),
+  saldo: z
+    .enum(['todos', 'con_saldo', 'sin_saldo', 'a_favor', 'adeudado'])
+    .optional()
+    .default('todos'),
 });
 
 export const idClienteEsquema = z.object({

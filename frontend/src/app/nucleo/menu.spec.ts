@@ -82,8 +82,8 @@ describe('menuPara', () => {
     const menu = menuPara(new Set(['auditoria.ver', 'notas.ver', 'caja.ver']));
     expect(menu.flatMap((g) => g.modulos.map((m) => m.ruta))).toEqual([
       'notas',
-      'caja',
       'auditoria',
+      'caja',
     ]);
   });
 

@@ -33,18 +33,21 @@ clientes y proveedores, y flujo de caja/bancos.
 **Pendiente**
 
 - [x] Corregir los 11 bugs de la Avance 1 (ver "Bugs de la Avance 1: estado")
-- [x] API REST en Express (16 módulos: `salud`, `auth`, `catalogo`,
+- [x] API REST en Express (16 módulos de negocio, más `salud` y `auth`:
+      `catalogo` —que agrupa `especies`, `categorias` y `almacenes`—,
       `clientes`, `usuarios`, `productos`, `precios`, `notas-remision`,
-      `pagos`, `proveedores`, `compras`, `inventario`, `caja`,
-      `facturacion`, `auditoria` y `direcciones`)
+      `direcciones`, `pagos`, `proveedores`, `compras`, `inventario`,
+      `caja`, `facturacion`, `auditoria`, `reportes` y `estado-cuenta`)
 - [x] Login + endpoint de permisos (usar `fn_tiene_permiso`)
 - [x] Generación de PDF de notas de remisión
 - [x] Frontend en Angular: sesion, login, cambio de contrasena, marco con
-      menu por permisos y los 14 modulos enrutados
-- [x] Pantallas del negocio: los 14 modulos tienen pantalla (ver
+      menu por permisos y los 16 modulos enrutados
+- [x] Pantallas del negocio: los 16 modulos tienen pantalla (ver
       `frontend/README.md`). El POS es el mas grande: cliente, renglones,
       direcciones de entrega, totales e impresion del PDF
-- [ ] Modulo de reportes (las vistas ya existen, no hay endpoints)
+- [x] Modulo de reportes (existencia, consumo semanal y estado de cuenta)
+- [x] Estado de cuenta por cliente, con su hoja en Excel y el export masivo
+- [x] Almacenes como catalogo editable (antes era un `almacen_id: 1` fijo)
 - [ ] Deploy (base de datos + backend + frontend)
 
 > **La API no tiene rate limit**, ni general ni en el login: mientras la
@@ -80,7 +83,13 @@ nutricion-especializada-pos/
 │   │   ├── 0009_compras_motivo_cancelacion.sql
 │   │   ├── 0010_facturas_auditoria_permisos.sql
 │   │   ├── 0011_direcciones_entrega.sql        # lista de direcciones del POS
-│   │   └── 0012_folios_formato_serie_activa.sql # serie del talonario puede ir vacia
+│   │   ├── 0012_folios_formato_serie_activa.sql # serie del talonario puede ir vacia
+│   │   ├── 0013_usuarios_fondo_login.sql       # fondo de login por usuario
+│   │   ├── 0014_usuarios_fondo_establo.sql     # agrega 'establo' a los fondos validos
+│   │   ├── 0015_permisos_almacenes.sql         # los almacenes dejan de ser un id fijo
+│   │   ├── 0016_permisos_reportes.sql          # expone las tres vistas de reportes
+│   │   ├── 0017_permisos_estado_cuenta.sql     # cobranza por cliente + hoja Excel
+│   │   └── 0018_notas_cascade.sql              # borrar una nota cancelada limpia sus hijos
 │   ├── seeds/
 │   │   └── seed_demo.sql                  # datos de prueba (no reales)
 │   └── tests/                             # pruebas en SQL puro
@@ -89,13 +98,14 @@ nutricion-especializada-pos/
 │   │   ├── core/                          # errores tipados, validación con Zod
 │   │   ├── db/                            # pool y cliente por request
 │   │   ├── middleware/                    # sesión, permisos, manejador de errores
-│   │   ├── modules/                       # salud, auth, catalogo, clientes,
+│   │   ├── modules/                       # salud, auth, catalogo (especies,
+│   │   │                                  #   categorias, almacenes), clientes,
 │   │   │                                  #   usuarios, productos, precios,
-│   │   │                                  #   notas-remision, pagos,
-│   │   │                                  #   proveedores, compras,
-│   │   │                                  #   inventario, caja,
-│   │   │                                  #   facturacion, auditoria,
-│   │   │                                  #   direcciones
+│   │   │                                  #   notas-remision, direcciones,
+│   │   │                                  #   pagos, proveedores, compras,
+│   │   │                                  #   inventario, caja, facturacion,
+│   │   │                                  #   auditoria, reportes,
+│   │   │                                  #   estado-cuenta
 │   │   ├── config/                        # entorno validado con Zod
 │   │   ├── app.ts                         # composición: orden de middlewares
 │   │   └── index.ts                       # arranque y cierre del pool
@@ -103,10 +113,10 @@ nutricion-especializada-pos/
 │       ├── api.test.mjs                   # 841 pruebas contra la API real
 │       └── unit/                          # pruebas de esquemas y servicios
 └── frontend/                              # Angular 22: sesion, login, marco
-│                                         #   y las 14 pantallas del negocio
+│                                         #   y las 16 pantallas del negocio
 ```
 
-> El frontend ya tiene las catorce pantallas y ninguna con el aviso de
+> El frontend ya tiene las dieciseis pantallas y ninguna con el aviso de
 > "pantalla pendiente". El menu y las rutas salen de la MISMA tabla
 > (`frontend/src/app/nucleo/menu.ts`), filtrada por permisos, asi que sigue
 > sin poder existir un enlace a una pantalla que no haya. Lo que cada
@@ -282,6 +292,41 @@ GET /precios      cambios de precio, con la variación
 - El nombre se valida único (índice `lower(nombre)`) y la dirección no puede
   superar los 300 caracteres, que es el ancho de `direccion_entrega`.
 
+### `almacenes` — bodegas de la sucursal (`/api/almacenes`)
+
+| Endpoint      | Qué hace                                   |
+| ------------- | ------------------------------------------ |
+| `GET /`       | Lista de almacenes, ordenados por nombre    |
+| `POST /`      | Da de alta una bodega                      |
+| `PUT /:id`    | Renombra la bodega                         |
+| `DELETE /:id` | Borra una bodega que no haya recibido mercancia |
+
+- Son el catálogo de bodegas donde entra y sale mercancía. Antes era un `almacen_id: 1` fijo; ahora son editables desde la app.
+- Forman parte del catálogo genérico (`catalogo/`), con permisos `almacenes.ver/crear/editar/eliminar`.
+- La eliminación solo tiene sentido para bodegas sin movimientos; si alguna vez recibió mercancía, hay que dejarla.
+
+### `reportes` — solo lectura (`/api/reportes`)
+
+| Endpoint               | Qué hace                                           |
+| ---------------------- | -------------------------------------------------- |
+| `GET /existencia`       | Existencia actual por producto y bodega            |
+| `GET /consumo-semanal`  | Consumo semanal promedio por cliente/producto      |
+| `GET /estado-cuenta`    | Estado de cuenta a nivel general (clientes con saldo) |
+
+- Tres GET con un único permiso: `reportes.ver`. Son de solo lectura y no exponen márgenes/costos.
+- Usan las vistas ya existentes (`vw_existencia_actual`, `vw_consumo_semanal_promedio`, `vw_estado_cuenta_cliente`).
+
+### `estado-cuenta` — cobranza por cliente (`/api/estado-cuenta`)
+
+| Endpoint            | Qué hace                                               |
+| ------------------- | ------------------------------------------------------ |
+| `GET /`             | Lista de clientes con su saldo (paginable y filtrable) |
+| `GET /:id/hoja`     | Descarga la hoja de estado de cuenta de un cliente (Excel) |
+| `POST /general`     | Genera un Excel de estado de cuenta para varios clientes |
+
+- Herramienta de cobranza del día. Va con permiso `estado_cuenta.ver`, separado de `reportes.ver` para permitir dar una sin la otra.
+- La hoja usa la plantilla `plantillas/EstadoCuenta.xlsx`. El export masivo arma un XLSX que agrupa varios clientes.
+
 ## Usuarios, roles y permisos
 
 ### El modelo
@@ -292,12 +337,12 @@ usuarios ──┬── usuarios_roles ──┬── roles ── roles_permi
            └── (N:M, varios roles por usuario)
 ```
 
-- **permisos**: la unidad real de acceso, con código `modulo.accion`
-  (48 permisos: `clientes.editar`, `caja.eliminar`, `auditoria.caja`...).
+- **permisos**: la unidad real de acceso, con código `modulo.accion` (54 permisos de negocio).
   Los de notas de remisión son `notas.ver`, `notas.crear`, `notas.editar`,
   `notas.cancelar` y `notas.folios`; este último lo administra solo el
   Administrador (migración 0008), porque es quien declara una serie completa.
   Los de direcciones (`direcciones.*`) vienen de la 0011.
+  Los de almacenes (`almacenes.*`) de la 0015; `reportes.ver` de la 0016; `estado_cuenta.ver` de la 0017.
 - **roles**: agrupa permisos. Vienen tres: `Administrador` (todo),
   `Empleada` (opera el día a día, sin precios ni caja.eliminar) y
   `Cajera` (caja y cobranza, sin ver precios).

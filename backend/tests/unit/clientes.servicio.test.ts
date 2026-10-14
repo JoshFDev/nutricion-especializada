@@ -27,7 +27,7 @@ const FILA = {
   actualizado_en: new Date('2026-01-15T10:00:00Z'),
 };
 
-const LISTA = { limite: 50, offset: 0 };
+const LISTA = { limite: 50, offset: 0, saldo: 'todos' as const };
 
 /**
  * Los datos de entrada se pasan por el esquema de Zod antes de llegar al

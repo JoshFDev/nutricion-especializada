@@ -1475,16 +1475,16 @@ export class Notas {
   }
 
   async eliminar(nota: NotaListada): Promise<void> {
-      const modal = this.confirmModal();
-      const ok = await modal.abrir({
-        titulo: 'Eliminar nota',
-        mensaje: `¿Eliminar definitivamente la nota ${nota.folio}? Esto eliminará la nota cancelada, liberará su folio para reutilizarse y se eliminarán sus aplicaciones de pago relacionadas (si las hay). Esta acción no se puede deshacer.`,
-        textoConfirmar: 'Eliminar',
-        variante: 'peligro',
-      });
-      if (!ok) {
-        return;
-      }
+    const modal = this.confirmModal();
+    const ok = await modal.abrir({
+      titulo: 'Eliminar nota',
+      mensaje: `¿Eliminar definitivamente la nota ${nota.folio}? Esto eliminará la nota cancelada, liberará su folio para reutilizarse y se eliminarán sus aplicaciones de pago relacionadas (si las hay). Esta acción no se puede deshacer.`,
+      textoConfirmar: 'Eliminar',
+      variante: 'peligro',
+    });
+    if (!ok) {
+      return;
+    }
     this.errorLista.set(null);
     try {
       await this.api.eliminar(nota.id);

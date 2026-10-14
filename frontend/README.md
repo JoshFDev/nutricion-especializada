@@ -18,7 +18,8 @@ Para que funcione hace falta el backend arriba (`pnpm dev` dentro de
 ## Que hay y que no
 
 Lo que hay es **todo**: sesion, login, cambio de contrasena, el marco con el
-menu, las doce pantallas del negocio y las dos de Sistema. No queda ningun
+menu, las doce pantallas del negocio y las cuatro de Sistema (Usuarios,
+Auditoria, Reportes, Caja y bancos). No queda ningun
 modulo con el aviso de "pantalla pendiente", y las rutas se siguen generando
 desde la misma tabla que arma el menu, asi que no puede salir un enlace a una
 pantalla que no exista.
@@ -26,7 +27,7 @@ pantalla que no exista.
 Ya tienen pantalla el POS (`/notas`: cliente, renglones, totales e imprimir
 el PDF), los clientes (`/clientes`: alta y edicion con codigo, especie y
 filtros), los productos (`/productos`: alta, edicion y baja), el catalogo
-(`/categorias` y `/especies`: alta, renombrado y borrado), los precios
+(`/categorias`, `/especies` y `/almacenes`: alta, renombrado y borrado), los precios
 (`/precios`: el de lista y el de cliente, con edicion de vigencia y cierre
 en vez de borrado), los pagos (`/pagos`: listado filtrable, registro con
 detalle y aplicacion a las notas abiertas del cliente), los proveedores

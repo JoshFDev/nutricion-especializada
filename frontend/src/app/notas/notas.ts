@@ -913,6 +913,24 @@ export class Notas {
       !this.guardando(),
   );
 
+  /**
+   * Lo que falta para poder guardar, en una frase.
+   *
+   * El botón de guardar se apaga cuando algo no cuadra, pero un botón gris sin
+   * explicación obliga a recorrer la pantalla buscando el problema. Esto dice
+   * cuál es, en el mismo orden en que se captura. Vacío = no falta nada.
+   */
+  readonly faltaParaGuardar = computed(() => {
+    if (this.guardando() || this.puedeGuardar()) return '';
+    if (this.cliente() === null) return 'Elige el cliente para continuar.';
+    if (this.almacen() === null) return 'Elige la bodega de la que sale la venta.';
+    if (!this.hayLineas()) return 'Agrega al menos un producto.';
+    if (this.lineas().some((linea) => Object.keys(problemasDe(linea)).length > 0))
+      return 'Revisa los renglones marcados.';
+    if (!this.editable()) return 'Esta nota ya no se puede editar.';
+    return 'No tienes permiso para guardar esta nota.';
+  });
+
   // -------------------------------------------------------- las direcciones
   private async cargarDirecciones(): Promise<void> {
     try {

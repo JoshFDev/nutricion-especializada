@@ -4,12 +4,12 @@ import { descargarExcel, errorLegible } from './api';
 
 /**
  * `errorLegible` es lo que decide que se le muestra a la persona cuando algo
- * sale mal, y sus tres casos (respuesta de la API, servidor caido, error
- * propio) se distinguen por cosas que no se ven a ojo en la pantalla.
+ * sale mal, y sus tres casos (respuesta del sistema, sistema sin responder,
+ * error propio) se distinguen por cosas que no se ven a ojo en la pantalla.
  */
 describe('errorLegible', () => {
   it('usa el codigo y el mensaje que manda la API', () => {
-    // Esta es la forma real del backend (ver middleware/errores.ts). Lo que
+    // Esta es la forma real del sistema (ver middleware/errores.ts). Lo que
     // decide la app es el CODIGO; el mensaje solo se muestra.
     const error = new HttpErrorResponse({
       status: 409,
@@ -40,23 +40,22 @@ describe('errorLegible', () => {
     ]);
   });
 
-  it('avisa que no hay servidor cuando la peticion no salio', () => {
-    // Status 0 es el "no se pudo contactar", y es lo que sale cuando el
-    // backend esta caido o el origen no esta permitido. El mensaje tiene que
-    // nombrar las dos causas, porque se confunden entre si. El COMO se
-    // arregla (el nombre de la variable) lo dice la pantalla
-    // `SinConexion`, que es donde se llega a resolver el problema de
-    // verdad; aqui no se echa jerga a la gente que esta en el mostrador.
+  it('avisa con palabras sencillas cuando no hay servidor', () => {
+    // Status 0 es el "no se pudo contactar": el sistema está caído, no hay
+    // internet, o el origen no está permitido. A quien atiende el mostrador no
+    // se le explica nada de eso: el mensaje tiene que ser simple y entendible.
+    // El detalle de cómo resolverlo vive en el comentario de `errorLegible`.
     const legible = errorLegible(new HttpErrorResponse({ status: 0 }));
 
     expect(legible.codigo).toBe('SIN_SERVIDOR');
-    expect(legible.mensaje).toContain('backend');
-    expect(legible.mensaje).toContain('origen');
+    expect(legible.mensaje).toContain('conexión');
+    expect(legible.mensaje).not.toContain('backend');
+    expect(legible.mensaje).not.toContain('CORS');
   });
 
   it('no ensena el texto crudo del servidor cuando no es un error de la app', () => {
     // Un 502 de nginx trae HTML. Si eso se pinta tal cual, la persona ve una
-    // pagina de error del servidor en medio de la app.
+    // pagina de error del sistema en medio de la app.
     const error = new HttpErrorResponse({ status: 502, error: '<html>Bad Gateway</html>' });
 
     const legible = errorLegible(error);
@@ -92,7 +91,7 @@ describe('errorLegible', () => {
 /**
  * `descargarExcel` es lo que hace que el archivo que baja se llame como debe.
  *
- * El backend manda el nombre en `content-disposition` (con la fecha, para que
+ * El sistema manda el nombre en `content-disposition` (con la fecha, para que
  * dos exportaciones del mismo día no se pisen), pero un proxy puede comerse esa
  * cabecera, y por eso hay un nombre por defecto. Lo que NO puede pasar es que
  * el archivo se quede con el nombre sin su extension y que el navegador no lo
@@ -128,7 +127,7 @@ describe('descargarExcel', () => {
     vi.restoreAllMocks();
   });
 
-  it('usa el nombre que manda el backend, con su fecha', () => {
+  it('usa el nombre que manda el sistema, con su fecha', () => {
     descargarExcel(respuesta('attachment; filename="clientes-2026-10-05.xlsx"'), 'clientes.xlsx');
 
     expect(descargas).toHaveLength(1);

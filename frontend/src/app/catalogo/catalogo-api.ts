@@ -4,41 +4,40 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
 
 /**
- * La API de especies, categorias y almacenes.
+ * El servicio de especies, categorías y almacenes.
  *
- * El backend las ATIENDE como una sola cosa: `catalogo/rutas.ts` construye
- * las tres rutas con la misma fabrica, y aqui el cliente hace lo mismo. La
- * unica diferencia de verdad es el nombre en la URL (`categorias-producto`
- * vs `especies` vs `almacenes`), que se resuelve con `rutaDe`.
+ * El sistema las ATIENDE como una sola cosa: `catalogo/rutas.ts` construye las
+ * tres rutas con la misma fábrica, y aquí la pantalla hace lo mismo. La única
+ * diferencia de verdad es el nombre en la dirección (`categorias-producto` vs
+ * `especies` vs `almacenes`), que se resuelve con `rutaDe`.
  *
- * La lista de estas tablas es CHICA (una docena de filas), por eso
- * `listar` no lleva filtros ni paginacion: el backend devuelve el catalogo
- * completo en `{ datos, total }`, a diferencia de clientes y productos
- * que si pagina.
+ * La lista de estas tablas es CHICA (una docena de filas), por eso `listar` no
+ * lleva filtros ni paginación: el sistema devuelve el catálogo completo en
+ * `{ datos, total }`, a diferencia de clientes y productos que sí pagina.
  */
 
-/** Especies, categorias y almacenes comparten forma: id + nombre. `catalogo/modelo.ts`. */
+/** Especies, categorías y almacenes comparten forma: id + nombre. `catalogo/modelo.ts`. */
 export interface FilaCatalogo {
   id: number;
   nombre: string;
   /**
-   * Cuantas filas la apuntan (productos y clientes en las especies,
-   * mercancia en los almacenes).
+   * Cuántas filas la apuntan (productos y clientes en las especies, mercancía
+   * en los almacenes).
    *
-   * Lo trae el listado (`FilaCatalogoConUsos` en el backend) y es lo que
-   * permite el filtro "En uso / Sin uso". Sin el, el unico filtro posible
-   * seria el nombre, y el nombre no dice si esa categoria la usan tres
+   * Lo trae el listado (`FilaCatalogoConUsos` en el sistema) y es lo que
+   * permite el filtro "En uso / Sin uso". Sin él, el único filtro posible
+   * sería el nombre, y el nombre no dice si esa categoría la usan tres
    * productos o ninguno — que es justo lo que uno quiere saber antes de
    * intentar borrarla y comerse el 409 EN_USO.
    */
   usos: number;
 }
 
-/** Las tres tablas del catalogo. `ClaveRecurso` en `catalogo/repositorio.ts`. */
+/** Las tres tablas del catálogo. `ClaveRecurso` en `catalogo/repositorio.ts`. */
 export type ClaveRecurso = 'categorias' | 'especies' | 'almacenes';
 
 /**
- * La URL de cada una. Solo `categorias` se llama distinto en el backend;
+ * La dirección de cada una. Solo `categorias` se llama distinto en el sistema;
  * las otras dos llevan el nombre del recurso.
  */
 export function rutaDe(recurso: ClaveRecurso): string {
@@ -46,13 +45,13 @@ export function rutaDe(recurso: ClaveRecurso): string {
 }
 
 /**
- * El permiso de una accion sobre un recurso.
+ * El permiso de una acción sobre un recurso.
  *
- * El backend los separa: `categorias.ver/crear/editar/eliminar`,
- * `especies.*` y `almacenes.*`. Leer va por permiso granular (los tres
- * roles lo tienen), escribir es del administrador (migraciones 0003 y
- * 0015), y la pantalla muestra los botones segun lo que la persona pueda
- * hacer de verdad.
+ * El sistema los separa: `categorias.ver/crear/editar/eliminar`, `especies.*`
+ * y `almacenes.*`. Leer va por permiso granular (los tres roles lo tienen),
+ * escribir es del administrador (actualizaciones del sistema 0003 y 0015), y
+ * la pantalla muestra los botones según lo que la persona pueda hacer de
+ * verdad.
  */
 export function permisoDe(recurso: ClaveRecurso, accion: 'crear' | 'editar' | 'eliminar'): string {
   return `${recurso}.${accion}`;
@@ -67,7 +66,7 @@ export function cuerpoDeCatalogo(nombre: string): { nombre: string } {
 export class CatalogoApi {
   private readonly http = inject(HttpClient);
 
-  /** Todo el catalogo, en orden del espanol (`nombre COLLATE pos.es_es`). */
+  /** Todo el catálogo, en orden del español (`nombre COLLATE pos.es_es`). */
   async listar(recurso: ClaveRecurso): Promise<FilaCatalogo[]> {
     const respuesta = await firstValueFrom(
       this.http.get<{ datos: FilaCatalogo[] }>(`${API}/${rutaDe(recurso)}`),
@@ -85,8 +84,9 @@ export class CatalogoApi {
   /**
    * Renombra.
    *
-   * Es PUT y no PATCH: el esquema del backend solo acepta `nombre` y el id
-   * nunca cambia, asi que no hay nada mas que mandar. Solo se renombra.
+   * Reemplaza, no actualiza en parte: las reglas de validación del sistema
+   * solo aceptan `nombre` y el id nunca cambia, así que no hay nada más que
+   * mandar. Solo se renombra.
    */
   async renombrar(recurso: ClaveRecurso, id: number, nombre: string): Promise<FilaCatalogo> {
     return firstValueFrom(
@@ -99,7 +99,7 @@ export class CatalogoApi {
     await firstValueFrom(this.http.delete(`${API}/${rutaDe(recurso)}/${id}`));
   }
 
-  /** Exporta el catalogo a Excel. */
+  /** Exporta el catálogo a Excel. */
   async exportarExcel(recurso: ClaveRecurso): Promise<void> {
     const resp = await firstValueFrom(
       this.http.get(`${API}/${rutaDe(recurso)}/exportar`, {

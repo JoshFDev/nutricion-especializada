@@ -1,13 +1,13 @@
 <main class="pantalla">
   <section class="tarjeta">
-    <h1>Cambia tu contrasena</h1>
+    <h1>Cambia tu contraseña</h1>
     <p class="sub">
-      El administrador dejo esta cuenta con la contrasena anterior. Hay que cambiarla antes de
+      El administrador dejó esta cuenta con la contraseña anterior. Hay que cambiarla antes de
       seguir.
     </p>
 
     <form [formGroup]="form" (ngSubmit)="cambiar()">
-      <label for="actual">Contrasena actual</label>
+      <label for="actual">Contraseña actual</label>
       <input
         id="actual"
         type="password"
@@ -18,10 +18,10 @@
       @if (errorActual()) {
         <p class="campo-error">{{ errorActual() }}</p>
       } @else if (form.controls.actual.touched && form.controls.actual.invalid) {
-        <p class="campo-error">Escribe tu contrasena actual.</p>
+        <p class="campo-error">Escribe tu contraseña actual.</p>
       }
 
-      <label for="nueva">Contrasena nueva</label>
+      <label for="nueva">Contraseña nueva</label>
       <input
         id="nueva"
         type="password"
@@ -33,13 +33,13 @@
       <!--
         Las reglas se muestran mientras se escribe y no solo al salir del
         campo. En un formulario obligatorio ver lo que falta mientras se
-        teclea es la diferencia entre "ya casi" y "algo esta mal".
+        teclea es la diferencia entre «ya casi» y «algo está mal».
       -->
       <ul class="reglas">
         <li [class.ok]="reglas.largo()">Al menos 12 caracteres</li>
-        <li [class.ok]="reglas.minuscula()">Una letra minuscula</li>
-        <li [class.ok]="reglas.mayuscula()">Una letra mayuscula</li>
-        <li [class.ok]="reglas.numero()">Un numero</li>
+        <li [class.ok]="reglas.minuscula()">Una letra minúscula</li>
+        <li [class.ok]="reglas.mayuscula()">Una letra mayúscula</li>
+        <li [class.ok]="reglas.numero()">Un número</li>
         <li [class.ok]="reglas.distinta()">Distinta de la actual</li>
       </ul>
 
@@ -63,17 +63,16 @@
       }
 
       <button type="submit" [disabled]="enviando() || exito() !== null">
-        {{ enviando() ? 'Cambiando...' : 'Cambiar contrasena' }}
+        {{ enviando() ? 'Cambiando...' : 'Cambiar contraseña' }}
       </button>
     </form>
 
     <!--
-      Salir esta disponible a proposito. El backend obliga a cambiar la
-      contrasena, y si alguien no puede (no la recuerda, no puede ganarse una
-      nueva ahora) tiene que poder salirse: la cuenta se resuelve por
-      fuera. Sin este boton esa persona se queda en esta pantalla para
-      siempre.
+      Salir está disponible a propósito. El sistema obliga a cambiar la
+      contraseña, y si alguien no puede (no la recuerda, no puede ganarse una
+      nueva ahora) tiene que poder salirse: la cuenta se resuelve por fuera. Sin
+      este botón esa persona se queda en esta pantalla para siempre.
     -->
-    <button type="button" class="secundario" (click)="salir()">Salir de la app</button>
+    <button type="button" class="secundario" (click)="salir()">Salir de la aplicación</button>
   </section>
 </main>

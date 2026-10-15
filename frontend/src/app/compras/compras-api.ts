@@ -10,36 +10,36 @@ import {
 } from './linea';
 
 /**
- * La API de compras.
+ * El servicio de compras.
  *
- * Es el espejo de `backend/src/modules/compras`. Los tipos de aqui salen de
- * `compras/modelo.ts` y los esquemas del cuerpo de `compras/esquemas.ts`, y no
- * se comparten (el front y el back son dos paquetes): cuando cambie una forma
- * hay que cambiar el tipo de este archivo. Por eso cada uno lleva anotado de
- * que archivo del backend salio.
+ * Los tipos de aquí salen de `compras/modelo.ts` y las reglas de validación de
+ * los datos de `compras/esquemas.ts`, y no se comparten con el sistema (son dos
+ * partes): cuando cambie una forma hay que cambiar el tipo de este archivo.
+ * Por eso cada uno lleva anotado de qué archivo del sistema salió.
  *
- * Cuatro decisiones que no se ven en los tipos y si en las reglas:
+ * Cuatro decisiones que no se ven en los tipos y sí en las reglas:
  *
- *   - **No hay editar.** Una compra ya escrita se deshace CANCELANDOLA (con
- *     motivo), no editando sus renglones: editarlos dejaria el inventario con
+ *   - **No hay editar.** Una compra ya escrita se deshace CANCELÁNDOLA (con
+ *     motivo), no editando sus renglones: editarlos dejaría el inventario con
  *     la entrada vieja y la nueva. Por eso no hay `actualizar`, solo `crear` y
  *     `cancelar`.
  *   - **No hay borrar.** Cancelar no borra: deja el documento con estatus
- *     'cancelada' y su motivo, y el trigger devuelve los bultos a la bodega.
+ *     'cancelada' y su motivo, y la regla automática del sistema devuelve los
+ *     bultos a la bodega.
  *   - **`estatus` y `subtotal` NO se mandan.** El estatus lo mueven los pagos
- *     al proveedor (`pagar`) y el `subtotal` es GENERATED en la base. Los dos
- *     los rechazaria el `.strict()` del esquema.
+ *     al proveedor (`pagar`) y el `subtotal` lo calcula el sistema. Los dos los
+ *     rechazarían las reglas de validación.
  *   - **Se paga, no se edita.** El abono que deja la compra 'pagada' lo
- *     registra `POST /:id/pagar` por el monto que falte.
- *   - **`precio_kg` es opcional.** Si no se manda, el servicio lo saca del
- *     ultimo costo vigente de ESE proveedor para ESE producto en la fecha de
+ *     registra el servicio al pagar, por el monto que falte.
+ *   - **`precio_kg` es opcional.** Si no se manda, el sistema lo saca del
+ *     último costo vigente de ESE proveedor para ESE producto en la fecha de
  *     la compra (`producto_proveedor_precios`). Si tampoco hay costo, es un
  *     422 `SIN_COSTO`: el costo hay que escribirlo alguna vez.
  */
 
 // --------------------------------------------------------------------- tipos
 
-/** `compras/modelo.ts` -> `EstatusCompra`. Lo cambian los pagos (aun sin API). */
+/** `compras/modelo.ts` -> `EstatusCompra`. Lo cambian los pagos (aún sin pantalla). */
 export type EstatusCompra = 'pendiente' | 'parcial' | 'pagada' | 'cancelada';
 
 /** `compras/modelo.ts` -> `CompraListada`. La fila de la tabla. */
@@ -51,7 +51,7 @@ export interface CompraListada {
   folio_proveedor: string | null;
   monto_total: number;
   estatus: EstatusCompra;
-  /** Cuantos renglones tiene. Es un conteo de la fila, no una columna. */
+  /** Cuántos renglones tiene. Es un conteo de la fila, no una columna. */
   renglones: number;
 }
 
@@ -66,7 +66,7 @@ export interface RenglonCompra {
   cantidad_bultos: number;
   kg_bulto: number;
   precio_kg: number;
-  /** Lo calcula Postgres: `cantidad_bultos * kg_bulto * precio_kg`. */
+  /** Lo calcula el sistema: `cantidad_bultos * kg_bulto * precio_kg`. */
   subtotal: number;
 }
 
@@ -92,7 +92,7 @@ export interface ListaCompras {
   offset: number;
 }
 
-/** `proveedores/modelo.ts` -> lo que el POS y compras necesitan del proveedor. */
+/** `proveedores/modelo.ts` -> lo que el mostrador y compras necesitan del proveedor. */
 export interface ProveedorOpcion {
   id: number;
   nombre: string;
@@ -111,12 +111,13 @@ export interface ProductoOpcion {
 // ------------------------------------------------------------------ el cuerpo
 
 /**
- * Un renglon de compra, tal como lo quiere `renglonCompraEsquema`.
+ * Un renglón de compra, tal como lo piden las reglas de validación
+ * (`renglonCompraEsquema`).
  *
  * `kg_bulto` y `precio_kg` son opcionales y los dos tienen el mismo sentido:
- * si no van, los resuelve el backend (la presentacion del producto y el
- * ultimo costo del proveedor), que es el dato bueno. Mandarlos solo cuando la
- * persona los escribio evita que el navegador imponga su copia.
+ * si no van, los resuelve el sistema (la presentación del producto y el último
+ * costo del proveedor), que es el dato bueno. Mandarlos solo cuando la persona
+ * los escribió evita que el navegador imponga su copia.
  */
 export interface RenglonCompraBody {
   producto_id: number;
@@ -126,7 +127,7 @@ export interface RenglonCompraBody {
   precio_kg?: string;
 }
 
-/** El `POST /api/compras`, tal como lo quiere `crearCompraEsquema`. */
+/** Los datos al crear una compra, tal como los pide `crearCompraEsquema`. */
 export interface CuerpoCompra {
   proveedor_id: number;
   folio_proveedor?: string;
@@ -135,14 +136,13 @@ export interface CuerpoCompra {
 }
 
 /**
- * El almacen que recibe la mercancia.
+ * El almacén que recibe la mercancía.
  *
- * `almacenes.id` es un SMALLINT y el catalogo de almacenes se sirve por
- * `/api/almacenes` (`catalogo/`), el mismo modulo que especies y
- * categorias. La pantalla lo elige al abrir el alta y lo pasa aqui por
- * parametro: ya no hay un 1 escrito a mano, y si la bodega falta, el alta
- * se bloquea ANTES de llegar al backend en vez de responder "El almacen 1
- * no existe".
+ * `almacenes.id` es un número pequeño y el catálogo de almacenes se sirve
+ * desde `catalogo/`, la misma parte que especies y categorías. La pantalla lo
+ * elige al abrir el alta y lo pasa aquí por parámetro: ya no hay un 1 escrito
+ * a mano, y si la bodega falta, el alta se bloquea ANTES de llegar al sistema
+ * en vez de responder "El almacén 1 no existe".
  */
 export interface Almacen {
   id: number;
@@ -150,19 +150,19 @@ export interface Almacen {
 }
 
 /**
- * Arma el cuerpo de la compra.
+ * Arma los datos de la compra.
  *
- * El almacen va por parametro: es el que la pantalla consulta al abrir el
- * alta (`Catálogo › Almacenes`) y no una constante, porque si mañana hay
- * mas de una bodega esto ya no se toca.
+ * El almacén va por parámetro: es el que la pantalla consulta al abrir el alta
+ * (`Catálogo › Almacenes`) y no una constante, porque si mañana hay más de una
+ * bodega esto ya no se toca.
  *
- * La fecha NO se manda si viene vacia: sin ella la usa la base
- * (`hoyEnLaBase`), que es la fecha del servidor y no la del navegador. La
- * fecha solo viaja cuando la persona escribio la del documento del proveedor,
- * que puede ser otro dia.
+ * La fecha NO se manda si viene vacía: sin ella la usa el sistema
+ * (`hoyEnLaBase`), que es la fecha del sistema y no la del navegador. La fecha
+ * solo viaja cuando la persona escribió la del documento del proveedor, que
+ * puede ser otro día.
  *
- * El `folio_proveedor` vacio tampoco se manda: no hay `null` que limpiar
- * porque una compra no se edita, y mandar `""` seria un folio de cero letras.
+ * El `folio_proveedor` vacío tampoco se manda: no hay `null` que limpiar
+ * porque una compra no se edita, y mandar `""` sería un folio de cero letras.
  */
 export function cuerpoDeCompra(
   proveedorId: number,
@@ -193,10 +193,10 @@ export function cuerpoDeCompra(
   const folioLimpio = folio?.trim();
   if (folioLimpio) cuerpo.folio_proveedor = folioLimpio;
 
-  // La fecha se valida como `AAAA-MM-DD` con un patron y no se reenvia tal
-  // cual: un `<input type="date">` en un navegador raro puede devolver texto
-  // a medias, y el backend lo rechazaria con un 422 sobre un campo que ya se
-  // ve bien en pantalla.
+  // La fecha se revisa como `AAAA-MM-DD` con un patrón y no se reenvía tal
+  // cual: un campo de fecha en un navegador raro puede devolver texto a
+  // medias, y el sistema lo rechazaría con un 422 sobre un campo que ya se ve
+  // bien en pantalla.
   const fechaLimpia = fecha?.trim();
   if (fechaLimpia && /^\d{4}-\d{2}-\d{2}$/.test(fechaLimpia)) cuerpo.fecha = fechaLimpia;
 
@@ -210,11 +210,12 @@ export class ComprasApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * Lista con filtros y paginacion.
+   * Lista con filtros y paginación.
    *
-   * El esquema del listado es `strict`: mandar un parametro que no este
-   * (`activo`, por ejemplo, que es de proveedores) da un 400. Por eso el
-   * objeto de opciones es cerrado y solo se copian los campos definidos.
+   * Las reglas de validación del listado no admiten campos de más: mandar un
+   * parámetro que no exista (`activo`, por ejemplo, que es de proveedores) da
+   * un 400. Por eso el objeto de opciones es cerrado y solo se copian los
+   * campos definidos.
    */
   async listar(opciones: {
     buscar?: string;
@@ -242,7 +243,7 @@ export class ComprasApi {
     return firstValueFrom(this.http.get<Compra>(`${API}/compras/${id}`));
   }
 
-  /** Crea. 201 + la compra con sus renglones y el `monto_total` de la base. */
+  /** Crea. 201 + la compra con sus renglones y el `monto_total` que calcula el sistema. */
   async crear(cuerpo: CuerpoCompra): Promise<Compra> {
     return firstValueFrom(this.http.post<Compra>(`${API}/compras`, cuerpo));
   }
@@ -250,9 +251,9 @@ export class ComprasApi {
   /**
    * Cancela, con el motivo obligatorio.
    *
-   * No se puede cancelar una compra que ya tiene pagos: el backend responde
-   * `COMPRA_CON_PAGO` (409) porque el dinero ya salio y no hay forma de
-   * regresarlo todavia. La pantalla lo dice tal cual.
+   * No se puede cancelar una compra que ya tiene pagos: el sistema responde
+   * `COMPRA_CON_PAGO` (409) porque el dinero ya salió y no hay forma de
+   * regresarlo todavía. La pantalla lo dice tal cual.
    */
   async cancelar(id: number, motivo: string): Promise<Compra> {
     return firstValueFrom(
@@ -263,10 +264,10 @@ export class ComprasApi {
   /**
    * Marca la compra como pagada de una vez.
    *
-   * El abono va por EXACTAMENTE lo que falta (el backend lo calcula: total
+   * El abono va por EXACTAMENTE lo que falta (el sistema lo calcula: total
    * menos lo ya abonado), para que el saldo del proveedor no se pase de
    * ceros. Devuelve la compra ya con su nuevo estatus; la fecha del abono la
-   * pone la base (hoy del servidor).
+   * pone el sistema (hoy del sistema).
    */
   async pagar(id: number): Promise<Compra> {
     return firstValueFrom(this.http.post<Compra>(`${API}/compras/${id}/pagar`, {}));
@@ -276,8 +277,8 @@ export class ComprasApi {
    * Busca proveedores ACTIVOS para el selector.
    *
    * `activo=true` porque no se le compra a un proveedor dado de baja: el
-   * backend lo rechazaria con `PROVEEDOR_INACTIVO`, asi que no tiene sentido
-   * ofrecerlo. El minimo de dos caracteres es el de siempre.
+   * sistema lo rechazaría con `PROVEEDOR_INACTIVO`, así que no tiene sentido
+   * ofrecerlo. El mínimo de dos caracteres es el de siempre.
    */
   async proveedores(buscar: string): Promise<ProveedorOpcion[]> {
     if (buscar.trim().length < 2) return [];
@@ -290,10 +291,11 @@ export class ComprasApi {
   }
 
   /**
-   * Busca productos por codigo o nombre.
+   * Busca productos por código o nombre.
    *
-   * Un caracter alcanza, como en el POS: los productos se distinguen por una
-   * clave corta (`LAC`, `DHP`) y el operador teclea el codigo.
+   * Un carácter alcanza, como en el punto de venta: los productos se
+   * distinguen por una clave corta (`LAC`, `DHP`) y el operador teclea el
+   * código.
    */
   async productos(buscar: string): Promise<ProductoOpcion[]> {
     if (buscar.trim().length < 1) return [];
@@ -306,12 +308,12 @@ export class ComprasApi {
   }
 
   /**
-   * Las bodegas a donde puede entrar la mercancia.
+   * Las bodegas a donde puede entrar la mercancía.
    *
    * Llenan el selector del alta. Antes esto era un 1 escrito a mano y si la
-   * bodega faltaba el alta respondia "El almacen 1 no existe": ahora la
-   * pantalla ofrece las que hay, y si no hay ninguna, crear una en el acto
-   * (solo quien tenga `almacenes.crear`).
+   * bodega faltaba el alta respondía "El almacén 1 no existe": ahora la
+   * pantalla ofrece las que hay, y si no hay ninguna, se puede crear una en el
+   * acto (solo quien tenga `almacenes.crear`).
    */
   async almacenes(): Promise<Almacen[]> {
     const respuesta = await firstValueFrom(this.http.get<{ datos: Almacen[] }>(`${API}/almacenes`));
@@ -321,11 +323,11 @@ export class ComprasApi {
   /**
    * Crea una bodega desde el mismo alta de compras.
    *
-   * Solo aparece cuando la lista esta vacia y el que captura tiene permiso
-   * (`almacenes.crear`, del Administrador): con el sistema recien entregado
-   * la base va limpia y la primera compra no se topa con un "almacen 1 no
-   * existe". El 409 `NOMBRE_DUPLICADO` lo traduce la pantalla en el aviso
-   * del editor.
+   * Solo aparece cuando la lista está vacía y quien captura tiene permiso
+   * (`almacenes.crear`, del Administrador): con el sistema recién entregado
+   * no hay ninguna y la primera compra no se topa con un "almacén 1 no
+   * existe". El 409 `NOMBRE_DUPLICADO` lo traduce la pantalla en el aviso del
+   * editor.
    */
   async crearAlmacen(nombre: string): Promise<Almacen> {
     return firstValueFrom(this.http.post<Almacen>(`${API}/almacenes`, { nombre: nombre.trim() }));
@@ -335,7 +337,7 @@ export class ComprasApi {
 /**
  * El estatus en palabras, para la tabla.
  *
- * `pendiente` es el unico estatus en el que puede nacer una compra hoy: los
+ * `pendiente` es el único estatus en el que puede nacer una compra hoy: los
  * otros los mueven los abonos del proveedor (`pagar`).
  */
 export function estatusComoTexto(estatus: EstatusCompra): string {

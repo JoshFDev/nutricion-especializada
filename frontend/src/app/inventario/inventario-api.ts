@@ -4,22 +4,23 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
 
 /**
- * La API de inventario.
+ * El servicio de inventario.
  *
- * Es el espejo de `backend/src/modules/inventario`. Dos familias:
+ * Dos familias:
  *
- *   - La EXISTENCIA por producto y almacen, de solo lectura. No hay tabla de
- *     saldos: es la SUMA de `inventario_movimientos` (`fn_existencia_de`).
- *     Las notas de venta y las compras mueven esos movimientos por trigger.
- *     Un producto que nunca se compro aparece en cero, no desaparece.
+ *   - La EXISTENCIA por producto y almacén, de solo lectura. No hay tabla de
+ *     saldos: es la SUMA de `inventario_movimientos` (`fn_existencia_de`). Las
+ *     notas de venta y las compras mueven esos movimientos con reglas
+ *     automáticas del sistema. Un producto que nunca se compró aparece en
+ *     cero, no desaparece.
  *
  *   - Los MOVIMIENTOS manuales: registrar un ajuste o una merma y borrarlos.
  *     El alta necesita motivo y el permiso `inventario.ajustar` (el mismo que
- *     el trigger de la base pide); el borrado queda en `auditoria_inventario`
- *     con el antes y el despues. El listado de movimientos es el KARDEX: trae
- *     tambien los de compra y venta, para que la historia del bulto se lea de
- *     una sola pasada. Solo los manuales se pueden borrar, y el backend lo
- *     comprueba.
+ *     pide la regla automática del sistema); el borrado queda en
+ *     `auditoria_inventario` con el antes y el después. El listado de
+ *     movimientos es el KARDEX: trae también los de compra y venta, para que
+ *     la historia del bulto se lea de una sola pasada. Solo los manuales se
+ *     pueden borrar, y el sistema lo comprueba.
  */
 
 // --------------------------------------------------------------------- tipos
@@ -45,10 +46,10 @@ export interface ListaExistencia {
 }
 
 /**
- * Que renglones se quieren ver.
+ * Qué renglones se quieren ver.
  *
- * El backend solo sabe decir `vacios=true` (en cero o negativo) o
- * `vacios=false` (con existencia), y "todas" es no mandar el parametro. Esta
+ * El sistema solo sabe decir `vacios=true` (en cero o negativo) o
+ * `vacios=false` (con existencia), y "todas" es no mandar el parámetro. Esta
  * pantalla traduce los tres estados a esos dos casos.
  */
 export type FiltroExistencia = 'todas' | 'con' | 'vacios';
@@ -64,13 +65,13 @@ export interface OpcionesExistencia {
 }
 
 /**
- * Los parametros de la peticion, aparte de la llamada.
+ * Los parámetros que se mandan, aparte de la llamada.
  *
- * Va como funcion pura y exportada para poder probarla: el esquema del
- * backend es `strict` y un parametro de mas da un 400, asi que "que se manda
- * y que no" es la parte del contrato que conviene tener cubierta. "Todas" no
- * manda `vacios`; "con" y "vacios" mandan el `'true'`/`'false'` que el
- * esquema convierte a booleano.
+ * Va como función pura y exportada para poder probarla: las reglas de
+ * validación no admiten campos de más y un parámetro extra da un 400, así que
+ * "qué se manda y qué no" es la parte que conviene tener cubierta. "Todas" no
+ * manda `vacios`; "con" y "vacios" mandan el `'true'`/`'false'` que el sistema
+ * convierte a booleano.
  */
 export function parametrosDe(opciones: OpcionesExistencia): Record<string, string | number> {
   const params: Record<string, string | number> = {
@@ -95,7 +96,7 @@ export interface Movimiento {
   producto: string;
   almacen_id: number;
   almacen: string;
-  /** "AAAA-MM-DDThh:mm", sin zona: es hora local del servidor. */
+  /** "AAAA-MM-DDThh:mm", sin zona: es hora local del sistema. */
   fecha: string;
   tipo: 'entrada_compra' | 'salida_venta' | 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
   /** Cantidad POSITIVA; el signo lo dice el tipo (`firmaDe`). */
@@ -113,7 +114,7 @@ export interface ListaMovimientos {
   offset: number;
 }
 
-/** Lo que se puede pedir del kardex: esta pantalla siempre manda producto y almacen. */
+/** Lo que se puede pedir del kardex: esta pantalla siempre manda producto y almacén. */
 export interface OpcionesMovimientos {
   producto_id: number;
   almacen_id: number;
@@ -131,7 +132,7 @@ export interface NuevoMovimiento {
   motivo: string;
 }
 
-/** Lo que pide el kardex, aparte de producto y almacen. Ver `parametrosDe`. */
+/** Lo que pide el kardex, aparte de producto y almacén. Ver `parametrosDe`. */
 export function parametrosDeMovimientos(
   opciones: OpcionesMovimientos,
 ): Record<string, string | number> {
@@ -151,7 +152,7 @@ export function parametrosDeMovimientos(
 export class InventarioApi {
   private readonly http = inject(HttpClient);
 
-  /** Lista la existencia con busqueda y filtro. */
+  /** Lista la existencia con búsqueda y filtro. */
   async listar(opciones: OpcionesExistencia): Promise<ListaExistencia> {
     return firstValueFrom(
       this.http.get<ListaExistencia>(`${API}/inventario/existencia`, {
@@ -160,7 +161,7 @@ export class InventarioApi {
     );
   }
 
-  /** El kardex de un producto en un almacen, del mas reciente al mas viejo. */
+  /** El kardex de un producto en un almacén, del más reciente al más viejo. */
   async listarMovimientos(opciones: OpcionesMovimientos): Promise<ListaMovimientos> {
     return firstValueFrom(
       this.http.get<ListaMovimientos>(`${API}/inventario/movimientos`, {

@@ -8,11 +8,11 @@ import {
 } from './pagos-api';
 
 /**
- * El cuerpo del pago: lo que se manda al backend, y la ayuda del editor.
+ * El cuerpo del pago: lo que se manda al sistema, y la ayuda del editor.
  *
- * El pago es el contraste del POS: la nota manda solo renglones de
- * producto y el backend cobra el precio vigente; aqui el monto lo teclea
- * la persona y el backend SOLO valida (que alcance el pago, que la nota
+ * El pago es el contraste del mostrador: la nota manda solo renglones de
+ * producto y el sistema cobra el precio vigente; aqui el monto lo teclea
+ * la persona y el sistema SOLO valida (que alcance el pago, que la nota
  * sea del cliente, que no este cancelada). Por eso el cuerpo es esto:
  * cliente, fecha, metodo opcional, monto, y SOLO las notas que se van a
  * cubrir de verdad.

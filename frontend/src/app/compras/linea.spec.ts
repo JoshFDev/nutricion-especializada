@@ -45,8 +45,8 @@ describe('agregar renglones', () => {
   });
 
   it('el mismo producto NO se fusiona: dos lotes son dos filas', () => {
-    // A diferencia del POS, aqui el proveedor puede vender el mismo producto
-    // en dos lotes a distinto costo y el backend guarda las dos filas.
+    // A diferencia del mostrador, aqui el proveedor puede vender el mismo producto
+    // en dos lotes a distinto costo y el sistema guarda las dos filas.
     const lineas = agregar(agregar([], lineaVacia(LAC)), lineaVacia(LAC));
     expect(lineas).toHaveLength(2);
   });
@@ -69,7 +69,7 @@ describe('la cantidad de bultos', () => {
   });
 
   it('cero vuelve a ser uno, no cero', () => {
-    // `cantidad_bultos` rechaza el cero en el backend.
+    // `cantidad_bultos` rechaza el cero en el sistema.
     expect(cambiarCantidad(lineaVacia(LAC), 0).cantidad_bultos).toBe(1);
   });
 
@@ -150,7 +150,7 @@ describe('los subtotales y el total', () => {
 
 describe('que renglones se pueden mandar', () => {
   it('uno con cantidad y kilos se puede aunque no tenga costo', () => {
-    // El costo lo resuelve el backend; si no hay, responde SIN_COSTO.
+    // El costo lo resuelve el sistema; si no hay, responde SIN_COSTO.
     expect(problemasDe(lineaVacia(LAC))).toEqual({});
     expect(lineaValida(lineaVacia(LAC))).toBe(true);
   });

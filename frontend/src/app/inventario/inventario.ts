@@ -28,7 +28,8 @@ import {
  *
  * La existencia es por PRODUCTO y ALMACÉN, y en BULTOS. No es un campo que
  * alguien capture: es la suma de `inventario_movimientos`, y los movimientos
- * los escriben las notas de venta y las compras por trigger.
+ * los escriben las notas de venta y las compras por medio de una regla
+ * automática del sistema.
  *
  * Lo que esta pantalla SI escribe, a partir de ahora, son los movimientos
  * MANUALES: el botón "Ajustar" de un renglón abre el editor de ese producto en
@@ -44,7 +45,7 @@ import {
  * Dos cosas que la tabla sigue haciendo notar:
  *
  *   - Un producto que nunca se compró aparece en CERO, no desaparece: el
- *     backend cruza todos los productos con todos los almacenes.
+ *     sistema cruza todos los productos con todos los almacenes.
  *   - El CERO y el NEGATIVO se pintan en rojo. El modelo permite vender sin
  *     existencia (avisa, no bloquea), así que un negativo es una deuda de
  *     mercancía que hay que ver.
@@ -82,8 +83,8 @@ export class Inventario {
   /**
    * Cuántos renglones se ven por página, y la página que se está viendo.
    *
-   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
-   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   * La página se elige en SALTOS y se traduce a la posición al pedir, porque
+   * una posición guardada se queda vieja en cuanto cambia un filtro.
    */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -104,7 +105,7 @@ export class Inventario {
   /**
    * Si el listado lleva algo puesto, para poder ofrecer "Limpiar".
    *
-   * El buscador se cuenta con dos caracteres porque es lo que el backend
+   * El buscador se cuenta con dos caracteres porque es lo que el sistema
    * exige: con uno solo no filtra, y un "Limpiar" que aparece a la primera
    * letra confunde más de lo que ayuda.
    */
@@ -128,7 +129,7 @@ export class Inventario {
    * Cada tecleo NO pega una petición: con el buscador abierto a media
    * escritura son varias y la última es la única que sirve. Además, buscar
    * vuelve siempre a la página 1, porque quedarse en la 4 con un filtro nuevo
-   * es mirar un `offset` que ya no quiere decir nada.
+   * es mirar una posición que ya no quiere decir nada.
    */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
@@ -153,8 +154,8 @@ export class Inventario {
   /**
    * El texto de búsqueda, o `undefined` si es muy corto.
    *
-   * El mínimo de dos caracteres es el de siempre: con uno solo, el `ILIKE` del
-   * backend trae medio catálogo y la tabla deja de informar.
+   * El mínimo de dos caracteres es el de siempre: con uno solo, la búsqueda
+   * por parecido del sistema trae medio catálogo y la tabla deja de informar.
    */
   private textoBusqueda(): string | undefined {
     const limpio = this.buscador().trim();
@@ -178,10 +179,10 @@ export class Inventario {
         offset: (pagina - 1) * this.limite(),
       });
 
-      // La página pedida ya no existe (el filtro se narrowed entre una carga y
-      // otra): se retrocede una en vez de dejar una tabla vacía con el
-      // contador diciendo "página 7 de 7". Solo cuando hay páginas antes, por
-      // que en la primera lo que hay que mostrar es el estado vacío.
+      // La página pedida ya no existe (el filtro se volvió más estrecho entre
+      // una carga y otra): se retrocede una en vez de dejar una tabla vacía
+      // con el contador diciendo "página 7 de 7". Solo cuando hay páginas
+      // antes, porque en la primera lo que hay que mostrar es el estado vacío.
       if (resultado.datos.length === 0 && pagina > 1) {
         await this.cargarPagina(pagina - 1);
         return;
@@ -223,7 +224,7 @@ export class Inventario {
 
     this.limite.set(limite);
     // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50 filas
-    // es pedir un `offset` que ya no corresponde a nada.
+    // es pedir una posición que ya no corresponde a nada.
     void this.recargar();
   }
 

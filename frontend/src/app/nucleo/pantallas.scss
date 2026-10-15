@@ -63,11 +63,11 @@ h2 {
 
 /*
  * El editor vive arriba de la tabla y el listado no desaparece, para no
- * perder de vista sobre qué se está Laplacando.
+ * perder de vista sobre qué se está capturando.
  *
- * Colapsado NO es "oculto con display: none" en el wrapper: el wrapper es
- * el quereserve el hueco, y el `display: none` va en el form. Si se
- * colapsara el wrapper, el listado saltaría de golpe al plegarse.
+ * Colapsado NO es "oculto con display: none" en la envoltura: la envoltura es
+ * la que reserva el hueco, y el `display: none` va en el form. Si se
+ * colapsara la envoltura, el listado saltaría de golpe al plegarse.
  */
 .editor-wrapper {
   margin-bottom: 0.75rem;
@@ -322,7 +322,7 @@ tbody tr:last-child td {
  * se le suma `display: block` en el scss de la pantalla, acotado a su
  * contexto. Antes cada pantalla se copiaba su propia versión o no lo tenía
  * y el texto salía con el color normal (auditoría traía veinte usos sin
- * estilo tras su migración).
+ * estilo tras pasarse al diseño común).
  */
 .tenue {
   font-size: 0.8125rem;
@@ -412,7 +412,7 @@ tbody tr:last-child td {
 }
 
 /*
- * La misma línea, pero en rojo: avisa de algo que el backend va a rechazar
+ * La misma línea, pero en rojo: avisa de algo que el sistema va a rechazar
  * (el motivo de una cancelación es obligatorio, el monto no puede ser cero).
  * Con `.tenue` se vuelve la ayuda normal, que es lo que se usa cuando el campo
  * solo explica (la fecha vacía es la de hoy).

@@ -26,16 +26,16 @@ import {
 /**
  * La pantalla de Especies, Categorias y Almacenes.
  *
- * Es LA MISMA pantalla para las tres tablas, igual que el backend usa la
+ * Es LA MISMA pantalla para las tres tablas, igual que el sistema usa la
  * misma fabrica para sus rutas: lo unico que cambia es el recurso y el
- * titulo, y eso llega por `@Input` desde el wrapper de cada ruta
+ * titulo, y eso llega por `@Input` desde la envoltura de cada ruta
  * (`especies.ts`, `categorias.ts` y `almacenes.ts`). El resto —el listado,
  * el editor de nombre, el borrado con su confirmacion— es identico porque
  * en la base lo es.
  *
  * Son listas CHICAS, sin filtros ni paginacion: se traen enteras y se
  * pintan. El editor solo tiene nombre porque eso es todo lo que tiene la
- * tabla (id + nombre), y el nombre debe ser unico: el backend responde
+ * tabla (id + nombre), y el nombre debe ser unico: el sistema responde
  * `NOMBRE_DUPLICADO` y eso se pega al campo, como el codigo en clientes.
  */
 
@@ -57,7 +57,7 @@ type FiltroUso = 'todas' | 'en-uso' | 'sin-uso';
   animations: [filasAnimation],
 })
 export class Catalogo implements OnInit {
-  /** `'especies'`, `'categorias'` o `'almacenes'`. Lo decide el wrapper de cada ruta. */
+  /** `'especies'`, `'categorias'` o `'almacenes'`. Lo decide la envoltura de cada ruta. */
   readonly recurso = input.required<ClaveRecurso>();
   readonly titulo = input.required<string>();
   /**
@@ -154,7 +154,7 @@ export class Catalogo implements OnInit {
    *
    * El boton de la cabecera es el que lo alterna, igual que en productos: el
    * listado se queda debajo y no desaparece, para no perder de vista lo que
-   * se esta Laplacando.
+   * se esta capturando.
    */
   readonly editorVisible = signal(false);
 
@@ -207,8 +207,8 @@ export class Catalogo implements OnInit {
   /**
    * Filtra y pagina en el cliente.
    *
-   * El catalogo se trae ENTERO y se filtra aqui, no en el backend: son una
-   * docena de filas y el backend no acepta filtros en estas rutas
+   * El catalogo se trae ENTERO y se filtra aqui, no en el sistema: son una
+   * docena de filas y el sistema no acepta filtros en estas rutas
    * (`catalogo/rutas.ts`). Con ese tamaño, filtrar en el navegador es
    * instantáneo y no se pierde nada.
    */
@@ -276,9 +276,9 @@ export class Catalogo implements OnInit {
   /**
    * El tamano de pagina como texto, para el `[value]` del desplegable.
    *
-   * En las plantillas de Angular no hay `String` global (si `JSON`, si
-   * `Math`, pero no `String`), y `[value]` necesita texto: con un numero, el
-   * `value` del `select` no coincide con ninguna opcion y sale vacio.
+   * En las plantillas de Angular no hay un `String` global (hay otras
+   * utilidades, pero no `String`), y `[value]` necesita texto: con un numero,
+   * el `value` del `select` no coincide con ninguna opcion y sale vacio.
    */
   limiteComoTexto(): string {
     return String(this.limite());
@@ -414,14 +414,15 @@ export class Catalogo implements OnInit {
   /**
    * Borra.
    *
-   * El backend no deja borrar lo que ya se uso (los FK no tienen ON
-   * DELETE) y responde 409 EN_USO con el detalle de quién la usa. Se
-   * confirma primero porque no hay "dar de baja" en estas tablas: o se
-   * borra o no se toca.
+   * El sistema no deja borrar lo que ya se uso (las relaciones no están
+   * configuradas para borrar en cascada) y responde `EN_USO` con el detalle
+   * de quién la usa. Se confirma primero porque no hay "dar de baja" en
+   * estas tablas: o se borra o no se toca.
    *
-   * La confirmacion va por el modal, no por `window.confirm`: el del
+   * La confirmacion va por el modal, no por el confirm del navegador: el del
    * navegador no se puede estilar, no cabe el texto largo que devuelve el
-   * 409 y en una pantalla de mostrador se pierde detras de otra ventana.
+   * aviso de uso y en una pantalla de mostrador se pierde detras de otra
+   * ventana.
    */
   async eliminar(fila: FilaCatalogo): Promise<void> {
     const confirmado = await this.confirmModal().abrir({

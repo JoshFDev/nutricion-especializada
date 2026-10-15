@@ -93,7 +93,7 @@ describe('la cantidad de bultos', () => {
   });
 
   it('cero vuelve a ser uno, no cero', () => {
-    // `cantidad_bultos` es un `decimal(...)` del backend y RECHAZA el cero
+    // `cantidad_bultos` es un `decimal(...)` del sistema y RECHAZA el cero
     // con un 422. Una linea en cero es una linea que no se puede cobrar.
     expect(cambiarCantidad(lista(), 0).cantidad_bultos).toBe(1);
   });
@@ -136,7 +136,7 @@ describe('los kilos por bulto', () => {
   });
 
   it('el cero NO se acepta, y deja los kilos como estaban', () => {
-    // `kg_bulto` es `decimal(7, 3, 'kg_bulto')` en el backend y exige
+    // `kg_bulto` es `decimal(7, 3, 'kg_bulto')` en el sistema y exige
     // `> 0`: un cero llega como un 422, con la nota ya capturada.
     expect(cambiarKilos(lista(), 0).kg_bulto).toBe(20);
   });
@@ -219,12 +219,12 @@ describe('que renglones se pueden mandar', () => {
     expect(lineaValida(lista())).toBe(true);
   });
 
-  it('uno sin precio no se puede, y el backend lo rechazaria con SIN_PRECIO', () => {
+  it('uno sin precio no se puede, y el sistema lo rechazaria con SIN_PRECIO', () => {
     expect(problemasDe(lineaVacia(LAC))['precio_unit_kg']).toContain('precio vigente');
   });
 
   it('una cantidad descabellada se marca antes de mandarla', () => {
-    // El backend valida hasta 8 cifras enteras; aqui se avisa.
+    // El sistema valida hasta 8 cifras enteras; aqui se avisa.
     expect(problemasDe(cambiarCantidad(lista(), 999_999_999))['cantidad_bultos']).toBeDefined();
   });
 });
@@ -275,7 +275,7 @@ describe('si hay que mandar los kilos por bulto', () => {
   });
 
   it('en la EDICION se mandan SIEMPRE, aunque no se hayan tocado', () => {
-    // La diferencia con el alta: el trigger `fn_default_kg_bulto` vuelve a
+    // La diferencia con el alta: la regla automática `fn_default_kg_bulto` vuelve a
     // la presentacion del producto cualquier renglon que llegue sin kilos,
     // y una nota que vendio bultos de 25.5 se convertiria en bultos de 25.
     const deNota = lineaDeRenglon({

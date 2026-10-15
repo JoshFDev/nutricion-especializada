@@ -47,10 +47,10 @@ import {
   type ResumenTalonario,
 } from './notas-api';
 /**
- * El cobro en linea usa el MISMO servicio y los mismos tipos de la pantalla de
- * pagos, en vez de un segundo `POST /api/pagos` escrito aqui. Se reutiliza a
- * proposito: si el contrato del pago cambia, cambia en un solo lado y no en dos
- * pantallas que lo mandan de forma distinta.
+ * El cobro en línea usa el MISMO servicio y los mismos tipos de la pantalla de
+ * pagos, en vez de escribirlo aquí otra vez. Se reutiliza a propósito: si la
+ * forma de registrar un pago cambia, cambia en un solo lado y no en dos
+ * pantallas que lo mandan distinto.
  */
 import {
   METODOS_PAGO,
@@ -61,58 +61,54 @@ import {
 } from '../pagos/pagos-api';
 
 /**
- * Cuantos renglones caben en el papel de la nota.
+ * Cuántos renglones caben en el papel de la nota.
  *
- * La plantilla del Excel (que tambien imprime el PDF) trae 9 bloques de
- * detalle en cada una de sus dos copias. Es un tope del PAPEL, no del
- * sistema, y por eso vive aqui arriba, con la cara del formulario: la captura
- * no deja pasar un producto que luego no se pueda imprimir.
+ * La plantilla (que también se usa para imprimir el PDF) trae 9 espacios de
+ * detalle en cada una de sus dos copias. Es un tope del PAPEL, no del sistema,
+ * y por eso vive aquí arriba, junto al formulario: la captura no deja pasar un
+ * producto que luego no se pueda imprimir.
  */
 export const MAX_RENGLONES_NOTA = 9;
 
 /**
- * El mostrador: capturar una nota de remision y ver las que ya se guardaron.
+ * El mostrador: capturar una nota de remisión y ver las que ya se guardaron.
  *
- * La pantalla son DOS cosas en una sola vista, sin paginas entre ellas:
+ * La pantalla son DOS cosas en una sola vista, sin páginas entre ellas:
  *
- *   1. ARRIBA, la captura: cliente, producto, renglones, direccion. Es lo
- *      mismo de siempre: en un mostrador el operador esta parado con el
- *      cliente enfrente y la mercancia en el piso, y cada paso que implique
- *      un "siguiente" es un paso que se equivoca.
+ *   1. ARRIBA, la captura: cliente, producto, renglones, dirección. Es lo mismo
+ *      de siempre: en un mostrador el operador está parado con el cliente
+ *      enfrente y la mercancía en el piso, y cada paso que implique un
+ *      "siguiente" es un paso que se equivoca.
  *   2. ABAJO, la tabla de las notas guardadas, con las acciones de cada una:
- *      ver, PDF, Excel, devolucion y cancelacion.
+ *      ver, PDF, Excel, devolución y cancelación.
  *
- * Por que la tabla esta en la MISMA pantalla y no en otra: guardar una nota
- * no es el final de la pantalla. En un mostrador se emiten veinte notas en
- * una hora y la mayoria son para el mismo cliente, asi que lo que hace falta
- * despues de guardar es volver a capturar (la siguiente) y de vez en cuando
- * volver a imprimir o corregir una de las anteriores. Con la tabla abajo, las
- * dos cosas estan a un scroll; con un comprobante de pantalla completa
- *   (como estaba antes), imprimir obligaba a salir del mostrador y la tabla
- *   obligaba a cambiar de ruta.
+ * Por qué la tabla está en la MISMA pantalla y no en otra: guardar una nota no
+ * es el final. En un mostrador se emiten veinte notas en una hora y la mayoría
+ * son para el mismo cliente, así que lo que hace falta después de guardar es
+ * volver a capturar (la siguiente) y de vez en cuando volver a imprimir o
+ * corregir una de las anteriores. Con la tabla abajo, las dos cosas están a un
+ * scroll.
  *
- * Y por que la devolucion es `editar` y no una pantalla aparte: devolver es
- * bajar bultos o quitar renglones de una nota que ya se emitio, y eso es
- * exactamente lo que hace `PATCH /:id` con el inventario del lado correcto
- * (el trigger borra el movimiento de salida y los bultos vuelven a la bodega).
- * No hay tabla de devoluciones en la base ni la va a haber: una devolucion
- * que no se registra como edicion de la nota es un documento que dice que se
- * llevo mas producto del que se llevo.
+ * Y por qué la devolución se hace corrigiendo la nota y no en una pantalla
+ * aparte: devolver es bajar bultos o quitar renglones de una nota que ya se
+ * emitió, y eso es exactamente lo que hace corregirla, con el inventario del
+ * lado correcto (la regla automática del sistema borra el movimiento de salida
+ * y los bultos vuelven a la bodega). No hay una lista de devoluciones aparte:
+ * una devolución que no se registra como corrección de la nota es un documento
+ * que dice que se llevó más producto del que se llevó.
  *
  * Decisiones que no son obvias:
  *
- *   - El precio se PIDE al backend por producto (`/precios/efectivo`) y no
- *     se manda en el alta. Ver `cuerpoDeNota`, que explica el por que: la
- *     precedencia del precio del cliente sobre el de lista es del backend y
- *     el POS no la reimplementa.
- *   - El total que se ve mientras se captura es un preview de double, y al
- *     guardar se sustituye por el `subtotal` de la base. Ver `totalDeLineas`.
- *   - Los campos de cantidad y kilos se confirman con `change` (al salir o
- *     con Enter) y no con `input`. Con `input` el valor del input se
- *     reescribe en cada tecla y al teclear "0." para escribir "0.5" se
- *     come el punto, porque el modelo ya es 0. Aqui no se pierde nada: se
- *     confirma al salir del campo.
- *   - El periodo del listado lo decide la base, no el reloj del navegador.
+ *   - El precio se PIDE producto por producto y no se manda al crear la nota.
+ *     Ver `cuerpoDeNota`: la regla de que el precio del cliente le gana al de
+ *     lista es del sistema y la pantalla no la repite.
+ *   - El total que se ve mientras se captura es un adelanto, y al guardar se
+ *     sustituye por el total que calcula el sistema. Ver `totalDeLineas`.
+ *   - Los campos de cantidad y kilos se confirman al salir del campo (o con
+ *     Enter) y no en cada tecla. En cada tecla el valor se reescribe y al
+ *     teclear "0." para escribir "0.5" se come el punto, porque el valor ya es
+ *     0. Aquí no se pierde nada: se confirma al salir del campo.
+ *   - El periodo del listado lo decide el sistema, no el reloj del navegador.
  *     Ver `Periodo`.
  */
 @Component({
@@ -128,7 +124,7 @@ export class Notas {
   private readonly apiDirecciones = inject(DireccionesApi);
   private readonly sesion = inject(Sesion);
 
-  /** La confirmacion de cambiar de cliente va por el modal, no por `window.confirm`. */
+  /** La confirmación de cambiar de cliente va por la ventana de aviso, no por la del navegador. */
   readonly confirmModal = viewChild.required(ConfirmModal);
 
   // ------------------------------------------------------------- la captura
@@ -137,16 +133,16 @@ export class Notas {
   readonly direccion = signal('');
 
   /**
-   * La nota que se esta corrigiendo, o `null` si lo que se esta capturando
-   * es una nota nueva.
+   * La nota que se está corrigiendo, o `null` si lo que se está capturando es
+   * una nota nueva.
    *
-   * Cuando esta puesta, la pantalla NO es un alta: es una devolucion (o una
-   * correccion cualquiera), y lo unico que cambia es el boton grande, que
-   * dice "Guardar la devolucion" y llama a `PATCH` en vez de a `POST`.
+   * Cuando está puesta, la pantalla NO es una nota nueva: es una devolución (o
+   * una corrección cualquiera), y lo único que cambia es el botón grande, que
+   * dice "Guardar la devolución".
    *
    * El mismo formulario para las dos cosas, y no dos formularios, porque el
-   * renglon que se ve es el mismo: el producto, los bultos, los kilos y el
-   * precio. Lo unico que cambia es que al guardar se corrige una nota que ya
+   * renglón que se ve es el mismo: el producto, los bultos, los kilos y el
+   * precio. Lo único que cambia es que al guardar se corrige una nota que ya
    * existe en vez de crear una nueva con el folio siguiente.
    */
   readonly editando = signal<Nota | null>(null);
@@ -157,29 +153,29 @@ export class Notas {
   readonly buscandoCliente = signal(false);
   readonly buscandoProducto = signal(false);
 
-  /** El renglon al que se le esta preguntando el precio, para no duplicar. */
+  /** El renglón al que se le está preguntando el precio, para no duplicar. */
   readonly preguntando = signal<number | null>(null);
 
   readonly guardando = signal(false);
   readonly error = signal<string | null>(null);
 
   /**
-   * Lo que se acaba de guardar, para el renglon de aviso de arriba.
+   * Lo que se acaba de guardar, para el renglón de aviso de arriba.
    *
    * Antes esto era la pantalla de comprobante: al guardar se tapaba el
-   * mostrador con el folio y habia que apretar "otra nota" para seguir. Ahora
-   * el formulario queda listo para la siguiente y la nota se ve en la tabla
-   * de abajo, asi que lo que se guarda aqui es solo el aviso: que folio
-   * salio, cuanto cobro la base (que no es el preview que se estaba viendo)
-   * y donde ir a verlo si hace falta.
+   * mostrador con el folio y había que apretar "otra nota" para seguir. Ahora
+   * el formulario queda listo para la siguiente y la nota se ve en la tabla de
+   * abajo, así que lo que se guarda aquí es solo el aviso: qué folio salió,
+   * cuánto cobró el sistema (que no es el adelanto que se estaba viendo) y
+   * dónde ir a verlo si hace falta.
    */
   readonly ultimaGuardada = signal<Nota | null>(null);
 
-  // --------------------------------------------------------- el cobro en linea
+  // ------------------------------------------------------ el cobro en línea
   /**
-   * Cobrar una nota sin salirse de la pantalla. La nota que se esta cobrando
-   * (por id), el monto escrito y el metodo. Sehattan de una en una porque en un
-   * mostrador se cobra una nota a la vez.
+   * Cobrar una nota sin salirse de la pantalla. La nota que se está cobrando
+   * (por id), el monto escrito y el método. Se atienden de una en una porque en
+   * un mostrador se cobra una nota a la vez.
    */
   readonly cobrando = signal<number | null>(null);
   readonly montoCobro = signal('');
@@ -188,17 +184,17 @@ export class Notas {
   readonly errorCobro = signal<string | null>(null);
 
   // --------------------------------------------------------- las direcciones
-  /** El catalogo de destinos de la sucursal. Ver `direcciones-api.ts`. */
+  /** El catálogo de destinos de la sucursal. Ver `direcciones-api.ts`. */
   readonly direcciones = signal<DireccionEntrega[]>([]);
   /**
-   * La direccion del catalogo que esta escrita en el campo.
+   * La dirección del catálogo que está escrita en el campo.
    *
-   * `null` cuando lo que hay escrito es una direccion nueva, todavia no
-   * guardada. No se puede deducir del texto: dos destinos puede tener el
-   * mismo texto escrito de dos maneras, y de eso se trata.
+   * `null` cuando lo que hay escrito es una dirección nueva, todavía no
+   * guardada. No se puede deducir del texto: dos destinos pueden tener el mismo
+   * texto escrito de dos maneras, y de eso se trata.
    */
   readonly direccionElegida = signal<number | null>(null);
-  /** El formulario de "guardar esta direccion" / "cambiar esta". */
+  /** El formulario de "guardar esta dirección" / "cambiar esta". */
   readonly formaDireccion = signal<{ id: number | null; nombre: string; direccion: string } | null>(
     null,
   );
@@ -207,16 +203,15 @@ export class Notas {
 
   // ------------------------------------------------------------- la bodega
   /**
-   * La bodega de la que sale la mercancia.
+   * La bodega de la que sale la mercancía.
    *
-   * Se elige en la captura (no es una constante): las bodegas viven en el
-   * catalogo (`/api/almacenes`) y el operador ve cual elige. Si no hay
-   * ninguna, la captura ofrece crear una en el acto a quien tenga
-   * `almacenes.crear` -- el administrador. Sin bodega, el guardado se bloquea
-   * con un aviso en vez de mandar un "almacen 1" que el backend va a rechazar
-   * con un error raro.
+   * Se elige en la captura (no es un valor fijo): las bodegas viven en el
+   * catálogo y el operador ve cuál elige. Si no hay ninguna, la captura ofrece
+   * crear una en el acto a quien tenga `almacenes.crear` -- el administrador.
+   * Sin bodega, el guardado se bloquea con un aviso en vez de mandar un
+   * "almacén 1" que el sistema va a rechazar con un error raro.
    *
-   * En una edicion (devolucion) los renglones que ya estaban conservan su
+   * Al corregir una nota (devolución) los renglones que ya estaban conservan su
    * bodega; la elegida solo rellena los productos NUEVOS que se agreguen.
    */
   readonly almacenes = signal<Almacen[]>([]);
@@ -231,34 +226,33 @@ export class Notas {
   readonly nuevaBodega = signal('');
   readonly creandoBodega = signal(false);
   readonly errorBodega = signal<string | null>(null);
-  /** Solo quien pueda ve el formulario de crearla: una bodega es config. */
+  /** Solo quien tenga permiso ve el formulario de crearla: una bodega es cosa de administración. */
   readonly puedeCrearBodega = computed(() => this.sesion.puede('almacenes.crear'));
 
   // ------------------------------------------------------ la tabla de notas
   readonly notas = signal<NotaListada[]>([]);
   /**
-   * Cuantas notas hay en el filtro, no cuantas se ven.
+   * Cuántas notas hay en el filtro, no cuántas se ven.
    *
-   * El nombre lleva el "notas" porque `total` ya lo ocupa el total de la
-   * nota que se esta capturando arriba, que es el que se ve con los miles en
-   * el boton. Son dos cifras distintas y en la misma pantalla, asi que
-   * nombrarlas distinto no es estetica: es para no tener que leer la pantalla
-   * para saber a cual se refiere un `total`.
+   * El nombre lleva el "notas" porque `total` ya lo ocupa el total de la nota
+   * que se está capturando arriba, que es el que se ve con los miles en el
+   * botón. Son dos cifras distintas y en la misma pantalla, así que nombrarlas
+   * distinto no es estética: es para no tener que leer la pantalla para saber a
+   * cuál se refiere un `total`.
    */
   readonly totalNotas = signal(0);
   /**
-   * Cuantas notas se ven por pagina, y la pagina que se esta viendo.
+   * Cuántas notas se ven por página, y la página que se está viendo.
    *
-   * Antes esto era un "cargar mas" que pegaba las siguientes al final de la
-   * tabla. Con 50, 100 o mas notas eso es una tabla de tres pantallas y pico,
-   * y para llegar a una nota de hace tres semanas habia que bajar y bajar. Con
-   * paginas la tabla tiene alto fijo: se sabe cuantas hay, se sabe en cual
-   * estas, y se llega a la que se busca en dos clics.
+   * Antes esto era un "cargar más" que pegaba las siguientes al final de la
+   * tabla. Con 50, 100 o más notas eso es una tabla de tres pantallas y pico, y
+   * para llegar a una nota de hace tres semanas había que bajar y bajar. Con
+   * páginas la tabla tiene alto fijo: se sabe cuántas hay, se sabe en cuál
+   * estás, y se llega a la que se busca en dos clics.
    *
-   * La pagina se elige en SALTOS porque `limite * (pagina - 1)`: los indices
-   * van en el `offset` de la API y un numero de pagina guardado seria un
-   * `offset` guardado, que se queda viejo en cuanto el filtro o el orden
-   * cambian y la API responde con otro total.
+   * La página se elige en SALTOS porque el punto de partida se calcula a partir
+   * del tamaño de página: si se guardara un número de página, quedaría viejo en
+   * cuanto el filtro o el orden cambian y llegan otras notas.
    */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -268,11 +262,11 @@ export class Notas {
   /**
    * `'todo'` no se manda: es la ausencia de periodo. Ver `Periodo`.
    *
-   * Arranca en `'todo'` y NO en `'hoy'`: con `'hoy'` la tabla se abria
-   * mostrando solo las notas del dia de hoy, y al volver a entrar otro dia
-   * (o al cambiar de turno) las notas ya emitidas desaparecian de la vista
-   * y parecia que se habian borrado. Las notas estan en la base; el filtro
-   * era lo que las escondia. Quien quiera acotar al dia lo elige a mano.
+   * Arranca en `'todo'` y NO en `'hoy'`: con `'hoy'` la tabla se abría
+   * mostrando solo las notas del día de hoy, y al volver a entrar otro día (o
+   * al cambiar de turno) las notas ya emitidas desaparecían de la vista y
+   * parecía que se habían borrado. Las notas están guardadas; el filtro era lo
+   * que las escondía. Quien quiera acotar al día lo elige a mano.
    */
   readonly periodo = signal<Periodo | 'todo'>('todo');
   readonly buscar = signal('');
@@ -284,7 +278,7 @@ export class Notas {
   /** Exportando lista a Excel. */
   readonly exportando = signal(false);
 
-  /** El orden lo pone el SERVIDOR (`ordenar` del esquema), no la pantalla. */
+  /** El orden lo pone el sistema, no la pantalla. */
   readonly ordenar = signal<OrdenNotas>('fecha_desc');
 
   /** Las opciones del desplegable de orden. */
@@ -293,10 +287,9 @@ export class Notas {
   /**
    * El texto escrito en los buscadores de cliente y de producto.
    *
-   * Antes no estaban en ningun lado: el `input` era uncontrolled y el texto se
-   * quedaba en el DOM, lo que hacia imposible limpiarlo al guardar sin ir a
-   * tocar el elemento a mano. Con el texto en un signal, limpiar la captura
-   * es limpiar signals.
+   * Antes no se guardaba en ningún lado: el texto se quedaba en la pantalla, y
+   * limpiarlo al guardar obligaba a tocar el campo a mano. Con el texto
+   * guardado aparte, limpiar la captura es solo borrar esos valores.
    */
   readonly textoCliente = signal('');
   readonly textoProducto = signal('');
@@ -314,7 +307,7 @@ export class Notas {
   readonly total = computed(() => totalDeLineas(this.lineas()));
   readonly kilos = computed(() => kilosDeLineas(this.lineas()));
   readonly hayLineas = computed(() => this.lineas().length > 0);
-  /** Cuantas paginas hay en total, con la del tamano de pagina elegido. */
+  /** Cuántas páginas hay en total, con el tamaño de página elegido. */
   readonly paginasTotales = computed(() =>
     Math.max(1, Math.ceil(this.totalNotas() / this.limite())),
   );
@@ -322,7 +315,7 @@ export class Notas {
   readonly hayPaginaAnterior = computed(() => this.pagina() > 1);
   readonly hayPaginaSiguiente = computed(() => this.pagina() < this.paginasTotales());
 
-  /** Que se ve en la barra: "1-25 de 340". */
+  /** Qué se ve en la barra: "1-25 de 340". */
   readonly rangoDePagina = computed(() => {
     const total = this.totalNotas();
     if (total === 0) return '0 de 0';
@@ -331,18 +324,18 @@ export class Notas {
     return `${desde}-${hasta} de ${total}`;
   });
 
-  /** El texto del boton grande: dice que se esta haciendo, no "guardar". */
+  /** El texto del botón grande: dice qué se está haciendo, no "guardar". */
   readonly textoGuardar = computed(() => {
     if (this.guardando()) return 'Guardando...';
     return this.editando() === null ? 'Guardar la nota' : 'Guardar la devolucion';
   });
 
   /**
-   * Lo que se esta capturando se puede guardar.
+   * Lo que se está capturando se puede guardar.
    *
-   * El ALTA se puede siempre; la correccion solo mientras el estatus de la
-   * nota lo permita (pendiente o parcial, que es lo que se comprueba aqui) y
-   * los triggers de 0008 lo impiden en la base, no antes.
+   * Una nota nueva se puede siempre; la corrección solo mientras el estatus de
+   * la nota lo permita (pendiente o parcial, que es lo que se comprueba aquí).
+   * El sistema impide corregir las demás más adelante, no antes.
    */
   readonly editable = computed(() => {
     const nota = this.editando();
@@ -355,12 +348,11 @@ export class Notas {
   );
 
   /**
-   * El boton de "guardar esta direccion" se apaga si el texto no alcanza.
+   * El botón de "guardar esta dirección" se apaga si el texto no alcanza.
    *
-   * El minimo de cinco caracteres es el del backend (`textoDireccionEsquema`)
-   * y el nombre de dos es el suyo (`nombreDireccionEsquema`). Se repiten aqui
-   * por la misma razon que se repiten los problemas de los renglones: para
-   * avisar antes, no para substituir al backend.
+   * El mínimo de cinco caracteres y el nombre de dos son los mismos que exige
+   * el sistema. Se repiten aquí por la misma razón que se repiten los problemas
+   * de los renglones: para avisar antes, no para sustituir al sistema.
    */
   readonly direccionGuardable = computed(() => {
     const forma = this.formaDireccion();
@@ -378,18 +370,18 @@ export class Notas {
   /**
    * El temporizador del buscador de la tabla de abajo.
    *
-   * Es un tercero y no el mismo que los otros dos por una razon que se ve al
-   * escribirlo: el buscador de la tabla tambien decide CUANDO se pide la
-   * pagina, y si compartiera el temporizador con el de productos, teclear en
-   * el buscador de la tabla cancelaria una busqueda de producto a media
-   * palabra. Son tres Searches distintos y por eso son tres esperas.
+   * Es un tercero y no el mismo que los otros dos por una razón que se ve al
+   * escribirlo: el buscador de la tabla también decide CUÁNDO se pide la
+   * página, y si compartiera la espera con el de productos, teclear en el
+   * buscador de la tabla cancelaría una búsqueda de producto a media palabra.
+   * Son tres búsquedas distintas y por eso son tres esperas.
    */
   private temporizadorFiltros: ReturnType<typeof setTimeout> | undefined;
   /**
    * El aviso de "guardada" se cierra solo. Antes era una franja fija arriba de
-   * la pantalla que no se iba nunca, y empujaba hacia abajo todo lo demas; con
-   * el aviso flotando, que ademas se recoge solo, la pantalla no necesita
-   * reservar ese renglon para siempre.
+   * la pantalla que no se iba nunca, y empujaba hacia abajo todo lo demás; con
+   * el aviso flotando, que además se recoge solo, la pantalla no necesita
+   * reservar ese renglón para siempre.
    */
   private temporizadorAviso: ReturnType<typeof setTimeout> | undefined;
 
@@ -401,9 +393,9 @@ export class Notas {
    * Lo que se carga al abrir la pantalla: las direcciones y las bodegas (que
    * se eligen al capturar) y la tabla de notas (que es lo que hay abajo).
    *
-   * Van juntas con `Promise.all` y no en serie porque no dependen una de la
-   * otra, y una pantalla de mostrador que tarda lo que las tres mas lo que
-   * cada una se siente lenta aunque las tres esten bien.
+   * Van juntas y no una tras otra porque no dependen entre sí, y una pantalla
+   * de mostrador que tarda la suma de las tres se siente lenta aunque las tres
+   * estén bien.
    */
   private async cargar(): Promise<void> {
     await Promise.all([this.cargarDirecciones(), this.cargarAlmacenes(), this.recargar()]);
@@ -412,11 +404,11 @@ export class Notas {
   /**
    * Se busca con 250 ms de espera.
    *
-   * Sin espera, teclear "VIM" hace tres peticiones y las tres respuestas
-   * llegan en desorden: la de "VI" se pinta DESPUES de la de "VIM" y la
-   * lista muestra productos que no coinciden con lo tecleado. Es el problema
-   * clasico de buscar mientras se teclea, y la unica forma de evitarlo sin
-   * pedir confirmacion es esperar a que la persona pare.
+   * Sin espera, teclear "VIM" hace tres consultas y las tres respuestas llegan
+   * en desorden: la de "VI" se pinta DESPUÉS de la de "VIM" y la lista muestra
+   * productos que no coinciden con lo tecleado. Es el problema clásico de
+   * buscar mientras se teclea, y la única forma de evitarlo sin pedir
+   * confirmación es esperar a que la persona pare.
    */
   buscarCliente(texto: string): void {
     this.textoCliente.set(texto);
@@ -431,9 +423,9 @@ export class Notas {
       try {
         this.resultadosCliente.set(await this.api.clientes(limpio));
       } catch {
-        // Fallar la busqueda no es motivo para seguir: lo que hay
-        // en pantalla sigue valido y el error se vera al guardar. Un fallo
-        // del buscador no debe tapar la nota a medio capture.
+        // Que falle la búsqueda no es motivo para seguir: lo que hay en
+        // pantalla sigue válido y el error se verá al guardar. Un fallo del
+        // buscador no debe tapar la nota a medio capturar.
         this.resultadosCliente.set([]);
       } finally {
         this.buscandoCliente.set(false);
@@ -468,12 +460,12 @@ export class Notas {
   }
 
   /**
-   * Cambiar de cliente con renglones puestos no se puede: el precio es de el.
+   * Cambiar de cliente con renglones puestos no se puede: el precio es de él.
    *
-   * La confirmacion va por el modal (no por `window.confirm`) porque el aviso
-   * es largo y peligroso: el mensaje dice que se pierde la nota capturada y
-   * el de `confirm` del navegador no se puede estilar, asi que en el mostrador
-   * se le da que sí de corrido sin leer.
+   * La confirmación va por la ventana de aviso (no por la del navegador)
+   * porque el mensaje es largo y peligroso: dice que se pierde la nota
+   * capturada, y la ventana del navegador no se puede dar formato, así que en
+   * el mostrador se acepta de corrido sin leer.
    */
   async cambiarCliente(): Promise<void> {
     if (this.hayLineas()) {
@@ -489,7 +481,7 @@ export class Notas {
     this.lineas.set(vaciar(this.lineas()));
     this.resultadosCliente.set([]);
     // El buscador queda en blanco, no con el texto del cliente que se acaba de
-    // quitar: si no, se abre el desplegable con la busqueda anterior puesta.
+    // quitar: si no, se abre la lista con la búsqueda anterior puesta.
     this.textoCliente.set('');
     this.resultadosProducto.set([]);
   }
@@ -497,17 +489,17 @@ export class Notas {
   /**
    * Agrega un producto a la nota.
    *
-   * El precio se pregunta antes de agregar la linea y no despues: si el
-   * producto no tiene precio vigente, el backend va a rechazar la nota
-   * entera con `SIN_PRECIO` y la persona se entera DESPUES de haber
-   * capturado media docena de renglones. Preguntando primero, el error sale
-   * cuando todavia no se capturo nada.
+   * El precio se pregunta antes de agregar el renglón y no después: si el
+   * producto no tiene precio vigente, el sistema va a rechazar la nota entera
+   * con `SIN_PRECIO` y la persona se entera DESPUÉS de haber capturado media
+   * docena de renglones. Preguntando primero, el error sale cuando todavía no
+   * se capturó nada.
    *
-   * Y si ya estaba, `agregar` suma la cantidad en vez de duplicar la fila.
+   * Y si ya estaba, `agregar` suma la cantidad en vez de duplicar el renglón.
    *
-   * La plantilla del papel trae 9 bloques de detalle (en cada una de sus
-   * dos copias), asi que aqui no se deja pasar el decimo producto distinto:
-   * una nota con 10 renglones nunca cabria en el papel que se imprime.
+   * La plantilla del papel trae 9 espacios de detalle (en cada una de sus dos
+   * copias), así que aquí no se deja pasar el décimo producto distinto: una
+   * nota con 10 renglones nunca cabría en el papel que se imprime.
    */
   async agregarProducto(producto: Producto): Promise<void> {
     const cliente = this.cliente();
@@ -517,8 +509,8 @@ export class Notas {
     }
     if (this.preguntando() === producto.id) return;
 
-    // `agregar` fusiona cuando el producto ya trae renglon: esos no cuentan
-    // como fila nueva. Solo se topa al producto distinto numero 10.
+    // `agregar` junta cuando el producto ya trae renglón: esos no cuentan como
+    // renglón nuevo. Solo se topa al producto distinto número 10.
     const yaEsta = this.lineas().some((linea) => linea.producto_id === producto.id);
     if (!yaEsta && this.lineas().length >= MAX_RENGLONES_NOTA) {
       this.error.set(
@@ -537,7 +529,7 @@ export class Notas {
       }
       if (!precio.vigente || precio.precio_kg === null) {
         this.error.set(
-          `El precio del ${producto.codigo} ya vencio (vencia el ${precio.vigente_hasta ?? 'ayer'}). ` +
+          `El precio del ${producto.codigo} ya venció (vencía el ${precio.vigente_hasta ?? 'ayer'}). ` +
             'Cámbialo en Precios antes de vender.',
         );
         return;
@@ -554,13 +546,13 @@ export class Notas {
   }
 
   /**
-   * Cuantos bultos quedan del producto, y ponerlos en los renglones que lo
+   * Cuántos bultos quedan del producto, y ponerlos en los renglones que lo
    * llevan.
    *
-   * Se pregunta DESPUES de agregar la linea y no antes: el "Disponibles" es
-   * una anotacion del renglon, y si el producto no tiene precio la factura ni
-   * se forma. Un fallo no echa la captura abajo; el renglon se queda sin
-   * contador, que es lo que ya se veia antes de saber cuanto habia.
+   * Se pregunta DESPUÉS de agregar el renglón y no antes: el "Disponibles" es
+   * una anotación del renglón, y si el producto no tiene precio la nota ni se
+   * forma. Un fallo no echa la captura abajo; el renglón se queda sin contador,
+   * que es lo que ya se veía antes de saber cuánto había.
    */
   private async saberDisponible(productoId: number, almacenId: number): Promise<void> {
     const disponibles = await this.api.existencia(productoId, almacenId);
@@ -573,17 +565,17 @@ export class Notas {
   }
 
   /**
-   * Pide el disponible de cada producto distinto que haya en los renglones.
+   * Pide lo disponible de cada producto distinto que haya en los renglones.
    *
-   * Se usa al abrir una nota para corregirla: los renglones recien cargados
-   * no traen su saldo, y el operador decide cuantos bultos devolver viendo
-   * cuantos quedan. Un producto por llamada, y cada una toca solo sus filas.
+   * Se usa al abrir una nota para corregirla: los renglones recién cargados no
+   * traen su saldo, y el operador decide cuántos bultos devolver viendo cuántos
+   * quedan. Un producto por consulta, y cada una toca solo sus renglones.
    */
   private refrescarDisponibles(): void {
     const porProducto = new Map<number, number>();
     for (const linea of this.lineas()) {
       if (porProducto.has(linea.producto_id)) continue;
-      // La bodega del renglon manda; la elegida solo rellena los NUEVOS.
+      // La bodega del renglón manda; la elegida solo rellena los NUEVOS.
       const almacenId = linea.almacen_id ?? this.almacen()?.id;
       if (almacenId === undefined) continue;
       porProducto.set(linea.producto_id, almacenId);
@@ -594,7 +586,7 @@ export class Notas {
   }
 
   // ------------------------------------------------------- los renglones
-  /** `poner*` y no `cantidad`/`kilos`: `kilos` es la signal del total de la nota. */
+  /** Se llaman `poner*` y no `cantidad`/`kilos`: `kilos` ya es el total de la nota. */
   ponerCantidad(uid: number, valor: string): void {
     this.lineas.update((lineas) =>
       lineas.map((linea) => (linea.uid === uid ? cambiarCantidad(linea, valor) : linea)),
@@ -608,21 +600,20 @@ export class Notas {
   }
 
   /**
-   * Quita el rengllon de la pantalla.
+   * Quita el renglón de la pantalla.
    *
-   * En una devolucion, quitar la fila es DEVOLVER el producto completo: el
-   * renglon no vuelve en el cuerpo del `PATCH` y el backend lo borra, y con
-   * el movimiento de inventario que lo saco. Bajar la cantidad a un bulto es
-   * lo mismo con mejor precision, pero quitar la fila es lo que se usa cuando
-   * el producto no se llevo nada.
+   * En una devolución, quitar el renglón es DEVOLVER el producto completo: el
+   * renglón no vuelve al guardar y el sistema lo borra, junto con el movimiento
+   * de inventario que lo sacó. Bajar la cantidad a un bulto es lo mismo con
+   * mejor precisión, pero quitar el renglón es lo que se usa cuando el producto
+   * no se llevó nada.
    */
   quitarLinea(uid: number): void {
     this.lineas.update((lineas) => quitar(lineas, uid));
   }
 
-  // Los simbolos que la plantilla usa como metodo de la clase. Un import
-  // suelto no es visible desde el HTML: lo que este en el `import` y no
-  // este aqui, la plantilla no lo ve.
+  // Las funciones que la pantalla usa como métodos. Lo que no se exponga aquí,
+  // la plantilla no lo ve.
   problemasDeLinea = problemasDe;
   kilosDeLinea = kilosDeLinea;
   origenComoTexto = origenComoTexto;
@@ -634,32 +625,31 @@ export class Notas {
 
   // ------------------------------------------------------------- el guardado
   /**
-   * Guarda lo que hay en pantalla: una nota nueva, o la correccion de una
-   * que ya existe.
+   * Guarda lo que hay en pantalla: una nota nueva, o la corrección de una que
+   * ya existe.
    *
-   * Los dos caminos salen de aqui y no de dos metodos porque el formulario
-   * es uno, y la unica diferencia entre crear y corregir es a quien se le
-   * manda el cuerpo (`POST` o `PATCH`). Al terminar los dos hacen lo mismo:
-   * dejar la pantalla lista para la siguiente nota, con el cliente puesto, y
-   * recargar la tabla de abajo para que la nota (o su nuevo total) se vea sin
-   * que la persona tenga que buscarla.
+   * Los dos caminos salen de aquí y no de dos métodos porque el formulario es
+   * uno, y la única diferencia entre crear y corregir es cómo se manda. Al
+   * terminar los dos hacen lo mismo: dejar la pantalla lista para la siguiente
+   * nota y recargar la tabla de abajo para que la nota (o su nuevo total) se
+   * vea sin que la persona tenga que buscarla.
    */
   /**
    * Deja la captura en blanco para la nota siguiente.
    *
-   * Se llama DESPUES de guardar, y tambien al cancelar una edicion. Todo lo que
-   * se capturo queda en cero: renglones, direccion, la direccion elegida de la
-   * lista, el texto de los dos buscadores y el cliente.
+   * Se llama DESPUÉS de guardar, y también al cancelar una corrección. Todo lo
+   * que se capturó queda en cero: renglones, dirección, la dirección elegida de
+   * la lista, el texto de los dos buscadores y el cliente.
    *
-   * El cliente tambien se va, a proposito. Podria quedarse (en un mostrador a
+   * El cliente también se va, a propósito. Podría quedarse (en un mostrador a
    * veces son varias notas seguidas para el mismo cliente) pero dejarlo puesto
-   * hace que la nota NUEVA se vea como si todavia tuviera lo que el operador
-   * acaba de emitir, y el precio que se esta mostrando en la cuenta es el del
-   * cliente anterior. Si hace falta lo mismo, se elige otra vez.
+   * hace que la nota NUEVA se vea como si todavía tuviera lo que el operador
+   * acaba de emitir, y el precio que se está mostrando es el del cliente
+   * anterior. Si hace falta lo mismo, se elige otra vez.
    *
-   * Los temporizadores de los buscadores se cancelan tambien: si no, el
-   * `setTimeout` de una busqueda a medio camino reviviria y llenaria el
-   * desplegable de resultados con clientes de una captura que ya no existe.
+   * Las esperas de los buscadores se cancelan también: si no, una búsqueda a
+   * medio camino reviviría y llenaría la lista de resultados con clientes de
+   * una captura que ya no existe.
    */
   private limpiarCaptura(): void {
     this.lineas.set(vaciar(this.lineas()));
@@ -693,9 +683,9 @@ export class Notas {
         this.ultimaGuardada.set(await this.api.editar(enEdicion.id, cuerpo));
         this.editando.set(null);
       }
-      // La captura se limpia en las DOS ramas y con el MISMO metodo. Antes solo
-      // se limpiaba al editar, y al dar de alta se seguian viendo los renglones
-      // y el total de la nota que ya se habia emitido.
+      // La captura se limpia en las DOS ramas y con el MISMO método. Antes solo
+      // se limpiaba al corregir, y al crear una nota se seguían viendo los
+      // renglones y el total de la nota que ya se había emitido.
       this.limpiarCaptura();
       await this.recargar();
       this.avisarGuardada();
@@ -709,7 +699,7 @@ export class Notas {
   /**
    * Programa el cierre del aviso de nota guardada. Si se vuelve a guardar
    * antes de que se cierre, se cancela el cierre anterior: si no, el primer
-   * aviso se llevaria por delante al segundo y la palomita desaparecería
+   * aviso se llevaría por delante al segundo y la palomita desaparecería
    * mientras el mostrador sigue viendo la nota nueva.
    */
   private avisarGuardada(): void {
@@ -724,12 +714,12 @@ export class Notas {
   }
 
   /**
-   * El error de guardar, traducido al idioma de quien esta en el mostrador.
+   * El error de guardar, traducido al idioma de quien está en el mostrador.
    *
-   * `STOCK_INSUFICIENTE` es el que vale la pena tratar: el mensaje del
-   * backend ("no hay producto suficiente en el almacen 1") no dice de que
-   * producto ni cuanto falta, y el `detalles` si. Como el POS ya sabe el
-   * nombre del producto (esta en la linea), el nombre se pone aqui.
+   * `STOCK_INSUFICIENTE` es el que vale la pena tratar: el mensaje del sistema
+   * ("no hay producto suficiente en el almacén 1") no dice de qué producto ni
+   * cuánto falta, y los detalles sí. Como la pantalla ya sabe el nombre del
+   * producto (está en el renglón), el nombre se pone aquí.
    */
   private explicar(falla: unknown): string {
     const legible = errorLegible(falla);
@@ -747,28 +737,27 @@ export class Notas {
   // ------------------------------------------------------------ los permisos
   /**
    * Se puede ABRIR el mostrador con `notas.ver` pero no GUARDAR sin
-   * `notas.crear` (`POST /notas-remision` lo pide, ver
-   * `notas-remision/rutas.ts`). Un rol que solo consulta llega aqui por el
-   * menu y se encuentra con un boton que el backend le va a rechazar con un
-   * 403, asi que el boton se apaga y se dice por que.
+   * `notas.crear` (ver `notas-remision/rutas.ts`). Un rol que solo consulta
+   * llega aquí por el menú y se encuentra con un botón que el sistema le va a
+   * rechazar, así que el botón se apaga y se dice por qué.
    *
    * Es la misma ayuda que `sesion.puede` da en todos lados: no es seguridad
-   * (el backend lo comprueba igual), es no prometerle a la persona algo que
-   * el servidor le va a negar.
+   * (el sistema lo comprueba igual), es no prometerle a la persona algo que el
+   * sistema le va a negar.
    */
   readonly puedeCrear = computed(() => this.sesion.puede('notas.crear'));
 
   /**
    * Corregir y devolver es `notas.editar`, y cancelar es `notas.cancelar`: no
    * son el mismo permiso y en la tabla salen botones distintos por eso (ver
-   * `notas-remision/rutas.ts`). Un rol que solo edita puede devolver mercancia
+   * `notas-remision/rutas.ts`). Un rol que solo edita puede devolver mercancía
    * pero no cancelar la nota entera, que es lo que un cajero NO debe poder
-   * hacer sin supervision.
+   * hacer sin supervisión.
    */
   readonly puedeEditar = computed(() => this.sesion.puede('notas.editar'));
   readonly puedeCancelar = computed(() => this.sesion.puede('notas.cancelar'));
 
-  /** PDF y Excel van con `notas.ver`: imprimir no es una operacion distinta. */
+  /** PDF y Excel van con `notas.ver`: imprimir no es una operación distinta. */
   readonly puedeVer = computed(() => this.sesion.puede('notas.ver'));
 
   readonly puedeVerDirecciones = computed(() => this.sesion.puede('direcciones.ver'));
@@ -778,16 +767,16 @@ export class Notas {
 
   /**
    * Cobrar desde la propia nota. El permiso es el de PAGOS, no uno de notas:
-   * registrar un cobro es un pago, y aunque la pantalla sea la de notas, el
-   * que no tiene `pagos.crear` no debe poder mover dinero desde aqui.
+   * registrar un cobro es un pago, y aunque la pantalla sea la de notas, el que
+   * no tiene `pagos.crear` no debe poder mover dinero desde aquí.
    */
   readonly puedeCobrar = computed(() => this.sesion.puede('pagos.crear'));
 
   /**
    * Una nota se puede cobrar en el mostrador mientras siga abierta. Una
-   * `parcial` tambien: se le puede pagar el resto. Lo que ya no se puede es
-   * una `pagada` (sobraria dinero) ni una `cancelada` (no se cobra lo que se
-   * devolvio).
+   * `parcial` también: se le puede pagar el resto. Lo que ya no se puede es
+   * una `pagada` (sobraría dinero) ni una `cancelada` (no se cobra lo que se
+   * devolvió).
    */
   sePuedeCobrar(nota: NotaListada): boolean {
     return nota.estatus === 'pendiente' || nota.estatus === 'parcial';
@@ -796,15 +785,14 @@ export class Notas {
   /**
    * Abre el cobro de una nota y deja el monto listo.
    *
-   * El monto se prellena SOLO con una nota `pendiente`, y con prellenarse
-   * exactamente lo que vale: en ese estatus, por definicion, no hay nada
-   * pagado todavia.
+   * El monto se rellena SOLO con una nota `pendiente`, y con exactamente lo que
+   * vale: en ese estatus, por definición, no hay nada pagado todavía.
    *
-   * En una `parcial` se deja EN BLANCO a proposito, aunque parezca menos
-   * comodo. El backend no expone cuanto se le aplico a la nota, asi que
-   * prellenar el subtotal mandaria de mas y el trigger lo rebotaria con un
-   * error; el operador escribe el resto, que es justo lo que ya se hace en la
-   * pantalla de pagos.
+   * En una `parcial` se deja EN BLANCO a propósito, aunque parezca menos
+   * cómodo. El sistema no dice cuánto se le aplicó a la nota, así que rellenar
+   * el total mandaría de más y la regla automática lo rebotaría con un error; el
+   * operador escribe el resto, que es justo lo que ya se hace en la pantalla de
+   * pagos.
    */
   abrirCobro(nota: NotaListada): void {
     if (!this.puedeCobrar() || !this.sePuedeCobrar(nota)) return;
@@ -815,11 +803,11 @@ export class Notas {
     this.cobrando.set(nota.id);
   }
 
-  /** Los metodos de pago, tal cual los acepta el backend. */
+  /** Los métodos de pago, tal cual los acepta el sistema. */
   readonly metodos = METODOS_PAGO;
 
   /**
-   * Si el operador YA ESTA ESCRIBIENDO el monto.
+   * Si el operador YA ESTÁ ESCRIBIENDO el monto.
    *
    * Existe para que el campo no salga marcado en rojo desde el principio: abrir
    * el formulario con el monto en blanco no es un error, es el estado de
@@ -827,14 +815,14 @@ export class Notas {
    */
   readonly montoCobroEscribiendo = signal(false);
 
-  /** Escribe el monto y apaga el error anterior: si ya se corrigio, el aviso se va. */
+  /** Escribe el monto y apaga el error anterior: si ya se corrigió, el aviso se va. */
   escribirMontoCobro(texto: string): void {
     this.montoCobro.set(texto);
     this.montoCobroEscribiendo.set(true);
     if (this.errorCobro() !== null) this.errorCobro.set(null);
   }
 
-  /** El boton de confirmar solo se enciende con un monto que se pueda cobrar. */
+  /** El botón de confirmar solo se enciende con un monto que se pueda cobrar. */
   readonly montoCobroValido = computed(() => {
     const monto = Number(this.montoCobro());
     return this.montoCobro().trim() !== '' && Number.isFinite(monto) && monto > 0;
@@ -849,26 +837,26 @@ export class Notas {
   }
 
   /**
-   * Registra el cobro: un solo pago, con una sola aplicacion, a la nota que se
-   * esta cobrando. El monto del pago y el de la aplicacion son el mismo numero
-   * porque aqui no hay a donde repartirlo.
+   * Registra el cobro: un solo pago, aplicado a la nota que se está cobrando.
+   * El monto del pago y el de la aplicación son el mismo número porque aquí no
+   * hay a dónde repartirlo.
    */
   async confirmarCobro(): Promise<void> {
     const id = this.cobrando();
     if (id === null || this.guardandoCobro()) return;
     const nota = this.notas().find((n) => n.id === id);
-    // Si el monto no sirve, el boton esta apagado y el campo marcado: no hace
-    // falta un mensaje para repetir lo que el campo ya esta diciendo.
+    // Si el monto no sirve, el botón está apagado y el campo marcado: no hace
+    // falta un mensaje para repetir lo que el campo ya está diciendo.
     if (nota === undefined || !this.montoCobroValido()) return;
 
     this.guardandoCobro.set(true);
     this.errorCobro.set(null);
     try {
-      // El cuerpo lo arma `cuerpoDePago`, el MISMO helper que usa la pantalla
-      // de pagos. No se escribe a mano a proposito: ese helper es quien
-      // redondea a dos decimales y quien deja fuera las aplicaciones en cero, y
-      // duplicar esas reglas aqui es la forma facil de que las dos pantallas
-      // se desincronicen.
+      // Lo que se manda lo arma `cuerpoDePago`, la MISMA función que usa la
+      // pantalla de pagos. No se escribe a mano a propósito: esa función es la
+      // que redondea a dos decimales y la que deja fuera las aplicaciones en
+      // cero, y duplicar esas reglas aquí es la forma fácil de que las dos
+      // pantallas se desincronicen.
       await this.apiPagos.crear(
         cuerpoDePago(
           nota.cliente_id,
@@ -901,18 +889,18 @@ export class Notas {
   }
 
   /**
-   * El boton grande se apaga con cliente, renglones y lineas sin problemas.
+   * El botón grande se enciende con cliente, renglones y renglones sin
+   * problemas.
    *
-   * El permiso va aqui y no solo en el boton: guardar pide `notas.crear` en
-   * el alta y `notas.editar` en la correccion, y el boton es el mismo. Con
-   * un rol que solo crea, la pantalla de correccion tiene que quedarse
-   * apagada, no la que se enciende y falla con un 403.
+   * El permiso va aquí y no solo en el botón: guardar pide `notas.crear` al
+   * crear y `notas.editar` al corregir, y el botón es el mismo. Con un rol que
+   * solo crea, la pantalla de corrección tiene que quedarse apagada, no la que
+   * se enciende y falla.
    *
-   * `editable()` tambien entra, y no por el permiso: es el estatus de la
-   * nota. En un ALTA siempre vale; en una correccion una pagada o una
-   * cancelada no se pueden corregir (los triggers de 0008 lo impiden en la
-   * base, no aqui), asi que el boton tiene que estar apagado antes, no
-   * despues del error.
+   * `editable()` también entra, y no por el permiso: es el estatus de la nota.
+   * Al crear siempre vale; al corregir, una pagada o una cancelada no se pueden
+   * corregir (el sistema lo impide más adelante, no aquí), así que el botón
+   * tiene que estar apagado antes, no después del error.
    */
   readonly puedeGuardar = computed(
     () =>
@@ -930,21 +918,21 @@ export class Notas {
     try {
       this.direcciones.set(await this.apiDirecciones.listar());
     } catch {
-      // El catalogo de direcciones es una ayuda, no un requisito: si no se
+      // El catálogo de direcciones es una ayuda, no un requisito: si no se
       // puede cargar, la pantalla sigue sirviendo para capturar y escribir la
-      // direccion a mano. Un fallo aqui NO se pinta como error de la nota.
+      // dirección a mano. Un fallo aquí NO se pinta como error de la nota.
       this.direcciones.set([]);
     }
   }
 
   // ------------------------------------------------------------- la bodega
   /**
-   * La bodega de la que sale la mercancia.
+   * La bodega de la que sale la mercancía.
    *
-   * Se consulta al abrir la pantalla, aunque ya se conozca: si el
-   * administrador la crea, la renombra o la borra en otra pestana, al volver
-   * al mostrador ya aparecen las buenas. Cuando la lista ya habia cargado y
-   * la elegida sigue viva, la seleccion no se mueve.
+   * Se consulta al abrir la pantalla, aunque ya se conozca: si el administrador
+   * la crea, la renombra o la borra en otra pestaña, al volver al mostrador ya
+   * aparecen las buenas. Cuando la lista ya había cargado y la elegida sigue
+   * viva, la selección no se mueve.
    */
   private async cargarAlmacenes(): Promise<void> {
     try {
@@ -954,8 +942,8 @@ export class Notas {
         this.almacenId.set(lista[0]?.id ?? null);
       }
     } catch {
-      // Sin bodegas (o sin conexion para leerlas) el guardado se bloquea con
-      // el aviso del selector; el listado ya tiene su propio error.
+      // Sin bodegas (o sin conexión para leerlas) el guardado se bloquea con el
+      // aviso del selector; la lista ya tiene su propio error.
       this.almacenes.set([]);
       this.almacenId.set(null);
     }
@@ -964,10 +952,10 @@ export class Notas {
   /**
    * Cambia la bodega elegida por la del selector.
    *
-   * Los renglones NUEVOS salen de aqui en adelante de la bodega elegida, asi
+   * Los renglones NUEVOS salen de aquí en adelante de la bodega elegida, así
    * que los "Disponibles" se vuelven a pedir: el saldo que se ve es el de la
-   * bodega que se acaba de elegir y no el de la anterior. Los renglones que
-   * ya estaban conservan su bodega y su saldo (ver `refrescarDisponibles`).
+   * bodega que se acaba de elegir y no el de la anterior. Los renglones que ya
+   * estaban conservan su bodega y su saldo (ver `refrescarDisponibles`).
    */
   elegirAlmacen(valor: string): void {
     this.almacenId.set(valor === '' ? null : Number(valor));
@@ -977,10 +965,10 @@ export class Notas {
   /**
    * Crea la primera bodega desde la MISMA captura.
    *
-   * Con el sistema recien entregado no hay bodega, y hacer que el operador
-   * salte a Catalogo > Almacenes para crearla (o que llame a otro lado) es
-   * justo lo que se queria evitar. Solo se ofrece a quien tenga el permiso;
-   * el resto ve el aviso de pedirlo. Al crearla, se selecciona sola.
+   * Con el sistema recién entregado no hay bodega, y hacer que el operador
+   * salte al catálogo de almacenes para crearla (o que llame a otro lado) es
+   * justo lo que se quería evitar. Solo se ofrece a quien tenga el permiso; el
+   * resto ve el aviso de pedirlo. Al crearla, se selecciona sola.
    */
   async crearBodega(): Promise<void> {
     const nombre = this.nuevaBodega().trim();
@@ -1001,17 +989,16 @@ export class Notas {
   }
 
   /**
-   * Elige una direccion del catalogo y la pone en el campo.
+   * Elige una dirección del catálogo y la pone en el campo.
    *
    * Recibe `number | string` porque la plantilla se la manda desde un
-   * `<select>`: el valor de una opcion SIEMPRE llega como texto ("12"), y el
-   * paso por `Number()` se hace aqui (o acepta el texto) en vez de dejarlo
-   * en la plantilla, donde no hay conversion.
+   * desplegable: el valor de una opción SIEMPRE llega como texto ("12"), y la
+   * conversión se hace aquí en vez de dejarla en la plantilla.
    *
-   * El texto se COPIA al campo en vez de dejar el campo apuntando al
-   * catalogo, porque el campo es lo que se imprime y lo que se manda: si el
-   * campo dependiera del catalogo, borrarla del catalogo dejaria una nota sin
-   * destino, que es justo lo que el diseno de la migracion 0011 evita.
+   * El texto se COPIA al campo en vez de dejar el campo dependiendo del
+   * catálogo, porque el campo es lo que se imprime y lo que se manda: si
+   * dependiera del catálogo, borrarla dejaría una nota sin destino, que es
+   * justo lo que el diseño de la actualización 0011 evita.
    */
   elegirDireccion(id: number | string): void {
     const numero = typeof id === 'number' ? id : Number(id);
@@ -1023,13 +1010,13 @@ export class Notas {
     this.errorDireccion.set(null);
   }
 
-  /** Escribe a mano: lo que hay en el campo ya no es la del catalogo. */
+  /** Escribe a mano: lo que hay en el campo ya no es la del catálogo. */
   escribirDireccion(texto: string): void {
     this.direccion.set(texto);
     this.direccionElegida.set(null);
   }
 
-  /** Abre el formulario para guardar lo escrito, con el nombre vacio. */
+  /** Abre el formulario para guardar lo escrito, con el nombre vacío. */
   abrirAltaDireccion(): void {
     this.formaDireccion.set({
       id: null,
@@ -1039,7 +1026,7 @@ export class Notas {
     this.errorDireccion.set(null);
   }
 
-  /** Abre el formulario para corregir una direccion del catalogo. */
+  /** Abre el formulario para corregir una dirección del catálogo. */
   abrirEdicionDireccion(id: number): void {
     const elegida = this.direcciones().find((otra) => otra.id === id);
     if (elegida === undefined) return;
@@ -1051,7 +1038,7 @@ export class Notas {
     this.errorDireccion.set(null);
   }
 
-  /** El formulario, campo por campo. El `id` es `null` en el alta. */
+  /** El formulario, campo por campo. El `id` es `null` al crear. */
   enFormaDireccion(campo: 'nombre' | 'direccion', valor: string): void {
     this.formaDireccion.update((forma) => (forma === null ? forma : { ...forma, [campo]: valor }));
   }
@@ -1062,13 +1049,13 @@ export class Notas {
   }
 
   /**
-   * Guarda la direccion del formulario: alta si no tiene id, correccion si
+   * Guarda la dirección del formulario: la crea si no tiene id, la corrige si
    * tiene.
    *
-   * Despues de corregir una que ya estaba elegida, el texto del campo se
-   * vuelve a copiar: si no, la pantalla seguiria mandando el texto viejo
-   * mientras el catalogo ya dice el nuevo, y la proxima nota saldria con la
-   * direccion que se acaba de corregir.
+   * Después de corregir una que ya estaba elegida, el texto del campo se vuelve
+   * a copiar: si no, la pantalla seguiría mandando el texto viejo mientras el
+   * catálogo ya dice el nuevo, y la próxima nota saldría con la dirección que
+   * se acaba de corregir.
    */
   async guardarDireccion(): Promise<void> {
     const forma = this.formaDireccion();
@@ -1094,12 +1081,12 @@ export class Notas {
   }
 
   /**
-   * Borra una direccion del catalogo.
+   * Borra una dirección del catálogo.
    *
-   * NO se pregunta si esta en uso porque no puede estarlo: la nota copio el
-   * texto y no apunta al catalogo (migracion 0011). Lo que si se dice, con
-   * `confirm`, es lo unico que se pierde: la direccion sale del desplegable,
-   * y las notas que ya la traian la conservan.
+   * NO se pregunta si está en uso porque no puede estarlo: la nota copió el
+   * texto y no depende del catálogo (actualización 0011). Lo que sí se dice es
+   * lo único que se pierde: la dirección sale de la lista, y las notas que ya
+   * la traían la conservan.
    */
   async borrarDireccion(id: number): Promise<void> {
     const borrada = this.direcciones().find((otra) => otra.id === id);
@@ -1123,11 +1110,10 @@ export class Notas {
 
   // ------------------------------------------------------ la tabla de notas
   /**
-   * Carga una pagina de la lista.
+   * Carga una página de la lista.
    *
-   * Es la UNICA forma de pedir notas. Antes habia dos (`recargar` y
-   * `cargarMas`) que pegaban filas al final; con paginacion hay una sola, y
-   * `recargar()` es esta con la pagina 1.
+   * Es la ÚNICA forma de pedir notas. Antes había dos que pegaban filas al
+   * final; con paginación hay una sola, y `recargar()` es esta con la página 1.
    */
   private async cargarPagina(pagina: number): Promise<void> {
     this.cargandoLista.set(true);
@@ -1154,12 +1140,12 @@ export class Notas {
     }
   }
 
-  /** Vuelve a la primera pagina, con el filtro o el orden que se tenga. */
+  /** Vuelve a la primera página, con el filtro o el orden que se tenga. */
   async recargar(): Promise<void> {
     await this.cargarPagina(1);
   }
 
-  /** Cambia de pagina y sube la tabla a la vista: cambiar de pagina es un salto. */
+  /** Cambia de página y sube la tabla a la vista: cambiar de página es un salto. */
   async irAPagina(pagina: number): Promise<void> {
     if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
     await this.cargarPagina(pagina);
@@ -1167,28 +1153,27 @@ export class Notas {
   }
 
   /**
-   * El tamano de pagina como texto, para el `[value]` del desplegable.
+   * El tamaño de página como texto, para el desplegable.
    *
-   * En las plantillas de Angular no hay `String` global (si `JSON`, si `Math`,
-   * pero no `String`), y `[value]` necesita texto: con un numero, el `value`
-   * del `select` no coincide con ninguna opcion y el desplegable sale vacio.
+   * La plantilla necesita texto: con un número, el valor no coincide con
+   * ninguna opción y el desplegable sale vacío.
    */
   limiteComoTexto(): string {
     return String(this.limite());
   }
 
   /**
-   * Cambia cuantas notas se ven por pagina.
+   * Cambia cuántas notas se ven por página.
    *
-   * Vuelve SIEMPRE a la pagina 1: quedarse en la pagina 7 y cambiar de 25 a
-   * 50 filas es quedarse en un `offset` que ya no quiere decir nada.
+   * Vuelve SIEMPRE a la página 1: quedarse en la página 7 y cambiar de 25 a 50
+   * filas es quedarse en una posición que ya no quiere decir nada.
    */
   async aTamanoDePagina(valor: string): Promise<void> {
     this.limite.set(Number(valor));
     await this.cargarPagina(1);
   }
 
-  /** El buscador de la tabla: 250 ms, como todos los de la app. */
+  /** El buscador de la tabla: 250 ms, como todos los de la aplicación. */
   aBuscar(texto: string): void {
     clearTimeout(this.temporizadorFiltros);
     this.temporizadorFiltros = setTimeout(() => {
@@ -1203,10 +1188,10 @@ export class Notas {
   }
 
   /**
-   * Cambia el orden del listado y vuelve a la primera pagina.
+   * Cambia el orden del listado y vuelve a la primera página.
    *
-   * Vuelve a la pagina 1: al cambiar el criterio de orden, quedarse en la 3
-   * seria mostrar una ventana del medio de otra lista, que no es lo que nadie
+   * Vuelve a la página 1: al cambiar el criterio de orden, quedarse en la 3
+   * sería mostrar una ventana del medio de otra lista, que no es lo que nadie
    * pide.
    */
   aOrdenar(valor: string): void {
@@ -1242,8 +1227,8 @@ export class Notas {
   /**
    * Exporta la lista actual de notas a Excel.
    *
-   * Descarga TODAS las notas del filtro actual (sin paginacion),
-   * no solo la pagina visible.
+   * Descarga TODAS las notas del filtro actual (sin paginación), no solo la
+   * página visible.
    */
   async exportarExcel(): Promise<void> {
     this.exportando.set(true);
@@ -1265,10 +1250,10 @@ export class Notas {
 
   // ------------------------------------------------------- las acciones
   /**
-   * Abrir y cerrar el detalle de una fila.
+   * Abrir y cerrar el detalle de un renglón.
    *
-   * Volver a apretar "Ver" la cierra, porque el mismo boton es el que dice
-   * "Ocultar" cuando esta abierta; y abrir OTRA fila cambia la abierta, no
+   * Volver a apretar "Ver" lo cierra, porque el mismo botón es el que dice
+   * "Ocultar" cuando está abierto; y abrir OTRO renglón cambia el abierto, no
    * apila dos.
    */
   async ver(nota: NotaListada): Promise<void> {
@@ -1289,16 +1274,16 @@ export class Notas {
   }
 
   /**
-   * La devolucion: carga la nota en el formulario de arriba para bajar bultos
+   * La devolución: carga la nota en el formulario de arriba para bajar bultos
    * o quitar renglones.
    *
-   * Antes se pregunta si hay algo a medias, porque esto REEMPLAZA lo que este
-   * capturando. Sin la pregunta, un boton con el mismo nombre en cada fila
-   * seria la forma mas rapida de perder media hora de captura.
+   * Antes se pregunta si hay algo a medias, porque esto REEMPLAZA lo que esté
+   * capturando. Sin la pregunta, un botón con el mismo nombre en cada renglón
+   * sería la forma más rápida de perder media hora de captura.
    *
-   * La nota se pide completa (`GET /:id`), no se arma con la fila de la
-   * tabla: la fila no tiene renglones, y una devolucion sin renglones no se
-   * puede capturar.
+   * La nota se pide completa, no se arma con el renglón de la tabla: el renglón
+   * no tiene los demás renglones, y una devolución sin renglones no se puede
+   * capturar.
    */
   async devolver(nota: NotaListada): Promise<void> {
     this.cerrarCancelacion();
@@ -1312,9 +1297,9 @@ export class Notas {
     this.error.set(null);
     try {
       const completa = await this.api.consultar(nota.id);
-      // El cliente viene de la nota y no del buscador: lo que hace falta es
-      // el nombre para mostrarlo y el id para mandarlo, y la nota ya trae los
-      // dos. Volver a buscarlo seria una peticion para nada.
+      // El cliente viene de la nota y no del buscador: lo que hace falta es el
+      // nombre para mostrarlo y el id para mandarlo, y la nota ya trae los dos.
+      // Volver a buscarlo sería una consulta para nada.
       this.cliente.set({
         id: completa.cliente_id,
         nombre: completa.cliente,
@@ -1325,9 +1310,9 @@ export class Notas {
       this.lineas.set(completa.renglones.map(lineaDeRenglon));
       this.refrescarDisponibles();
       this.direccion.set(completa.direccion_entrega ?? '');
-      // El texto puede coincidir con una del catalogo, pero no se puede
-      // saber cual es: se deja como direccion nueva. Si habia una elegida, se
-      // olvida, porque el texto que se va a mandar es el de la nota.
+      // El texto puede coincidir con una del catálogo, pero no se puede saber
+      // cuál es: se deja como dirección nueva. Si había una elegida, se olvida,
+      // porque el texto que se va a mandar es el de la nota.
       this.direccionElegida.set(null);
       this.editando.set(completa);
       this.ultimaGuardada.set(null);
@@ -1341,12 +1326,12 @@ export class Notas {
   /**
    * Sube al formulario cuando hay algo a medio capturar.
    *
-   * Sin esto, la devolucion se carga 500 pixeles arriba de donde esta el
-   * boton que la pidio y la persona no ve nada cambiar hasta que scrollea. En
-   * una pantalla de mostrador, "no paso nada" y "no se guardo" se ven igual.
+   * Sin esto, la devolución se carga 500 píxeles arriba de donde está el botón
+   * que la pidió y la persona no ve nada cambiar hasta que baja. En una pantalla
+   * de mostrador, "no pasó nada" y "no se guardó" se ven igual.
    *
-   * `behavior: 'smooth'` y no `instant`: la pantalla tiene que moverse, y un
-   * salto seco a otra parte del documento en una pantalla tactil hace que la
+   * El movimiento es suave y no instantáneo: la pantalla tiene que moverse, y un
+   * salto seco a otra parte del documento en una pantalla táctil hace que la
    * mano se quede arriba.
    */
   private subirArriba(): void {
@@ -1354,18 +1339,18 @@ export class Notas {
   }
 
   /**
-   * Sube hasta la tabla de notas, no hasta arriba de la pagina.
+   * Sube hasta la tabla de notas, no hasta arriba de la página.
    *
-   * Al cambiar de pagina el scroll se queda donde estaba, y como la tabla esta
-   * mas abajo, el cambio de pagina no se ve: solo cambia el numero de la barra
-   * de paginacion, que puede estar fuera de pantalla. Con la tabla a la vista
-   * el cambio se ve.
+   * Al cambiar de página la vista se queda donde estaba, y como la tabla está
+   * más abajo, el cambio de página no se ve: solo cambia el número de la barra
+   * de paginación, que puede estar fuera de pantalla. Con la tabla a la vista el
+   * cambio se ve.
    */
   private subirTabla(): void {
     document.querySelector('.tabla-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  /** Cierra el formulario de edicion y deja la pantalla como una nota nueva. */
+  /** Cierra el formulario de corrección y deja la pantalla como una nota nueva. */
   cancelarEdicion(): void {
     this.editando.set(null);
     this.limpiarCaptura();
@@ -1376,8 +1361,8 @@ export class Notas {
   /**
    * Abre el papel de la nota.
    *
-   * El PDF es la plantilla del Excel: vertical, una hoja. Para dos copias se
-   * elige "2 paginas por hoja" al imprimir.
+   * El PDF usa la misma plantilla: vertical, una hoja. Para dos copias se elige
+   * "2 páginas por hoja" al imprimir.
    */
   async imprimir(notaId: number): Promise<void> {
     this.errorLista.set(null);
@@ -1391,10 +1376,9 @@ export class Notas {
   /**
    * Descarga la nota en Excel.
    *
-   * La plantilla del papel solo trae 9 renglones: si la nota lleva mas, el
-   * Excel se descarga con los primeros 9 y aqui se avisa cuantos se
-   * quedaron fuera, para que no se entregue una nota a medias como si fuera
-   * completa.
+   * La plantilla del papel solo trae 9 renglones: si la nota lleva más, el
+   * Excel se descarga con los primeros 9 y aquí se avisa cuántos se quedaron
+   * fuera, para que no se entregue una nota a medias como si fuera completa.
    */
   async excel(notaId: number): Promise<void> {
     this.errorLista.set(null);
@@ -1402,7 +1386,7 @@ export class Notas {
       const fuera = await this.api.abrirExcel(notaId);
       if (fuera > 0) {
         this.errorLista.set(
-          `La nota tiene ${fuera} renglon${fuera === 1 ? '' : 'es'} de mas para el papel: el Excel va con los primeros 9.`,
+          `La nota tiene ${fuera} renglón${fuera === 1 ? '' : 'es'} de más para el papel: el Excel va con los primeros 9.`,
         );
       }
     } catch (falla) {
@@ -1410,7 +1394,7 @@ export class Notas {
     }
   }
 
-  /** Abre el motivo de la cancelacion debajo de la fila. */
+  /** Abre el motivo de la cancelación debajo del renglón. */
   abrirCancelacion(nota: NotaListada): void {
     this.detalle.set(null);
     this.motivo.set('');
@@ -1424,12 +1408,12 @@ export class Notas {
   }
 
   /**
-   * El motivo se valida aqui y en el backend.
+   * El motivo se valida aquí y en el sistema.
    *
-   * Los tres caracteres del backend son el minimo de `cancelarNotaEsquema`,
-   * y se comprueba aqui para que el boton se apague y no para sustituir al
-   * servidor: una cancelacion sin motivo es un boton que borra trabajo, y el
-   * motivo es lo unico que queda de por que se hizo.
+   * Los tres caracteres son el mínimo que exige el sistema, y se comprueba aquí
+   * para que el botón se apague y no para sustituirlo: una cancelación sin
+   * motivo es un botón que borra trabajo, y el motivo es lo único que queda de
+   * por qué se hizo.
    */
   readonly motivoValido = computed(
     () => this.motivo().trim().length >= 3 && !this.guardandoCancelacion(),
@@ -1440,14 +1424,14 @@ export class Notas {
     if (nota === null || !this.motivoValido()) return;
 
     const ok = await this.confirmModal().abrir({
-      titulo: 'Confirmar la cancelacion',
-      mensaje: `Al confirmar la cancelacion de la nota ${nota.folio} ocurrira lo siguiente:`,
+      titulo: 'Confirmar la cancelación',
+      mensaje: `Al confirmar la cancelación de la nota ${nota.folio} ocurrirá lo siguiente:`,
       detalles: [
         'Se cancela la nota y ya no se puede corregir ni cobrar.',
-        'La mercancia regresa al inventario.',
+        'La mercancía regresa al inventario.',
         `El importe de ${this.montoComoTexto(nota.subtotal)} se le devuelve a ${nota.cliente} como saldo a favor: queda en su cuenta y se descuenta de lo que deba.`,
       ],
-      textoConfirmar: 'Si, cancelar la nota',
+      textoConfirmar: 'Sí, cancelar la nota',
       variante: 'peligro',
     });
     if (!ok) return;
@@ -1465,16 +1449,16 @@ export class Notas {
     }
   }
 
-  /** Una nota se puede devolver solo mientras el backend la pueda editar. */
+  /** Una nota se puede devolver solo mientras el sistema la pueda corregir. */
   sePuedeDevolver(nota: NotaListada): boolean {
     return nota.estatus === 'pendiente' || nota.estatus === 'parcial';
   }
 
-  /** Por que no, en una linea, para el `title` del boton apagado. */
+  /** Por qué no, en una línea, para el aviso del botón apagado. */
   porqueNoDevolver(nota: NotaListada): string {
     if (nota.estatus === 'pagada')
-      return 'La nota ya esta pagada: cancelala si hay que deshacer el cobro';
-    if (nota.estatus === 'cancelada') return 'Esta nota ya esta cancelada';
+      return 'La nota ya está pagada: cancélala si hay que deshacer el cobro';
+    if (nota.estatus === 'cancelada') return 'Esta nota ya está cancelada';
     return '';
   }
 
@@ -1509,32 +1493,32 @@ export class Notas {
 
   // ------------------------------------------------------- el talonario
   /**
-   * La serie ACTIVA la elige quien llega hasta aqui: `notas.folios` lo
-   * tiene solo el Administrador (migracion 0008), y este es el unico lugar
-   * del POS que no le sirve a quien cobra.
+   * La serie ACTIVA la elige quien llega hasta aquí: `notas.folios` lo tiene
+   * solo el Administrador, y este es el único lugar del mostrador que no le
+   * sirve a quien cobra.
    *
-   * Esta seccion vive en el mostrador y no en una pantalla aparte por la
-   * misma razon que las direcciones: es la otra mitad del modulo de notas,
-   * y un menu aparte para una sola pantalla de un solo rol seria ofrecer
-   * un modulo que casi nadie llega a ver. La llamada no sale al ABRIR la
-   * pantalla: sale al ABRIR la seccion, porque un cajero que solo captura
-   * no tiene por que pagar ese viaje.
+   * Esta sección vive en el mostrador y no en una pantalla aparte por la misma
+   * razón que las direcciones: es la otra mitad del módulo de notas, y un menú
+   * aparte para una sola pantalla de un solo rol sería ofrecer algo que casi
+   * nadie llega a ver. La consulta no sale al ABRIR la pantalla: sale al ABRIR
+   * la sección, porque un cajero que solo captura no tiene por qué pagar ese
+   * viaje.
    */
   readonly puedeAdministrarFolios = computed(() => this.sesion.puede('notas.folios'));
 
   readonly talonarioAbierto = signal(false);
   readonly resumen = signal<ResumenTalonario[]>([]);
-  /** El prefijo en uso; vacio = folios de puros numeros. */
+  /** El prefijo en uso; vacío = folios de puros números. */
   readonly serieActiva = signal('');
   readonly cargandoTalonario = signal(false);
   readonly errorTalonario = signal<string | null>(null);
 
-  /** El formulario del alta: el prefijo y el tramo de folios. */
+  /** El formulario de carga: el prefijo y el tramo de folios. */
   readonly formaTalonario = signal({ serie: '', desde: '', hasta: '' });
   readonly activarAlCargar = signal(true);
   readonly guardandoTalonario = signal(false);
 
-  /** La serie abierta en detalle y sus folios, para ver los numeros. */
+  /** La serie abierta en detalle y sus folios, para ver los números. */
   readonly serieEnDetalle = signal<string | null>(null);
   readonly foliosDetalle = signal<Folio[]>([]);
   readonly totalFoliosDetalle = signal(0);
@@ -1542,8 +1526,8 @@ export class Notas {
   readonly buscandoFolios = signal(false);
 
   /**
-   * El tramo del formulario: prefijo de hasta 10, dos enteros, en orden y
-   * de 5000 folios, que es el tope que impone el backend tambien.
+   * El tramo del formulario: prefijo de hasta 10, dos números enteros, en orden
+   * y de 5000 folios, que es el tope que impone el sistema también.
    */
   readonly tramoValido = computed(() => {
     const forma = this.formaTalonario();
@@ -1559,7 +1543,7 @@ export class Notas {
     () => this.foliosDetalle().length < this.totalFoliosDetalle() && !this.buscandoFolios(),
   );
 
-  /** Como se muestra la serie activa, que puede ser vacia. */
+  /** Cómo se muestra la serie activa, que puede ser vacía. */
   serieActivaComoTexto(): string {
     const activa = this.serieActiva();
     return activa === '' ? 'puros numeros' : activa;
@@ -1592,10 +1576,10 @@ export class Notas {
   }
 
   /**
-   * Carga un tramo de talonario y, si el cuadro esta marcado, lo deja como
-   * la serie activa de una vez. Son las dos cosas que hace una persona que
-   * esta alimentando el talonario: cargar los numeros que siguen y decirle
-   * al POS de donde sale el proximo folio.
+   * Carga un tramo de talonario y, si el cuadro está marcado, lo deja como la
+   * serie activa de una vez. Son las dos cosas que hace una persona que está
+   * alimentando el talonario: cargar los números que siguen y decir de dónde
+   * sale el próximo folio.
    */
   async cargarTramo(): Promise<void> {
     if (!this.tramoValido() || this.guardandoTalonario()) return;
@@ -1631,7 +1615,7 @@ export class Notas {
     }
   }
 
-  /** Abre y cierra los folios de una serie, y los deja vacios al cerrar. */
+  /** Abre y cierra los folios de una serie, y los deja vacíos al cerrar. */
   async alternarSerie(serie: string): Promise<void> {
     if (this.serieEnDetalle() === serie) {
       this.serieEnDetalle.set(null);
@@ -1687,7 +1671,7 @@ export class Notas {
   /** El total en pantalla, ya con los miles. Ver `totalComoTexto` de cifras. */
   totalComoTexto = computed(() => montoComoTexto(this.total()));
 
-  /** El estatus, en el idioma del mostrador y no en el del esquema. */
+  /** El estatus, en el idioma del mostrador y no en el técnico. */
   estatusComoTexto(estatus: EstatusNota): string {
     if (estatus === 'pendiente') return 'Pendiente';
     if (estatus === 'parcial') return 'Pagada parcial';
@@ -1697,11 +1681,11 @@ export class Notas {
 }
 
 /**
- * `confirm` para las cosas que se pierden sin avisar.
+ * La ventana de confirmación para las cosas que se pierden sin avisar.
  *
- * Va en un envoltorio y no suelto en la pantalla para que se pueda ver de
- * un vistazo que son las unicas preguntas que hace la app, y para que
- * si algun dia se cambia a un `dialog` propio se cambie en un solo lugar.
+ * Va en una función aparte y no suelta en la pantalla para que se pueda ver de
+ * un vistazo que son las únicas preguntas que hace la aplicación, y para que si
+ * algún día se cambia a una ventana propia se cambie en un solo lugar.
  */
 function confirmar(pregunta: string): boolean {
   return window.confirm(pregunta);

@@ -5,25 +5,25 @@ import { API } from '../nucleo/api';
 import { hoyComoTexto } from '../precios/precios-api';
 
 /**
- * Las cinco bitacoras, en solo lectura.
+ * Las cinco bitácoras, en solo lectura.
  *
- * Este modulo no tiene ni un `POST` y por eso aqui tampoco hay ni un
- * formulario. No es que se haya olvidado: `auditoria/esquemas.ts` lo dice
- * ("aceptar un endpoint que la escriba daria al usuario la forma de fabricar
- * su propio rastro") y la pantalla tiene que dejar claro que lo que se ve
- * lo escribieron los triggers de la base, no las pantallas.
+ * Este módulo no permite escribir nada y por eso aquí tampoco hay ni un
+ * formulario. No es que se haya olvidado: las reglas lo dicen ("aceptar una
+ * operación que la escriba daría al usuario la forma de fabricar su propio
+ * rastro") y la pantalla tiene que dejar claro que lo que se ve lo escribieron
+ * las reglas automáticas del sistema, no las pantallas.
  *
- * Cada bitacora tiene su propio permiso (`auditoria.accesos`, `.caja`,
- * `.inventario`, `.precios`), y el de la pestana es lo que decide si la
- * pestana existe. Con `auditoria.ver` sin los otros cuatro se ve una sola
- * pestana, y eso no es un error de permisos: es alguien a quien le pasaron
- * el acceso a la minima informacion.
+ * Cada bitácora tiene su propio permiso (`auditoria.accesos`, `.caja`,
+ * `.inventario`, `.precios`), y el de la pestaña es lo que decide si la
+ * pestaña existe. Con `auditoria.ver` sin los otros cuatro se ve una sola
+ * pestaña, y eso no es un error de permisos: es alguien a quien le pasaron el
+ * acceso a la mínima información.
  *
- * Lo que hace propia a esta pantalla es el renglon del `log`: trae el
- * registro de ANTES y el de DESPUES en crudo, y el backend no sabe que
- * tablas existen ni que campos tiene cada una. Por eso la pantalla arma el
- * cambio ella misma (`cambiosDeFila`): si el calculo viviera en el backend,
- * habria que tocarlo cada vez que se agregara una columna.
+ * Lo que hace propia a esta pantalla es el renglón del `log`: trae el registro
+ * de ANTES y el de DESPUÉS en crudo, y el sistema no sabe qué tablas existen
+ * ni qué campos tiene cada una. Por eso la pantalla arma el cambio ella misma
+ * (`cambiosDeFila`): si el cálculo viviera en el sistema, habría que tocarlo
+ * cada vez que se agregara una columna.
  */
 
 export type Operacion = 'INSERT' | 'UPDATE' | 'DELETE';
@@ -56,7 +56,7 @@ export interface RenglonLog {
   usuario: string | null;
   usuario_rfc: string | null;
   usuario_ip: string | null;
-  /** El JSON de antes y el de despues, tal cual los guardo el trigger. */
+  /** Los datos de antes y los de después, tal cual los guardó la regla automática del sistema. */
   datos_anteriores: Record<string, unknown> | null;
   datos_nuevos: Record<string, unknown> | null;
 }
@@ -66,7 +66,7 @@ export interface RenglonAcceso {
   fecha: string;
   evento: EventoAcceso;
   usuario_id: number | null;
-  /** Lo que se tecleo en el campo de correo, exista o no la cuenta. */
+  /** Lo que se tecleó en el campo de correo, exista o no la cuenta. */
   usuario_intento: string | null;
   usuario: string | null;
   usuario_rfc: string | null;
@@ -77,7 +77,7 @@ export interface RenglonAcceso {
 
 export interface RenglonCaja {
   id: number;
-  /** NULL cuando el renglon es de un DELETE: el movimiento ya no existe. */
+  /** Vacío cuando el renglón es de una baja: el movimiento ya no existe. */
   movimiento_id: number | null;
   cuenta_id: number;
   usuario_id: number | null;
@@ -137,7 +137,7 @@ export interface RenglonPrecios {
   creado_en: string;
 }
 
-/** El rango, igual para las cinco: dos dias opcionales. */
+/** El rango, igual para las cinco: dos días opcionales. */
 export interface Rango {
   desde?: string;
   hasta?: string;
@@ -151,22 +151,22 @@ export interface Filtros extends Rango {
 
 // ------------------------------------------------------------------ el log
 
-/** Un campo que se movio entre el renglon anterior y el nuevo. */
+/** Un campo que se movió entre el renglón anterior y el nuevo. */
 export interface Cambio {
   campo: string;
   antes: string;
   nuevo: string;
-  /** El campo no existia antes, o no existe despues. */
+  /** El campo no existía antes, o no existe después. */
   lado?: 'antes' | 'despues';
 }
 
 /**
- * Como se muestra un valor del JSON del trigger.
+ * Cómo se muestra un valor de los datos de la regla automática.
  *
- * El trigger guarda lo que hay en la fila y Postgres devuelve `NUMERIC` y
- * `DATE` como texto, y los booleanos como `true`/`false`. Aqui solo se
- * quiere una linea legible, no un type guard: un `"12.50"` y un `12.5` se
- * pintan igual y a quien lee la bitacora le sirve el numero, no el tipo de
+ * La regla guarda lo que hay en la fila y el sistema devuelve los importes y
+ * las fechas como texto, y los booleanos como `true`/`false`. Aquí solo se
+ * quiere una línea legible, no una revisión de tipos: un `"12.50"` y un `12.5`
+ * se pintan igual y a quien lee la bitácora le sirve el número, no el tipo de
  * la columna.
  */
 export function valorLegible(valor: unknown): string {
@@ -179,16 +179,16 @@ export function valorLegible(valor: unknown): string {
 }
 
 /**
- * Los campos que SE MOVIERON, en el orden en que estan en el registro nuevo.
+ * Los campos que SE MOVIERON, en el orden en que están en el registro nuevo.
  *
- * Es lo que hace util la bitacora: hundredas de columnas de las que solo
+ * Es lo que hace útil la bitácora: cientos de columnas de las que solo
  * cambiaron dos. Solo van los que cambian, y se comparan ya pasadas por
- * `valorLegible` para que `null` contra `''` se vea como lo que es (un
- * campo que se vacio) y no como dos valores raros.
+ * `valorLegible` para que `null` contra `''` se vea como lo que es (un campo
+ * que se vació) y no como dos valores raros.
  *
- * Los campos que solo existen en un lado semarkan con `lado` para que la
- * tabla pueda distinguir "se lleno" de "cambio de valor": en un INSERT todo
- * es nuevo y esa es la unica lectura util.
+ * Los campos que solo existen en un lado se marcan con `lado` para que la
+ * tabla pueda distinguir "se llenó" de "cambió de valor": en un alta todo es
+ * nuevo y esa es la única lectura útil.
  */
 export function cambiosDeFila(
   anterior: Record<string, unknown> | null,
@@ -232,9 +232,9 @@ export const ETIQUETA_EVENTO: Record<EventoAcceso, string> = {
  * Si un evento es de los que hay que mirar primero.
  *
  * `login_fallido`, `acceso_denegado` y `bloqueo` son los que aparecen cuando
- * alguien que no deberia esta intentando entrar. Van marcados en la columna
- * para que la lista se pueda recorrer sin leer cada renglon, que es como se
- * lee una bitacora: uno escanea, no lee linea por linea.
+ * alguien que no debería está intentando entrar. Van marcados en la columna
+ * para que la lista se pueda recorrer sin leer cada renglón, que es como se lee
+ * una bitácora: uno escanea, no lee línea por línea.
  */
 export function eventoSospechoso(evento: EventoAcceso): boolean {
   return evento === 'login_fallido' || evento === 'acceso_denegado' || evento === 'bloqueo';
@@ -247,25 +247,25 @@ export const ETIQUETA_OPERACION: Record<Operacion, string> = {
 };
 
 /**
- * La fecha de la bitacora: dia y hora.
+ * La fecha de la bitácora: día y hora.
  *
- * Se corta el ISO con `slice` y no con `new Date` a proposito: el navegador
- * lo correria a la zona horaria de quien la abre, y un renglon de las 00:15
- * se veria del dia anterior (o del siguiente) al otro lado del pais.
+ * Se corta el texto tal cual y no con `new Date` a propósito: el navegador lo
+ * correría a la zona horaria de quien la abre, y un renglón de las 00:15 se
+ * vería del día anterior (o del siguiente) al otro lado del país.
  */
 export function fechaLegible(iso: string): string {
   return iso.slice(0, 16).replace('T', ' ');
 }
 
 /**
- * El rango por omision: el mes que va.
+ * El rango por omisión: el mes que va.
  *
- * Una bitacora sin rango son miles de renglones y la primera pregunta de
- * quien la abre es "que paso hoy", asi que el filtro arranca en el mes en
- * curso. Se puede limpiar con "Todo" para ir a buscar algo viejo, y las
- * fechas viajan como `AAAA-MM-DD` porque el repositorio las convierte a un
- * fin de dia EXCLUSIVO (`< fecha + 1`): es lo que hace que el dia final no
- * desaparezca del reporte.
+ * Una bitácora sin rango son miles de renglones y la primera pregunta de quien
+ * la abre es "qué pasó hoy", así que el filtro arranca en el mes en curso. Se
+ * puede limpiar con "Todo" para ir a buscar algo viejo, y las fechas viajan
+ * como `AAAA-MM-DD` porque el servicio las convierte a un fin de día
+ * EXCLUSIVO (`< fecha + 1`): es lo que hace que el día final no desaparezca
+ * del reporte.
  */
 export function rangoDelMes(hoy = new Date()): Rango {
   const dia = hoyComoTexto(hoy);
@@ -275,11 +275,11 @@ export function rangoDelMes(hoy = new Date()): Rango {
 /**
  * Si el rango tiene sentido, para no hacer un viaje que va a rebotar.
  *
- * El backend ya lo revisa (`rangoCoherente` en `auditoria/esquemas.ts`) y
- * devuelve 422. Preguntar aqui es solo para que el boton se apague con el
+ * El sistema ya lo revisa (`rangoCoherente` en `auditoria/esquemas.ts`) y
+ * devuelve 422. Preguntar aquí es solo para que el botón se apague con el
  * motivo a la vista, y se compara como texto: con `AAAA-MM-DD` el orden
- * lexicografico es el del calendario, y `new Date` correria a la zona
- * horaria del navegador.
+ * alfabético es el del calendario, y `new Date` correría a la zona horaria del
+ * navegador.
  */
 export function rangoIncoherente(desde?: string, hasta?: string): boolean {
   if (desde === undefined || hasta === undefined) return false;
@@ -291,11 +291,11 @@ export class AuditoriaApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * Las cinco llamadas son un `GET` con filtros y paginacion, y solo cambian
-   * la ruta y los filtros propios de cada una. Se arma el `params` a mano en
-   * cada metodo (y no con un objeto plano) porque varias bitacoras NO
-   * aceptan busqueda: mandarle `buscar` a la de caja es un 400 del `strict`,
-   * no un filtro que se ignore.
+   * Las cinco llamadas son consultas con filtros y paginación, y solo cambian
+   * la ruta y los filtros propios de cada una. Se arman los parámetros a mano
+   * en cada método (y no con un objeto plano) porque varias bitácoras NO
+   * aceptan búsqueda: mandarle `buscar` a la de caja es un 400 de las reglas
+   * de validación, no un filtro que se ignore.
    */
   private async listar<T>(
     ruta: string,
@@ -314,7 +314,7 @@ export class AuditoriaApi {
     return this.listar<RenglonLog>('log', params);
   }
 
-  /** Quien entro, con quien fallo y a quien se le nego el paso. */
+  /** Quién entró, con quién falló y a quién se le negó el paso. */
   async accesos(
     opciones: Filtros & { evento?: EventoAcceso | null },
   ): Promise<Listado<RenglonAcceso>> {
@@ -323,7 +323,7 @@ export class AuditoriaApi {
     return this.listar<RenglonAcceso>('accesos', params);
   }
 
-  /** Los movimientos de caja y bancos, con el saldo antes y despues. */
+  /** Los movimientos de caja y bancos, con el saldo antes y después. */
   async caja(
     opciones: Filtros & { tipo?: 'ingreso' | 'egreso' | null },
   ): Promise<Listado<RenglonCaja>> {
@@ -332,12 +332,12 @@ export class AuditoriaApi {
     return this.listar<RenglonCaja>('caja', params);
   }
 
-  /** Los movimientos de almacen, con la existencia antes y despues. */
+  /** Los movimientos de almacén, con la existencia antes y después. */
   async inventario(opciones: Filtros): Promise<Listado<RenglonInventario>> {
     return this.listar<RenglonInventario>('inventario', this.comunes(opciones, false));
   }
 
-  /** Los cambios de precio, con la variacion en moneda. */
+  /** Los cambios de precio, con la variación en moneda. */
   async precios(
     opciones: Filtros & { tipo_precio?: 'cliente' | 'publico' | 'costo' | null },
   ): Promise<Listado<RenglonPrecios>> {
@@ -349,11 +349,11 @@ export class AuditoriaApi {
   /**
    * Los filtros que las cinco comparten.
    *
-   * `conBusqueda` esta en OFF para caja, inventario y precios porque sus
-   * esquemas no la aceptan (`buscar` solo existe en el log y en accesos) y
-   * mandarla seria un 400. Los ids de filtro (`cuenta_id`, `producto_id`,
-   * `almacen_id`, `usuario_id`) no se exponen todavia: llegan vacios y la
-   * pantalla filtra por nombre y por fecha, que es como se pregunta
+   * `conBusqueda` está apagado para caja, inventario y precios porque sus
+   * reglas de validación no la aceptan (`buscar` solo existe en el log y en
+   * accesos) y mandarla sería un 400. Los ids de filtro (`cuenta_id`,
+   * `producto_id`, `almacen_id`, `usuario_id`) no se exponen todavía: llegan
+   * vacíos y la pantalla filtra por nombre y por fecha, que es como se pregunta
    * primero.
    */
   private comunes(opciones: Filtros, conBusqueda = true): Record<string, string | number> {

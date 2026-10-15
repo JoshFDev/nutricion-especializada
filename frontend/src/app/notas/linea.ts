@@ -2,56 +2,56 @@ import { decimalComoTexto, kilosComoTexto, montoComoTexto, redondearMonto } from
 import type { Producto, PrecioEfectivo, RenglonNota } from './notas-api';
 
 /**
- * Un renglon del POS, tal como esta en la pantalla.
+ * Un renglón de la nota, tal como se ve en la pantalla.
  *
- * NO es el renglon que se manda. Este tiene lo que la persona ve y lo que
- * todavia no se sabe (el precio puede no existir todavia); el que se manda lo
- * arma `cuerpoDeNota` en `notas-api.ts`. La razon de que sean dos cosas es
- * que aqui vive el `precio_unit_kg` que el backend prohibio en el alta y el
- * `kg_bulto` que la base rellena, y si se mandara esta misma estructura
- * y el esquema estricto los rechaza con un 400.
+ * NO es el renglón que se manda al guardar. Este tiene lo que la persona ve y
+ * lo que todavía no se sabe (el precio puede no existir todavía); el que se
+ * manda lo arma `cuerpoDeNota` en `notas-api.ts`. Son dos cosas distintas
+ * porque aquí vive el `precio_unit_kg`, que el sistema no acepta al crear la
+ * nota, y el `kg_bulto` que el mismo sistema rellena, y si se mandara esta
+ * misma estructura la validación la rechazaría.
  *
  * `uid` es para el `@for` de Angular y para poder tener DOS renglones del
- * mismo producto, que es lo que hace el backend (no los fusiona: suma el
- * consumo para el stock y guarda las filas como van). Ver `agregar`.
+ * mismo producto, que es lo que hace el sistema (no los junta: suma el
+ * consumo para el inventario y guarda las filas como van). Ver `agregar`.
  */
 export interface Linea {
   uid: number;
   producto_id: number;
   producto_codigo: string;
   producto_nombre: string;
-  /** Kilos por bulto que trae el producto. Es el default de la base. */
+  /** Kilos por bulto que trae el producto. Es el valor normal del sistema. */
   presentacion_kg: number;
-  /** El que se va a cobrar: el de la presentacion, o el que se escribio. */
+  /** El que se va a cobrar: el de la presentación, o el que se escribió. */
   kg_bulto: number;
-  /** Que la persona toco los kilos a mano y hay que mandarlos. */
+  /** Que la persona tocó los kilos a mano y hay que mandarlos. */
   kg_editado: boolean;
   cantidad_bultos: number;
   /**
-   * Cuantos bultos hay del producto en el almacen, en el momento en que se
-   * consulto. `undefined` cuando no se pudo saber (o cuando la linea viene
-   * de una nota que ya se emitio y nadie lo pidio todavia).
+   * Cuántos bultos hay del producto en el almacén, en el momento en que se
+   * consultó. `undefined` cuando no se pudo saber (o cuando el renglón viene
+   * de una nota que ya se emitió y nadie lo pidió todavía).
    */
   disponible_bultos?: number;
   /**
-   * El id del renglon en la base, cuando la linea viene de una nota que se
-   * esta corrigiendo.
+   * El id del renglón en el sistema, cuando el renglón viene de una nota que
+   * se está corrigiendo.
    *
-   * Es lo que le dice al backend "este ya existia": sin el, cada guardado
-   * borraria todos los renglones y los volveria a crear, y con ellos sus
-   * movimientos de inventario. En el alta no hay ninguno, y por eso es
+   * Es lo que le dice al sistema "este ya existía": sin él, cada guardado
+   * borraría todos los renglones y los volvería a crear, y con ellos sus
+   * movimientos de inventario. Al crear una nota no hay ninguno, y por eso es
    * opcional.
    */
   renglon_id?: number;
-  /** La bodega de la que salio el producto, si la linea viene de la nota. */
+  /** La bodega de la que salió el producto, si el renglón viene de la nota. */
   almacen_id?: number;
-  /** El precio que resolved el backend. `null` si todavia no se sabe. */
+  /** El precio que resolvió el sistema. `null` si todavía no se sabe. */
   precio_unit_kg: number | null;
-  /** De donde salio el precio, para poder decirlo en la pantalla. */
+  /** De dónde salió el precio, para poder decirlo en la pantalla. */
   precio_origen: 'cliente' | 'publico' | 'nota' | null;
 }
 
-/** Un renglon todavia sin precio: sale al mundo cuando el precio llega. */
+/** Un renglón todavía sin precio: aparece en cuanto el precio llega. */
 export function lineaVacia(producto: Producto): Linea {
   return {
     uid: siguienteUid(),
@@ -68,24 +68,24 @@ export function lineaVacia(producto: Producto): Linea {
 }
 
 /**
- * Un renglon que ya estaba en la nota, cargado para corregirla.
+ * Un renglón que ya estaba en la nota, cargado para corregirla.
  *
- * Es la devolucion: la persona abre la nota, baja los bultos de lo que se
- * llevo de mas, quita el renglon de lo que no se llevo, y guarda. El backend
- * mete la diferencia al almacen y recalcula el subtotal.
+ * Es la devolución: la persona abre la nota, baja los bultos de lo que se
+ * llevó de más, quita el renglón de lo que no se llevó, y guarda. El sistema
+ * mete la diferencia al almacén y recalcula el total.
  *
- * Tres cosas que aqui NO se pueden saber y por eso se resuelven asi:
+ * Tres cosas que aquí NO se pueden saber y por eso se resuelven así:
  *
- *   - El precio no se vuelve a preguntar: se copia el del renglon, que es el
- *     que se cobro. Preguntar el de hoy convertiria una devolucion de 8 bultos
+ *   - El precio no se vuelve a preguntar: se copia el del renglón, que es el
+ *     que se cobró. Preguntar el de hoy convertiría una devolución de 8 bultos
  *     en un cambio de precio por kilo.
  *   - `presentacion_kg` se pone igual al `kg_bulto` que trae la nota. La nota
- *     no guarda la presentacion del producto, solo los kilos que se
- *     cobraron, y este valor solo se usa para saber si la persona VOLVIO a
- *     escribir los kilos; si no los toco, no hay nada que mandar (ver
+ *     no guarda la presentación del producto, solo los kilos que se cobraron,
+ *     y este valor solo se usa para saber si la persona VOLVIÓ a escribir los
+ *     kilos; si no los tocó, no hay nada que mandar (ver
  *     `kgComoTextoSiHayQueMandarlo`).
- *   - `kg_editado` arranca en `false` aunque el renglon traiga unos kilos que
- *     no son los del producto: los manda el `renglon_id`, no el flag.
+ *   - `kg_editado` arranca en `false` aunque el renglón traiga unos kilos que
+ *     no son los del producto: los manda el `renglon_id`, no la marca.
  */
 export function lineaDeRenglon(renglon: RenglonNota): Linea {
   return {
@@ -104,7 +104,7 @@ export function lineaDeRenglon(renglon: RenglonNota): Linea {
   };
 }
 
-/** El precio ya resuelto se le pone a la linea. */
+/** Al renglón se le pone el precio ya resuelto. */
 export function conPrecio(linea: Linea, precio: PrecioEfectivo): Linea {
   return {
     ...linea,
@@ -114,11 +114,11 @@ export function conPrecio(linea: Linea, precio: PrecioEfectivo): Linea {
 }
 
 /**
- * Pone cuantos bultos hay del producto en el almacen.
+ * Pone cuántos bultos hay del producto en el almacén.
  *
  * Es un dato de inventario que se consulta aparte del precio: el precio se
  * pregunta para cada producto que se agrega, y lo que hay se pregunta para
- * cada renglon, por eso va como un paso separado (`saberDisponible` en la
+ * cada renglón, por eso va como un paso separado (`saberDisponible` en la
  * vista) y no dentro de `agregarProducto`.
  */
 export function conDisponible(linea: Linea, disponibles: number): Linea {
@@ -126,10 +126,10 @@ export function conDisponible(linea: Linea, disponibles: number): Linea {
 }
 
 /**
- * Lo que queda del producto despues de lo capturado: disponible menos lo
+ * Lo que queda del producto después de lo capturado: lo disponible menos lo
  * que se escribe en los bultos. Es el "se van restando" del mostrador.
  *
- * `null` cuando no se sabe cuantos hay: un renglon sin `disponible_bultos`
+ * `null` cuando no se sabe cuántos hay: un renglón sin `disponible_bultos`
  * no puede decir si falta, y la pantalla se calla en vez de inventar.
  */
 export function restanteDe(linea: Linea): number | null {
@@ -138,14 +138,13 @@ export function restanteDe(linea: Linea): number | null {
 }
 
 /**
- * Que tan chistoso esta el producto: si el precio es de este cliente o el
- * de la lista. El POS lo dice en la linea porque es la pregunta que se
- * hace el operador ("¿le estoy cobrando bien?") y la respuesta son dos
- * palabras.
+ * De dónde salió el precio: si es del cliente o de la lista. La pantalla lo
+ * dice en el renglón porque es la pregunta que se hace el operador ("¿le
+ * estoy cobrando bien?") y la respuesta son dos palabras.
  *
- * `'nota'` es el caso de una linea que se cargo de una nota para corregirla:
- * el precio no se volvio a preguntar, se tomo del renglon. Decir "precio de
- * lista" ahi seria mentir, porque el de la lista puede ser otro.
+ * `'nota'` es el caso de un renglón que se cargó de una nota para corregirla:
+ * el precio no se volvió a preguntar, se tomó del renglón. Decir "precio de
+ * lista" ahí sería mentir, porque el de la lista puede ser otro.
  */
 export function origenComoTexto(linea: Linea): string {
   if (linea.precio_unit_kg === null) return 'sin precio';
@@ -154,7 +153,7 @@ export function origenComoTexto(linea: Linea): string {
   return 'precio de lista';
 }
 
-/** Un renglon con precio y con cantidad: lo que se puede cobrar. */
+/** Un renglón con precio y con cantidad: lo que se puede cobrar. */
 export function totalDeLinea(linea: Linea): number {
   if (linea.precio_unit_kg === null) return 0;
   return redondearMonto(linea.cantidad_bultos * linea.kg_bulto * linea.precio_unit_kg);
@@ -163,30 +162,30 @@ export function totalDeLinea(linea: Linea): number {
 /**
  * El total de la nota en pantalla.
  *
- * Es un PREVISUALIZADO, no el monto del documento. La suma se hace aqui
- * porque el operador lo necesita mientras captura, y el redondeo es el del
- * double (ver `redondearMonto`): puede haber una diferencia de un centavo
- * contra el `subtotal` que calcula Postgres al guardar. Cuando se guarda,
- * en la pantalla manda el del servidor y este se sustituye por el.
+ * Es un ADELANTO, no el monto del documento. La suma se hace aquí porque el
+ * operador lo necesita mientras captura, y el redondeo es el normal (ver
+ * `redondearMonto`): puede haber una diferencia de un centavo contra el total
+ * que calcula el sistema al guardar. Cuando se guarda, en pantalla manda el
+ * del sistema y este se sustituye por él.
  */
 export function totalDeLineas(lineas: Linea[]): number {
   return redondearMonto(lineas.reduce((suma, linea) => suma + totalDeLinea(linea), 0));
 }
 
-/** Kilos de la nota, que es lo que se entrega y lo que se descuenta del almacen. */
+/** Kilos de la nota, que es lo que se entrega y lo que se descuenta del almacén. */
 export function kilosDeLineas(lineas: Linea[]): number {
   return lineas.reduce((suma, linea) => suma + linea.cantidad_bultos * linea.kg_bulto, 0);
 }
 
 /**
- * Cantidad de kilos de una linea, con los tres decimales que usan los
- * kilos por bulto.
+ * Cantidad de kilos de un renglón, con los tres decimales que usan los kilos
+ * por bulto.
  */
 export function kilosDeLinea(linea: Linea): string {
   return kilosComoTexto(linea.cantidad_bultos * linea.kg_bulto);
 }
 
-/** El total de la linea, en dinero. */
+/** El total del renglón, en dinero. */
 export function montoDeLinea(linea: Linea): string {
   return montoComoTexto(totalDeLinea(linea));
 }
@@ -194,22 +193,21 @@ export function montoDeLinea(linea: Linea): string {
 /**
  * Cambia la cantidad de bultos.
  *
- * `cero` se vuelve a uno y no a cero: `cantidad_bultos` es un `decimal(...,
- * ..., 'cantidad_bultos')` en el backend, que REJAZA el cero con un 422
- * ("no puede ser cero ni negativo"), y una linea en cero es una linea que
- * no se puede cobrar ni borrar sin buscarla. Volver a uno deja la nota en
- * un estado que si se puede mandar.
+ * `cero` se vuelve a uno y no a cero: la cantidad de bultos es un dato que el
+ * sistema RECHAZA si es cero o negativo, y un renglón en cero no se puede
+ * cobrar ni borrar sin buscarlo. Volver a uno deja la nota en un estado que
+ * sí se puede mandar.
  *
- * Los bultos son UNIDADES, no peso: un decimal no se manda. Se trunca a
- * numero entero en lugar de redondear, porque redondear convertiria "3.8"
- * en cuatro bultos de algo que no se cargo entero.
+ * Los bultos son UNIDADES, no peso: no se manda un decimal. Se corta a número
+ * entero en lugar de redondear, porque redondear convertiría "3.8" en cuatro
+ * bultos de algo que no se cargó entero.
  */
 export function cambiarCantidad(linea: Linea, cantidad: number | string): Linea {
   const numero = Math.trunc(Number(cantidad));
-  // Lo que no se puede leer se IGNORA y no se convierte en uno. La distincion
-  // es con el cero, que si es un numero valido que el backend no acepta; un
-  // "abc" a medio teclear no es un cero, y pisar la cantidad que habia con
-  // un uno porque el campo quedo a medias es perder trabajo de la persona.
+  // Lo que no se puede leer se IGNORA y no se convierte en uno. La distinción
+  // es con el cero, que sí es un número válido pero que el sistema rechaza; un
+  // "abc" a medio teclear no es un cero, y pisar la cantidad que había con
+  // un uno porque el campo quedó a medias es perder trabajo de la persona.
   if (!Number.isFinite(numero)) return linea;
   return { ...linea, cantidad_bultos: numero > 0 ? numero : 1 };
 }
@@ -217,18 +215,17 @@ export function cambiarCantidad(linea: Linea, cantidad: number | string): Linea 
 /**
  * Cambia los kilos por bulto a mano.
  *
- * El cero y el negativo NO se aceptan, y devuelven la linea como estaba con
- * la presentacion del producto. No es capricho: `kg_bulto` es un
- * `decimal(7, 3, 'kg_bulto')` del backend, que exige `Number(valor) > 0`, y
- * un cero llega como un 422 de "no puede ser cero ni negativo" DESPUES de
- * que la persona capturo la nota entera.
+ * El cero y el negativo NO se aceptan, y dejan el renglón como estaba con la
+ * presentación del producto. No es capricho: el sistema exige que los kilos
+ * por bulto sean mayores que cero, y un cero se convierte en un rechazo
+ * DESPUÉS de que la persona capturó la nota entera.
  *
- * La tentacion de dejar pasar el cero es que "el banano se vende por
- * unidades, no por kilos". El modelo no tiene esa idea: `presentacion_kg`
- * es "kg por bulto" y es NOT NULL, asi que un producto por pieza se
- * representa con un bulto de 1 kg, no con un bulto de 0. Si algun dia se
- * venden piezas de verdad, el cambio es una columna mas en `productos` y
- * una regla mas en el renglon, no un cero escondido aqui.
+ * La tentación de dejar pasar el cero es que "el banano se vende por
+ * unidades, no por kilos". El sistema no tiene esa idea: los kilos por bulto
+ * son obligatorios, así que un producto por pieza se representa con un bulto
+ * de 1 kg, no con un bulto de 0. Si algún día se venden piezas de verdad, el
+ * cambio es un dato más en el catálogo de productos y una regla más en el
+ * renglón, no un cero escondido aquí.
  */
 export function cambiarKilos(linea: Linea, kilos: number | string): Linea {
   const numero = Number(kilos);
@@ -239,21 +236,19 @@ export function cambiarKilos(linea: Linea, kilos: number | string): Linea {
 /**
  * Agrega un producto a la nota.
  *
- * Si ya estaba, SUMA la cantidad en vez de abrir otra fila. Dos razones, y
+ * Si ya estaba, SUMA la cantidad en vez de abrir otro renglón. Dos razones, y
  * las dos importan:
  *
- *   - El operador no va a buscar si ya lo habia puesto. En un mostrador se
+ *   - El operador no va a buscar si ya lo había puesto. En un mostrador se
  *     agrega el mismo producto dos veces cuando se le olvidó, y la nota con
  *     dos renglones del mismo producto se ve como un error.
- *   - El backend SÍ LOS SUMA para el stock (`prepararRenglones` lleva un
- *     `consumo` por producto-almacen) pero guarda las dos filas. O sea que
- *     las dos formas dan el mismo resultado en la base, y la de la
- *     pantalla es mas legible.
+ *   - El sistema SÍ LOS SUMA para el inventario (lleva un consumo por
+ *     producto y almacén) pero guarda los dos renglones. O sea que las dos
+ *     formas dan el mismo resultado, y la de la pantalla es más legible.
  *
- * `uid` es un contador de modulo, no un `Math.random`: dos renglones con el
- *     mismo producto necesitan identificadores distintos y el aleatorio
- *     hace que un @for de Angular se queje de claves duplicadas cuando
- *     casualmente se repiten.
+ * `uid` es un contador del archivo, no un número al azar: dos renglones con
+ * el mismo producto necesitan identificadores distintos y el azar hace que un
+ * @for de Angular se queje de claves duplicadas cuando casualmente se repiten.
  */
 let ultimoUid = 0;
 
@@ -262,7 +257,7 @@ function siguienteUid(): number {
   return ultimoUid;
 }
 
-/** Agregar, fusionando con la linea existente del mismo producto. */
+/** Agregar, juntando con el renglón que ya existe del mismo producto. */
 export function agregar(lineas: Linea[], linea: Linea): Linea[] {
   const misma = lineas.find((otra) => otra.producto_id === linea.producto_id);
   if (!misma) return [...lineas, linea];
@@ -273,41 +268,42 @@ export function agregar(lineas: Linea[], linea: Linea): Linea[] {
   );
 }
 
-/** Quita el renglon. Por `uid`, no por producto: hay una fila por uid. */
+/** Quita el renglón. Por `uid`, no por producto: hay un renglón por uid. */
 export function quitar(lineas: Linea[], uid: number): Linea[] {
   return lineas.filter((linea) => linea.uid !== uid);
 }
 
-/** Vacia la nota, menos el cliente: el mismo cliente, otra venta. */
+/** Vacía la nota, menos el cliente: el mismo cliente, otra venta. */
 export function vaciar(lineas: Linea[]): Linea[] {
   return lineas.length > 0 ? [] : lineas;
 }
 
 /**
- * Que problemas tiene un renglon, para ENCENDER los campos en vez de
- * dejar que la persona mande algo que el backend va a rechazar.
+ * Qué problemas tiene un renglón, para ENCENDER los campos en vez de dejar
+ * que la persona mande algo que el sistema va a rechazar.
  *
- * Las reglas son un espejo de `renglonNotaEsquema`: los limites de
- * decimales y de cifras enteras son los mismos, porque el backend los
- * revalida y un 422 de esos llega como un error de validacion de un campo
- * que en la pantalla no existe todavia.
+ * Las reglas son las mismas que valida el sistema al guardar: los límites de
+ * decimales y de cifras enteras son idénticos, porque el sistema los vuelve a
+ * revisar y un rechazo de esos llega como un aviso de un campo que en la
+ * pantalla todavía no existe.
  */
 export function problemasDe(linea: Linea): Record<string, string> {
   const problemas: Record<string, string> = {};
 
-  // Los bultos son unidades: enteros y positivos. `Number.isInteger` aparte
-  // del `> 0`, para que "2.5" no pase como si fueran dos bultos y pico.
+  // Los bultos son unidades: enteros y positivos. Se revisa que sea entero
+  // aparte de que sea mayor que cero, para que "2.5" no pase como si fueran
+  // dos bultos y pico.
   const entero = (numero: number, maximo: number): boolean =>
     Number.isInteger(numero) && numero > 0 && numero <= maximo;
 
   if (!entero(linea.cantidad_bultos, 99_999_999)) {
     problemas['cantidad_bultos'] =
-      'La cantidad debe ser un numero entero positivo (los bultos no llevan decimales)';
+      'La cantidad debe ser un número entero positivo (los bultos no llevan decimales)';
   }
   if (!(linea.kg_bulto > 0 && linea.kg_bulto <= 9_999_999)) {
-    // Los kilos por bulto SI llevan decimales, asi que no es el `entero` de
-    // arriba: solo el mismo `> 0` del `decimal` del backend.
-    problemas['kg_bulto'] = 'Los kilos por bulto tienen que ser mas de cero';
+    // Los kilos por bulto SÍ llevan decimales, así que no es el `entero` de
+    // arriba: solo la misma regla de que sean mayores que cero.
+    problemas['kg_bulto'] = 'Los kilos por bulto tienen que ser más de cero';
   }
   if (linea.precio_unit_kg === null) {
     problemas['precio_unit_kg'] = 'Este producto no tiene precio vigente';
@@ -316,20 +312,19 @@ export function problemasDe(linea: Linea): Record<string, string> {
   return problemas;
 }
 
-/** Si el renglon se puede mandar tal cual. */
+/** Si el renglón se puede mandar tal cual. */
 export function lineaValida(linea: Linea): boolean {
   return Object.keys(problemasDe(linea)).length === 0;
 }
 
 /**
- * La forma del `cantidad_bultos` que va en el JSON.
+ * La forma de la cantidad de bultos que se manda al guardar.
  *
- * Se manda como TEXTO, no como numero, a proposito: el backend lo acepta
- * en las dos formas y lo convierte a texto antes de validarlo (ver el
- * `decimal` de `notas-remision/esquemas.ts`), porque el double de
- * JavaScript no sirve para dinero ni para cantidades. Mandar el texto
- * "8.5" y no el 8.5 quita de en medio el unico punto donde un 0.1 + 0.2
- * pueda colarse.
+ * Se manda como TEXTO, no como número, a propósito: el sistema la acepta en
+ * las dos formas y la convierte a texto antes de validarla (ver
+ * `notas-remision/esquemas.ts`), porque los decimales de JavaScript no son
+ * confiables ni para dinero ni para cantidades. Mandar el texto "8.5" y no el
+ * 8.5 quita de en medio el único punto donde un 0.1 + 0.2 pueda colarse.
  */
 export function cantidadComoTexto(linea: Linea): string {
   return decimalComoTexto(linea.cantidad_bultos, 2);
@@ -338,20 +333,19 @@ export function cantidadComoTexto(linea: Linea): string {
 /**
  * Los kilos por bulto, pero solo si hay que mandarlos.
  *
- * En el ALTA se mandan solo si la persona los toco: si no, se omiten y la
- * base los rellena con `productos.presentacion_kg`, que es la presentacion
- * real del producto y no la que el navegador recuerda.
+ * Al CREAR la nota se mandan solo si la persona los tocó: si no, se omiten y
+ * el sistema los rellena con la presentación real del producto, que es la del
+ * catálogo y no la que el navegador recuerda.
  *
- * En la EDICION se mandan siempre, y la razon es el trigger
- * `fn_default_kg_bulto` de 0001: `actualizarRenglon` hace
- * `kg_bulto = COALESCE($4, NULL)`, o sea que un renglon enviado sin kilos
- * vuelve a la presentacion del producto. Una nota que vendio bultos de 25.5
- * kg porque ese dia el producto venia en 25.5 se convertiria sola en bultos
- * de 25, con otros kilos y otro subtotal, por no haber mandado un campo que
- * en pantalla no cambio.
+ * Al CORREGIR se mandan siempre, y la razón es la regla automática del
+ * sistema que rellena los kilos: un renglón enviado sin kilos vuelve a la
+ * presentación del producto. Una nota que vendió bultos de 25.5 kg porque ese
+ * día el producto venía en 25.5 se convertiría sola en bultos de 25, con
+ * otros kilos y otro total, por no haber mandado un dato que en pantalla no
+ * cambió.
  *
  * Por eso el nombre no dice "si se editaron": la regla es si hay que
- * mandarlos, y depende de si la linea viene de la nota.
+ * mandarlos, y depende de si el renglón viene de la nota.
  */
 export function kgComoTextoSiHayQueMandarlo(linea: Linea): string | null {
   if (linea.renglon_id !== undefined) return decimalComoTexto(linea.kg_bulto, 3);

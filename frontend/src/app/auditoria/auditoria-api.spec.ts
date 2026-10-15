@@ -26,7 +26,7 @@ describe('un valor del JSON del trigger', () => {
   });
 
   it('los booleanos en palabras', () => {
-    // El trigger guarda `true`/`false` y se pintan mejor asi que en ingles.
+    // La regla automática guarda `true`/`false` y se pintan mejor asi que en ingles.
     expect(valorLegible(true)).toBe('sí');
     expect(valorLegible(false)).toBe('no');
   });
@@ -92,14 +92,14 @@ describe('los campos que se movieron', () => {
   });
 
   it('ve un numero que cambio de valor aunque los dos sean string', () => {
-    // Postgres devuelve `NUMERIC` como texto, asi que dos cantidades
+    // La base devuelve `NUMERIC` como texto, asi que dos cantidades
     // distintas llegan como '10.00' y '10.50' y no como 10 y 10.5.
     const cambios = cambiosDeFila({ monto: '10.00' }, { monto: '10.50' });
     expect(cambios).toHaveLength(1);
   });
 
   it('recorre los campos en el orden del registro nuevo, no en el del viejo', () => {
-    // El trigger manda el `jsonb` y Postgres no garantiza el orden de sus
+    // La regla automática manda los datos y la base no garantiza el orden de sus
     // llaves, asi que la unica referencia estable es el registro nuevo.
     const cambios = cambiosDeFila(
       { puesto: 'Cajera', nombre: 'Ana' },
@@ -122,8 +122,8 @@ describe('los campos que se movieron', () => {
 describe('los eventos de acceso', () => {
   const eventos = Object.keys(ETIQUETA_EVENTO) as EventoAcceso[];
 
-  it('tiene una etiqueta para cada evento que acepta el backend', () => {
-    // Si el backend agrega un evento y esta tabla no, se pinta `undefined`.
+  it('tiene una etiqueta para cada evento que acepta el sistema', () => {
+    // Si el sistema agrega un evento y esta tabla no, se pinta `undefined`.
     expect(eventos).toHaveLength(9);
     for (const evento of eventos) {
       expect(ETIQUETA_EVENTO[evento], evento).toBeTruthy();
@@ -177,7 +177,7 @@ describe('el rango incoherente', () => {
   });
 
   it('deja pasar el mismo dia en los dos extremos', () => {
-    // El backend compara como texto, asi que el mismo dia es coherente.
+    // El sistema compara como texto, asi que el mismo dia es coherente.
     expect(rangoIncoherente('2026-06-01', '2026-06-01')).toBe(false);
   });
 

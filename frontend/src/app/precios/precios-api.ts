@@ -5,23 +5,22 @@ import { API } from '../nucleo/api';
 import { decimalComoTexto } from '../nucleo/cifras';
 
 /**
- * La API de precios.
+ * El servicio de precios.
  *
- * Tipos espejo de `backend/src/modules/precios`. Es el modulo con la forma
- * MAS distinta de las que se han hecho:
+ * Los tipos son un espejo de `precios/modelo.ts`. Es el módulo con la forma
+ * MÁS distinta de las que se han hecho:
  *
- *   - DOS recursos en vez de uno: `precios_publicos` (el precio de lista
- *     del producto) y `precios_cliente` (lo pactado con una persona). No
- *     son el mismo dato y no se mezclan; el menu ofrece "Precios" y la
- *     pantalla separa las dos vistas.
- *   - NO hay DELETE: un precio borrado es un hueco en la historia de
- *     facturacion, y las notas guardan el precio que se leyo al cobrar.
- *     "Borrar" es cerrarlo con `POST /:id/cerrar`, que le pone la fecha de
- *     fin y deja la fila.
- *   - El PATCH es PARCIAL y `vigente_hasta: null` significa "abrir de
+ *   - DOS recursos en vez de uno: `precios_publicos` (el precio de lista del
+ *     producto) y `precios_cliente` (lo pactado con una persona). No son el
+ *     mismo dato y no se mezclan; el menú ofrece "Precios" y la pantalla
+ *     separa las dos vistas.
+ *   - NO hay borrar: un precio borrado es un hueco en la historia de
+ *     facturación, y las notas guardan el precio que se leyó al cobrar.
+ *     "Borrar" es cerrarlo, que le pone la fecha de fin y deja la fila.
+ *   - La actualización es PARCIAL y `vigente_hasta: null` significa "abrir de
  *     nuevo" (no "no lo mandes").
- *   - La vigencia es lo que vale: los precios se traslapan o no por fechas,
- *     y el backend rechaza un rango que choca con otro (`VIGENCIA_*`) o que
+ *   - La vigencia es lo que vale: los precios se traslapan o no por fechas, y
+ *     el sistema rechaza un rango que choca con otro (`VIGENCIA_*`) o que
  *     termina antes de empezar.
  */
 
@@ -38,7 +37,7 @@ export interface PrecioPublico {
   vigente_hasta: string | null;
 }
 
-/** `precios/modelo.ts` -> `PrecioCliente`. Es el publico con cliente. */
+/** `precios/modelo.ts` -> `PrecioCliente`. Es el público con cliente. */
 export interface PrecioCliente {
   id: number;
   cliente_id: number;
@@ -61,7 +60,7 @@ export interface Listado<T> {
 
 /** Lo que se puede preguntar del listado. Los filtros van sobre el recurso. */
 export interface Criterios {
-  /** Un producto en concreto: la linea de tiempo completa de su precio. */
+  /** Un producto en concreto: la línea de tiempo completa de su precio. */
   producto_id?: number;
   /** Un cliente en concreto, solo en el listado de precios de cliente. */
   cliente_id?: number;
@@ -79,7 +78,7 @@ export interface OpcionFiltro {
   nombre: string;
 }
 
-/** La forma que saca el editor: producto o cliente segun el recurso. */
+/** La forma que saca el editor: producto o cliente según el recurso. */
 export interface PrecioNuevoBase {
   precio_kg: string;
   vigente_desde: string;
@@ -88,17 +87,17 @@ export interface PrecioNuevoBase {
 
 // ------------------------------------------------------------- el cuerpo
 /**
- * El cuerpo de un precio, sea alta o actualizacion.
+ * Los datos de un precio, sea alta o actualización.
  *
- * `vigente_hasta` vacio va siempre como `null` ("abierto"), nunca omitido:
- * en el alta los dos valen, y en el PATCHes justo lo que reabre un precio
- * cerrado. Mandarlo explícito quita la distincion que el backend distingue
- * — `undefined` es "no tocar" y `null` es "abrir" — y la pantalla siempre
- * sabe cuál de las dos quiere.
+ * `vigente_hasta` vacío va siempre como `null` ("abierto"), nunca omitido: en
+ * el alta los dos valen, y al actualizar es justo lo que reabre un precio
+ * cerrado. Mandarlo explícito quita la distinción que el sistema distingue
+ * — `undefined` es "no tocar" y `null` es "abrir" — y la pantalla siempre sabe
+ * cuál de las dos quiere.
  *
- * El `precio_kg` se normaliza con `decimalComoTexto` exactamente como el
- * POS normaliza el monto del pago: la base es NUMERIC(10,2) y el esquema
- * no admite una coma ni ceros de mas.
+ * El `precio_kg` se normaliza con `decimalComoTexto` exactamente como el punto
+ * de venta normaliza el monto del pago: el campo es un número con dos
+ * decimales y las reglas de validación no admiten una coma ni ceros de más.
  */
 export interface CuerpoPrecio {
   precio_kg: string;
@@ -124,18 +123,18 @@ export function problemaDeVigencia(desde: string, hasta: string): string | null 
   return null;
 }
 
-/** El precio como texto que se le puede mandar al esquema, o null si no. */
+/** El precio como texto que se le puede mandar a las reglas de validación, o null si no. */
 export function problemaDePrecio(texto: string): string | null {
   const limpio = texto.trim();
   if (limpio === '') return null;
   if (!/^\d{1,8}(\.\d{1,2})?$/.test(limpio.replace(',', '.'))) {
-    return 'El precio debe ser un numero con hasta 2 decimales.';
+    return 'El precio debe ser un número con hasta 2 decimales.';
   }
   if (Number(limpio.replace(',', '.')) < 0) return 'El precio no puede ser negativo.';
   return null;
 }
 
-/** La fecha de hoy en el formato que espera el esquema (AAAA-MM-DD). */
+/** La fecha de hoy en el formato que esperan las reglas de validación (AAAA-MM-DD). */
 export function hoyComoTexto(fecha = new Date()): string {
   const anio = fecha.getFullYear();
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -149,7 +148,7 @@ export function hoyComoTexto(fecha = new Date()): string {
 export class PreciosApi {
   private readonly http = inject(HttpClient);
 
-  /** Busca productos por codigo o nombre, para el selector del editor. */
+  /** Busca productos por código o nombre, para el selector del editor. */
   async productos(buscar: string): Promise<OpcionFiltro[]> {
     if (buscar.trim().length < 1) return [];
     const respuesta = await firstValueFrom(
@@ -242,7 +241,7 @@ export class PreciosApi {
     );
   }
 
-  /** Exporta los precios de lista (publicos) a Excel. */
+  /** Exporta los precios de lista (públicos) a Excel. */
   async exportarExcelPublicos(criterios: Criterios): Promise<void> {
     const params = paramsDe(criterios);
     const resp = await firstValueFrom(
@@ -282,20 +281,22 @@ export class PreciosApi {
 }
 
 /**
- * Los query params de una vista, quitando lo que esa vista no acepta.
+ * Los datos que se mandan al consultar una vista, quitando lo que esa vista no
+ * acepta.
  *
- * Existe por el `cliente_id`. Los dos listados validan sus query params con
- * `strictObject` (`backend/src/modules/precios/esquemas.ts`): el de precios de
- * lista NO tiene `cliente_id` entre sus claves, asi que mandarselo no lo
- * ignora, lo rechaza con un 400 y deja la pantalla en blanco. Antes se armaba
- * un solo objeto de criterios con `cliente_id` puesto siempre que hubiera
- * filtro de cliente, y como ese filtro no se quitaba al cambiar de pestana,
- * filtrar por un cliente y pasar a "Precio de lista" rompia el listado.
+ * Existe por el `cliente_id`. Los dos listados validan lo que reciben
+ * (`precios/esquemas.ts`): el de precios de lista NO tiene `cliente_id` entre
+ * sus campos, así que mandárselo no lo ignora, lo rechaza con un 400 y deja la
+ * pantalla en blanco. Antes se armaba un solo objeto de criterios con
+ * `cliente_id` puesto siempre que hubiera filtro de cliente, y como ese filtro
+ * no se quitaba al cambiar de pestaña, filtrar por un cliente y pasar a
+ * "Precio de lista" rompía el listado.
  *
- * Aqui se decide por vista, que es donde se sabe que key manda cada una.
+ * Aquí se decide por vista, que es donde se sabe qué campo manda cada una.
  *
- * El `offset` sale de la pagina y del limite, no se pasa: un numero de pagina
- * guardado seria un `offset` guardado, que envejece en cuanto cambia el filtro.
+ * El `offset` sale de la página y del límite, no se pasa: un número de página
+ * guardado sería un `offset` guardado, que envejece en cuanto cambia el
+ * filtro.
  */
 export function criteriosDe(
   vista: 'publicos' | 'clientes',
@@ -304,12 +305,12 @@ export function criteriosDe(
     clienteId?: number;
     vigencia: Vigencia;
     /**
-     * Opcionales a proposito: el listado los necesita, el export no.
+     * Opcionales a propósito: el listado los necesita, la exportación no.
      *
-     * Sin ellos no se manda `limite` ni `offset` y el backend exporta todo
-     * lo que encaja en el filtro (`listarTodosPublicos`, que quita la
-     * paginacion). Un Excel con los 50 de la pagina parece completo y no
-     * lo esta, que es peor que no exportar.
+     * Sin ellos no se manda `limite` ni `offset` y el sistema exporta todo lo
+     * que encaja en el filtro (`listarTodosPublicos`, que quita la
+     * paginación). Un Excel con los 50 de la página parece completo y no lo
+     * está, que es peor que no exportar.
      */
     limite?: number;
     pagina?: number;
@@ -327,7 +328,7 @@ export function criteriosDe(
   return criterios;
 }
 
-/** Los criterios que si van, y el vigencia siempre para que el backend decida. */
+/** Los criterios que sí van, y la vigencia siempre para que el sistema decida. */
 function paramsDe(criterios: Criterios): Record<string, string | number> {
   const params: Record<string, string | number> = {
     limite: criterios.limite ?? 50,

@@ -21,7 +21,7 @@ import {
  * Las reglas que la pantalla decide por su cuenta, y el cuerpo que se manda.
  *
  * Lo importante aqui es que la pantalla no mande nunca un `saldo_actual` y que
- * respete los limites del esquema: `decimal(10, 2)` y mayor que cero para el
+ * respete los limites de las reglas: `decimal(10, 2)` y mayor que cero para el
  * monto, 80 caracteres para la categoria, y el banco obligatorio cuando el tipo
  * de cuenta es `banco`. Un `saldo_actual` en el cuerpo se rechazaria con un
  * 400 de "propiedad inesperada", y un saldo escrito a mano se pisaria con el
@@ -56,7 +56,7 @@ describe('el cuerpo del movimiento', () => {
     );
   });
 
-  it('la fecha vacia se omite y la de hoy la pone el backend', () => {
+  it('la fecha vacia se omite y la de hoy la pone el sistema', () => {
     expect(cuerpoDeMovimiento(editor(), null, null, '', '', false).fecha).toBeUndefined();
     expect(cuerpoDeMovimiento(editor(), null, null, '2026-09-28', '', false).fecha).toBe(
       '2026-09-28',
@@ -225,7 +225,7 @@ describe('los totales del cierre', () => {
   });
 
   it('suma el esperado tal como viene, sin recalcularlo de los otros tres', () => {
-    // Un 1500 que no cuadra con fondo + entrado - salido: si el servidor lo
+    // Un 1500 que no cuadra con fondo + entrado - salido: si el sistema lo
     // manda, es porque hay movimientos con fecha fuera del rango, y aqui no
     // se maquilla.
     const totales = totalesDeCierre([

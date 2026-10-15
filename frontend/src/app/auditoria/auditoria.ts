@@ -38,10 +38,10 @@ import {
  *     en "todo". Una bitacora sin rango son miles de renglones y lo que se
  *     pregunta primero es "que paso hoy".
  *   - **Una bitacora no se edita ni se borra.** Ni la pantalla ni el
- *     backend tienen un endpoint para eso, y no es un hueco: es lo unico
+ *     sistema tienen una forma de hacerlo, y no es un hueco: es lo unico
  *     que una bitacora no puede permitir.
  *   - **El renglon del log trae el antes y el despues en crudo**, y quien
- *     arma el "que cambio" es la pantalla (`cambiosDeFila`). El backend no
+ *     arma el "que cambio" es la pantalla (`cambiosDeFila`). El sistema no
  *     sabe que tablas hay ni que columnas tienen, y no deberia: si lo
  *     supiera, habria que tocarlo cada vez que se agregue una columna.
  *
@@ -49,8 +49,8 @@ import {
  * renglon de las cinco. Es un poco mas de codigo, y a cambio el `@switch` de
  * la plantilla estrecha el tipo de verdad: con una lista comun el tipo seria
  * la union de las cinco y `renglon.operacion` no existiria en la de accesos.
- * Con un `any` se callaba el error, y ahi es donde se cuelan las columnas mal
- * escritas.
+ * Con un tipo suelto se callaba el error, y ahi es donde se cuelan las
+ * columnas mal escritas.
  */
 
 /** Las cinco pestanas, con el permiso que cada una necesita. */
@@ -115,8 +115,8 @@ export class Auditoria {
   /**
    * Con el boton de aplicar apagado, y con el motivo a la vista.
    *
-   * El backend ya devuelve 422 en este caso, pero preguntar aqui evita el
-   * viaje y deja el motivo escrito en la pantalla.
+   * El sistema ya devuelve un error en este caso, pero preguntar aqui evita
+   * el viaje y deja el motivo escrito en la pantalla.
    */
   readonly rangoMalo = computed(() => rangoIncoherente(this.desde(), this.hasta()));
   readonly botonActivo = computed(() => !this.rangoMalo() && !this.cargando());
@@ -218,7 +218,7 @@ export class Auditoria {
     this.error.set(null);
     // Cada bitacora filtra por una cosa distinta y el filtro de otra no
     // significa nada aqui: dejarlos puestos seria mandar un parametro que
-    // el esquema de la otra ni siquiera acepta.
+    // las reglas de validacion de la otra ni siquiera aceptan.
     this.filtroOperacion.set('');
     this.filtroEvento.set('');
     this.filtroTipo.set('');
@@ -280,9 +280,9 @@ export class Auditoria {
    * Carga la pagina abierta de la bitacora abierta.
    *
    * El `switch` esta porque cada una tiene su filtro propio y ninguna los
-   * acepta todos: mandarle `buscar` a la de caja es un 400 del `strict` del
-   * esquema, no un filtro que se ignore en silencio. Y es tambien donde cada
-   * respuesta cae en la senal de SU tipo, que es lo que hace que la
+   * acepta todos: mandarle `buscar` a la de caja es un rechazo de las reglas
+   * de validacion, no un filtro que se ignore en silencio. Y es tambien donde
+   * cada respuesta cae en la senal de SU tipo, que es lo que hace que la
    * plantilla no tenga que inventarse el tipo del renglon.
    */
   private async cargar(): Promise<void> {
@@ -303,8 +303,8 @@ export class Auditoria {
         case 'log': {
           const r = await this.api.log({
             ...comunes,
-            // El `as` es porque `''` es el estado de "sin filtro" y TypeScript
-            // no lo descarta solo: son dos estados en una senal, no un enum.
+            // El `as` es porque `''` es el estado de "sin filtro" y el
+            // compilador no lo descarta solo: son dos estados en una senal.
             operacion: (this.filtroOperacion() || null) as Operacion | null,
           });
           this.filas.log.set(r.datos);

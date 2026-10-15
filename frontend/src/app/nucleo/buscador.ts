@@ -48,7 +48,7 @@ export interface Buscador<T> {
 
 export function crearBuscador<T>(cfg: {
   cargar: (texto: string) => Promise<T[]>;
-  /** Cuantos caracteres hay que escribir antes de preguntar al servidor. */
+  /** Cuantos caracteres hay que escribir antes de preguntar al sistema. */
   minimo: number;
   /** Lo que se dice cuando la pregunta no trae nada. */
   nada: (texto: string) => string;

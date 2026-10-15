@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { cuerpoDeProducto, type FormaProducto } from './productos-api';
 
 /**
- * El cuerpo del producto: lo que se manda al backend.
+ * El cuerpo del producto: lo que se manda al sistema.
  *
- * Ojo donde NO normaliza: el codigo NO se mayusculiza (el esquema de
- * `productos/esquemas.ts` no lo transforma, a diferencia del de clientes),
- * y `presentacion_kg` va como string porque el esquema lo valida como texto
+ * Ojo donde NO normaliza: el codigo NO se mayusculiza (las reglas de
+ * `productos/esquemas.ts` no lo transforman, a diferencia del de clientes),
+ * y `presentacion_kg` va como string porque las reglas lo validan como texto
  * (`presentacionKg` lo normaliza a string y luego aplica la regex).
  */
 

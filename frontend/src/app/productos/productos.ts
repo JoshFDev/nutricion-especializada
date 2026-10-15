@@ -21,13 +21,13 @@ import { ToastService } from '../nucleo/toast.service';
  *
  * Misma estructura que la de clientes: listado con busqueda y filtro de
  * estado, mas un editor para alta/edicion. Aqui `editar()` si valida el
- * `activo` del producto, porque el estado vive en la fila y el backend lo
- * acepta en el PATCH (no en el alta).
+ * `activo` del producto, porque el estado vive en la fila y el sistema lo
+ * acepta al actualizar (no en el alta).
  *
  * Dos filtros que conviene no confundir: el del LISTADO (`activo` suelto en
- * `productos/esquemas.ts`) y el del EDITOR (`activo` dentro del PATCH). El
- * primero decide que filas se ven; el segundo, si el producto se ofrece a la
- * venta.
+ * `productos/esquemas.ts`) y el del EDITOR (`activo` dentro de la
+ * actualizacion). El primero decide que filas se ven; el segundo, si el
+ * producto se ofrece a la venta.
  */
 
 @Component({
@@ -69,8 +69,8 @@ export class Productos {
    * de volver arriba ni de saber en cuanto se esta. Con paginas la tabla
    * tiene alto fijo y el mismo control que precios y el catalogo.
    *
-   * La pagina se elige en SALTOS y se traduce a `offset` al pedir, porque
-   * un `offset` guardado se queda viejo en cuanto cambia un filtro.
+   * La pagina se elige en SALTOS y se traduce a la posición al pedir, porque
+   * una posición guardada se queda vieja en cuanto cambia un filtro.
    */
   readonly limite = signal(50);
   readonly pagina = signal(1);
@@ -156,7 +156,7 @@ export class Productos {
     this.hayCambiosSinGuardar.set(false);
     this.editando.set({} as Producto);
     this.editorVisible.set(true);
-    // Focus al primer campo después de que el DOM se actualice
+    // Focus al primer campo después de que la pantalla se actualice
     setTimeout(() => {
       const input = document.getElementById('codigo') as HTMLInputElement;
       input?.focus();
@@ -181,7 +181,7 @@ export class Productos {
 
   private temporizador: ReturnType<typeof setTimeout> | undefined;
 
-  /** Busca con 250 ms de espera, igual que el POS. */
+  /** Busca con 250 ms de espera, igual que el mostrador. */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
     this.buscador.set(texto);
@@ -224,7 +224,7 @@ export class Productos {
    * Vuelve a la primera pagina con el filtro que se tenga puesto.
    *
    * Todo cambio de filtro pasa por aqui y no por la pagina: quedarse en la
-   * 4 y cambiar de categoría es quedarse en un `offset` que ya no quiere
+   * 4 y cambiar de categoría es quedarse en una posición que ya no quiere
    * decir nada, y sale una tabla vacia sin que se entienda por que.
    */
   async recargar(): Promise<void> {
@@ -276,9 +276,9 @@ export class Productos {
   /**
    * El tamano de pagina como texto, para el `[value]` del desplegable.
    *
-   * En las plantillas de Angular no hay `String` global (si `JSON`, si
-   * `Math`, pero no `String`), y `[value]` necesita texto: con un numero, el
-   * `value` del `select` no coincide con ninguna opcion y sale vacio.
+   * En las plantillas de Angular no hay un `String` global (hay otras
+   * utilidades, pero no `String`), y `[value]` necesita texto: con un numero,
+   * el `value` del `select` no coincide con ninguna opcion y sale vacio.
    */
   limiteComoTexto(): string {
     return String(this.limite());
@@ -288,7 +288,7 @@ export class Productos {
    * Cambia cuantos productos se ven por pagina.
    *
    * Vuelve SIEMPRE a la pagina 1: quedarse en la 7 y pasar de 50 a 100
-   * filas es quedarse en un `offset` que ya no quiere decir nada.
+   * filas es quedarse en una posición que ya no quiere decir nada.
    */
   async aTamanoDePagina(valor: string): Promise<void> {
     this.limite.set(Number(valor));
@@ -401,8 +401,8 @@ export class Productos {
     this.guardando.set(true);
     this.error.set(null);
     try {
-      // PATCH con solo `activo`: el servicio lo componen con el resto de la
-      // fila o no, pero aqui no interesa tocar mas campos.
+      // Actualizacion con solo `activo`: el servicio lo compone con el resto
+      // de la fila o no, pero aqui no interesa tocar mas campos.
       const cuerpo = cuerpoDeProducto({
         codigo: producto.codigo,
         nombre: producto.nombre,

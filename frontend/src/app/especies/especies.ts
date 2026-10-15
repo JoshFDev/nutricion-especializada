@@ -4,10 +4,10 @@ import { Catalogo } from '../catalogo/catalogo';
 /**
  * La pantalla de Especies.
  *
- * Un wrapper sobre `Catalogo` con el recurso ya cerrado. El backend
+ * Una envoltura sobre `Catalogo` con el recurso ya cerrado. El sistema
  * construye las dos rutas del catalogo con la misma fabrica
  * (`construir(clave)` en `catalogo/rutas.ts`), y aqui la pantalla hace lo
- * mismo: las dos rutas del menu cargan este wrapper o el de categorias, y
+ * mismo: las dos rutas del menu cargan esta envoltura o la de categorias, y
  * el de verdad (listado, editor, borrado) vive en `catalogo/`, no en dos
  * copias casi iguales.
  */

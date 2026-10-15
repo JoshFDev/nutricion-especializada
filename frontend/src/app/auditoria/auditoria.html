@@ -34,7 +34,8 @@
   <div>
     <h1>Auditoría</h1>
     <p class="tenue">
-      Solo lectura. Lo que aparece aquí lo escribieron los triggers de la base, no las pantallas.
+      Solo lectura. Lo que aparece aquí lo escribieron las reglas automáticas de la base, no las
+      pantallas.
     </p>
   </div>
 </div>
@@ -593,7 +594,7 @@
 <!--
   El detalle del renglon del log: que campos se movieron.
 
-  El backend manda el `jsonb` de antes y el de despues, tal cual, y quien
+  El sistema manda los datos de antes y los de despues, tal cual, y quien
   arma la comparacion es la pantalla. Solo salen los campos que CAMBIARON,
   que es lo unico util de una tabla con cien columnas: se entra a ver por
   que cambio un precio, no a leer el registro entero.
@@ -666,8 +667,8 @@
       }
 
       <p class="nota">
-        Estos datos los guardó el trigger de la base cuando alguien modificó el registro. La
-        pantalla solo los compara: no los puede cambiar.
+        Estos datos los guardó la regla automática de la base cuando alguien modificó el registro.
+        La pantalla solo los compara: no los puede cambiar.
       </p>
     </section>
   </div>

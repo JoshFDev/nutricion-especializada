@@ -60,8 +60,8 @@ interface FilaPrecio {
  *     que ya no aplica, al lado del que si, es el error que la pantalla
  *     quiere evitar. El historico de un producto se ve con su filtro.
  *   - El precio se captura como TEXTO y se normaliza al mandar (`cuerpoDePrecio`),
- *     igual que los montos del pago, porque el esquema quiere "8.50" y no
- *     una coma ni ceros de mas.
+ *     igual que los montos del pago, porque las reglas de validación quieren
+ *     "8.50" y no una coma ni ceros de más.
  */
 @Component({
   selector: 'app-precios',
@@ -98,8 +98,8 @@ export class Precios {
    * bajar. Con paginas la tabla tiene alto fijo: se sabe cuantas hay, se sabe
    * en cual se esta, y se llega en un clic.
    *
-   * La pagina se elige en SALTOS y se traduce a `offset` al pedir, porque un
-   * numero de pagina guardado seria un `offset` guardado, que se queda viejo
+   * La pagina se elige en SALTOS y se traduce a la posición al pedir, porque un
+   * numero de pagina guardado seria una posición guardada, que se queda vieja
    * en cuanto cambia el filtro.
    */
   readonly limite = signal(50);
@@ -195,14 +195,14 @@ export class Precios {
   /**
    * Por que no se puede cerrar todavia, o null si la fecha sirve.
    *
-   * El backend rechaza estas tres cosas (`servicio.ts`), pero solo DESPUES de
-   * haber enviado la peticion, y con un 400 que llega cuando el usuario ya
-   * esta esperando: "no se puede cerrar un precio con una fecha que ya
+   * El sistema rechaza estas tres cosas (`servicio.ts`), pero solo DESPUES de
+   * haber enviado lo que se pide, y con un error que llega cuando el usuario
+   * ya esta esperando: "no se puede cerrar un precio con una fecha que ya
    * paso", "la vigencia no puede terminar antes de empezar". Se comprueba
    * aqui para que el boton se apague y el motivo se lea junto al campo.
    *
    * La fecha de cierre no puede estar en el pasado porque `hoy()` es el
-   * corte del servidor: un cierre con fecha de ayer dejaria el precio
+   * corte del sistema: un cierre con fecha de ayer dejaria el precio
    * vigente hoy, que es justo lo contrario de cerrarlo.
    */
   readonly problemaCierre = computed(() => {
@@ -296,7 +296,7 @@ export class Precios {
    * Cambia de pestana.
    *
    * El filtro de cliente se quita al salir de su pestana porque el listado de
-   * precios de lista no lo acepta: lo rechaza con un 400. Antes se quedaba
+   * precios de lista no lo acepta: lo rechaza con un error. Antes se quedaba
    * puesto a oscuras y la pantalla se caia al volver.
    */
   cambiarVista(vista: 'publicos' | 'clientes'): void {
@@ -360,9 +360,9 @@ export class Precios {
   /**
    * El tamano de pagina como texto, para el `[value]` del desplegable.
    *
-   * En las plantillas de Angular no hay `String` global (si `JSON`, si
-   * `Math`, pero no `String`), y `[value]` necesita texto: con un numero, el
-   * `value` del `select` no coincide con ninguna opcion y sale vacio.
+   * En las plantillas de Angular no hay un `String` global (hay otras
+   * utilidades, pero no `String`), y `[value]` necesita texto: con un numero,
+   * el `value` del `select` no coincide con ninguna opcion y sale vacio.
    */
   limiteComoTexto(): string {
     return String(this.limite());
@@ -372,7 +372,7 @@ export class Precios {
    * Cambia cuantos precios se ven por pagina.
    *
    * Vuelve SIEMPRE a la pagina 1: quedarse en la 7 y pasar de 50 a 100 filas
-   * es quedarse en un `offset` que ya no quiere decir nada.
+   * es quedarse en una posición que ya no quiere decir nada.
    */
   async aTamanoDePagina(valor: string): Promise<void> {
     this.limite.set(Number(valor));
@@ -389,7 +389,7 @@ export class Precios {
    * Pide una pagina del recurso que este abierto y la mapea a la fila.
    *
    * Los criteria se arman con `criteriosDe`, que es quien sabe que key acepta
-   * cada listado: el de precios de lista rechaza `cliente_id` con un 400.
+   * cada listado: el de precios de lista rechaza `cliente_id` con un error.
    */
   private async pedir(pagina: number): Promise<[FilaPrecio[], number]> {
     const criterios = criteriosDe(this.vista(), {
@@ -566,11 +566,11 @@ export class Precios {
    *
    * Sin esto un precio cerrado por error se queda asi para siempre: no hay
    * boton de borrar, y el unico camino era el editor, donde "cerrado por fin
-   * de vigencia" se vacia a mano. Aqui la fecha se manda en `null`, que en el
-   * PATCH significa "abrir de nuevo" y no "no lo mandes" (`precios-api.ts`).
+   * de vigencia" se vacia a mano. Aqui la fecha se manda en `null`, que al
+   * actualizar significa "abrir de nuevo" y no "no lo mandes" (`precios-api.ts`).
    *
-   * Si al reabrirlo choca con otro precio que ocupa esas fechas, el backend
-   * responde 409 `VIGENCIA_TRASLAPADA` y el mensaje dice que se cierre el
+   * Si al reabrirlo choca con otro precio que ocupa esas fechas, el sistema
+   * responde `VIGENCIA_TRASLAPADA` y el mensaje dice que se cierre el
    * anterior: es lo correcto, no se puede aplicar dos precios a la vez.
    */
   async reabrir(fila: FilaPrecio): Promise<void> {

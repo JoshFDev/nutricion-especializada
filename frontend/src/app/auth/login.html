@@ -1,43 +1,43 @@
 <main class="pantalla" [style.--fondo-login]="imagenFondo">
   <!--
-    Dos bloques y nada mas: la marca y el acceso.
+    Dos bloques y nada más: la marca y el acceso.
 
     Antes esto era una sola columna con un panel de cristal a la derecha, y en
-    una ventana de 1920 la tarjeta de 23rem quedaba pequena en el centro de un
-    hueco enorme. Aqui el reparto se decide con UNA sola variable de ancho
+    una ventana de 1920 la tarjeta de 23 rem quedaba pequeña en el centro de un
+    hueco enorme. Aquí el reparto se decide con UNA sola variable de ancho
     (`.escena`) y la tarjeta crece con la pantalla, que es lo que hace que en
-    Full HD se vea disenada y no estirada.
+    Full HD se vea diseñada y no estirada.
 
     `.escena` lleva `margin: auto` en vez de `align-items: center` para que una
-    tarjeta mas alta que la ventana empuje hacia abajo en vez de desbordarse
-    por arriba, donde no se podria alcanzar haciendo scroll (ver la nota de
-    "centrado" en el SCSS).
+    tarjeta más alta que la ventana empuje hacia abajo en vez de desbordarse
+    por arriba, donde no se podría alcanzar haciendo scroll (ver la nota de
+    «centrado» en el SCSS).
   -->
   <div class="escena">
     <!--
-      La marca. Es lo unico de la app que se ve sin sesion, asi que va fuera de
-      la tarjeta: si el logo esta dentro del formulario, un formulario en blanco
-      con error no dice de que sistema se trata.
+      La marca. Es lo único de la aplicación que se ve sin sesión, así que va
+      fuera de la tarjeta: si el logo está dentro del formulario, un formulario
+      en blanco con error no dice de qué sistema se trata.
 
-      El logo va sobre un circulo blanco solido y no suelto sobre la foto. Es el
-      patron mas corriente de login profesional, y aqui ademas resuelve un
-      problema concreto: el logo es de tinta oscura y con la foto de fondo de
-      detras se lo come. Con el circulo blanco el logo va siempre sobre blanco,
-      le cuadre la foto que le cuadre.
+      El logo va sobre un círculo blanco sólido y no suelto sobre la foto. Es
+      el patrón más corriente de inicio de sesión profesional, y aquí además
+      resuelve un problema concreto: el logo es de tinta oscura y con la foto de
+      fondo detrás se lo come. Con el círculo blanco el logo va siempre sobre
+      blanco, le cuadre la foto que le cuadre.
 
-      Hay dos archivos del mismo dibujo a distinto tamano, y el `srcset` deja que
-      cada pantalla baje el suyo: `logo-nutricion.png` de 256x256 para las de 1x,
-      y `logo-nutricion-hd.png` de 1254x1254 para las de 2x. Sin el `srcset`, una
-      pantalla HiDPI tendria que estirar los 256px del pequeño y el logo se veria
-      pixeleado justo en la pantalla que mas se nota.
+      Hay dos archivos del mismo dibujo a distinto tamaño, y el `srcset` deja
+      que cada pantalla baje el suyo: `logo-nutricion.png` de 256x256 para las
+      de 1x, y `logo-nutricion-hd.png` de 1254x1254 para las de 2x. Sin el
+      `srcset`, una pantalla HiDPI tendría que estirar los 256 px del pequeño y
+      el logo se vería pixeleado justo en la pantalla que más se nota.
 
-      El circulo llega a 9.5rem (152px), que en HiDPI de 2x son 304 pixeles
-      reales: de sobra con los 1254 del archivo grande, asi que se puede agrandar
-      sin stretching. El `width`/`height` no fijan el tamano (eso lo hace el CSS
-      con `clamp`), estan para que el navegador reserve el hueco antes de
-      descargar la imagen y la pagina no salte al aparecer.
+      El círculo llega a 9.5 rem (152 px), que en HiDPI de 2x son 304 píxeles
+      reales: de sobra con los 1254 del archivo grande, así que se puede
+      agrandar sin deformar la imagen. El `width`/`height` no fijan el tamaño
+      (eso lo hace el CSS con `clamp`), están para que el navegador reserve el
+      hueco antes de descargar la imagen y la página no salte al aparecer.
 
-      `alt` vacio a proposito: el nombre ya lo dice el `h1` de al lado, y dos
+      `alt` vacío a propósito: el nombre ya lo dice el `h1` de al lado, y dos
       veces el mismo texto es ruido para el lector de pantalla.
     -->
     <aside class="marca">
@@ -50,30 +50,30 @@
         height="152"
         draggable="false"
       />
-      <h1 class="marca__titulo">Nutricion Especializada</h1>
-      <p class="marca__sub">Captura de remisiones, cartera y almacen</p>
+      <h1 class="marca__titulo">Nutrición Especializada</h1>
+      <p class="marca__sub">Captura de remisiones, cartera y almacén</p>
 
       <!--
-        Los tres modulos, con icono y una linea de que hay dentro de cada uno.
+        Los tres módulos, con icono y una línea de qué hay dentro de cada uno.
 
-        No son adornos: el login es la unica pantalla donde alguien que no
-        conoce la app decide si esta en el sitio correcto, y "un sistema con
-        una factura" no dice lo mismo que "remisiones, cartera y almacen".
-        Cada linea cita modulos que existen de verdad en la app (notas, clientes
-        y facturacion, productos e inventario), asi que no promete nada que no
-        se pueda hacer en cuanto se entra.
+        No son adornos: el inicio de sesión es la única pantalla donde alguien
+        que no conoce la aplicación decide si está en el sitio correcto, y «un
+        sistema con una factura» no dice lo mismo que «remisiones, cartera y
+        almacén». Cada línea cita módulos que existen de verdad en la
+        aplicación (notas, clientes y facturación, productos e inventario), así
+        que no promete nada que no se pueda hacer en cuanto se entra.
 
-        El texto va en una sola linea por modulo (`nowrap`) para que el titulo y
-        su descripcion formen un par y no se lea como una lista de seis cosas.
-        En movil la descripcion se oculta y las tres se ponen en fila (ver el
-        SCSS): en una ventana de 667 de alto, las tres lineas con descripcion
-        empujaban el formulario fuera de la pantalla y obligaban a hacer scroll
-        para encontrar el boton de entrar.
+        El texto va en una sola línea por módulo (`nowrap`) para que el título
+        y su descripción formen un par y no se lea como una lista de seis
+        cosas. En móvil la descripción se oculta y las tres se ponen en fila
+        (ver el SCSS): en una ventana de 667 de alto, las tres líneas con
+        descripción empujaban el formulario fuera de la pantalla y obligaban a
+        hacer scroll para encontrar el botón de entrar.
       -->
       <ul class="marca__lista">
         <li class="punto">
           <span class="punto__icono" aria-hidden="true">
-            <!-- Un documento con pliegue y dos renglones: una nota de remision. -->
+            <!-- Un documento con pliegue y dos renglones: una nota de remisión. -->
             <svg viewBox="0 0 20 20" fill="none">
               <path
                 d="M5 2.75h6.5L15 6.25v11H5z"
@@ -97,7 +97,7 @@
           </span>
           <span class="punto__detalle">
             <span class="punto__t">Remisiones</span>
-            <span class="punto__d">Notas de remision y guias</span>
+            <span class="punto__d">Notas de remisión y guías</span>
           </span>
         </li>
 
@@ -122,13 +122,13 @@
           </span>
           <span class="punto__detalle">
             <span class="punto__t">Cartera</span>
-            <span class="punto__d">Clientes, facturacion y cobros</span>
+            <span class="punto__d">Clientes, facturación y cobros</span>
           </span>
         </li>
 
         <li class="punto">
           <span class="punto__icono" aria-hidden="true">
-            <!-- Tres cajas apiladas: el deposito. -->
+            <!-- Tres cajas apiladas: el depósito. -->
             <svg viewBox="0 0 20 20" fill="none">
               <rect
                 x="2.75"
@@ -160,7 +160,7 @@
             </svg>
           </span>
           <span class="punto__detalle">
-            <span class="punto__t">Almacen</span>
+            <span class="punto__t">Almacén</span>
             <span class="punto__d">Productos, inventario y precios</span>
           </span>
         </li>
@@ -169,33 +169,33 @@
 
     <section class="acceso" aria-labelledby="titulo-acceso">
       <!--
-        ElCristal va en un pseudoelemento de la tarjeta y NO en la tarjeta, a
-        proposito: `backdrop-filter` obliga al navegador a crear una superficie
-        de render propia, y el texto de dentro se rasteriza a la resolucion de
+        El cristal va en un pseudoelemento de la tarjeta y NO en la tarjeta, a
+        propósito: `backdrop-filter` obliga al navegador a crear una superficie
+        de dibujo propia, y el texto de dentro se rasteriza a la resolución de
         esa superficie en vez de a la de la pantalla. Con el desenfoque en la
-        propia tarjeta, "Iniciar sesion", los campos y el boton se veian suaves
-        y se seguian viendo suaves despues, porque la capa se queda encendida.
+        propia tarjeta, «Iniciar sesión», los campos y el botón se veían suaves
+        y se seguían viendo suaves después, porque la capa se queda encendida.
         Con el desenfoque en `::before` y el texto encima, el texto se dibuja a
-        la resolucion real de la pantalla. Ver la nota de "Capas y texto" al
+        la resolución real de la pantalla. Ver la nota de «Capas y texto» al
         final del SCSS.
       -->
       <div class="tarjeta" [class.con-error]="error()">
         <header class="cabecera">
-          <h2 id="titulo-acceso">Iniciar sesion</h2>
+          <h2 id="titulo-acceso">Iniciar sesión</h2>
           <p class="cabecera__ayuda">Escribe tus credenciales para entrar.</p>
         </header>
 
         @if (avisoSesionCerrada()) {
-          <p class="aviso aviso-info">Tu sesion se cerro. Vuelve a entrar para continuar.</p>
+          <p class="aviso aviso-info">Tu sesión se cerró. Vuelve a entrar para continuar.</p>
         }
 
         <form [formGroup]="form" (ngSubmit)="entrar()">
           <!--
             Cada campo va en su bloque y no suelto. El margen vive en el bloque,
-            no en el input, para que el error salga DENTRO del bloque (entre el
-            input y el margen) y no empuje el boton de entrar hacia abajo cada
-            vez que aparece, que es justo cuando se esta escribiendo la
-            contrasena.
+            no en el campo, para que el error salga DENTRO del bloque (entre el
+            campo y el margen) y no empuje el botón de entrar hacia abajo cada
+            vez que aparece, que es justo cuando se está escribiendo la
+            contraseña.
           -->
           <div class="campo">
             <label for="correo">Correo</label>
@@ -215,22 +215,22 @@
               [attr.aria-describedby]="tocado('correo') ? 'correo-error' : null"
             />
             @if (tocado('correo')) {
-              <p class="campo-error" id="correo-error">Escribe un correo con formato valido.</p>
+              <p class="campo-error" id="correo-error">Escribe un correo con formato válido.</p>
             }
           </div>
 
           <div class="campo">
-            <label for="contrasena">Contrasena</label>
+            <label for="contrasena">Contraseña</label>
             <!--
-              El campo con el boton de ver la contrasena.
+              El campo con el botón de ver la contraseña.
 
-              Es la unica concesion a la seguridad de la pantalla, y a cambio
-              resuelve el problema mas comun de un mostrador: teclear la
-              contrasena con mayusculas o con el teclado en espanol, con el
-              numero de caracteres equivocado y sin poder notarlo. El boton es
-              un `type="button"` para que no dispare el `submit` del formulario,
-              y lleva `aria-pressed` para que el lector de pantalla diga si la
-              contrasena esta a la vista o no.
+              Es la única concesión a la seguridad de la pantalla, y a cambio
+              resuelve el problema más común de un mostrador: teclear la
+              contraseña con mayúsculas o con el teclado en español, con el
+              número de caracteres equivocado y sin poder notarlo. El botón es
+              un `type="button"` para que no dispare el envío del formulario, y
+              lleva `aria-pressed` para que el lector de pantalla diga si la
+              contraseña está a la vista o no.
             -->
             <div class="campo-contrasena">
               <input
@@ -239,7 +239,7 @@
                 formControlName="contrasena"
                 autocomplete="current-password"
                 enterkeyhint="go"
-                placeholder="Tu contrasena"
+                placeholder="Tu contraseña"
                 [class.invalido]="tocado('contrasena')"
                 [attr.aria-invalid]="tocado('contrasena')"
                 [attr.aria-describedby]="tocado('contrasena') ? 'contrasena-error' : null"
@@ -249,8 +249,8 @@
                 class="ver"
                 (click)="alternarContrasena()"
                 [attr.aria-pressed]="verContrasena()"
-                [attr.aria-label]="verContrasena() ? 'Ocultar la contrasena' : 'Ver la contrasena'"
-                [title]="verContrasena() ? 'Ocultar la contrasena' : 'Ver la contrasena'"
+                [attr.aria-label]="verContrasena() ? 'Ocultar la contraseña' : 'Ver la contraseña'"
+                [title]="verContrasena() ? 'Ocultar la contraseña' : 'Ver la contraseña'"
               >
                 @if (verContrasena()) {
                   <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -280,7 +280,7 @@
               </button>
             </div>
             @if (tocado('contrasena')) {
-              <p class="campo-error" id="contrasena-error">La contrasena no puede ir vacia.</p>
+              <p class="campo-error" id="contrasena-error">La contraseña no puede ir vacía.</p>
             }
           </div>
 
@@ -289,11 +289,11 @@
           }
 
           <!--
-            El boton se deshabilita mientras viaja la peticion. Un doble clic
-            manda dos logins, y el segundo error (de sesion ya usada) se come el
-            mensaje del primero. Tambien dice "Entrando..." y enseña el spinner
-            para que se vea que algo paso: sin eso, en una red lenta parece que
-            el clic no entro.
+            El botón se deshabilita mientras viaja la petición. Un doble clic
+            manda dos inicios de sesión, y el segundo error (de sesión ya usada)
+            se come el mensaje del primero. También dice «Entrando...» y enseña
+            el spinner para que se vea que algo pasó: sin eso, en una red lenta
+            parece que el clic no entró.
           -->
           <button type="submit" class="principal" [disabled]="enviando()">
             @if (enviando()) {
@@ -306,13 +306,13 @@
         @if (esDesarrollo) {
           <!--
             Acceso directo de desarrollo. Solo aparece con `ng serve`, y el
-            backend lo rechaza con 404 en produccion (ver `app.ts` y
-            `auth/rutas-dev.ts`), asi que el candado no depende de que este
-            boton este escondido.
+            sistema lo rechaza con 404 en producción (ver `app.ts` y
+            `auth/rutas-dev.ts`), así que el candado no depende de que este
+            botón esté escondido.
 
-            Se separa del formulario y no es un `type="submit"` mas: es una
-            peticion distinta, a otra ruta, con otro cuerpo, y mezclarla en el
-            mismo form haria que el submit normal lo mandara.
+            Se separa del formulario y no es un `type="submit"` más: es una
+            petición distinta, a otra ruta, con otros datos, y mezclarla en el
+            mismo formulario haría que el envío normal lo mandara.
           -->
           <div class="desarrollo">
             <button
@@ -323,7 +323,9 @@
             >
               Entrar como administrador
             </button>
-            <p>Solo en desarrollo. Entra como el administrador del seed, sin contrasena.</p>
+            <p>
+              Solo en desarrollo. Entra como el administrador de datos iniciales, sin contraseña.
+            </p>
           </div>
         }
       </div>

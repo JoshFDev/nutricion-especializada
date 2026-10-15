@@ -14,21 +14,21 @@ import { interceptorSesion } from './nucleo/interceptor-sesion';
 import { routes } from './app.routes';
 
 /**
- * Las dos pantallas de sesion, reconocidas por la URL.
+ * Las dos pantallas de sesión, reconocidas por la URL.
  *
- * `/login` con su `?returnUrl=...` y `/cambiar-contrasena`, y tambien lo que
- * apunte hacia ellas. No hay otras rutas que empiecen asi (ver
- * `app.routes.ts`), y el `[/?#]` despues evita confundir `/login` con una
- * ruta hipotetica `/logina`.
+ * `/login` con su `?returnUrl=...` y `/cambiar-contrasena`, y también lo que
+ * apunte hacia ellas. No hay otras rutas que empiecen así (ver
+ * `app.routes.ts`), y el `[/?#]` después evita confundir `/login` con una
+ * ruta hipotética `/logina`.
  */
 const PANTALLA_DE_SESION = /^\/(login|cambiar-contrasena)([/?#]|$)/;
 
 /**
- * Como se arma la app.
+ * Cómo se arma la aplicación.
  *
- * Va en un archivo y no en `main.ts` porque `main.ts` solo arranca. Asi las
- * pruebas pueden construir la misma configuracion con `TestBed` sin abrir
- * un puerto, igual que en el backend, donde la composicion esta en `app.ts`
+ * Va en un archivo y no en `main.ts` porque `main.ts` solo arranca. Así las
+ * pruebas pueden construir la misma configuración con `TestBed` sin abrir
+ * un puerto, igual que en el sistema, donde la composición está en `app.ts`
  * y no en `index.ts`.
  */
 export const appConfig: ApplicationConfig = {
@@ -38,40 +38,41 @@ export const appConfig: ApplicationConfig = {
 
     // `withComponentInputBinding` hace que el `data` de la ruta se escriba
     // solo en los inputs del componente. Es lo que permite que `Pendiente`
-    // lea su titulo y su texto de `data` sin volver a pedir el
+    // lea su título y su texto de `data` sin volver a pedir el
     // `ActivatedRoute` por cada campo.
     //
     // `withViewTransitions` es lo que hace que cambiar de pantalla no sea un
     // corte en seco: el navegador toma una foto de lo que hay, la cambia y
-    // mezcla las dos con la animacion de `::view-transition-old(contenido)` y
+    // mezcla las dos con la animación de `::view-transition-old(contenido)` y
     // `::view-transition-new(contenido)` en `styles.scss`. Sin esto el
     // cambio era un salto seco, y con las animaciones de filas de encima se
-    // veía como que la pagina se trababa.
+    // veía como que la página se trababa.
     //
-    // `skipInitialTransition` apaga la de la PRIMERA navegacion. Al cargar la
-    // app con `/notas` ya en la barra de direcciones no hay pagina anterior
-    // de la que cruzar, y animar ese primer render hacia un frame en blanco.
+    // `skipInitialTransition` apaga la de la PRIMERA navegación. Al cargar la
+    // aplicación con `/notas` ya en la barra de direcciones no hay página
+    // anterior de la que cruzar, y animar ese primer dibujado terminaba en un
+    // fotograma en blanco.
     //
-    // `onViewTransitionCreated` salta la animacion cuando el cruce toca
-    // `/login` o `/cambiar-contrasena`, en cualquier sentido. La razon es el
-    // trabazon del logout: dos navegaciones seguidas hacia o desde el login
-    // (el interceptor y el boton de salir, o la guarda de cambio obligatorio)
-    // arrancaban DOS view-transitions, la segunda cancelaba a la primera a
-    // media mezcla y la pantalla se quedaba congelada con la foto vieja.
-    // Saltando la transicion en esas dos pantallas la navegacion sale limpia
-    // y ademas entrar al login no se anima, que es un corte: no hay nada que
-    // mezclar con una pantalla de contrasena.
+    // `onViewTransitionCreated` salta la animación cuando el cruce toca
+    // `/login` o `/cambiar-contrasena`, en cualquier sentido. La razón es el
+    // enredo del cierre de sesión: dos navegaciones seguidas hacia o desde el
+    // inicio de sesión (el interceptor y el botón de salir, o la guarda de
+    // cambio obligatorio) arrancaban DOS transiciones de vista, la segunda
+    // cancelaba a la primera a media mezcla y la pantalla se quedaba congelada
+    // con la foto vieja. Saltando la transición en esas dos pantallas la
+    // navegación sale limpia y además entrar al inicio de sesión no se anima,
+    // que es un corte: no hay nada que mezclar con una pantalla de contraseña.
     //
-    // El callback corre en contexto de inyeccion (lo dice el tipo del
-    // router), asi que `inject(Router)` va. En ese momento el router todavia
-    // apunta a la pantalla DE DONDE se viene (`router.url`) y la navegacion
-    // en curso da hacia DONDE se va; el estado se cambia despues, al
-    // activar las rutas.
+    // El callback corre en contexto de inyección (lo dice el tipo del
+    // enrutador), así que `inject(Router)` va. En ese momento el enrutador
+    // todavía apunta a la pantalla DE DONDE se viene (`router.url`) y la
+    // navegación en curso da hacia DONDE se va; el estado se cambia después,
+    // al activar las rutas.
     //
     // `withInMemoryScrolling` devuelve cada pantalla arriba al entrar. Sin
-    // esto se hereda la posicion del scroll de la pantalla anterior, asi que
+    // esto se hereda la posición del scroll de la pantalla anterior, así que
     // cambiar de productos a clientes te dejaba a media tabla del sitio
-    // donde estabas, y con la transicion se nota todavia mas.
+    // donde estabas, y con la transición se nota todavía más.
     provideRouter(
       routes,
       withComponentInputBinding(),
@@ -91,7 +92,7 @@ export const appConfig: ApplicationConfig = {
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled' }),
     ),
 
-    // El interceptor va aqui y no en cada peticion. Ver el archivo.
+    // El interceptor va aquí y no en cada petición. Ver el archivo.
     provideHttpClient(withInterceptors([interceptorSesion])),
   ],
 };

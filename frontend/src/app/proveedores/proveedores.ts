@@ -17,14 +17,14 @@ import { ProveedoresApi, cuerpoDeProveedor, type ProveedorListado } from './prov
  * que pegaba las siguientes al final; ahora el editor se despliega ARRIBA de
  * la tabla y la lista pagina de verdad.
  *
- * Tres reglas que vienen del backend (`proveedores/esquemas.ts`) y que no
+ * Tres reglas que vienen del sistema (`proveedores/esquemas.ts`) y que no
  * conviene rediseñar:
  *
  *   - **No hay borrar.** Un proveedor con compras tiene su nombre impreso en
- *     documentos viejos, así que la baja es `activo: false` por PATCH desde
- *     la fila, no un DELETE. Por eso esta pantalla no usa el modal de
+ *     documentos viejos, así que la baja es `activo: false` actualizando
+ *     desde la fila, no un borrado. Por eso esta pantalla no usa el modal de
  *     confirmación de productos: no hay nada irreversible que preguntar.
- *   - **El nombre es la llave.** Es UNIQUE en la base y el servicio responde
+ *   - **El nombre es la llave.** Es único en la base y el servicio responde
  *     `PROVEEDOR_DUPLICADO`, que se pega al campo y no solo al aviso de
  *     arriba. En una compra el proveedor se elige por nombre.
  *   - **Alta y edición piden el MISMO permiso** (`proveedores.editar`), que es
@@ -68,8 +68,8 @@ export class Proveedores {
   /**
    * Cuántos proveedores se ven por página, y la página que se está viendo.
    *
-   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
-   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   * La página se elige en SALTOS y se traduce a la posición al pedir, porque
+   * una posición guardada se queda vieja en cuanto cambia un filtro.
    */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -92,7 +92,7 @@ export class Proveedores {
    *
    * La referencia es `activos`, que es como se ve al entrar: "Limpiar" deja
    * la pantalla como se encontró, y no como se vino. El buscador se cuenta
-   * con dos caracteres porque es lo que el backend exige: con uno solo no
+   * con dos caracteres porque es lo que el sistema exige: con uno solo no
    * filtra, y un "Limpiar" que aparece a la primera letra confunde más de lo
    * que ayuda.
    */
@@ -136,10 +136,10 @@ export class Proveedores {
   /**
    * Busca con 250 ms de espera, igual que el resto de las pantallas.
    *
-   * Cada tecleo NO pega una petición: con el buscador abierto a media
+   * Cada tecleo NO pega una consulta: con el buscador abierto a media
    * escritura son varias y la última es la única que sirve. Además, buscar
    * siempre vuelve a la página 1, porque quedarse en la 4 con un filtro
-   * nuevo es mirar un `offset` que ya no quiere decir nada.
+   * nuevo es mirar una posición que ya no quiere decir nada.
    */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
@@ -165,8 +165,8 @@ export class Proveedores {
    * El texto de búsqueda, o `undefined` si es muy corto.
    *
    * El mínimo de DOS caracteres es el mismo de las otras pantallas: con uno
-   * solo el `ILIKE '%a%'` del backend (`proveedores/repositorio.ts`) trae
-   * medio catálogo y la tabla deja de informar.
+   * solo la búsqueda por parecido del sistema (`proveedores/repositorio.ts`)
+   * trae medio catálogo y la tabla deja de informar.
    */
   private textoBusqueda(): string | undefined {
     const limpio = this.buscador().trim();
@@ -234,7 +234,7 @@ export class Proveedores {
 
     this.limite.set(limite);
     // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50
-    // filas es pedir un `offset` que ya no corresponde a nada.
+    // filas es pedir una posición que ya no corresponde a nada.
     void this.recargar();
   }
 
@@ -299,7 +299,7 @@ export class Proveedores {
   }
 
   /**
-   * El mensaje de un campo, si el backend lo mandó o el formulario lo sabe.
+   * El mensaje de un campo, si el sistema lo mandó o el formulario lo sabe.
    *
    * El error va DEBAJO del campo y no solo en el aviso de arriba del
    * formulario: lo que hay que corregir es el campo, y un mensaje suelto
@@ -326,8 +326,9 @@ export class Proveedores {
   }
 
   /**
-   * Alta o edición: lo decide `esAlta`. El `activo` no se manda, porque el
-   * esquema de crear no lo acepta y la baja se decide desde la fila.
+   * Alta o edición: lo decide `esAlta`. El `activo` no se manda, porque las
+   * reglas de validación del alta no lo aceptan y la baja se decide desde la
+   * fila.
    */
   async guardar(): Promise<void> {
     if (this.guardando() || this.forma.invalid || !this.puedeGuardar()) return;

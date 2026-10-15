@@ -5,22 +5,21 @@ import { API } from '../nucleo/api';
 import { cantidadComoTexto, kgComoTextoSiHayQueMandarlo, type Linea } from './linea';
 
 /**
- * La API del mostrador: clientes, productos, precios y el alta de la nota.
+ * El servicio de notas del mostrador: clientes, productos, precios y el alta
+ * de la nota.
  *
- * Los tipos de aqui son un espejo de los del backend. No se comparten
- * (el front y el back son dos paquetes y no hay un monorepo), asi que
- * cuando cambie una forma hay que cambiar el tipo de este archivo; por eso
- * cada uno lleva el archivo del backend del que salio.
+ * Los tipos de aquí son una copia de los que usa el servicio. No se comparten
+ * (las dos partes son programas aparte), así que cuando cambie una forma hay
+ * que cambiar el tipo de este archivo; por eso cada uno anota de dónde salió.
  *
- * No hay ningun `subscribe` en las pantallas: todo se resuelve con
- * `firstValueFrom` y `await`. Un mostrador son clics sueltos, no un
- * formulario con muchos campos a la vez, y el estado de "guardando" se
- * maneja con una signal.
+ * Ninguna pantalla se queda "escuchando": todo se pide y se espera la
+ * respuesta. Un mostrador son clics sueltos, no un formulario con muchos
+ * campos a la vez, y el estado de "guardando" se maneja con una señal.
  */
 
 // --------------------------------------------------------------------- tipos
 
-/** `clientes/modelo.ts` -> `Cliente`. El POS usa el id, el nombre y el rfc. */
+/** `clientes/modelo.ts` -> `Cliente`. La pantalla usa el id, el nombre y el rfc. */
 export interface Cliente {
   id: number;
   codigo_cliente: string | null;
@@ -44,7 +43,7 @@ export interface PrecioEfectivo {
   producto_id: number;
   producto_codigo: string;
   producto_nombre: string;
-  /** `false` cuando el precio existe pero ya vencio: hay que decirlo. */
+  /** `false` cuando el precio existe pero ya venció: hay que decirlo. */
   vigente: boolean;
   origen: 'cliente' | 'publico' | null;
   precio_id: number | null;
@@ -53,7 +52,7 @@ export interface PrecioEfectivo {
   vigente_hasta: string | null;
 }
 
-/** `inventario/modelo.ts` -> `Existencia`. El POS usa solo `existencia_bultos`. */
+/** `inventario/modelo.ts` -> `Existencia`. La pantalla usa solo `existencia_bultos`. */
 export interface Existencia {
   producto_id: number;
   almacen_id: number;
@@ -97,11 +96,11 @@ export interface Nota {
 export type EstatusNota = 'pendiente' | 'parcial' | 'pagada' | 'cancelada';
 
 /**
- * `notas-remision/modelo.ts` -> `NotaListada`: la fila de la tabla de abajo.
+ * `notas-remision/modelo.ts` -> `NotaListada`: el renglón de la tabla de abajo.
  *
- * NO trae los renglones (traerlos para 50 notas seria pintar 50 tablas
- * enteras), solo cuantos tiene. El detalle se pide con `consultar` cuando la
- * persona abre una fila.
+ * NO trae el detalle de los renglones (traerlo para 50 notas sería pintar 50
+ * tablas enteras), solo cuántos tiene. El detalle se pide con `consultar`
+ * cuando la persona abre una fila.
  */
 export interface NotaListada {
   id: number;
@@ -113,35 +112,34 @@ export interface NotaListada {
   subtotal: number;
   estatus: EstatusNota;
   renglones: number;
-  /** Los kilos que salen en el camion, sumados de los renglones. */
+  /** Los kilos que salen en el camión, sumados de los renglones. */
   kg_total: number;
 }
 
 /**
- * El periodo del listado. `hoy` y `ultimos_7` los resuelve la BASE
+ * El periodo del listado. `hoy` y `ultimos_7` los resuelve el propio sistema
  * (`periodosEsquema` en `notas-remision/esquemas.ts`), no el navegador: la
- * fecha de una nota la decide `CURRENT_DATE` del servidor de la base, y un
- * filtro armado con la fecha del navegador deja fuera la nota que se acaba de
- * capturar cuando la maquina del mostrador y el servidor estan en dias
- * distintos.
+ * fecha de una nota la decide la fecha del sistema, y un filtro armado con la
+ * fecha del navegador deja fuera la nota que se acaba de capturar cuando la
+ * máquina del mostrador y el sistema están en días distintos.
  *
- * `'todo'` no existe en el backend: es la ausencia de filtro, y se manda
+ * `'todo'` no existe como filtro: es la ausencia de filtro, y se manda
  * `undefined`.
  */
 export type Periodo = 'hoy' | 'ultimos_7';
 
 /**
- * Como se pide el listado ordenado. Son las cuatro combinaciones que ofrece el
- * desplegable de la pantalla, y son las UNICAS que el backend acepta: el
- * esquema del servidor es un enum y no un campo libre, para que nadie pueda
- * pedir un orden sin indice.
+ * Cómo se pide el listado ordenado. Son las cuatro combinaciones que ofrece
+ * el desplegable de la pantalla, y son las ÚNICAS que el sistema acepta: la
+ * validación solo permite estas, para que nadie pueda pedir un orden que no se
+ * pueda resolver.
  */
 export type OrdenNotas = 'fecha_desc' | 'fecha_asc' | 'subtotal_desc' | 'subtotal_asc';
 
-/** Lo que el desplegable muestra, y a que valor del backend corresponde. */
+/** Lo que el desplegable muestra, y a qué opción corresponde. */
 export const ORDENES_NOTAS: { valor: OrdenNotas; texto: string }[] = [
-  { valor: 'fecha_desc', texto: 'Mas recientes primero' },
-  { valor: 'fecha_asc', texto: 'Mas antiguas primero' },
+  { valor: 'fecha_desc', texto: 'Más recientes primero' },
+  { valor: 'fecha_asc', texto: 'Más antiguas primero' },
   { valor: 'subtotal_desc', texto: 'Mayor total primero' },
   { valor: 'subtotal_asc', texto: 'Menor total primero' },
 ];
@@ -156,7 +154,7 @@ export interface FiltroNotas {
   offset?: number;
 }
 
-/** La envoltura de los listados. `notas-remision/modelo.ts` -> `Listado`. */
+/** El molde con el que llegan las listas. `notas-remision/modelo.ts` -> `Listado`. */
 export interface Listado<T> {
   datos: T[];
   total: number;
@@ -164,7 +162,7 @@ export interface Listado<T> {
   offset: number;
 }
 
-/** `notas-remision/modelo.ts` -> `Folio`: un numero del talonario. */
+/** `notas-remision/modelo.ts` -> `Folio`: un número del talonario. */
 export interface Folio {
   id: number;
   serie: string;
@@ -185,7 +183,7 @@ export interface ResumenTalonario {
   cancelados: number;
 }
 
-/** El cuerpo de `POST /folios`: un tramo de talonario. */
+/** Lo que se manda al cargar un tramo de talonario. */
 export interface CuerpoTalonario {
   serie: string;
   desde: number;
@@ -195,33 +193,31 @@ export interface CuerpoTalonario {
 // ------------------------------------------------------------------ el cuerpo
 
 /**
- * El cuerpo de `POST /api/notas-remision`, tal como lo quiere
- * `crearNotaEsquema`.
+ * Lo que se manda al crear una nota, tal como lo pide el sistema.
  *
- * Lo que se ve aqui, y no en la pantalla, es lo que decides NO mandar:
+ * Lo que se ve aquí, y no en la pantalla, es lo que se decide NO mandar:
  *
- *   - `serie`: NO se manda. El talonario del que sale el folio es la
- *     "serie activa" que dejo puesta quien administra `notas.folios`
- *     (endpoint `PUT /folios/serie-activa`), y el backend la resuelve si
- *     el cuerpo no la trae. El mostrador no debe saber que serie es la de
- *     hoy: eso cambio en la oficina, no en el mostrador.
- *   - `subtotal`: NO existe. Es una columna GENERATED y el esquema es
- *     `strict`, asi que mandarla da un 400 con un mensaje en ingles sobre
- *     "cannot insert into column". Es el 400 mas confuso de toda la API.
- *   - `precio_unit_kg`: NO se manda, aunque la pantalla ya sepa el
- *     precio. El backend lo resuelve en la FECHA DE LA NOTA si no llega
+ *   - `serie`: NO se manda. El talonario del que sale el folio es la "serie
+ *     activa" que dejó puesta quien administra `notas.folios`, y el sistema
+ *     la resuelve si no la trae. El mostrador no debe saber qué serie toca
+ *     hoy: eso cambió en la oficina, no en el mostrador.
+ *   - `subtotal`: NO existe. Es un dato que el sistema calcula solo, y su
+ *     validación es estricta, así que mandarlo provoca un rechazo con un
+ *     mensaje poco claro. Es el error más confuso de todos.
+ *   - `precio_unit_kg`: NO se manda, aunque la pantalla ya sepa el precio.
+ *     El sistema lo resuelve en la FECHA DE LA NOTA si no llega
  *     (`prepararRenglones` -> `resolverEfectivo`), que es la regla del
- *     negocio; mandarlo desde la pantalla abriria la puerta a que un
- *     `precio_unit_kg: 0.01` en el JSON cobre un peso. El precio que se
- *     ve en la linea es el mismo que va a resolver el servidor con la misma
- *     fecha y el mismo cliente.
- *   - `fecha`: NO se manda, y por lo mismo: si no viene, la usa la base
- *     (`hoyEnLaBase`). Mandarla desde el navegador es como la fecha se
- *     corre un dia en un huso horario.
- *   - `kg_bulto`: solo si la persona lo toco. Si no, lo rellena
+ *     negocio; mandarlo desde la pantalla abriría la puerta a que un precio
+ *     de 0.01 cobrara casi nada. El precio que se ve en el renglón es el
+ *     mismo que va a resolver el sistema con la misma fecha y el mismo
+ *     cliente.
+ *   - `fecha`: NO se manda, y por lo mismo: si no viene, la usa el sistema
+ *     (`hoyEnLaBase`). Mandarla desde el navegador es como la fecha se corre
+ *     un día en otra zona horaria.
+ *   - `kg_bulto`: solo si la persona lo tocó. Si no, lo rellena
  *     `fn_default_kg_bulto` con `productos.presentacion_kg`, que es la
- *     presentacion real del producto y no la que el navegador recuerda.
- *   - `id`: los renglones del alta no tienen id en la base todavia.
+ *     presentación real del producto y no la que el navegador recuerda.
+ *   - `id`: los renglones de una nota nueva no tienen id todavía.
  */
 export interface CuerpoNota {
   cliente_id: number;
@@ -237,28 +233,27 @@ export interface RenglonNotaBody {
 }
 
 /**
- * El cuerpo de `PATCH /api/notas-remision/:id`, tal como lo quiere
- * `editarNotaEsquema`.
+ * Lo que se manda al corregir una nota, tal como lo pide el sistema.
  *
- * Tres diferencias con el del alta, y las tres son obligatorias:
+ * Tres diferencias con lo que se manda al crear, y las tres son obligatorias:
  *
- *   - `renglones[].id`: sin el, el backend no puede distinguir "este renglon
- *     ya estaba" de "este es nuevo", y cada guardado borraria todos los
- *     renglones y los volveria a crear. Con los renglones borrados y
- *     recreados, sus movimientos de inventario tambien se borran y se
- *     rehacen: una devolucion terminaria con el kardoex lleno de ruido.
- *     Los que la persona quito de la tabla (una devolucion completa) no
- *     vienen, y el backend los borra de verdad.
- *   - `almacen_id`: se toma del renglon (`RenglonNota.almacen_id`). En el
- *     alta la nota es nueva y la bodega la elige la pantalla; al corregir una
- *     nota, el producto puede haber salido de otra bodega, y mandarle el
- *     almacen equivocado descuenta el stock de la que no es. La bodega de la
+ *   - `renglones[].id`: sin él, el sistema no puede distinguir "este renglón
+ *     ya estaba" de "este es nuevo", y cada guardado borraría todos los
+ *     renglones y los volvería a crear. Con los renglones borrados y
+ *     recreados, sus movimientos de inventario también se borran y se
+ *     rehacen: una devolución terminaría con el inventario lleno de ruido.
+ *     Los que la persona quitó de la tabla (una devolución completa) no
+ *     vienen, y el sistema los borra de verdad.
+ *   - `almacen_id`: se toma del renglón (`RenglonNota.almacen_id`). Al crear
+ *     la nota la bodega la elige la pantalla; al corregir una nota, el
+ *     producto puede haber salido de otra bodega, y mandarle el almacén
+ *     equivocado descuenta la mercancía de la que no es. La bodega de la
  *     pantalla solo rellena los renglones NUEVOS que se agreguen.
- *   - `precio_unit_kg`: tampoco se manda, y por la misma razon que en el
- *     alta. El backend conserva el precio de los renglones que ya estaban
- *     (ver `prepararRenglones` -> `aConservar` en el servicio), que es lo
- *     que se cobro. Bajar bultos en una devolucion no puede cambiar el
- *     precio por kilo de lo que quedo.
+ *   - `precio_unit_kg`: tampoco se manda, y por la misma razón que al crear.
+ *     El sistema conserva el precio de los renglones que ya estaban (ver
+ *     `prepararRenglones` -> `aConservar` en el servicio), que es lo que se
+ *     cobró. Bajar bultos en una devolución no puede cambiar el precio por
+ *     kilo de lo que quedó.
  */
 export interface CuerpoEdicion {
   cliente_id: number;
@@ -275,26 +270,25 @@ export interface RenglonEdicionBody {
 }
 
 /**
- * El almacen del que sale la venta.
+ * El almacén del que sale la venta.
  *
- * `almacenes.id` es un SMALLINT y el catalogo se sirve por `/api/almacenes`
- * (`catalogo/`), el mismo modulo que especies y categorias. La pantalla lo
- * elige en la captura y lo pasa aqui por parametro: ya no hay un 1 escrito a
- * mano, y si no hay bodega el guardado se bloquea ANTES de llegar al backend
- * en vez de responder "El almacen 1 no existe".
+ * Las bodegas vienen del catálogo (`catalogo/`), el mismo que especies y
+ * categorías. La pantalla lo elige en la captura y lo pasa aquí: ya no hay un
+ * 1 escrito a mano, y si no hay bodega el guardado se bloquea ANTES de
+ * intentarlo, en vez de responder "El almacén 1 no existe".
  *
- * En el ALTA la bodega es una sola para toda la nota. En la EDICION cada
- * renglon conserva la suya (`RenglonNota.almacen_id`): el producto puede
- * haber salido de otra bodega, y mandarle el almacen equivocado descuenta el
- * stock de la que no es. La bodega elegida solo rellena los renglones NUEVOS
- * que se agreguen al corregir.
+ * Al CREAR la nota la bodega es una sola para toda la nota. Al CORREGIR cada
+ * renglón conserva la suya (`RenglonNota.almacen_id`): el producto puede
+ * haber salido de otra bodega, y mandarle el almacén equivocado descuenta la
+ * mercancía de la que no es. La bodega elegida solo rellena los renglones
+ * NUEVOS que se agreguen al corregir.
  */
 export interface Almacen {
   id: number;
   nombre: string;
 }
 
-/** Arma el cuerpo de la nota. */
+/** Arma lo que se manda al crear la nota. */
 export function cuerpoDeNota(
   clienteId: number,
   lineas: Linea[],
@@ -318,9 +312,9 @@ export function cuerpoDeNota(
     }),
   };
 
-  // La direccion es opcional y vacia no es lo mismo que ninguna: se manda
-  // `null` para BORRAR la que tuviera, y para eso el esquema la acepta
-  // nullable. Sin esto, una nota editada nunca podria quedar sin direccion.
+  // La dirección es opcional y vacía no es lo mismo que ninguna: se manda
+  // `null` para BORRAR la que tuviera, y por eso se permite que vaya vacía.
+  // Sin esto, una nota editada nunca podría quedar sin dirección.
   const limpia = direccion?.trim();
   if (limpia) cuerpo.direccion_entrega = limpia;
 
@@ -328,14 +322,13 @@ export function cuerpoDeNota(
 }
 
 /**
- * Arma el cuerpo de la edicion (la devolucion).
+ * Arma lo que se manda al corregir la nota (la devolución).
  *
- * A diferencia del alta, aqui la direccion se manda SIEMPRE, aunque venga
- * vacia: `editarNotaEsquema` trata `direccion_entrega` como lo que es, un
- * campo que se puede dejar en null, y mandarlo solo cuando hay texto hacia
- * que quitar la direccion que la nota tenia y no se puede quitar. En el alta
- * no hay nada que quitar (la nota no existia), asi que alli si vale la regla
- * de "solo si hay algo".
+ * A diferencia de cuando se crea, aquí la dirección se manda SIEMPRE, aunque
+ * vaya vacía: al corregir, la dirección vacía es una orden de quitar la que
+ * la nota tenía, y mandarla solo cuando hay texto impediría quitarla. Al
+ * crear no hay nada que quitar (la nota no existía), así que ahí sí vale la
+ * regla de "solo si hay algo".
  */
 export function cuerpoDeEdicion(
   clienteId: number,
@@ -344,8 +337,8 @@ export function cuerpoDeEdicion(
   direccion: string,
 ): CuerpoEdicion {
   if (lineas.length === 0) {
-    // Un renglon de menos es una devolucion; una nota sin renglones es un
-    // documento que no existe. Cancelarla es otra cosa y tiene otro boton.
+    // Un renglón de menos es una devolución; una nota sin renglones es un
+    // documento que no existe. Cancelarla es otra cosa y tiene otro botón.
     throw new Error('Una nota necesita al menos un renglon');
   }
 
@@ -357,7 +350,7 @@ export function cuerpoDeEdicion(
       return {
         ...(linea.renglon_id === undefined ? {} : { id: linea.renglon_id }),
         producto_id: linea.producto_id,
-        // La bodega del renglon manda; la elegida solo rellena los NUEVOS
+        // La bodega del renglón manda; la elegida solo rellena los NUEVOS
         // que se agreguen al corregir, que no traen la suya.
         almacen_id: linea.almacen_id ?? almacenId,
         cantidad_bultos: cantidadComoTexto(linea),
@@ -376,10 +369,10 @@ export class NotasApi {
   /**
    * Busca clientes para el selector.
    *
-   * `buscar` con menos de dos caracteres no se manda: el backend acepta
-   * uno solo (`min(1)`) y con un caracter devuelve medio catalogo, que es
-   * mas lento de pintar que de buscar. Dos es el minimo que discrimina
-   * ("CL", "PE") sin traer el mundo.
+   * Con menos de dos caracteres no se busca: el sistema aceptaría uno solo,
+   * pero con un carácter devuelve medio catálogo, que es más lento de pintar
+   * que de buscar. Dos es el mínimo que distingue ("CL", "PE") sin traerlo
+   * todo.
    */
   async clientes(buscar: string): Promise<Cliente[]> {
     if (buscar.trim().length < 2) return [];
@@ -392,11 +385,11 @@ export class NotasApi {
   }
 
   /**
-   * Busca productos por codigo o nombre.
+   * Busca productos por código o nombre.
    *
-   * Aqui un caracter si sirve: el mostrador tiene lectores de codigo de
-   * barras y el operador Teclea "L" y espera, y un producto que empiece con
-   * L son cuatro. Por eso el minimo aqui es uno y en el de clientes dos.
+   * Aquí un carácter sí sirve: el mostrador tiene lectores de código de
+   * barras y el operador teclea "L" y espera, y los productos que empiezan
+   * con L son cuatro. Por eso el mínimo aquí es uno y en el de clientes dos.
    */
   async productos(buscar: string): Promise<Producto[]> {
     if (buscar.trim().length < 1) return [];
@@ -411,11 +404,11 @@ export class NotasApi {
   /**
    * El precio que se le va a cobrar a ESTE cliente por ESTE producto.
    *
-   * Es una llamada por producto que se agrega, y no un catalogo de precios
-   * de una vez: la precedencia (el del cliente le gana al de lista) es
-   * regla del backend y el POS no la reimplementa. La respuesta trae
-   * `vigente: false` cuando el precio existe pero ya paso su fecha, que es
-   * un caso distinto al de "no hay precio" y hay que poder distinguirlos.
+   * Es una consulta por producto que se agrega, y no traer toda la lista de
+   * precios de una vez: la regla de que el precio del cliente le gana al de
+   * lista es del sistema y la pantalla no la repite. La respuesta trae
+   * `vigente: false` cuando el precio existe pero ya pasó su fecha, que es un
+   * caso distinto al de "no hay precio" y hay que poder distinguirlos.
    */
   async precio(productoId: number, clienteId: number): Promise<PrecioEfectivo | null> {
     return firstValueFrom(
@@ -426,13 +419,13 @@ export class NotasApi {
   }
 
   /**
-   * Cuantos bultos hay de un producto en el almacen, como los cuenta la
-   * propia base (la suma de los movimientos de inventario).
+   * Cuántos bultos hay de un producto en el almacén, como los cuenta el
+   * propio sistema (la suma de los movimientos de inventario).
    *
-   * Es el "Disponibles" que se ve bajo los bultos de cada renglon. Un
-   * `null` es "no se supo" -- el permiso `inventario.ver` no es de la
-   * cajera en alguna base rara, o la consulta fallo -- y la pantalla se
-   * queda sin contador, que es mejor que bloquear la captura por saberlo.
+   * Es el "Disponibles" que se ve bajo los bultos de cada renglón. Un `null`
+   * es "no se supo" -- el permiso `inventario.ver` no lo tiene la cajera en
+   * alguna instalación rara, o la consulta falló -- y la pantalla se queda
+   * sin contador, que es mejor que bloquear la captura por saberlo.
    */
   async existencia(productoId: number, almacenId: number): Promise<number | null> {
     try {
@@ -452,9 +445,9 @@ export class NotasApi {
    * Las bodegas de las que puede salir la venta.
    *
    * Llenan el selector de la captura. Antes esto era un 1 escrito a mano y si
-   * la bodega faltaba el guardado respondia "El almacen 1 no existe": ahora
-   * la pantalla ofrece las que hay, y si no hay ninguna, crear una en el acto
-   * (solo quien tenga `almacenes.crear`).
+   * la bodega faltaba el guardado respondía "El almacén 1 no existe": ahora
+   * la pantalla ofrece las que hay, y si no hay ninguna, permite crear una en
+   * el acto (solo quien tenga `almacenes.crear`).
    */
   async almacenes(): Promise<Almacen[]> {
     const respuesta = await firstValueFrom(this.http.get<{ datos: Almacen[] }>(`${API}/almacenes`));
@@ -464,10 +457,11 @@ export class NotasApi {
   /**
    * Crea una bodega desde el mismo mostrador.
    *
-   * Solo aparece cuando la lista esta vacia y quien captura tiene permiso
-   * (`almacenes.crear`, del Administrador): con el sistema recien entregado
-   * la base va limpia y la primera venta no se topa con un "almacen 1 no
-   * existe". El 409 `NOMBRE_DUPLICADO` lo traduce la pantalla en su aviso.
+   * Solo aparece cuando la lista está vacía y quien captura tiene permiso
+   * (`almacenes.crear`, del Administrador): con el sistema recién entregado
+   * no hay ninguna bodega y la primera venta no se topa con un "almacén 1 no
+   * existe". El aviso de nombre repetido (`NOMBRE_DUPLICADO`) lo traduce la
+   * pantalla.
    */
   async crearAlmacen(nombre: string): Promise<Almacen> {
     return firstValueFrom(this.http.post<Almacen>(`${API}/almacenes`, { nombre: nombre.trim() }));
@@ -476,10 +470,10 @@ export class NotasApi {
   /**
    * Guarda la nota.
    *
-   * Devuelve la nota CON SUS RENGLONES y el `subtotal` que calculo la base,
-   * y eso es lo que se muestra de aqui en adelante: el total que se ve
-   * mientras se captura es un preview (ver `totalDeLineas`) y este es el
-   * numero del documento.
+   * Devuelve la nota CON SUS RENGLONES y el total que calculó el sistema, y
+   * eso es lo que se muestra de aquí en adelante: el total que se ve mientras
+   * se captura es un adelanto (ver `totalDeLineas`) y este es el número del
+   * documento.
    */
   async crear(cuerpo: CuerpoNota): Promise<Nota> {
     return firstValueFrom(this.http.post<Nota>(`${API}/notas-remision`, cuerpo));
@@ -488,9 +482,9 @@ export class NotasApi {
   /**
    * La tabla de notas de abajo del mostrador.
    *
-   * `periodo` viaja tal cual y lo resuelve la base (ver `Periodo`), porque
-   * "hoy" es el dia de la base y no el del reloj del navegador. `buscar` lo
-   * acepta el backend por folio ("A-1001" o solo "1001") o por nombre del
+   * `periodo` se manda tal cual y lo resuelve el sistema (ver `Periodo`),
+   * porque "hoy" es el día del sistema y no el del reloj del navegador.
+   * `buscar` se acepta por folio ("A-1001" o solo "1001") o por nombre del
    * cliente, que son las dos cosas que se teclean en un mostrador.
    */
   async listar(filtro: FiltroNotas): Promise<Listado<NotaListada>> {
@@ -509,28 +503,27 @@ export class NotasApi {
 
   /**
    * La nota CON sus renglones: la que se abre al ver una fila de la tabla y
-   * la que se carga en el formulario para una devolucion.
+   * la que se carga en el formulario para una devolución.
    *
-   * El listado no las trae (traerlas para 50 notas seria pintar 50 tablas),
-   * asi que abrir una fila o devolver mercancia cuesta una llamada. Es una
-   * llamada por cada vez que la persona hace algo con ESA nota, no por nota.
+   * La lista no los trae (traerlos para 50 notas sería pintar 50 tablas), así
+   * que abrir una fila o devolver mercancía cuesta una consulta. Es una
+   * consulta por cada vez que la persona hace algo con ESA nota, no por nota.
    */
   async consultar(notaId: number): Promise<Nota> {
     return firstValueFrom(this.http.get<Nota>(`${API}/notas-remision/${notaId}`));
   }
 
   /**
-   * Corrige la nota: es la devolucion.
+   * Corrige la nota: es la devolución.
    *
-   * Manda el detalle COMPLETO, no solo lo que cambio. Es lo que espera
-   * `editarNotaEsquema` y lo que hace el backend: los renglones que no
-   * vuelven en el arreglo se borran (y con ellos vuelve la mercancia al
-   * almacen, por el trigger de inventario) y los que vuelven con id se
-   * actualizan. Mandar "solo lo que bajo" haria que cada devolucion borrara
-   * la nota entera.
+   * Manda el detalle COMPLETO, no solo lo que cambió. Eso es lo que el
+   * sistema espera: los renglones que no vuelven en la lista se borran (y con
+   * ellos vuelve la mercancía al almacén, por la regla automática de
+   * inventario) y los que vuelven con id se actualizan. Mandar "solo lo que
+   * bajó" haría que cada devolución borrara la nota entera.
    *
-   * Devuelve la nota ya recalculada, con el `subtotal` de la base: el total
-   * que se ve mientras se corrige es un preview y este es el del documento.
+   * Devuelve la nota ya recalculada, con el total del sistema: el total que
+   * se ve mientras se corrige es un adelanto y este es el del documento.
    */
   async editar(notaId: number, cuerpo: CuerpoEdicion): Promise<Nota> {
     return firstValueFrom(this.http.patch<Nota>(`${API}/notas-remision/${notaId}`, cuerpo));
@@ -539,10 +532,10 @@ export class NotasApi {
   /**
    * Cancela la nota, con su motivo.
    *
-   * El motivo no es opcion: el backend lo exige (el CHECK
-   * `chk_notas_motivo_cancelacion` de la migracion 0008) porque una
-   * cancelacion sin explicacion es un boton que borra trabajo. Y cancelar no
-   * es lo mismo que devolver: la devolucion es `editar`.
+   * El motivo no es opción: el sistema lo exige (la validación de la
+   * actualización 0008) porque una cancelación sin explicación es un botón
+   * que borra trabajo. Y cancelar no es lo mismo que devolver: la devolución
+   * se hace al corregir la nota.
    */
   async cancelar(notaId: number, motivo: string): Promise<Nota> {
     return firstValueFrom(
@@ -553,16 +546,16 @@ export class NotasApi {
   /**
    * Descarga el Excel de la nota.
    *
-   * NO se abre en una pestana como el PDF: un `.xlsx` no lo abre el
-   * navegador, y si se le metiera a una ventana nueva se veria como texto
-   * o se descargaria a medias. Va como `attachment` desde el backend, y
-   * aqui se baja como archivo con un `<a download>` temporal: se crea, se
-   * hace clic y se suelta, sin tocar la pagina en la que esta la persona.
+   * NO se abre en una pestaña como el PDF: un `.xlsx` no lo abre el
+   * navegador, y si se le metiera a una ventana nueva se vería como texto o
+   * se descargaría a medias. Se baja como archivo con un enlace temporal: se
+   * crea, se hace clic y se suelta, sin tocar la página en la que está la
+   * persona.
    *
-   * Devuelve cuantos renglones se quedaron fuera del papel (la plantilla
-   * solo trae 9 bloques): el backend lo manda en la cabecera
-   * `X-Renglones-Fuera`, que es lo unico que el frontend puede leer de una
-   * respuesta que es un archivo, no JSON.
+   * Devuelve cuántos renglones se quedaron fuera del papel (la plantilla solo
+   * trae 9 espacios): el sistema lo manda junto con el archivo
+   * (`X-Renglones-Fuera`), que es lo único que la pantalla puede leer de una
+   * respuesta que es un archivo y no datos normales.
    */
   async abrirExcel(notaId: number): Promise<number> {
     const respuesta = await firstValueFrom(
@@ -577,37 +570,36 @@ export class NotasApi {
     enlace.href = url;
     enlace.download = nombreDelExcel(respuesta.headers.get('content-disposition'));
     enlace.click();
-    // El object URL se revaca con tiempo, no al cerrar: el anchor ya tuvo
-    // su clic y no queda evento al que engancharse. Igual que el PDF.
+    // El enlace temporal se libera después de un rato, no al cerrar: el clic
+    // ya ocurrió y no queda evento al que engancharse. Igual que el PDF.
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
     return Number(respuesta.headers.get('x-renglones-fuera') ?? 0);
   }
 
   /**
-   * Abre el PDF de la nota en una pestana nueva.
+   * Abre el PDF de la nota en una pestaña nueva.
    *
-   * NO es un `<a href>` al endpoint, y esa es la diferencia entre que
-   * imprima y que no imprima nada: el token va en la cabecera
-   * `Authorization` (ver `nucleo/sesion.ts`), y un link plano no manda
-   * cabeceras, asi que el backend responde 401 y el operador ve una pantalla
-   * en blanco. Por eso se pide el PDF como blob.
+   * NO es un enlace directo al documento, y esa es la diferencia entre que
+   * imprima y que no imprima nada: el permiso de la sesión va con cada
+   * consulta (ver `nucleo/sesion.ts`), y un enlace plano no lo manda, así que
+   * el sistema responde como no autorizado y el operador ve una pantalla en
+   * blanco. Por eso se pide el PDF y luego se muestra.
    *
-   * Y la ventana se abre ANTES de pedirlo, en blanco, a proposito: despues
-   * de un `await` el navegador ya no sabe que esto viene de un click y la
-   * bloquea como ventana emergente. Con la ventana ya abierta se le pone la
-   * direccion cuando llega el PDF, que es lo que sobrevive al bloqueo. Es
-   * el orden inverso al intuitivo y por eso esta aqui anotado.
+   * Y la ventana se abre ANTES de pedirlo, en blanco, a propósito: después de
+   * una espera el navegador ya no sabe que esto viene de un clic y la bloquea
+   * como ventana emergente. Con la ventana ya abierta se le pone la dirección
+   * cuando llega el PDF, que es lo que sobrevive al bloqueo. Es el orden
+   * inverso al intuitivo y por eso está aquí anotado.
    *
-   * Un link con el token en el query se rechazo a proposito en el backend
-   * (quedaria en el historial del navegador y en el log del proxy), asi que
-   * la unica forma de imprimir es esta.
+   * Un enlace con el permiso a la vista se rechazó a propósito (quedaría en
+   * el historial del navegador), así que la única forma de imprimir es esta.
    */
   async abrirPdf(notaId: number): Promise<void> {
     const ventana = window.open('', '_blank');
     if (ventana === null) {
       throw new Error(
-        'El navegador no dejo abrir la pestana. Revisa que no este bloqueando las ventanas.',
+        'El navegador no dejó abrir la pestaña. Revisa que no esté bloqueando las ventanas.',
       );
     }
 
@@ -617,10 +609,10 @@ export class NotasApi {
       );
       const url = URL.createObjectURL(pdf);
       ventana.location.href = url;
-      // El object URL se revaca con tiempo, no al cerrar: la ventana ya
-      // cambio de documento al navegar al blob, asi que no hay evento al
-      // que engancharse. Sin esto, una sesion de mostrador acumula un PDF
-      // en memoria por cada impresion.
+      // El recurso temporal se libera después de un rato, no al cerrar: la
+      // ventana ya cambió de documento, así que no hay evento al que
+      // engancharse. Sin esto, una sesión de mostrador acumularía un PDF en
+      // memoria por cada impresión.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (falla) {
       // La pestana en blanco no se queda abierta: se cierra y el error lo
@@ -633,7 +625,7 @@ export class NotasApi {
   /**
    * Descarga el Excel de la lista de notas (exportar lista completa).
    *
-   * Igual que `abrirExcel`, se baja como `attachment` con `<a download>`.
+   * Igual que `abrirExcel`, se baja como archivo con un enlace temporal.
    */
   async exportarExcel(filtro: FiltroNotas): Promise<void> {
     const respuesta = await firstValueFrom(
@@ -661,10 +653,10 @@ export class NotasApi {
   // ------------------------------------------------------- el talonario
 
   /**
-   * Lo que el POS usara para su siguiente folio: la serie activa.
+   * Lo que la pantalla usará para su siguiente folio: la serie activa.
    *
-   * Esta es la preferencia que dejo puesta quien administra el talonario
-   * (`notas.folios`). Vacua significa folios de puros numeros, el formato
+   * Esta es la preferencia que dejó puesta quien administra el talonario
+   * (`notas.folios`). Vacía significa folios de puros números, el formato
    * normal del negocio.
    */
   async serieActiva(): Promise<string> {
@@ -674,7 +666,7 @@ export class NotasApi {
     return respuesta.serie;
   }
 
-  /** Guarda la serie activa. Nada de `PATCH`: la preferencia se pisa entera. */
+  /** Guarda la serie activa. La preferencia se reemplaza entera. */
   async ponerSerieActiva(serie: string): Promise<string> {
     const respuesta = await firstValueFrom(
       this.http.put<{ serie: string }>(`${API}/notas-remision/folios/serie-activa`, { serie }),
@@ -683,11 +675,11 @@ export class NotasApi {
   }
 
   /**
-   * Un renglon por serie, para la tabla del talonario.
+   * Un renglón por serie, para la tabla del talonario.
    *
    * No pinta los cientos de folios de una serie: pinta la serie y lo que
-   * tiene libre, que es lo que decide si se puede activar. Los folios
-   * sueltos de una serie se piden con `listarFolios`.
+   * tiene libre, que es lo que decide si se puede activar. Los folios sueltos
+   * de una serie se piden con `listarFolios`.
    */
   async resumenDeTalonarios(): Promise<ResumenTalonario[]> {
     return firstValueFrom(
@@ -695,7 +687,7 @@ export class NotasApi {
     );
   }
 
-  /** Los folios de una serie, para ver los numeros que la componen. */
+  /** Los folios de una serie, para ver los números que la componen. */
   async listarFolios(filtro: {
     serie?: string;
     limite: number;
@@ -715,9 +707,9 @@ export class NotasApi {
   /**
    * Carga un tramo de talonario, del `desde` al `hasta` inclusive.
    *
-   * `serie` es el PREFIJO de esos folios y puede ir vacio: vacio = folios
-   * de puros numeros. El formato lo decide la persona al cargar el tramo,
-   * no el codigo.
+   * `serie` es el PREFIJO de esos folios y puede ir vacío: vacío = folios de
+   * puros números. El formato lo decide la persona al cargar el tramo, no el
+   * código.
    */
   async crearTalonario(
     cuerpo: CuerpoTalonario,
@@ -736,13 +728,12 @@ export class NotasApi {
 }
 
 /**
- * El nombre del archivo que el backend puso en `Content-Disposition`, sin
- * la envoltura de cabecera.
+ * El nombre del archivo que puso el sistema, sin la parte técnica que lo
+ * envuelve.
  *
- * `Content-Disposition` va como
- * `attachment; filename="nota-remision-A-1001-2026-09-27.xlsx"` y el nombre
- * es lo que el `<a download>` debe usar. Si la cabecera no viene o viene
- * rara, se devuelve uno fijo: que la descarga salga vale mas que el nombre.
+ * El sistema anota el nombre junto con el archivo y ese es el que debe usar
+ * el enlace de descarga. Si no viene o viene raro, se devuelve uno fijo: que
+ * la descarga salga vale más que el nombre.
  */
 function nombreDelExcel(contentDisposition: string | null): string {
   const nombre = /filename="([^"]+)"/.exec(contentDisposition ?? '')?.[1];

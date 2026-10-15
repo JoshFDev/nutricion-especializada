@@ -4,16 +4,16 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
 
 /**
- * La API de productos.
+ * El servicio de productos.
  *
- * Tipos espejo de `backend/src/modules/productos`. La envoltura de la lista
- * es DISTINTA a la de clientes: aqui es `{ datos, total, limite, offset }`
- * (ver `productos/servicio.ts`), y clientes manda el total anidado.
+ * Los tipos son un espejo de `productos/modelo.ts`. La forma de la lista es
+ * DISTINTA a la de clientes: aquí es `{ datos, total, limite, offset }` (ver
+ * `productos/servicio.ts`), y clientes manda el total anidado.
  *
- * El `tipo` alta/edicion no tiene `activo` a proposito: el esquema de
- * CREAR no lo acepta (`crearProductoEsquema`, ver `productos/esquemas.ts`)
- * y el de editar si, asi que la edicion lo manda aparte en
- * `actualizarActivo` y el alta no lo menciona.
+ * El `tipo` alta/edición no tiene `activo` a propósito: las reglas de
+ * validación de CREAR no lo aceptan (`crearProductoEsquema`, ver
+ * `productos/esquemas.ts`) y las de editar sí, así que la edición lo manda
+ * aparte en `actualizarActivo` y el alta no lo menciona.
  */
 
 // --------------------------------------------------------------------- tipos
@@ -36,10 +36,10 @@ export interface Producto {
 /**
  * `catalogo/modelo.ts` -> `Especie` y `CategoriaProducto`, misma forma.
  *
- * `usos` lo trae solo el listado del catalogo (`FilaCatalogoConUsos`): son
- * las filas que lo apuntan. Aqui no se usa —el desplegable del editor solo
- * necesita el nombre— pero viene en la misma respuesta y asi el tipo de las
- * dos pantallas no se contradice.
+ * `usos` lo trae solo el listado del catálogo (`FilaCatalogoConUsos`): son las
+ * filas que lo apuntan. Aquí no se usa —el desplegable del editor solo necesita
+ * el nombre— pero viene en la misma respuesta y así el tipo de las dos
+ * pantallas no se contradice.
  */
 export interface Catalogo {
   id: number;
@@ -58,10 +58,10 @@ export interface ListaProductos {
 /**
  * La forma del editor.
  *
- * `presentacion_kg` va como TEXTO a proposito: el esquema del backend lo
- * acepta numero o string y lo normaliza a string antes de validar (ver
- * `presentacionKg` en `productos/esquemas.ts`), y mandar el texto evita
- * que el double de JavaScript se cuele en la validacion decimal.
+ * `presentacion_kg` va como TEXTO a propósito: las reglas de validación lo
+ * aceptan número o texto y lo normalizan a texto antes de validar (ver
+ * `presentacionKg` en `productos/esquemas.ts`), y mandar el texto evita que el
+ * número decimal de JavaScript se cuele en la validación decimal.
  */
 export interface FormaProducto {
   codigo: string;
@@ -71,7 +71,7 @@ export interface FormaProducto {
   especie_id: string;
 }
 
-/** El cuerpo de `POST /api/productos`. El `activo` lo pone la base. */
+/** Los datos al crear un producto. El `activo` lo pone el sistema. */
 export interface CuerpoProducto {
   codigo: string;
   nombre: string;
@@ -80,7 +80,7 @@ export interface CuerpoProducto {
   especie_id: number | null;
 }
 
-/** La forma del editor convertida al cuerpo de la peticion. */
+/** La forma del editor convertida a los datos que se mandan. */
 export function cuerpoDeProducto(forma: FormaProducto): CuerpoProducto {
   return {
     codigo: forma.codigo.trim(),
@@ -98,11 +98,11 @@ export class ProductosApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * Lista con filtros y paginacion.
+   * Lista con filtros y paginación.
    *
-   * `activo` trae tres estados y no un booleano porque el backend distingue
+   * `activo` trae tres estados y no un booleano porque el sistema distingue
    * "solo activos", "solo inactivos" y "todos" (ver `listarProductosEsquema`),
-   * y por omision salen solo los activos.
+   * y por omisión salen solo los activos.
    */
   async listar(opciones: {
     buscar?: string;
@@ -123,7 +123,7 @@ export class ProductosApi {
     return firstValueFrom(this.http.get<ListaProductos>(`${API}/productos`, { params }));
   }
 
-  /** Crea. 201 + el producto con sus joins resueltos. */
+  /** Crea. 201 + el producto con sus datos relacionados ya resueltos. */
   async crear(cuerpo: CuerpoProducto): Promise<Producto> {
     return firstValueFrom(this.http.post<Producto>(`${API}/productos`, cuerpo));
   }
@@ -131,10 +131,10 @@ export class ProductosApi {
   /**
    * Edita.
    *
-   * El esquema es `strict`: `activo` va aparte del resto porque en el alta
-   * NO existe, y mezclarlo haria que el alta envia un campo que el esquema
-   * de crear no conoce. Por eso `actualizar` recibe todo el cuerpo y el
-   * estado por separado.
+   * Las reglas de validación no admiten campos de más: `activo` va aparte del
+   * resto porque en el alta NO existe, y mezclarlo haría que el alta envíe un
+   * campo que las reglas de crear no conocen. Por eso `actualizar` recibe todo
+   * y el estado por separado.
    */
   async actualizar(id: number, cuerpo: CuerpoProducto, activo: boolean): Promise<Producto> {
     return firstValueFrom(
@@ -142,12 +142,12 @@ export class ProductosApi {
     );
   }
 
-  /** Borra (solo productos sin historial). 204 si salio. */
+  /** Borra (solo productos sin historial). 204 si salió. */
   async eliminar(id: number): Promise<void> {
     await firstValueFrom(this.http.delete(`${API}/productos/${id}`));
   }
 
-  /** Categorias para el select del editor. */
+  /** Categorías para el selector del editor. */
   async categorias(): Promise<Catalogo[]> {
     const respuesta = await firstValueFrom(
       this.http.get<{ datos: Catalogo[] }>(`${API}/categorias-producto`),
@@ -155,7 +155,7 @@ export class ProductosApi {
     return respuesta.datos;
   }
 
-  /** Especies para el select del editor. */
+  /** Especies para el selector del editor. */
   async especies(): Promise<Catalogo[]> {
     const respuesta = await firstValueFrom(this.http.get<{ datos: Catalogo[] }>(`${API}/especies`));
     return respuesta.datos;

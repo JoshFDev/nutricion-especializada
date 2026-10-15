@@ -11,8 +11,8 @@
   - El detalle de un pago se despliega DEBAJO de su fila, igual que el
     comprobante de una compra: la lista es la que dice si el cliente está al
     corriente, y el detalle es la explicación de UN pago.
-  - El pago NO tiene botón de borrar ni de editar. El backend no tiene PATCH
-    ni DELETE a propósito: un pago mal capturado se arregla cancelando la nota
+  - El pago NO tiene botón de borrar ni de editar. El sistema no permite editar
+    ni borrar a propósito: un pago mal capturado se arregla cancelando la nota
     que cubría, no borrando, y queda el rastro. Aquí solo hay "Ver".
   - El editor reparte el pago entre las notas abiertas del cliente. Un pago sin
     aplicaciones es un abono a cuenta y es válido, así que el botón de guardar

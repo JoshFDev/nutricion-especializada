@@ -4,10 +4,10 @@ import { parametrosDe, parametrosDeMovimientos } from './inventario-api';
 /**
  * Los parametros de la lista de inventario.
  *
- * Se prueba la funcion pura y no la llamada: el esquema del backend es
+ * Se prueba la funcion pura y no la llamada: las reglas del sistema son
  * `strict`, y un parametro de mas da un 400. Por eso lo que importa es QUE se
  * manda y que NO: sobre todo que "todas" no manda `vacios`, porque el
- * backend lo lee como booleano y un string vacio reventaria el listado.
+ * sistema lo lee como booleano y un string vacio reventaria el listado.
  */
 
 describe('los parametros de la existencia', () => {

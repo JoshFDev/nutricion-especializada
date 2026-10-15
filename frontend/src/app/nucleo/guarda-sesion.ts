@@ -12,23 +12,23 @@ import { Sesion } from './sesion';
 /**
  * Las guardas de ruta.
  *
- * Todas devuelven una promesa o un `UrlTree`, nunca `true` a ciegas: una
- * guarda que devuelve `true` sin comprobar nada es la forma mas comun de
- * que la app "funcione" en la maquina de quien la programa y se rompa en la
- * del que la usa.
+ * Todas devuelven una promesa o un `UrlTree`, nunca `true` a ciegas: una guarda
+ * que devuelve `true` sin comprobar nada es la forma más común de que la
+ * aplicación «funcione» en la máquina de quien la programa y se rompa en la del
+ * que la usa.
  */
 
 /**
- * Dejar pasar solo a quien tiene sesion, y con el perfil ya cargado.
+ * Dejar pasar solo a quien tiene sesión, y con el perfil ya cargado.
  *
- * Se espera al perfil antes de dejar entrar porque el menu se dibuja a
- * partir de el: si se dejara pasar de inmediato, la primera pantalla
- * apareceria sin menu y luego "aparecerian" los permisos solos, que se ve
- * como un fallo de la app y confunde.
+ * Se espera al perfil antes de dejar entrar porque el menú se dibuja a partir
+ * de él: si se dejara pasar de inmediato, la primera pantalla aparecería sin
+ * menú y luego «aparecerían» los permisos solos, que se ve como un fallo de la
+ * aplicación y confunde.
  *
- * Si el backend esta caido, `asegurarPerfil` lanza y aqui se convierte en
- * "no se pudo verificar la sesion", que es distinto de "no tienes sesion" y
- * por eso va a una pantalla propia y no al login.
+ * Si el sistema está caído, `asegurarPerfil` lanza y aquí se convierte en «no
+ * se pudo verificar la sesión», que es distinto de «no tienes sesión» y por eso
+ * va a una pantalla propia y no al inicio de sesión.
  */
 export const guardaSesion: CanActivateFn = async (
   _ruta: ActivatedRouteSnapshot,
@@ -43,16 +43,16 @@ export const guardaSesion: CanActivateFn = async (
     const perfil = await sesion.asegurarPerfil();
     if (!perfil) return alLogin(router, estado.url);
   } catch {
-    // El token parece bueno pero no se pudo preguntar. Casi siempre es que
-    // el backend no esta arriba.
+    // La credencial parece buena pero no se pudo preguntar. Casi siempre es que
+    // el sistema no está arriba.
     return router.parseUrl('/sin-conexion');
   }
 
-  // El backend obliga a cambiar la contrasena, asi que esto no es una
-  // preferencia de la app: mientras la bandera este puesta, TODO lo demas
-  // queda cerrado. Se deja pasar solo el logout, que esta en la cabecera y
-  // no pasa por aqui, para que la persona pueda salir si el cambio no le
-  // sale y no quedarse encerrada.
+  // El sistema obliga a cambiar la contraseña, así que esto no es una
+  // preferencia de la aplicación: mientras la bandera esté puesta, TODO lo
+  // demás queda cerrado. Se deja pasar solo el cierre de sesión, que está en la
+  // cabecera y no pasa por aquí, para que la persona pueda salir si el cambio
+  // no le sale y no quedarse encerrada.
   if (sesion.perfil()?.debeCambiarContrasena) {
     return router.parseUrl('/cambiar-contrasena');
   }
@@ -61,11 +61,12 @@ export const guardaSesion: CanActivateFn = async (
 };
 
 /**
- * Al reves: fuera de `/login` quien ya tiene sesion.
+ * Al revés: fuera de `/login` quien ya tiene sesión.
  *
- * Sin esto, recargar la pagina del login con el token guardado deja a
- * alguien que ya entro escribiendo su contrasena otra vez. Y con el login
- *-equivocado se acaba de venir, se respeta el `returnUrl` y no se pisa.
+ * Sin esto, recargar la página del inicio de sesión con la credencial guardada
+ * deja a alguien que ya entró escribiendo su contraseña otra vez. Y con el
+ * inicio de sesión equivocado se acaba de venir, se respeta el `returnUrl` y no
+ * se pisa.
  */
 export const guardaSinSesion: CanActivateFn = async (): Promise<boolean | UrlTree> => {
   const sesion = inject(Sesion);
@@ -73,23 +74,25 @@ export const guardaSinSesion: CanActivateFn = async (): Promise<boolean | UrlTre
 
   if (!sesion.hayToken()) return true;
 
-  // Con token pero sin perfil no se decide nada: se deja pasar al login. Si
-  // el token estuviera bueno, el menu se puede pintar sin preguntas.
+  // Con credencial pero sin perfil no se decide nada: se deja pasar al inicio
+  // de sesión. Si la credencial estuviera buena, el menú se puede pintar sin
+  // preguntas.
   if (!sesion.perfil()) return true;
 
   return router.parseUrl(sesion.perfil()!.debeCambiarContrasena ? '/cambiar-contrasena' : '/');
 };
 
 /**
- * Deja pasar solo a quien tiene el permiso del modulo.
+ * Deja pasar solo a quien tiene el permiso del módulo.
  *
- * El permiso va en el `data` de la ruta, que se genera desde `menu.ts`, y
- * se lee con corchetes porque el proyecto trae `noPropertyAccessFromIndexSignature`:
- * `data['permiso']`, no `data.permiso`.
+ * El permiso va en el `data` de la ruta, que se genera desde `menu.ts`, y se
+ * lee con corchetes porque el proyecto trae
+ * `noPropertyAccessFromIndexSignature`: `data['permiso']`, no `data.permiso`.
  *
- * Otra vez: esto es UX, no seguridad. El backend responde 403 igual, y si
- * alguien cambia el permiso entre que se dibuja el menu y que se hace clic,
- * lo que se ve es el mensaje de 403, no una pantalla en blanco.
+ * Otra vez: esto es para la comodidad de la interfaz, no seguridad. El sistema
+ * responde 403 igual, y si alguien cambia el permiso entre que se dibuja el
+ * menú y que se hace clic, lo que se ve es el mensaje de 403, no una pantalla
+ * en blanco.
  */
 export const guardaPermiso: CanActivateFn = (ruta: ActivatedRouteSnapshot): boolean | UrlTree => {
   const sesion = inject(Sesion);
@@ -103,11 +106,11 @@ export const guardaPermiso: CanActivateFn = (ruta: ActivatedRouteSnapshot): bool
 };
 
 /**
- * La pantalla de inicio: al primer modulo al que la persona tenga acceso.
+ * La pantalla de inicio: al primer módulo al que la persona tenga acceso.
  *
- * En vez de una pantalla de bienvenida que habria que rehacer el dia que
- * sepamos que va a haber, entra de una vez a lo que va a usar. Si no tiene
- * ningun modulo, se queda en la raiz y el shell le explica por que.
+ * En vez de una pantalla de bienvenida que habría que rehacer el día que
+ * sepamos qué va a haber, entra de una vez a lo que va a usar. Si no tiene
+ * ningún módulo, se queda en la raíz y el marco le explica por qué.
  */
 export const guardaInicio: CanActivateFn = (): boolean | UrlTree => {
   const sesion = inject(Sesion);
@@ -117,12 +120,12 @@ export const guardaInicio: CanActivateFn = (): boolean | UrlTree => {
   return destino ? router.parseUrl(destino) : true;
 };
 
-/** Al login, guardando de donde venia para volver ahi al entrar. */
+/** Al inicio de sesión, guardando de dónde venía para volver ahí al entrar. */
 function alLogin(router: Router, desde: string): UrlTree {
-  // El `returnUrl` se manda solo si la persona venia de una ruta real de
-  // la app. Se descartan las de la propia autenticacion para no encadenar
-  // `/login?returnUrl=/cambiar-contrasena` y que al entrar la mande a
-  // cambiar la contrasena otra vez.
+  // El `returnUrl` se manda solo si la persona venía de una ruta real de la
+  // aplicación. Se descartan las de la propia autenticación para no encadenar
+  // `/login?returnUrl=/cambiar-contrasena` y que al entrar la mande a cambiar
+  // la contraseña otra vez.
   const esRutaInterna = !desde.startsWith('/login') && !desde.startsWith('/cambiar-contrasena');
   return router.parseUrl(
     esRutaInterna ? `/login?returnUrl=${encodeURIComponent(desde)}` : '/login',

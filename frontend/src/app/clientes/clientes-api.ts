@@ -5,15 +5,14 @@ import { API, descargarExcel } from '../nucleo/api';
 import { rfcNormalizado } from '../usuarios/usuarios-api';
 
 /**
- * La API de clientes.
+ * El servicio de clientes.
  *
- * Los tipos son un espejo de `backend/src/modules/clientes`. El RFC y la
- * razón social vienen de `datos_fiscales_cliente` (LEFT JOIN en el
- * listado). El RFC SÍ se escribe por esta API: vive en esa tabla y no en
- * `clientes`, así que el backend lo recibe junto con el resto y escribe en
- * los dos lados. La razón social no: no se captura, y el servidor la guarda
- * con el nombre del cliente. Por eso la forma del editor lleva rfc y no
- * razón social, y la fila sí enseña las dos.
+ * El RFC y la razón social vienen de `datos_fiscales_cliente` (se unen al
+ * listado). El RFC SÍ se escribe por esta pantalla: vive en esa tabla y no en
+ * `clientes`, así que el sistema lo recibe junto con el resto y escribe en los
+ * dos lados. La razón social no: no se captura, y el sistema la guarda con el
+ * nombre del cliente. Por eso la forma del editor lleva rfc y no razón social,
+ * y la fila sí enseña las dos.
  *
  * La lista responde con forma DISTINTA a la de productos: aquí es
  * `{ datos, paginación: { limite, offset, total } }` (ver
@@ -56,10 +55,10 @@ export interface ListaClientes {
 /**
  * La forma del editor, tal como la arma la pantalla.
  *
- * Van como TEXTO los campos que el backend recibe opcionales o numericos:
- * el select de especie manda `''` cuando no se elige ninguna, y el cuerpo
- * la convierte en `null`. Así el formulario no tiene que saber distinguir
- * "vacío" de "no existe", que es problema del borde.
+ * Van como TEXTO los campos que el sistema recibe opcionales o numéricos: el
+ * selector de especie manda `''` cuando no se elige ninguna, y los datos la
+ * convierten en `null`. Así el formulario no tiene que saber distinguir "vacío"
+ * de "no existe", que es problema del borde.
  */
 export interface FormaCliente {
   codigo_cliente: string;
@@ -73,7 +72,7 @@ export interface FormaCliente {
   saldo_actual?: string;
 }
 
-/** El cuerpo de `POST/PATCH /api/clientes`, tal como lo quiere el esquema. */
+/** Los datos al crear o actualizar un cliente, tal como los piden las reglas de validación. */
 export interface CuerpoCliente {
   codigo_cliente: string;
   nombre: string;
@@ -87,17 +86,16 @@ export interface CuerpoCliente {
 }
 
 /**
- * La forma del editor convertida al cuerpo de la peticion.
+ * La forma del editor convertida a los datos que se mandan.
  *
- * El código va en MAYUSCULAS y limpio de espacios: el esquema del backend
- * ya lo transforma así, y hacerlo aquí evita que el listado refrescado
- * muestre el código con mayúsculas distinto al que se tecleó.
+ * El código va en MAYÚSCULAS y limpio de espacios: las reglas de validación
+ * del sistema ya lo transforman así, y hacerlo aquí evita que el listado
+ * refrescado muestre el código con mayúsculas distinto al que se tecleó.
  *
- * El RFC pasa por lo mismo (`rfcNormalizado`): si no, un tecleo en
- * minusculas llegaria al servidor y volveria en mayusculas, con la tabla
- * mostrando algo distinto a lo que quedo en el campo. En blanco va
- * `null`, que es como el backend lo entiende como "sin RFC" y lo usa para
- * borrar el dato fiscal.
+ * El RFC pasa por lo mismo (`rfcNormalizado`): si no, un tecleo en minúsculas
+ * llegaría al sistema y volvería en mayúsculas, con la tabla mostrando algo
+ * distinto a lo que quedó en el campo. En blanco va `null`, que es como el
+ * sistema lo entiende como "sin RFC" y lo usa para borrar el dato fiscal.
  */
 export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
   const cuerpo: CuerpoCliente = {
@@ -117,7 +115,7 @@ export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
 }
 
 /** Un campo opcional que llegó en blanco se manda como `null`, que es como
- * lo trata la base: sin dato, no con un string de espacios. */
+ * lo trata el sistema: sin dato, no con un texto de espacios. */
 function textoONull(valor: string): string | null {
   const limpio = valor.trim();
   return limpio === '' ? null : limpio;
@@ -132,9 +130,9 @@ export class ClientesApi {
   /**
    * Lista con filtros y paginación.
    *
-   * `buscar` busca en nombre, código Y rfc (el LEFT JOIN del listado); aquí
-   * se envuelve solo en el mínimo de dos caracteres, igual que el buscador
-   * del POS: con uno el backend trae medio catálogo.
+   * `buscar` busca en nombre, código Y rfc (la unión del listado); aquí se
+   * envuelve solo en el mínimo de dos caracteres, igual que el buscador del
+   * punto de venta: con uno el sistema trae medio catálogo.
    */
   async listar(opciones: {
     buscar?: string;
@@ -158,7 +156,7 @@ export class ClientesApi {
     return firstValueFrom(this.http.post<Cliente>(`${API}/clientes`, cuerpo));
   }
 
-  /** Edita con PATCH parcial. */
+  /** Edita con una actualización parcial. */
   async actualizar(id: number, cuerpo: CuerpoCliente): Promise<Cliente> {
     return firstValueFrom(this.http.patch<Cliente>(`${API}/clientes/${id}`, cuerpo));
   }
@@ -168,7 +166,7 @@ export class ClientesApi {
     await firstValueFrom(this.http.delete(`${API}/clientes/${id}`));
   }
 
-  /** El catálogo de especies para el select del editor. */
+  /** El catálogo de especies para el selector del editor. */
   async especies(): Promise<Especie[]> {
     const respuesta = await firstValueFrom(this.http.get<{ datos: Especie[] }>(`${API}/especies`));
     return respuesta.datos;
@@ -177,10 +175,10 @@ export class ClientesApi {
   /**
    * Exporta a Excel lo que hay FILTRADO, no la página que se ve.
    *
-   * Los filtros se mandan tal cuál y sin `limite`/`offset`: el backend tiene
-   * su propia ruta sin paginación para esto, así que el archivo sale entero
-   * aunque en la pantalla se este viendo la segunda de tres páginas. Por eso
-   * esta fuera de `listar()` y no es un `listar` con otros parametros.
+   * Los filtros se mandan tal cual y sin `limite`/`offset`: el sistema tiene su
+   * propia forma de exportar sin paginación para esto, así que el archivo sale
+   * entero aunque en la pantalla se esté viendo la segunda de tres páginas.
+   * Por eso está fuera de `listar()` y no es un `listar` con otros parámetros.
    */
   async exportarExcel(filtro: { buscar?: string; estatus?: 'Activo' | 'Inactivo' }): Promise<void> {
     const params: Record<string, string> = {};

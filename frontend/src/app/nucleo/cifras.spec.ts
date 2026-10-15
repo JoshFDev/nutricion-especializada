@@ -38,7 +38,7 @@ describe('mostrar numeros', () => {
   it('un numero que no es numero se muestra como cero, no como NaN', () => {
     // NaN e Infinity con un separador de miles en medio dicen "NaN,00" e
     // "Infinity", que en un total es peor que no decir nada. El cero sale
-    // PELADO, igual que en `core/valores.ts` del backend: es un caso que
+    // PELADO, igual que en `core/valores.ts` del sistema: es un caso que
     // la base nunca produce (su NUMERIC es exacto) y las dos mitades
     // tienen que decir lo mismo.
     expect(montoComoTexto(Number.NaN)).toBe('0');
@@ -56,14 +56,14 @@ describe('mostrar numeros', () => {
 
 describe('mandar numeros', () => {
   it('quita los ceros de mas, que en el JSON son ruido', () => {
-    // El backend valida con ^\d{1,8}(\.\d{1,2})?$ y "8.00" lo pasa, pero
+    // El sistema valida con ^\d{1,8}(\.\d{1,2})?$ y "8.00" lo pasa, pero
     // en el cuerpo de la peticion no aporta nada.
     expect(decimalComoTexto(8.0, 2)).toBe('8');
     expect(decimalComoTexto('8.50', 2)).toBe('8.5');
   });
 
   it('redondea ANTES de convertir a texto, y no despues', () => {
-    // Sin el redondeo previo esto salia "0.30000000000000004" y el backend
+    // Sin el redondeo previo esto salia "0.30000000000000004" y el sistema
     // lo rechazaba por tener demasiados decimales.
     expect(decimalComoTexto(0.1 + 0.2, 2)).toBe('0.3');
     expect(decimalComoTexto(1.005, 2)).toBe('1');

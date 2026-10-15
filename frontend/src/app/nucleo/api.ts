@@ -2,28 +2,28 @@ import { HttpErrorResponse, type HttpResponse } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
 /**
- * Base de la API.
+ * La dirección base de las peticiones.
  *
- * Sale del `environment` y no esta escrita en los servicios: cambiar de
- * servidor es cambiar de archivo, no buscar y reemplazar en veinte
+ * Sale del `environment` y no está escrita en cada servicio: cambiar a dónde
+ * apunta la app es cambiar de archivo, no buscar y reemplazar en veinte
  * componentes.
  */
 export const API = environment.api;
 
 /**
- * Un error de la API ya descrito.
+ * Un error del sistema ya descrito.
  *
- * El backend responde siempre con la misma forma:
+ * El sistema responde siempre con la misma forma:
  *
  *   { codigo: 'NO_ENCONTRADO', error: 'Recurso no encontrado', detalles?: [...] }
  *
- * `codigo` es estable y esta en ingles; `error` es para personas y se
- * traduce. Por eso la app decide mirando el CODIGO y pinta el MENSAJE, y
- * nunca al reves: si el dia de manana el backend reescribe un mensaje, la
+ * `codigo` es estable y está en inglés; `error` es para personas y se
+ * traduce. Por eso la app decide mirando el CÓDIGO y pinta el MENSAJE, y
+ * nunca al revés: si el día de mañana el sistema reescribe un mensaje, la
  * app sigue funcionando y solo cambia lo que se lee.
  *
  * El original dice esto mismo en `core/errores.ts`, y el motivo es que los
- * textos se traducen y los codigos no.
+ * textos se traducen y los códigos no.
  */
 export class ErrorApi extends Error {
   constructor(
@@ -31,7 +31,7 @@ export class ErrorApi extends Error {
     readonly codigo: string,
     mensaje: string,
     readonly detalles: DetalleCampo[] = [],
-    /** El `detalles` crudo del backend, sin interpretar. Ver `ErrorLegible`. */
+    /** El `detalles` crudo del sistema, sin interpretar. Ver `ErrorLegible`. */
     readonly datos: unknown = null,
   ) {
     super(mensaje);
@@ -49,7 +49,7 @@ export class ErrorApi extends Error {
   }
 }
 
-/** Una falla contra un campo especifico, tal como lo reporta el backend. */
+/** Una falla contra un campo especifico, tal como lo reporta el sistema. */
 export interface DetalleCampo {
   campo: string;
   problema: string;
@@ -62,12 +62,12 @@ export interface ErrorLegible {
   codigo: string;
   detalles: DetalleCampo[];
   /**
-   * El `detalles` CRUDO del backend, sin interpretar.
+   * El `detalles` CRUDO del sistema, sin interpretar.
    *
    * Va aparte de `detalles` porque los dos niveles no significan lo mismo.
    * `detalles` es la lista de `{campo, problema}` de los 422 de
    * validacion, que es lo que se pinta junto a un input. En las reglas de
-   * negocio el backend manda un objeto con lo que el error sabe de verdad
+   * negocio el sistema manda un objeto con lo que el error sabe de verdad
    * (`STOCK_INSUFICIENTE` trae `existencia`, `solicitado` y `faltan`), y
    * tirarlo obliga a pintar "no hay producto suficiente" cuando se puede
    * decir "faltan 8 bultos".
@@ -80,31 +80,30 @@ export interface ErrorLegible {
 }
 
 /**
- * Convierte cualquier fallo en algo que se pueda pintar.
+ * Convierte cualquier fallo en un mensaje que se le pueda mostrar a la
+ * persona que atiende el mostrador.
  *
- * Se come los tres casos que se dan de verdad:
+ * Se resuelven los tres casos que pasan de verdad:
  *
- * 1. La API respondio con un error de la app (4xx/5xx). Se usa su mensaje,
- *    que ya esta en espanol y esta escrito para el que lo lee.
- * 2. La API no respondio (status 0): el backend esta caido, no hay red, o
- *    el navegador esta bloqueando el puerto 3000 porque `CORS_ORIGINS` no
- *    incluye el origen. Es el caso que mas confunde cuando se desarrolla, y
- *    por eso el mensaje dice las dos cosas.
- * 3. Algo se rompio en la app antes de pedir nada.
+ * 1. El sistema respondió con un error propio (4xx/5xx). Se usa su mensaje,
+ *    que ya viene en español y escrito para quien lo lee.
+ * 2. El sistema no respondió (status 0): se cayó, no hay internet, o el
+ *    navegador está bloqueando la conexión porque `CORS_ORIGINS` no incluye
+ *    este origen. Esto último solo le importa a quien desarrolla, no a quien
+ *    usa el mostrador, por eso el mensaje que ve la persona es sencillo.
+ * 3. Algo se rompió en la app antes de pedir nada.
  *
- * Se devuelve un objeto y no se lanza: la pantalla decide que hacer. Un
- * `catch` que re-lanza deja el mismo error cruzando la app y cada
- * componente termina inventando su propio `if (e.status === 401)`.
+ * Se devuelve un objeto y no se lanza: cada pantalla decide qué mostrar. Un
+ * `catch` que vuelve a lanzar deja el mismo error cruzando la app y cada
+ * componente termina inventando su propia revisión.
  */
 export function errorLegible(error: unknown): ErrorLegible {
   if (error instanceof HttpErrorResponse) {
-    // Sin respuesta del servidor.
+    // No hubo respuesta de nadie.
     if (error.status === 0) {
       return {
         codigo: 'SIN_SERVIDOR',
-        mensaje:
-          'No se pudo contactar al servidor. Revisa que este encendido el backend ' +
-          'y que este permitido este origen.',
+        mensaje: 'No hay conexión. Revisa tu internet e inténtalo de nuevo.',
         detalles: [],
         datos: null,
       };
@@ -115,20 +114,20 @@ export function errorLegible(error: unknown): ErrorLegible {
     if (cuerpo && typeof cuerpo.codigo === 'string') {
       return {
         codigo: cuerpo.codigo,
-        mensaje: cuerpo.error ?? 'La operacion no se pudo completar',
+        mensaje: cuerpo.error ?? 'La operación no se pudo completar',
         detalles: detallesDe(cuerpo.detalles),
-        // Se pasa crudo: el codigo ya lo eligio el backend y cada uno trae
-        // su propio objeto. Ver `datos` en `ErrorLegible`.
+        // Se pasa tal cual: el código ya lo eligió el sistema y cada uno
+        // trae su propio objeto. Ver `datos` en `ErrorLegible`.
         datos: cuerpo.detalles ?? null,
       };
     }
 
-    // Un 4xx/5xx que no viene del manejador de errores (un 404 de nginx, un
-    // HTML de un proxy). El texto del backend no esta en espanol.
+    // Un 4xx/5xx que no viene del manejo normal de errores (una página de
+    // error de nginx, un HTML de un proxy). Su texto no está en español.
     if (error.status >= 500) {
       return {
         codigo: 'ERROR_SERVIDOR',
-        mensaje: 'El servidor fallo. Intenta de nuevo en un momento.',
+        mensaje: 'No pudimos completar la operación. Inténtalo de nuevo en un momento.',
         detalles: [],
         datos: null,
       };
@@ -137,14 +136,14 @@ export function errorLegible(error: unknown): ErrorLegible {
 
   return {
     codigo: 'ERROR_INESPERADO',
-    mensaje: 'Ocurrio un error inesperado.',
+    mensaje: 'Algo salió mal. Inténtalo de nuevo.',
     detalles: [],
     datos: null,
   };
 }
 
 /**
- * El backend manda `detalles` con forma distinta segun el error: una lista
+ * El sistema manda `detalles` con forma distinta segun el error: una lista
  * de `{campo, problema}` en los de validacion, y objetos sueltos en las
  * reglas de negocio. Solo se interesa el primer caso; lo demas se ignora en
  * vez de inventar una forma comun que no existe.
@@ -165,12 +164,12 @@ function detallesDe(detalles: unknown): DetalleCampo[] {
 }
 
 /**
- * Guarda en el equipo el Excel que devuelve la API.
+ * Guarda en el equipo el Excel que devuelve el sistema.
  *
  * El archivo llega como un `Blob` y hay que convertirlo en una descarga: se
  * hace un `objectURL` temporal, se le pasa a un `<a>` con `download` y se
- * pulsa. El nombre sale del `Content-Disposition` del backend, que es quien
- * sabe si van today's date o el numero de la fila; el de aqui solo se usa si
+ * pulsa. El nombre sale del `Content-Disposition` del sistema, que es quien
+ * sabe si va la fecha de hoy o el numero de la fila; el de aqui solo se usa si
  * esa cabecera no llega (un proxy que la quita, por ejemplo).
  *
  * El `revokeObjectURL` va con espera y no de inmediato: hay navegadores que

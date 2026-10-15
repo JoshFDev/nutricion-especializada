@@ -53,23 +53,25 @@ import {
  *
  * Lo que hace distinta a las demás pantallas, y por qué:
  *
- *   - **Es el único módulo con DELETE.** En los otros, el registro tiene
- *     nombre y aparece en documentos viejos, así que se conserva y se cancela.
- *     Un movimiento de caja solo vive en `auditoria_caja`, y el permiso que lo
- *     autoriza (`caja.eliminar`) se creó desde el principio para eso. Por eso
- *     el borrado pide confirmación escribiendo el monto, no un `confirm` de
- *     una línea.
- *   - **El saldo no se toca nunca desde la pantalla.** Lo recalcula
- *     `fn_recalcular_saldo_cuenta` sumando los movimientos de la cuenta. Por
- *     eso después de guardar o de borrar se vuelven a pedir las cuentas y el
- *     resumen: el número que se muestra no es el que se calculó aquí.
- *   - **Cliente y proveedor son excluyentes.** El esquema rechaza un
- *     movimiento que sea de los dos, y los dos vacíos es legítimo (la renta
- *     del local no es de nadie). Elegir uno borra al otro en vez de dejar que
- *     el servidor lo rechace.
- *   - **La descripción es un `input` de una línea, no un `textarea`.** El
- *     esquema usa `texto()`, que rechaza los caracteres de control, y un
- *     "enter" de más sería un 422 que no menciona los saltos de línea.
+ *   - **Es la única pantalla donde se puede borrar de verdad.** En las otras,
+ *     el registro tiene nombre y aparece en documentos viejos, así que se
+ *     conserva y se cancela. Un movimiento de caja solo vive en
+ *     `auditoria_caja`, y el permiso que lo autoriza (`caja.eliminar`) se creó
+ *     desde el principio para eso. Por eso el borrado pide confirmación
+ *     escribiendo el monto, no un simple "¿estás seguro?" de una línea.
+ *   - **El saldo no se toca nunca desde la pantalla.** Lo vuelve a calcular la
+ *     regla automática del sistema (`fn_recalcular_saldo_cuenta`) sumando los
+ *     movimientos de la cuenta. Por eso después de guardar o de borrar se
+ *     vuelven a pedir las cuentas y el resumen: el número que se muestra no es
+ *     el que se calculó aquí.
+ *   - **Cliente y proveedor son excluyentes.** Las reglas de validación
+ *     rechazan un movimiento que sea de los dos, y los dos vacíos es legítimo
+ *     (la renta del local no es de nadie). Elegir uno borra al otro en vez de
+ *     dejar que el sistema lo rechace.
+ *   - **La descripción es un `input` de una línea, no un `textarea`.** Las
+ *     reglas de validación usan `texto()`, que rechaza los caracteres de
+ *     control, y un "enter" de más sería un error de captura que no menciona
+ *     los saltos de línea.
  *
  * El resumen comparte las fechas con el listado y no con los demás filtros: un
  * periodo es una sola cosa en la pantalla, mientras que "solo egresos" o
@@ -164,7 +166,7 @@ export class Caja {
   readonly cierre = signal<CierreDeCaja | null>(null);
   readonly cargandoCierre = signal(false);
   readonly errorCierre = signal<string | null>(null);
-  /** El dia a cerrar. Vacio la primera vez: lo pone el backend con su "hoy". */
+  /** El día a cerrar. Vacío la primera vez: lo pone el sistema con su "hoy". */
   readonly fechaCierre = signal('');
 
   readonly totalesCierre = computed(() => totalesDeCierre(this.cierre()?.cuentas ?? []));
@@ -179,10 +181,10 @@ export class Caja {
   }
 
   /**
-   * Pide el cierre del dia elegido.
+   * Pide el cierre del día elegido.
    *
-   * Sin fecha, el backend decide (hoy segun la base) y devuelve el dia que
-   * cerro; se copia al campo para que el `date` muestre que dia se esta
+   * Sin fecha, el sistema decide (hoy según la base) y devuelve el día que
+   * cerró; se copia al campo para que el `date` muestre qué día se está
    * mirando en vez de quedarse en blanco.
    */
   private async cargarCierre(): Promise<void> {
@@ -224,7 +226,7 @@ export class Caja {
   readonly errorCorte = signal<string | null>(null);
   /**
    * Los dos momentos de la ventana, en el formato del `datetime-local`
-   * (`AAAA-MM-DDTHH:MM`). Vacíos la primera vez: los pone el backend con su
+   * (`AAAA-MM-DDTHH:MM`). Vacíos la primera vez: los pone el sistema con su
    * "hoy a medianoche" y su "ahora".
    */
   readonly corteDesde = signal('');
@@ -233,12 +235,13 @@ export class Caja {
   readonly totalesCorte = computed(() => totalesDeCorte(this.corte()?.cuentas ?? []));
 
   /**
-   * Un rango al revés, detectado antes de ir al servidor.
+   * Un rango al revés, detectado antes de ir al sistema.
    *
-   * El esquema también lo rechaza (`desde <= hasta`), pero avisar aquí evita
-   * un viaje y, sobre todo, deja el mensaje junto a los dos campos en vez de en
-   * un 400 al final. Los dos momentos llegan del `datetime-local` con el mismo
-   * ancho, así que compararlos como texto es compararlos en el tiempo.
+   * Las reglas de validación también lo rechazan (`desde <= hasta`), pero
+   * avisar aquí evita un viaje y, sobre todo, deja el mensaje junto a los dos
+   * campos en vez de en un error al final. Los dos momentos llegan del
+   * `datetime-local` con el mismo ancho, así que compararlos como texto es
+   * compararlos en el tiempo.
    */
   readonly problemaCorte = computed(() => {
     const desde = this.corteDesde();
@@ -261,10 +264,10 @@ export class Caja {
   /**
    * Pide el corte de la ventana elegida.
    *
-   * Un momento vacío se omite y lo pone el backend (medianoche de hoy o ahora).
-   * El rango que el servidor usó vuelve en la respuesta, y se copia a los
-   * campos que estaban vacíos para que los dos `datetime-local` muestren la
-   * ventana que de verdad se está mirando en vez de quedarse en blanco.
+   * Un momento vacío se omite y lo pone el sistema (medianoche de hoy o
+   * ahora). El rango que el sistema usó vuelve en la respuesta, y se copia a
+   * los campos que estaban vacíos para que los dos `datetime-local` muestren
+   * la ventana que de verdad se está mirando en vez de quedarse en blanco.
    */
   private async cargarCorte(): Promise<void> {
     if (this.problemaCorte() !== null) {
@@ -302,10 +305,10 @@ export class Caja {
   }
 
   /**
-   * "Hoy hasta ahora": vacía la ventana y deja que el backend la resuelva.
+   * "Hoy hasta ahora": vacía la ventana y deja que el sistema la resuelva.
    *
    * Es el atajo que más se usa -- el corte del día en curso --, y por eso no
-   * lleva una fecha escrita: con los dos campos vacíos el servidor pone su
+   * lleva una fecha escrita: con los dos campos vacíos el sistema pone su
    * medianoche de hoy y su hora actual, que son las que valen.
    */
   async corteHoyAhora(): Promise<void> {
@@ -334,8 +337,8 @@ export class Caja {
   /**
    * Cuántos renglones se ven por página, y la página que se está viendo.
    *
-   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
-   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   * La página se elige en SALTOS y se traduce a la posición al pedir, porque
+   * una posición guardada se queda vieja en cuanto cambia un filtro.
    */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -361,7 +364,7 @@ export class Caja {
    * Las fechas NO cuentan: esas son el periodo, y el resumen de arriba está
    * calculado con ellas. Borrarlas sería quitarle el periodo a la tarjeta sin
    * querer. El buscador se cuenta con dos caracteres porque es lo que el
-   * backend exige.
+   * sistema exige.
    */
   readonly hayFiltros = computed(
     () =>
@@ -420,9 +423,10 @@ export class Caja {
   /**
    * Lo que falta para poder guardar, en el orden en que aparece el formulario.
    *
-   * El monto se valida con la misma regla del esquema (`decimal(10, 2)` y mayor
-   * que cero) para que el 422 no llegue por escribir "0" o un número con tres
-   * decimales. La categoría igual, con su mínimo de dos.
+   * El monto se valida con la misma regla de las reglas de validación
+   * (`decimal(10, 2)` y mayor que cero) para que el error no llegue por
+   * escribir "0" o un número con tres decimales. La categoría igual, con su
+   * mínimo de dos.
    */
   readonly problemas = computed(() => {
     const editor = this.editor();
@@ -481,9 +485,9 @@ export class Caja {
 
   readonly problemaNombreCuenta = computed(() => problemaDeNombreCuenta(this.nombreCuenta()));
   /**
-   * El banco solo se pide si el tipo es `banco`. El backend lo exige con un
-   * `refine` y la base no: una cuenta de banco sin nombre de banco no se
-   * distingue de otra en la lista, que es donde se mira.
+   * El banco solo se pide si el tipo es `banco`. El sistema lo exige y la base
+   * no: una cuenta de banco sin nombre de banco no se distingue de otra en la
+   * lista, que es donde se mira.
    */
   readonly problemaBancoCuenta = computed(() =>
     this.tipoCuenta() === 'banco' && this.bancoCuenta().trim() === ''
@@ -530,10 +534,10 @@ export class Caja {
   /**
    * Busca con 250 ms de espera, como el resto de las pantallas.
    *
-   * Cada tecleo NO pega una petición: con el buscador abierto a media escritura
-   * son varias y la última es la única que sirve. Además, buscar vuelve
-   * siempre a la página 1, porque quedarse en la 4 con un filtro nuevo es
-   * mirar un `offset` que ya no quiere decir nada.
+   * Cada tecleo NO pega una consulta: con el buscador abierto a media
+   * escritura son varias y la última es la única que sirve. Además, buscar
+   * vuelve siempre a la página 1, porque quedarse en la 4 con un filtro nuevo
+   * es mirar una posición que ya no quiere decir nada.
    */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
@@ -653,17 +657,17 @@ export class Caja {
     this.limite.set(limite);
     this.cerrarDetalle();
     // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50 filas
-    // es pedir un `offset` que ya no corresponde a nada.
+    // es pedir una posición que ya no corresponde a nada.
     void this.cargarPagina(1);
   }
 
   /**
    * `con_factura` es el único filtro que viaja como texto 'true'/'false'.
    *
-   * El esquema lo declara como `z.enum(['true','false'])` y lo transforma a
-   * booleano: mandar el booleano de JavaScript sería un 400, porque `true` no
-   * es el texto "true". Por eso la api lo recibe como `boolean` y lo
-   * convierte al mandar la petición.
+   * Las reglas de validación lo declaran como `z.enum(['true','false'])` y lo
+   * transforman a booleano: mandar el booleano sería un error, porque `true`
+   * no es el texto "true". Por eso el servicio lo recibe como `boolean` y lo
+   * convierte al mandar la consulta.
    */
   private facturaPedida(): boolean | undefined {
     const actual = this.filtroFactura();
@@ -776,10 +780,10 @@ export class Caja {
   /**
    * Elegir un cliente borra al proveedor, y al revés.
    *
-   * El esquema rechaza un movimiento que tenga los dos, y dejarlos se
-   * llenando para que el servidor avise al final es peor que decidir aquí que
-   * un movimiento es de UNO. Los dos vacíos sí es legítimo: la renta del local
-   * no es de nadie.
+   * Las reglas de validación rechazan un movimiento que tenga los dos, y
+   * dejarlos llenándose para que el sistema avise al final es peor que
+   * decidir aquí que un movimiento es de UNO. Los dos vacíos sí es legítimo:
+   * la renta del local no es de nadie.
    */
   elegirCliente(opcion: OpcionNombrada): void {
     this.cliente.set(opcion);
@@ -815,8 +819,8 @@ export class Caja {
   /**
    * Guarda y enseña el comprobante en su propia fila.
    *
-   * El saldo lo recalculó el trigger, así que las cuentas y el resumen se
-   * vuelven a pedir: el número que se ve no se calcula aquí.
+   * El saldo lo recalculó la regla automática del sistema, así que las cuentas
+   * y el resumen se vuelven a pedir: el número que se ve no se calcula aquí.
    */
   async guardar(): Promise<void> {
     if (!this.puedeGuardar()) return;
@@ -840,7 +844,7 @@ export class Caja {
 
       await this.cargar();
       // Se despliega lo que devolvió el alta: pedir el detalle otra vez sería
-      // una segunda ida al servidor por lo mismo. Si el movimiento no está en
+      // una segunda ida al sistema por lo mismo. Si el movimiento no está en
       // la página que se está viendo, su fila no está y no se despliega.
       if (this.filas().some((otra) => otra.id === movimiento.id)) {
         this.detalle.set(movimiento);
@@ -924,8 +928,9 @@ export class Caja {
       await this.api.eliminarMovimiento(movimiento.id);
       this.cerrarDetalle();
       this.toast.exito(`Se borró el movimiento de ${montoComoTexto(movimiento.monto)}.`);
-      // El DELETE responde 204 sin cuerpo. El saldo de la cuenta lo rehizo el
-      // trigger, así que se vuelve a pedir todo en vez de restar a mano.
+      // El borrado responde sin datos de vuelta. El saldo de la cuenta lo
+      // rehízo la regla automática del sistema, así que se vuelve a pedir todo
+      // en vez de restar a mano.
       await this.cargar();
     } catch (falla) {
       this.errorDetalle.set(errorLegible(falla).mensaje);
@@ -1044,15 +1049,15 @@ export class Caja {
 }
 
 /**
- * Un momento del backend al formato del `datetime-local`.
+ * Un momento del sistema al formato del `datetime-local`.
  *
- * El servidor devuelve el rango con un espacio (`AAAA-MM-DD HH:MM`, el formato
- * con el que Postgres compara) y el control del navegador exige la `T`
+ * El sistema devuelve el rango con un espacio (`AAAA-MM-DD HH:MM`, el formato
+ * con el que la base compara) y el control del navegador exige la `T`
  * (`AAAA-MM-DDTHH:MM`). Sin esta conversión el campo saldría en blanco con el
  * texto que no reconoce. Es un `replace` sobre el primer espacio y no un
- * `slice` por posición: así funciona igual si el servidor algún día manda
- * segundos. Solo para MOSTRAR lo que ya resolvió el servidor; lo que se manda
- * de vuelta lo normaliza el esquema.
+ * `slice` por posición: así funciona igual si el sistema algún día manda
+ * segundos. Solo para MOSTRAR lo que ya resolvió el sistema; lo que se manda
+ * de vuelta lo normalizan las reglas de validación.
  */
 function aMomentoDelInput(momento: string): string {
   return momento.replace(' ', 'T');

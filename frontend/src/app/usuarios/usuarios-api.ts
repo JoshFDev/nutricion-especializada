@@ -4,44 +4,45 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
 
 /**
- * Usuarios, roles y el cambio de contrasena.
+ * Usuarios, roles y el cambio de contraseña.
  *
- * A diferencia de las otras pantallas del negocio, aqui casi todo lo que se
- * ve en el formulario es INMUTABLE, y no es una decision de la pantalla:
+ * A diferencia de las otras pantallas del negocio, aquí casi todo lo que se ve
+ * en el formulario es INMUTABLE, y no es una decisión de la pantalla:
  *
- *   - **El RFC no se edita jamas.** Es la llave con la que el SAT recognizes
- *     a la persona y el `actualizarUsuarioEsquema` ni lo menciona. Se manda
- *     al alta y despues se muestra de solo lectura, porque un RFC corregido
- *     a mano es un RFC que ya no coincide con el alta del SAT.
+ *   - **El RFC no se edita jamás.** Es la llave con la que el SAT reconoce a
+ *     la persona y `actualizarUsuarioEsquema` ni siquiera lo menciona. Se
+ *     manda al alta y después se muestra de solo lectura, porque un RFC
+ *     corregido a mano es un RFC que ya no coincide con el alta del SAT.
  *   - **El correo tampoco.** Por el mismo motivo. Y ojo con el alta: es
- *     `nullish()`, o sea que un correo vacio NO es `''`, es `null`; mandar
- *     `''` es un 400 porque `''` no es un correo valido.
+ *     `nullish()`, o sea que un correo vacío NO es `''`, es `null`; mandar
+ *     `''` es un 400 porque `''` no es un correo válido.
  *
- * Tres reglas mas vienen del servicio y hay que dejarlas visibles en la
+ * Tres reglas más vienen del sistema y hay que dejarlas visibles en la
  * pantalla, porque son la clase de error que el operador no entiende si solo
- * ve el texto del servidor:
+ * ve el texto del mensaje:
  *
  *   - **No te puedes desactivar a ti mismo** (`NO_SELF_DESACTIVAR`).
  *   - **No te puedes quitar a ti mismo el rol de administrador**
- *     (`NO_SELF_DEMOTEAR`). Quitarse el rol a OTRO es normal, pero entonces
+ *     (`NO_SELF_DEMOTEAR`). Quitarle el rol a OTRO es normal, pero entonces
  *     hay que dejar otro admin activo o el sistema se queda sin nadie que lo
  *     administre (`ULTIMO_ADMIN`).
- *   - **Desactivar y cambiar roles cierran las sesiones abiertas.** Quien
- *     esta en otro equipo se cae, y no cuando expire el token: de inmediato.
- *     Por eso el reseteo de contrasena (que se usa para recuperar el acceso)
- *     NO cierra la sesion de quien lo pide, solo las demas.
+ *   - **Desactivar y cambiar roles cierran las sesiones abiertas.** Quien está
+ *     en otro equipo se cae, y no cuando expire el acceso: de inmediato. Por
+ *     eso el reinicio de contraseña (que se usa para recuperar el acceso) NO
+ *     cierra la sesión de quien lo pide, solo las demás.
  *
- * La contrasena temporal se devuelve UNICA vez, en el alta y en el reseteo, y
- * en la base solo esta el hash. Por eso la pantalla tiene que mostrarla
- *vvisible y copy-pasteable, y no esconderla en un aviso que se va solo.
+ * La contraseña temporal se devuelve UNA sola vez, en el alta y en el
+ * reinicio, y en el sistema solo queda guardada cifrada. Por eso la pantalla
+ * tiene que mostrarla visible y lista para copiar, y no esconderla en un aviso
+ * que se va solo.
  */
 
-/** Un rol, tal como lo devuelve `GET /api/usuarios/roles`. */
+/** Un rol, tal como lo devuelve el servicio de usuarios. */
 export interface Rol {
   id: number;
   nombre: string;
   descripcion: string | null;
-  /** Si da acceso a todo. El unico con este campo en true es Admin. */
+  /** Si da acceso a todo. El único con este campo en true es Admin. */
   es_admin: boolean;
 }
 
@@ -52,13 +53,13 @@ export interface Usuario {
   apellido_materno: string | null;
   rfc: string;
   email: string | null;
-  /** ISO con hora: es una fecha con tiempo, no solo el dia. */
+  /** Con hora: es una fecha con tiempo, no solo el día. */
   fecha_contratacion: string;
   puesto: string | null;
   activo: boolean;
-  /** El dueno del negocio. No se quita desde la pantalla. */
+  /** El dueño del negocio. No se quita desde la pantalla. */
   es_dueno: boolean;
-  /** Debe cambiar la clave que le resetearon en su proximo ingreso. */
+  /** Debe cambiar la contraseña que le reiniciaron en su próximo ingreso. */
   debe_cambiar_contrasena: boolean;
   intentos_fallidos: number;
   bloqueado_hasta: string | null;
@@ -66,17 +67,18 @@ export interface Usuario {
   creado_en: string;
   actualizado_en: string;
   /**
-   * El fondo que esta persona vera al entrar, ya resuelto.
+   * El fondo que esta persona verá al entrar, ya resuelto.
    *
-   * Llega como objeto y no como la clave guardada para que el frontend no
-   * tenga que saber quantas imagenes hay ni como se llaman: esa lista es del
-   * backend y cambia con una migracion (ver `usuarios/fondos-login.ts`).
+   * Llega como objeto y no como la clave guardada para que la pantalla no
+   * tenga que saber cuántas imágenes hay ni cómo se llaman: esa lista es del
+   * sistema y cambia con una actualización del sistema (ver
+   * `usuarios/fondos-login.ts`).
    */
   fondo: FondoLogin;
   roles: Rol[];
 }
 
-/** Un fondo del login. La lista llega de `GET /api/usuarios/fondos`. */
+/** Un fondo de la pantalla de entrada. La lista la da el servicio. */
 export interface FondoLogin {
   clave: string;
   etiqueta: string;
@@ -92,11 +94,12 @@ export interface ListaUsuarios {
 }
 
 /**
- * El POST devuelve la clave temporal junto al usuario. Solo esta vez.
+ * Al crear, el sistema devuelve la contraseña temporal junto al usuario. Solo
+ * esta vez.
  *
  * `contrasenaTemporal` es `string | null` y el null no es un error: es el
- * caso en que el administrador escribio la clave en el alta. Ahi no hay nada
- * que mostrar ni que entregar, la persona ya la tiene.
+ * caso en que el administrador escribió la contraseña al dar de alta. Ahí no
+ * hay nada que mostrar ni que entregar, la persona ya la tiene.
  */
 export interface UsuarioCreado {
   usuario: Usuario;
@@ -105,14 +108,14 @@ export interface UsuarioCreado {
 
 export interface Reseteo {
   contrasenaTemporal: string;
-  /** Cuantas sesiones de las abiertas quedaron cerradas con esto. */
+  /** Cuántas sesiones de las abiertas quedaron cerradas con esto. */
   sesionesCerradas: number;
 }
 
 /**
  * La forma del editor: lo que se teclea, sin normalizar.
  *
- * Los roles NO van en el form (son checkboxes sobre un catalogo), por eso
+ * Los roles NO van en el formulario (son casillas sobre un catálogo), por eso
  * `cuerpoDeUsuario` los recibe aparte.
  */
 export interface FormaUsuario {
@@ -124,18 +127,19 @@ export interface FormaUsuario {
   puesto: string;
   fecha_contratacion: string;
   /**
-   * La clave del alta, en texto plano. Vacia = que la genere el sistema.
+   * La contraseña del alta, en texto plano. Vacía = que la genere el sistema.
    *
-   * Existe solo en el alta y no se recorta: las contrasenas admiten espacios
-   * a proposito (el backend tampoco aplica `.trim()`), y un recorte aqui
-   * cambiaria la clave sin aviso. `confirmar` viaja en la forma y NO en el
-   * cuerpo: es para que no se equivoquen al escribirla, nada mas.
+   * Existe solo en el alta y no se recorta: las contraseñas admiten espacios
+   * a propósito (el sistema tampoco aplica `.trim()`), y un recorte aquí
+   * cambiaría la contraseña sin aviso. `confirmar` viaja en la forma y NO en
+   * los datos que se mandan: es para que no se equivoquen al escribirla, nada
+   * más.
    */
   contrasena: string;
   confirmar: string;
 }
 
-/** Lo que acepta `POST /api/usuarios`. Es `strictObject`: sobra un campo y es 400. */
+/** Lo que se manda al crear un usuario. Las reglas de validación no admiten campos de más: sobra uno y es 400. */
 export interface CuerpoUsuario {
   nombre: string;
   apellido_paterno: string;
@@ -145,7 +149,7 @@ export interface CuerpoUsuario {
   puesto: string | null;
   fecha_contratacion?: string;
   /**
-   * La clave, si el administrador la escribio. Si no viene, el servidor
+   * La contraseña, si el administrador la escribió. Si no viene, el sistema
    * genera la temporal de siempre (`crearUsuarioEsquema`).
    */
   contrasena?: string;
@@ -153,11 +157,12 @@ export interface CuerpoUsuario {
 }
 
 /**
- * Lo que acepta `PATCH /api/usuarios/:id`.
+ * Lo que se manda al actualizar un usuario.
  *
- * Solo estos cinco campos. El servicio arma el UPDATE a partir de lo que
- * llega (`COLUMNAS_EDITABLES`), asi que mandar de mas no cambia el dato pero
- * si mete ruido en el cable; y el esquema rechaza el cuerpo vacio con 400.
+ * Solo estos cinco campos. El sistema arma la actualización a partir de lo que
+ * llega (`COLUMNAS_EDITABLES`), así que mandar de más no cambia el dato pero
+ * sí mete ruido en el cable; y las reglas de validación rechazan los datos
+ * vacíos con 400.
  */
 export interface CuerpoActualizacion {
   nombre?: string;
@@ -168,9 +173,9 @@ export interface CuerpoActualizacion {
   /**
    * La CLAVE del fondo, o null para volver al de por defecto.
    *
-   * Va la clave y no la `url` a proposito: el backend valida contra su lista y
-   * devuelve el `fondo` ya resuelto. Mandar la url seria pedirle al servidor
-   * que se fíe de un texto que eligio el cliente.
+   * Va la clave y no la `url` a propósito: el sistema valida contra su lista y
+   * devuelve el `fondo` ya resuelto. Mandar la url sería pedirle al sistema
+   * que se fíe de un texto que eligió el usuario.
    */
   fondo_login?: string | null;
 }
@@ -178,18 +183,18 @@ export interface CuerpoActualizacion {
 // ------------------------------------------------------------------ el RFC
 
 /**
- * La MISMA expresion que el `CHECK` de la tabla y que el esquema del backend
- * (`usuarios/esquemas.ts`). Copiada, no importada: el backend tiene su propio
- * arbol y la app no puede importar de ahi.
+ * La MISMA expresión que el `CHECK` de la tabla y que las reglas de validación
+ * (`usuarios/esquemas.ts`). Copiada, no importada: el sistema tiene su propio
+ * árbol y la aplicación no puede importar de ahí.
  *
- * Esta aqui para que el error salga pegado al campo, y no despues de un viaje
- * al servidor. El backend pone en mayusculas ANTES de validar, asi que el
- * frontend tambien lo hace: asi el `pattern` del input y la regla del servidor
+ * Está aquí para que el error salga pegado al campo, y no después de un viaje
+ * al sistema. El sistema pone en mayúsculas ANTES de validar, así que la
+ * pantalla también lo hace: así el `pattern` del campo y la regla del sistema
  * dicen exactamente lo mismo.
  */
 export const REGEX_RFC = /^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$/;
 
-/** Como lo manda el backend: recortado y en mayusculas. */
+/** Como lo manda el sistema: recortado y en mayúsculas. */
 export function rfcNormalizado(texto: string): string {
   return texto.trim().toUpperCase();
 }
@@ -206,23 +211,23 @@ function textoONull(valor: string): string | null {
 }
 
 /**
- * Arma el cuerpo del alta.
+ * Arma los datos del alta.
  *
- * Tres cosas que no son obvias:
+ * Cuatro cosas que no son obvias:
  *
- *   1. **El RFC va en mayusculas y sin espacios.** El esquema lo hace igual,
- *      pero mandarlo ya normalizado evita el 400 en el caso de que alguien
- *      lo escriba con el teclado en minusculas.
- *   2. **Lo vacio va como `null`, no como `''`.** Es lo que admiten los tres
- *      campos opcionales (`nullish`); `''` es un valor VALIDO para un texto
- *      pero no para el correo, y ahi lo que se quiere decir es "no hay".
- *   3. **La fecha solo va si se escribio.** El esquema la pone opcional y el
- *      servicio la rellena con hoy si no llega; mandarla vacia seria un 400
- *      del `regex`.
- *   4. **La contrasena solo va si se escribio**, y sin recortarla: los
- *      espacios adentro son parte de la clave y el backend tampoco los
- *      toca. En blanco se omite el campo entero (no `''`, que daria 400) y
- *      el servidor genera la temporal. `confirmar` jamas sale de aqui.
+ *   1. **El RFC va en mayúsculas y sin espacios.** Las reglas de validación lo
+ *      hacen igual, pero mandarlo ya normalizado evita el 400 en el caso de
+ *      que alguien lo escriba con el teclado en minúsculas.
+ *   2. **Lo vacío va como `null`, no como `''`.** Es lo que admiten los tres
+ *      campos opcionales (`nullish`); `''` es un valor VÁLIDO para un texto
+ *      pero no para el correo, y ahí lo que se quiere decir es "no hay".
+ *   3. **La fecha solo va si se escribió.** Las reglas de validación la ponen
+ *      opcional y el sistema la rellena con hoy si no llega; mandarla vacía
+ *      sería un 400 del `regex`.
+ *   4. **La contraseña solo va si se escribió**, y sin recortarla: los
+ *      espacios de adentro son parte de la contraseña y el sistema tampoco los
+ *      toca. En blanco se omite el campo entero (no `''`, que daría 400) y el
+ *      sistema genera la temporal. `confirmar` jamás sale de aquí.
  */
 export function cuerpoDeUsuario(forma: FormaUsuario, roles: number[]): CuerpoUsuario {
   const cuerpo: CuerpoUsuario = {
@@ -241,13 +246,13 @@ export function cuerpoDeUsuario(forma: FormaUsuario, roles: number[]): CuerpoUsu
 }
 
 /**
- * Arma el cuerpo de la edicion.
+ * Arma los datos de la edición.
  *
- * `activo` NO va con los otros cuatro: la baja y la alta se alternan con un
- * PATCH de un solo campo desde el boton de la fila, para que bajar a alguien
- * no pueda reescribirle el nombre. Y se manda lo que hay, sin comparar con
- * la version anterior: el esquema pide al menos un campo y estos cuatro
- * siempre estan, asi que nunca se manda un cuerpo vacio.
+ * `activo` NO va con los otros cuatro: la baja y el alta se alternan con una
+ * actualización de un solo campo desde el botón de la fila, para que dar de
+ * baja a alguien no pueda reescribirle el nombre. Y se manda lo que hay, sin
+ * comparar con la versión anterior: las reglas de validación piden al menos un
+ * campo y estos cuatro siempre están, así que nunca se mandan datos vacíos.
  */
 export function cuerpoDeActualizacion(forma: FormaUsuario): CuerpoActualizacion {
   return {
@@ -259,12 +264,12 @@ export function cuerpoDeActualizacion(forma: FormaUsuario): CuerpoActualizacion 
 }
 
 /**
- * Los roles que se van a mandar, sin repetir y en el orden del catalogo.
+ * Los roles que se van a mandar, sin repetir y en el orden del catálogo.
  *
- * Sin repetir porque el esquema acepta hasta 5 pero el `INSERT` no lo
- * distingue, y en el orden del catalogo para que las casillas marcadas y lo
- * que se guarda sean la misma lista. El catalogo llega por nombre
- * (`ORDER BY nombre`), asi que sin esto "Cajera" marcado salia guardado al
+ * Sin repetir porque las reglas de validación aceptan hasta 5 pero el `INSERT`
+ * no los distingue, y en el orden del catálogo para que las casillas marcadas
+ * y lo que se guarda sean la misma lista. El catálogo llega por nombre
+ * (`ORDER BY nombre`), así que sin esto "Cajera" marcado salía guardado al
  * final y la lista de la ficha lo muestra en otro orden.
  */
 export function rolesNormalizados(seleccionados: number[], catalogo: Rol[]): number[] {
@@ -277,11 +282,11 @@ export function rolesNormalizados(seleccionados: number[], catalogo: Rol[]): num
 // ------------------------------------------------------------- la cuenta
 
 /**
- * Como se ve la cuenta en la lista.
+ * Cómo se ve la cuenta en la lista.
  *
- * El orden importa: una cuenta desactivada que ademas esta bloqueada se
+ * El orden importa: una cuenta desactivada que además está bloqueada se
  * muestra como desactivada, porque eso es lo que hay que arreglar primero, y
- * "bloqueado" confundiria ("pero si no esta dado de baja...").
+ * "bloqueado" confundiría ("pero si no está dado de baja...").
  */
 export type EstadoCuenta = 'inactivo' | 'bloqueado' | 'debe_cambiar' | 'ok';
 
@@ -301,14 +306,14 @@ export const ETIQUETA_ESTADO: Record<EstadoCuenta, string> = {
   ok: 'Activo',
 };
 
-/** "Juan Perez Lopez". El materno es opcional y no se pone "null". */
+/** "Juan Pérez López". El materno es opcional y no se pone "null". */
 export function nombreCompleto(usuario: Usuario): string {
   return [usuario.nombre, usuario.apellido_paterno, usuario.apellido_materno]
     .filter((parte) => parte !== null && parte !== '')
     .join(' ');
 }
 
-/** Los roles en una linea, para la columna de la lista. */
+/** Los roles en una línea, para la columna de la lista. */
 export function rolesEnLinea(usuario: Usuario): string {
   return usuario.roles.map((rol) => rol.nombre).join(', ');
 }
@@ -318,14 +323,14 @@ export function rolesEnLinea(usuario: Usuario): string {
 export type AccionDeCuenta = 'desactivar' | 'quitar_admin';
 
 /**
- * Por que un boton NO se puede usar, en palabras. `null` si se puede.
+ * Por qué un botón NO se puede usar, en palabras. `null` si se puede.
  *
- * Las dos reglas que se saben desde la pantalla son las de "no te lo hagas
- * a ti mismo". La de `ULTIMO_ADMIN` NO se sabe aqui (habria que contar los
- * administradores activos de toda la base, y la pantalla solo tiene la
- * pagina que esta viendo), asi que el boton se deja activo y es el backend
- * el que responde: es mejor un 409 con su mensaje que un boton gris sin
- * explicacion.
+ * Las dos reglas que se saben desde la pantalla son las de "no te lo hagas a
+ * ti mismo". La de `ULTIMO_ADMIN` NO se sabe aquí (habría que contar los
+ * administradores activos de todo el sistema, y la pantalla solo tiene la
+ * página que está viendo), así que el botón se deja activo y es el sistema el
+ * que responde: es mejor un 409 con su mensaje que un botón gris sin
+ * explicación.
  */
 export function motivoDeCandado(
   accion: AccionDeCuenta,
@@ -348,21 +353,22 @@ export class UsuariosApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * El catalogo de roles.
+   * El catálogo de roles.
    *
-   * No son paginados: son cinco filas fijas y salen de memoria. Es la
-   * pantalla que los consulta para dibujar los checkboxes.
+   * No son paginados: son cinco filas fijas y salen de memoria. Es la pantalla
+   * que los consulta para dibujar las casillas.
    */
   async roles(): Promise<Rol[]> {
     return firstValueFrom(this.http.get<Rol[]>(`${API}/usuarios/roles`));
   }
 
   /**
-   * Los fondos de login que se pueden elegir.
+   * Los fondos de la pantalla de entrada que se pueden elegir.
    *
-   * Viene del backend en vez de estar escrito aqui a mano por lo mismo que los
-   * roles: la lista crece con una migracion, y si el frontend tuviera su propia
-   * copia se podrian desincronizar sin que nada avise.
+   * Vienen del sistema en vez de estar escritos aquí a mano por lo mismo que
+   * los roles: la lista crece con una actualización del sistema, y si la
+   * pantalla tuviera su propia copia se podrían desincronizar sin que nada
+   * avise.
    */
   async fondos(): Promise<FondoLogin[]> {
     const r = await firstValueFrom(
@@ -372,16 +378,16 @@ export class UsuariosApi {
   }
 
   /**
-   * Lista con busqueda, filtro por rol y filtro de estado.
+   * Lista con búsqueda, filtro por rol y filtro de estado.
    *
-   * El filtro de estado tiene tres posiciones porque el backend solo sabe
+   * El filtro de estado tiene tres posiciones porque el sistema solo sabe
    * decir `activo: true` o `activo: false` (`listarUsuariosEsquema`), y
-   * "todos" es no mandar el parametro. Por omision salen solo los ACTIVOS,
-   * como en proveedores: lo que se busca el 99% de las veces es quien
-   * puede entrar, y el dado de baja lo cambia quien lo busca.
+   * "todos" es no mandar el parámetro. Por omisión salen solo los ACTIVOS,
+   * como en proveedores: lo que se busca el 99% de las veces es quien puede
+   * entrar, y el dado de baja lo cambia quien lo busca.
    *
-   * `rol` es un id y no un nombre, y el filtro es `=` y no `ILIKE` (esta en
-   * el repositorio), asi que se manda el id del check.
+   * `rol` es un id y no un nombre, y el filtro es `=` y no `ILIKE` (está en
+   * el servicio), así que se manda el id de la casilla.
    */
   async listar(opciones: {
     buscar?: string;
@@ -406,7 +412,7 @@ export class UsuariosApi {
     return firstValueFrom(this.http.get<Usuario>(`${API}/usuarios/${id}`));
   }
 
-  /** Crea. 201, con la clave temporal que hay que mostrar una vez. */
+  /** Crea. 201, con la contraseña temporal que hay que mostrar una vez. */
   async crear(cuerpo: CuerpoUsuario): Promise<UsuarioCreado> {
     return firstValueFrom(this.http.post<UsuarioCreado>(`${API}/usuarios`, cuerpo));
   }
@@ -414,9 +420,9 @@ export class UsuariosApi {
   /**
    * Edita los datos y/o el estado.
    *
-   * El `activo` va en el mismo PATCH y no aparte porque el candado de
-   * "no te desactives" vive en el servicio (`usuarios/servicio.ts`) y se
-   * comprueba sobre el campo que llega, no sobre el metodo de HTTP.
+   * El `activo` va en la misma actualización y no aparte porque el candado de
+   * "no te desactives" vive en el sistema (`usuarios/servicio.ts`) y se
+   * comprueba sobre el campo que llega, no sobre la acción en sí.
    */
   async actualizar(id: number, cuerpo: CuerpoActualizacion): Promise<Usuario> {
     return firstValueFrom(this.http.patch<Usuario>(`${API}/usuarios/${id}`, cuerpo));
@@ -425,20 +431,21 @@ export class UsuariosApi {
   /**
    * Reemplaza los roles completos.
    *
-   * Es un PUT, no un PATCH: la lista que llega es la que queda, y por eso el
-   * esquema exige al menos uno. Un POST "agregar rol" permitiria quedarse
-   * con cero sin querer.
+   * Reemplaza, no agrega: la lista que llega es la que queda, y por eso las
+   * reglas de validación exigen al menos uno. Una acción de "agregar rol"
+   * permitiría quedarse con cero sin querer.
    */
   async asignarRoles(id: number, roles: number[]): Promise<Usuario> {
     return firstValueFrom(this.http.put<Usuario>(`${API}/usuarios/${id}/roles`, { roles }));
   }
 
   /**
-   * Resetea la clave. La nueva vuelve una sola vez.
+   * Reinicia la contraseña. La nueva vuelve una sola vez.
    *
-   * No hay cuerpo y no hay `contrasena` que mandar: la genera el servidor
-   * (`generarContrasenaTemporal`). Mandar una clave desde aqui dejaria en
-   * manos de la pantalla decidir que clave se le pone a otra persona.
+   * No hay datos que mandar y no hay `contrasena` que enviar: la genera el
+   * sistema (`generarContrasenaTemporal`). Mandar una contraseña desde aquí
+   * dejaría en manos de la pantalla decidir qué contraseña se le pone a otra
+   * persona.
    */
   async resetearContrasena(id: number): Promise<Reseteo> {
     return firstValueFrom(this.http.post<Reseteo>(`${API}/usuarios/${id}/resetear-contrasena`, {}));

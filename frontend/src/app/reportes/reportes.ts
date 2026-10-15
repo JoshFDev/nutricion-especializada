@@ -13,11 +13,12 @@ import {
 /**
  * La pantalla de reportes: tres vistas del negocio en tres pestanas.
  *
- * Son las consultas que 0001 dejo calculando y que hasta ahora no tenian ni
- * endpoint ni pantalla. Cada pestana es una vista distinta y por eso cada una
- * tiene SU PROPIA senal de filas: es lo que hace que el `@switch` de la
- * plantilla estreche el tipo de verdad, y que una columna mal escrita sea un
- * error de compilacion en vez de un `undefined` en pantalla.
+ * Son las consultas que la actualizacion del sistema dejo calculando y que
+ * hasta ahora no tenian ni servicio ni pantalla. Cada pestana es una vista
+ * distinta y por eso cada una tiene SU PROPIA senal de filas: es lo que hace
+ * que el `@switch` de la plantilla estreche el tipo de verdad, y que una
+ * columna mal escrita sea un error de compilacion en vez de un `undefined`
+ * en pantalla.
  *
  * Las tres son de SOLO LECTURA: no hay formulario, ni boton de guardar, ni
  * edicion. Lo que se ve lo calcula la base a partir de las ventas, las compras
@@ -80,9 +81,10 @@ export class Reportes {
   /**
    * Con lo que el buscador aporta, no con cada tecla que se pulsa.
    *
-   * El buscador se manda al backend y el backend filtra por ILIKE, asi que el
-   * valor viaja tal cual. El minimo de dos caracteres esta en la API, no aqui:
-   * esta senal solo sirve para decidir si el boton "Limpiar" aparece.
+   * El buscador se manda al sistema y el sistema filtra por parecido, asi que
+   * el valor viaja tal cual. El minimo de dos caracteres esta en el servicio,
+   * no aqui: esta senal solo sirve para decidir si el boton "Limpiar"
+   * aparece.
    */
   readonly hayFiltros = computed(
     () => this.buscador().trim().length >= 2 || this.soloConExistencia() || this.soloConSaldo(),
@@ -151,10 +153,10 @@ export class Reportes {
   /**
    * Busca con 250 ms de espera, igual que el resto de las pantallas.
    *
-   * Cada tecleo NO pega una peticion: con el buscador a media escritura son
+   * Cada tecleo NO pega una consulta: con el buscador a media escritura son
    * varias y la ultima es la unica que sirve. Y vuelve siempre a la pagina 1,
-   * porque quedarse en la 4 con una busqueda nueva es mirar un `offset` que ya
-   * no significa nada.
+   * porque quedarse en la 4 con una busqueda nueva es mirar una posicion que
+   * ya no significa nada.
    */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
@@ -198,8 +200,8 @@ export class Reportes {
     const limite = Number(valor);
     if (!Number.isFinite(limite) || limite <= 0 || limite === this.limite()) return;
     this.limite.set(limite);
-    // Vuelve siempre a la pagina 1: la pagina 7 con otro tamano es un `offset`
-    // que ya no corresponde a nada.
+    // Vuelve siempre a la pagina 1: la pagina 7 con otro tamano es una
+    // posicion que ya no corresponde a nada.
     await this.recargar();
   }
 
@@ -214,8 +216,8 @@ export class Reportes {
    * Carga una pagina del reporte abierto.
    *
    * El `switch` esta porque cada pestana tiene su filtro propio y su propia
-   * senal: mandarle `solo_con_saldo` a la existencia es un 400 del `strict`
-   * del esquema, no un filtro que se ignore.
+   * senal: mandarle `solo_con_saldo` a la existencia es un rechazo de las
+   * reglas de validacion, no un filtro que se ignore.
    */
   private async cargarPagina(pagina: number): Promise<void> {
     this.cargando.set(true);

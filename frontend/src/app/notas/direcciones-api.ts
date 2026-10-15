@@ -4,18 +4,17 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../nucleo/api';
 
 /**
- * El catalogo de direcciones de entrega de la sucursal.
+ * El catálogo de direcciones de entrega de la sucursal.
  *
- * Es UN archivo propio, y no tres metodos mas de `notas-api.ts`, por una
- * razon que se ve al escribirlo: son recursos distintos. La nota es un
- * documento que se emite y no se toca; la direccion es una lista de destinos
- * que se agrega, se corrige y se borra, y sus tipos, sus permisos
- * (`direcciones.*`) y su tabla no tienen nada que ver con los de
- * `notas.*`. Mezclarlos seria dejar un archivo donde la mitad de los metodos no
- * aplica a la otra mitad, que es el sintoma de un archivo que no sabe que es.
+ * Es un archivo aparte, y no tres funciones más de `notas-api.ts`, porque son
+ * cosas distintas: la nota es un papel que se emite y ya no se toca; la
+ * dirección es una lista de destinos que se agrega, se corrige y se borra, y
+ * sus permisos (`direcciones.*`) y la forma de guardarla no tienen nada que
+ * ver con los de `notas.*`. Mezclarlos dejaría un archivo donde la mitad del
+ * código no aplica a la otra mitad.
  *
- * Como en el resto de la app, los tipos son un espejo de los del backend
- * (`modules/direcciones/modelo.ts`) y no se comparten.
+ * Como en el resto del sistema, los datos de aquí son los mismos que maneja el
+ * servicio (`modules/direcciones/modelo.ts`).
  */
 export interface DireccionEntrega {
   id: number;
@@ -23,13 +22,13 @@ export interface DireccionEntrega {
   direccion: string;
 }
 
-/** Que se manda al crear o al corregir. Los dos cuerpos son el mismo. */
+/** Lo que se manda al crear o al corregir. En los dos casos es lo mismo. */
 export interface CuerpoDireccion {
   nombre: string;
   direccion: string;
 }
 
-/** La envoltura del listado, igual que en el resto de la API. */
+/** El molde con el que llega la lista, igual que en el resto del sistema. */
 interface ListadoDirecciones {
   datos: DireccionEntrega[];
   total: number;
@@ -42,9 +41,9 @@ export class DireccionesApi {
   /**
    * Todas las direcciones, ordenadas por nombre.
    *
-   * Sin paginacion a proposito: son unas decenas de filas y la pantalla las
-   * necesita TODAS para el desplegable de "a donde va esta nota". Paginarlas
-   * significaria un buscador dentro de un buscador.
+   * No se parten en páginas a propósito: son unas decenas de filas y la
+   * pantalla las necesita TODAS para el desplegable de "a dónde va esta nota".
+   * Partirlas sería meter un buscador dentro de otro buscador.
    */
   async listar(): Promise<DireccionEntrega[]> {
     const respuesta = await firstValueFrom(
@@ -60,9 +59,9 @@ export class DireccionesApi {
   /**
    * Corrige el nombre y/o el texto.
    *
-   * `PUT` y no `PATCH`: el backend manda los dos campos siempre (ver
-   * `modulos/direcciones/rutas.ts`), asi que corregir el nombre sin tocar la
-   * direccion sigue mandando la direccion que ya estaba.
+   * Se mandan siempre los dos campos (ver `modulos/direcciones/rutas.ts`),
+   * así que corregir el nombre sin tocar la dirección conserva la dirección
+   * que ya estaba.
    */
   async editar(id: number, cuerpo: CuerpoDireccion): Promise<DireccionEntrega> {
     return firstValueFrom(
@@ -71,11 +70,11 @@ export class DireccionesApi {
   }
 
   /**
-   * Borra la direccion del catalogo.
+   * Borra la dirección del catálogo.
    *
-   * No toca ninguna nota: la nota copio el texto y no apunta aqui (ver la
-   * migracion 0011). Por eso el boton puede ofrecer el borrado sin la
-   * pregunta de "esta en uso" que hacen las especies.
+   * No toca ninguna nota: la nota copió el texto y no depende de aquí (ver la
+   * actualización del sistema 0011). Por eso el botón puede ofrecer el borrado
+   * sin preguntar antes "¿está en uso?".
    */
   async borrar(id: number): Promise<void> {
     await firstValueFrom(this.http.delete<void>(`${API}/direcciones-entrega/${id}`));

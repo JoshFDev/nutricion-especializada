@@ -4,7 +4,7 @@ import { parametrosDe } from './reportes-api';
 /**
  * Los parametros de los tres reportes.
  *
- * Se prueba la funcion pura y no la llamada: el esquema del backend es
+ * Se prueba la funcion pura y no la llamada: las reglas del sistema son
  * `strict`, y un parametro de mas da un 400. Por eso lo que importa es QUE se
  * manda y que NO.
  */

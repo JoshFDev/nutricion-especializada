@@ -11,10 +11,10 @@ import {
 import type { PrecioEfectivo, Producto, RenglonNota } from './notas-api';
 
 /**
- * El cuerpo de la nota: lo que se manda al backend.
+ * El cuerpo de la nota: lo que se manda al sistema.
  *
- * Es la prueba mas importante del POS, y no por el `POST` sino por lo que
- * este cuerpo NO lleva. El esquema del alta es `strict` y dos de los tres
+ * Es la prueba mas importante del mostrador, y no por el `POST` sino por lo que
+ * este cuerpo NO lleva. Las reglas del alta son `strict` y dos de los tres
  * errores que se pueden mandar aqui son 400 con un mensaje en ingles que no
  * le dice nada a la persona que esta capturando la venta.
  */
@@ -53,10 +53,10 @@ describe('el cuerpo de la nota', () => {
     expect(cuerpo.renglones).toHaveLength(1);
   });
 
-  it('NO lleva la serie: la resuelve el backend con la serie activa', () => {
+  it('NO lleva la serie: la resuelve el sistema con la serie activa', () => {
     // La serie la decide quien administra el talonario y se guarda en la
-    // base (`serie_folio_activa`). Si el POS la mandara, un cajero podria
-    // quemar folios de cualquier serie, y el esquema del alta es `strict`.
+    // base (`serie_folio_activa`). Si el mostrador la mandara, un cajero podria
+    // quemar folios de cualquier serie, y las reglas del alta son `strict`.
     const cuerpo = cuerpoDeNota(3, [lineaLista()], 2);
     expect(cuerpo).not.toHaveProperty('serie');
     expect(JSON.stringify(cuerpo)).not.toContain('serie');
@@ -64,16 +64,16 @@ describe('el cuerpo de la nota', () => {
 
   it('NO lleva subtotal: es una columna GENERATED y el esquema es strict', () => {
     // Mandarla da un 400 con un texto en ingles sobre "cannot insert into
-    // column", que es el error mas confuso de toda la API.
+    // column", que es el error mas confuso de todo el sistema.
     const cuerpo = cuerpoDeNota(3, [lineaLista()], 2);
     expect(cuerpo.renglones[0]).not.toHaveProperty('subtotal');
     expect(JSON.stringify(cuerpo)).not.toContain('subtotal');
   });
 
   it('NO lleva el precio, aunque la pantalla ya lo sepa', () => {
-    // El backend resuelve el precio en la fecha de la nota si no le
+    // El sistema resuelve el precio en la fecha de la nota si no le
     // llega, y esa es la regla. Mandarlo desde aqui abriria la puerta a
-    // que un JSON con precio 0.01 cobre un peso.
+    // que unos datos con precio 0.01 cobren un peso.
     const linea = lineaLista();
     expect(linea.precio_unit_kg).toBe(8.5);
     const cuerpo = cuerpoDeNota(3, [linea], 2);
@@ -91,8 +91,8 @@ describe('el cuerpo de la nota', () => {
   });
 
   it('los bultos van como texto y sin decimales', () => {
-    // El backend acepta numero o texto y lo normaliza a texto antes de
-    // validar. Mandar texto quita de en medio el double. Y son enteros: un
+    // El sistema acepta numero o texto y lo normaliza a texto antes de
+    // validar. Mandar texto quita de en medio el numero decimal. Y son enteros: un
     // bulto es una unidad, no un peso, y `cambiarCantidad` trunca.
     const cuerpo = cuerpoDeNota(3, [lineaLista(8)], 2);
     expect(cuerpo.renglones[0].cantidad_bultos).toBe('8');
@@ -134,7 +134,7 @@ describe('el cuerpo de la nota', () => {
     expect(cuerpoDeNota(3, [lineaLista()], 2, '  Calle 5  ').direccion_entrega).toBe('Calle 5');
   });
 
-  it('una nota sin renglones no sale: el backend pide al menos uno', () => {
+  it('una nota sin renglones no sale: el sistema pide al menos uno', () => {
     // Se comprueba aqui y no con un boton apagado, porque el boton se
     // desarma solo con signals y esto no.
     expect(() => cuerpoDeNota(3, [], 2)).toThrow(/al menos un renglon/);
@@ -161,7 +161,7 @@ describe('el cuerpo de la nota', () => {
  * El cuerpo de la EDICION: la devolucion.
  *
  * Es la prueba de que una correccion no reescribe la nota entera: los
- * renglones que ya estaban llevan su id para que el backend los actualice y
+ * renglones que ya estaban llevan su id para que el sistema los actualice y
  * no los borre y recree (y con ellos sus movimientos de inventario).
  */
 describe('el cuerpo de la edicion', () => {
@@ -182,7 +182,7 @@ describe('el cuerpo de la edicion', () => {
   /** La nota se carga con `lineaDeRenglon`, como hace la pantalla. */
   const deNota = (): Linea => lineaDeRenglon(renglon);
 
-  it('lleva el cliente y los renglones con su id, para que el backend actualice', () => {
+  it('lleva el cliente y los renglones con su id, para que el sistema actualice', () => {
     const cuerpo = cuerpoDeEdicion(3, [deNota()], 2, '');
     expect(cuerpo.cliente_id).toBe(3);
     expect(cuerpo.renglones).toHaveLength(1);
@@ -207,12 +207,12 @@ describe('el cuerpo de la edicion', () => {
 
   it('los kilos se mandan SIEMPRE en la edicion', () => {
     // Sin el id no se distinguen de un renglon nuevo, y un renglon sin kilos
-    // vuelve a la presentacion del producto (trigger `fn_default_kg_bulto`).
+    // vuelve a la presentacion del producto (regla automática `fn_default_kg_bulto`).
     const cuerpo = cuerpoDeEdicion(3, [deNota()], 2, '');
     expect(cuerpo.renglones[0].kg_bulto).toBe('25.5');
   });
 
-  it('el precio no se manda: el backend conserva el del renglon', () => {
+  it('el precio no se manda: el sistema conserva el del renglon', () => {
     const cuerpo = cuerpoDeEdicion(3, [deNota()], 2, '');
     expect(cuerpo.renglones[0]).not.toHaveProperty('precio_unit_kg');
   });
@@ -220,7 +220,7 @@ describe('el cuerpo de la edicion', () => {
   it('un renglon nuevo (sin id, agregado por el buscador) se puede anadir a la nota', () => {
     // No todo es devolver: a la nota tambien se le puede anadir producto. El
     // renglon que entra por el buscador no tiene `renglon_id`, y ese es el
-    // que se manda sin id para que el backend lo cree.
+    // que se manda sin id para que el sistema lo cree.
     const nuevo = conPrecio(lineaVacia({ ...LAC, id: 9, codigo: 'DHP', nombre: 'DHP-22' }), {
       ...PRECIO,
       producto_id: 9,

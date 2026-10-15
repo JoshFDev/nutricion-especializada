@@ -2,12 +2,12 @@
   Catalogo: listado + editor inline colapsable.
 
   Es la MISMA pantalla para categorias y especies: lo unico que cambia son
-  el `recurso`, el `titulo` y el `singular`, que llegan por @Input desde los
-  wrappers de cada ruta.
+  el `recurso`, el `titulo` y el `singular`, que llegan por @Input desde las
+  envolturas de cada ruta.
 
   El editor vive ANTES de la tabla (inline) y es colapsable, igual que en
   productos: el listado se queda debajo, para no perder de vista sobre que
-  se esta Laplacando el nombre. El boton que lo despliega va en la cabecera,
+  se esta editando el nombre. El boton que lo despliega va en la cabecera,
   junto al titulo.
 
   El diseño sale de `nucleo/pantallas.scss`: el MISMO que usan productos y
@@ -209,7 +209,7 @@
               <!--
                 La columna de uso no es un adorno: es lo que dice si el
                 botón de eliminar va a funcionar. Lo que tiene algo detrás no
-                se puede borrar (el backend responde 409 EN_USO), y verlo aqui
+                se puede borrar (el sistema responde 409 EN_USO), y verlo aqui
                 evita el intento y la sorpresa.
               -->
               <td class="centro">

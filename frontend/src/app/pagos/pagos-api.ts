@@ -5,17 +5,16 @@ import { API } from '../nucleo/api';
 import { decimalComoTexto, redondearMonto } from '../nucleo/cifras';
 
 /**
- * La API de cobranza.
+ * El servicio de cobranza.
  *
- * Tipos espejo de `backend/src/modules/pagos`. El pago es un documento que
- * NO se borra ni se edita (rutas.ts no tiene PATCH ni DELETE): se crea con
- * su alta, se le ve el detalle, y si algo salio mal se cancela la nota que
- * cobraba, no el pago. La pantalla refleja eso: no hay botones de editar ni
- * borrar.
+ * Los tipos son un espejo de `pagos/modelo.ts`. El pago es un documento que NO
+ * se borra ni se edita: se crea con su alta, se le ve el detalle, y si algo
+ * salió mal se cancela la nota que cobraba, no el pago. La pantalla refleja
+ * eso: no hay botones de editar ni borrar.
  *
- * El `metodo` es `null` a proposito (el esquema lo recibe nullish): un pago
- * de mostrador en efectivo casi siempre llega sin metodo, y la base lo
- * acepta.
+ * El `metodo` es `null` a propósito (las reglas de validación lo reciben
+ * nullish): un pago de mostrador en efectivo casi siempre llega sin método, y
+ * el sistema lo acepta.
  */
 
 // --------------------------------------------------------------------- tipos
@@ -87,11 +86,11 @@ export interface Listado<T> {
 /**
  * Una nota abierta con lo que se le va a aplicar, dentro del editor.
  *
- * `monto` va como TEXTO porque es lo que teclea la persona en un input:
- * recien al guardar se convierte en el `monto` de la aplicacion. Vacio, o
- * en cero, significa que esta nota NO entra en el pago: el backend acepta
- * un pago sin aplicaciones (un abono a cuenta), y no mandar la nota es la
- * unica forma que tiene la pantalla de "no la quiero cubrir".
+ * `monto` va como TEXTO porque es lo que teclea la persona en un campo: recién
+ * al guardar se convierte en el `monto` de la aplicación. Vacío, o en cero,
+ * significa que esta nota NO entra en el pago: el sistema acepta un pago sin
+ * aplicaciones (un abono a cuenta), y no mandar la nota es la única forma que
+ * tiene la pantalla de "no la quiero cubrir".
  */
 export interface AplicacionEditor {
   nota_id: number;
@@ -104,7 +103,7 @@ export interface AplicacionEditor {
 
 // ------------------------------------------------------------------ el cuerpo
 
-/** El cuerpo de `POST /api/pagos`, tal como lo quiere `crearPagoEsquema`. */
+/** Los datos al registrar un pago, tal como los pide `crearPagoEsquema`. */
 export interface CuerpoPago {
   cliente_id: number;
   fecha: string;
@@ -116,21 +115,21 @@ export interface CuerpoPago {
 }
 
 /**
- * Arma el cuerpo del pago.
+ * Arma los datos del pago.
  *
  * Lo que se decide aquí y no en la pantalla:
  *
- *   - `fecha` SIEMPRE se manda: el esquema la acepta opcional para no
- *     obligar al que llama, pero el editor tiene un input de fecha con la
- *     de hoy ya puesta, y una fecha tipeada no debe caer en el huso del
+ *   - `fecha` SIEMPRE se manda: las reglas de validación la aceptan opcional
+ *     para no obligar al que llama, pero el editor tiene un campo de fecha con
+ *     la de hoy ya puesta, y una fecha tecleada no debe caer en el huso del
  *     navegador. Mandarla explícita es lo honesto.
- *   - `metodo` en blanco va como `null`, no omitido: el esquema es
- *     `strict`, y las dos formas valen, pero `null` dice "no hay" igual que
- *     la base.
- *   - `aplicaciones` lleva SOLO las notas con monto. Una nota tocada en
- *     cero (o vacia) no se cubre, y por eso no aparece: el backend valida
- *     `total <= monto` contra lo que se manda, y mandar ceros seria
- *     renglones que no aplican nada pero hacen sumar distinto.
+ *   - `metodo` en blanco va como `null`, no omitido: las reglas de validación
+ *     no admiten campos de más, y las dos formas valen, pero `null` dice "no
+ *     hay" igual que el sistema.
+ *   - `aplicaciones` lleva SOLO las notas con monto. Una nota tocada en cero
+ *     (o vacía) no se cubre, y por eso no aparece: el sistema valida
+ *     `total <= monto` contra lo que se manda, y mandar ceros sería renglones
+ *     que no aplican nada pero hacen sumar distinto.
  */
 export function cuerpoDePago(
   clienteId: number,
@@ -159,47 +158,46 @@ export function cuerpoDePago(
 }
 
 /**
- * Cuanto llevan aplicado las notas del editor.
+ * Cuánto llevan aplicado las notas del editor.
  *
- * Es un preview para el saldo en pantalla ("ya llevas 500, el pago es de
- * 800"), no el monto del documento: el que vale es el que calcula el
- * servicio con `centavos()` (ver `pagos/servicio.ts`). Por eso se suma con
- * doubles y se redondea al final, igual que el `totalDeLineas` del POS.
+ * Es una vista previa para el saldo en pantalla ("ya llevas 500, el pago es de
+ * 800"), no el monto del documento: el que vale es el que calcula el sistema
+ * con `centavos()` (ver `pagos/servicio.ts`). Por eso se suma con decimales y
+ * se redondea al final, igual que el `totalDeLineas` del punto de venta.
  */
 export function montoDeAplicaciones(aplicaciones: AplicacionEditor[]): number {
   const total = aplicaciones.reduce((suma, a) => suma + montoNumerico(a.monto), 0);
   return redondearMonto(total);
 }
 
-/** El `monto` de una aplicacion como numero, o cero si no es un numero usable. */
+/** El `monto` de una aplicación como número, o cero si no es un número usable. */
 function montoNumerico(texto: string): number {
   const numero = Number(texto.trim().replace(',', '.'));
   return Number.isFinite(numero) ? numero : 0;
 }
 
 /**
- * Por que una aplicacion no se puede guardar, o null si esta lista.
+ * Por qué una aplicación no se puede guardar, o null si está lista.
  *
- * Vacio quiere decir "esta nota no se cubre": la linea se queda en el
- * editor pero no entra al cuerpo. Ya con texto, el monto tiene que ser un
- * numero mayor que cero y no pasar del subtotal de la nota — el backend
- * sigue comprobando contra el saldo real (una parcial ya tiene cobrado y
- * aqui no se sabe cuanto), y su `MONTO_MAYOR_A_NOTA` manda el `disponible`.
- * Este control es para que el que no se equivoco no se entere por el
- * servidor.
+ * Vacío quiere decir "esta nota no se cubre": la línea se queda en el editor
+ * pero no entra a los datos que se mandan. Ya con texto, el monto tiene que
+ * ser un número mayor que cero y no pasar del subtotal de la nota — el sistema
+ * sigue comprobando contra el saldo real (una parcial ya tiene cobrado y aquí
+ * no se sabe cuánto), y su `MONTO_MAYOR_A_NOTA` manda el `disponible`. Este
+ * control es para que quien no se equivocó no se entere por el sistema.
  */
 export function problemaDeAplicacion(a: AplicacionEditor): string | null {
   const limpio = a.monto.trim();
   if (limpio === '') return null;
   const numero = montoNumerico(limpio);
-  if (numero <= 0) return 'El monto tiene que ser un numero mayor que cero.';
+  if (numero <= 0) return 'El monto tiene que ser un número mayor que cero.';
   if (numero > a.subtotal) {
-    return `No puede aplicar mas de ${a.subtotal.toFixed(2)} a la nota ${a.folio}.`;
+    return `No puede aplicar más de ${a.subtotal.toFixed(2)} a la nota ${a.folio}.`;
   }
   return null;
 }
 
-/** La fecha de hoy en el formato que espera el esquema (AAAA-MM-DD). */
+/** La fecha de hoy en el formato que esperan las reglas de validación (AAAA-MM-DD). */
 export function hoyComoTexto(fecha = new Date()): string {
   const anio = fecha.getFullYear();
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -213,7 +211,7 @@ export function hoyComoTexto(fecha = new Date()): string {
 export class PagosApi {
   private readonly http = inject(HttpClient);
 
-  /** Busca clientes para el selector, igual que el POS pero con su propio api. */
+  /** Busca clientes para el selector, igual que el punto de venta pero con su propio servicio. */
   async clientes(buscar: string): Promise<{ id: number; nombre: string; rfc: string | null }[]> {
     if (buscar.trim().length < 2) return [];
     const respuesta = await firstValueFrom(
@@ -228,15 +226,15 @@ export class PagosApi {
   /**
    * Las notas ABIERTAS del cliente: cobrables de verdad.
    *
-   * El backend filtra por UN estatus a la vez (`listarNotasEsquema`), asi
-   * que aqui se piden las dos cosas que interesan a una caja (pendiente y
-   * parcial) y se juntan. Una nota cancelada o pagada no aparece, y eso es
-   * lo correcto: a la cancelada no se le puede aplicar (lo valida el
-   * servicio) y a la pagada no le falta nada.
+   * El sistema filtra por UN estatus a la vez (`listarNotasEsquema`), así que
+   * aquí se piden las dos cosas que interesan a una caja (pendiente y parcial)
+   * y se juntan. Una nota cancelada o pagada no aparece, y eso es lo correcto:
+   * a la cancelada no se le puede aplicar (lo valida el sistema) y a la pagada
+   * no le falta nada.
    *
-   * No se pagina porque el rango es acotado: un cliente con mas de 200
-   * notas abiertas seria un problema de cobranza que este filtro no va a
-   * resolver, y el maximo del esquema ya lo trae el query.
+   * No se pagina porque el rango es acotado: un cliente con más de 200 notas
+   * abiertas sería un problema de cobranza que este filtro no va a resolver, y
+   * el máximo de las reglas de validación ya lo trae la consulta.
    */
   async notasAbiertas(clienteId: number): Promise<AplicacionEditor[]> {
     const [pendientes, parciales] = await Promise.all(
@@ -285,7 +283,7 @@ export class PagosApi {
     return firstValueFrom(this.http.get<Pago>(`${API}/pagos/${id}`));
   }
 
-  /** Crea el pago y devuelve el detalle como lo armo el servidor. */
+  /** Crea el pago y devuelve el detalle como lo armó el sistema. */
   async crear(cuerpo: CuerpoPago): Promise<Pago> {
     return firstValueFrom(this.http.post<Pago>(`${API}/pagos`, cuerpo));
   }

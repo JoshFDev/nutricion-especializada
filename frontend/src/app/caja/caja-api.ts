@@ -5,22 +5,24 @@ import { API } from '../nucleo/api';
 import { decimalComoTexto, redondearMonto } from '../nucleo/cifras';
 
 /**
- * La API de caja y bancos.
+ * El servicio de caja y bancos.
  *
- * Es el modulo con la UNICA pantalla que borra, y el borrado es de a
- * proposito: un movimiento de caja no tiene nombre ni aparece en documentos
- * viejos, solo vive en `auditoria_caja`. En los demas modulos el registro tiene
- * nombre y se conserva; aqui se borra y el trigger `fn_recalcular_saldo_cuenta`
- * rehace el saldo de la cuenta. Ver la nota de `caja/rutas.ts`.
+ * Es el módulo con la ÚNICA pantalla que borra, y el borrado es a propósito:
+ * un movimiento de caja no tiene nombre ni aparece en documentos viejos, solo
+ * vive en `auditoria_caja`. En los demás módulos el registro tiene nombre y se
+ * conserva; aquí se borra y la regla automática del sistema
+ * `fn_recalcular_saldo_cuenta` rehace el saldo de la cuenta. Ver la nota de
+ * `caja/rutas.ts`.
  *
- * Tres cosas del contrato que la pantalla tiene que respetar:
+ * Tres cosas del comportamiento que la pantalla tiene que respetar:
  *
- *   1. **`saldo_actual` no se manda nunca.** Ni en el alta de cuenta ni en el
- *      movimiento: lo recalcula la base sumando los movimientos. Aceptarlo
- *      dejaria cuadrar a mano lo que el servidor rehace al siguiente movimiento.
- *   2. **El resumen es aparte del listado.** `GET /resumen` existe porque el
- *      listado viene paginado: un total de la pagina no es el total del
- *      periodo, y "hoy entra X" tiene que ser un numero correcto.
+ *   1. **`saldo_actual` no se manda nunca.** Ni al dar de alta una cuenta ni
+ *      al registrar el movimiento: lo recalcula el sistema sumando los
+ *      movimientos. Aceptarlo dejaría cuadrar a mano lo que el sistema rehace
+ *      al siguiente movimiento.
+ *   2. **El resumen es aparte del listado.** La consulta de `/resumen` existe
+ *      porque el listado viene paginado: un total de la página no es el total
+ *      del periodo, y "hoy entra X" tiene que ser un número correcto.
  *   3. **`/cuentas` y `/categorias` no son listados paginados.** Devuelven
  *      arreglos sueltos (`Cuenta[]`), no la envoltura con `total`: son pocas
  *      y se usan todas.
@@ -39,7 +41,7 @@ export interface Cuenta {
   tipo: TipoCuenta;
   banco: string | null;
   titular: string | null;
-  /** Lo recalcula `fn_recalcular_saldo_cuenta`; la pantalla solo lo muestra. */
+  /** Lo recalcula la regla automática `fn_recalcular_saldo_cuenta`; la pantalla solo lo muestra. */
   saldo_actual: number;
 }
 
@@ -68,9 +70,9 @@ export interface Movimiento extends MovimientoListado {
 /**
  * `caja/modelo.ts` -> `ResumenCuenta`.
  *
- * `saldo_periodo` NO es el saldo de la cuenta: es lo que entro menos lo que
- * salio DENTRO del rango. Son dos preguntas distintas, y la base las trae
- * separadas a proposito.
+ * `saldo_periodo` NO es el saldo de la cuenta: es lo que entró menos lo que
+ * salió DENTRO del rango. Son dos preguntas distintas, y el sistema las trae
+ * separadas a propósito.
  */
 export interface ResumenCuenta {
   cuenta_id: number;
@@ -84,11 +86,11 @@ export interface ResumenCuenta {
 }
 
 /**
- * `caja/modelo.ts` -> `CierreCuenta`, el arqueo de una cuenta en un dia.
+ * `caja/modelo.ts` -> `CierreCuenta`, el arqueo de una cuenta en un día.
  *
- * `fondo` es lo que traia la cuenta antes del dia y `esperado` el fondo mas lo
- * del dia: lo que deberia haber al cerrar. `saldo_actual` es el saldo del
- * sistema AHORA y solo coincide con el esperado si el dia es hoy y no hay
+ * `fondo` es lo que traía la cuenta antes del día y `esperado` el fondo más lo
+ * del día: lo que debería haber al cerrar. `saldo_actual` es el saldo del
+ * sistema AHORA y solo coincide con el esperado si el día es hoy y no hay
  * movimientos con fecha futura.
  */
 export interface CierreCuenta {
@@ -129,7 +131,7 @@ export interface CorteCuenta {
 /**
  * `caja/modelo.ts` -> `CorteDeCaja`.
  *
- * `desde` y `hasta` son el rango ya resuelto por el servidor (con sus valores
+ * `desde` y `hasta` son el rango ya resuelto por el sistema (con sus valores
  * por defecto) y `generado_en` la marca de cuando se pidió.
  */
 export interface CorteDeCaja {
@@ -146,13 +148,13 @@ export interface Listado<T> {
   offset: number;
 }
 
-/** `caja/modelo.ts` -> `Cuenta[]` de las categorias en uso. */
+/** `caja/modelo.ts` -> `Cuenta[]` de las categorías en uso. */
 export interface CategoriaEnUso {
   categoria: string;
   movimientos: number;
 }
 
-/** El cuerpo de `POST /api/caja/movimientos`. */
+/** Los datos que se mandan al crear un movimiento de caja. */
 export interface CuerpoMovimiento {
   cuenta_id: number;
   fecha?: string;
@@ -165,7 +167,7 @@ export interface CuerpoMovimiento {
   tiene_factura: boolean;
 }
 
-/** El cuerpo de `POST /api/caja/cuentas`. */
+/** Los datos que se mandan al crear una cuenta. */
 export interface CuerpoCuenta {
   nombre: string;
   tipo: TipoCuenta;
@@ -190,18 +192,18 @@ export interface OpcionNombrada {
 // ------------------------------------------------------------------ el cuerpo
 
 /**
- * Arma el cuerpo del movimiento.
+ * Arma los datos del movimiento.
  *
- *   - `cliente_id` y `proveedor_id` viajan los dos o ninguno: el esquema
- *     rechaza un movimiento que sea de los dos, y la pantalla los deja
- *     excluyentes (elegir uno borra el otro) para no tener que explicar eso.
- *     Los dos en `null` es el caso legitimo: la renta del local no es de
+ *   - `cliente_id` y `proveedor_id` viajan los dos o ninguno: las reglas de
+ *     validación rechazan un movimiento que sea de los dos, y la pantalla los
+ *     deja excluyentes (elegir uno borra el otro) para no tener que explicar
+ *     eso. Los dos en `null` es el caso legítimo: la renta del local no es de
  *     nadie.
- *   - `monto` va como texto normalizado, porque el esquema lo valida con
- *     `decimal(10, 2)` y "1,000" o " 500 " serian un 400.
- *   - La fecha vacia se omite y la pone el backend (la de hoy, segun la base
- *     y no segun el huso del navegador).
- *   - `saldo_actual` no aparece: lo recalcula el trigger.
+ *   - `monto` va como texto normalizado, porque las reglas de validación lo
+ *     revisan con `decimal(10, 2)` y "1,000" o " 500 " serían un 400.
+ *   - La fecha vacía se omite y la pone el sistema (la de hoy, según el
+ *     sistema y no según el huso del navegador).
+ *   - `saldo_actual` no aparece: lo recalcula la regla automática del sistema.
  */
 export function cuerpoDeMovimiento(
   editor: EditorMovimiento,
@@ -223,8 +225,8 @@ export function cuerpoDeMovimiento(
     fecha: fecha === '' ? undefined : fecha,
     tipo: editor.tipo,
     categoria: unaLinea(editor.categoria),
-    // Ya normalizado: `decimalComoTexto` tambien cambiaria la coma decimal por
-    // punto, pero si se le pasa "1,500.50" se comeria la coma equivocada.
+    // Ya normalizado: `decimalComoTexto` también cambiaría la coma decimal por
+    // punto, pero si se le pasa "1,500.50" se comería la coma equivocada.
     monto: decimalComoTexto(montoNormalizado(editor.monto), 2),
     cliente_id: cliente?.id ?? null,
     proveedor_id: proveedor?.id ?? null,
@@ -233,7 +235,7 @@ export function cuerpoDeMovimiento(
   };
 }
 
-/** El cuerpo del alta de cuenta. El `banco` es obligatorio si el tipo es banco. */
+/** Los datos al dar de alta una cuenta. El `banco` es obligatorio si el tipo es banco. */
 export function cuerpoDeCuenta(
   nombre: string,
   tipo: TipoCuenta,
@@ -254,19 +256,21 @@ export function cuerpoDeCuenta(
 }
 
 /**
- * El monto tal como lo entiende el esquema: punto decimal y sin comas de miles.
+ * El monto tal como lo entienden las reglas de validación: punto decimal y sin
+ * comas de miles.
  *
- * Hay dos formas de escribirlo y las dos se aceptan, porque las dos se teclean:
+ * Hay dos formas de escribirlo y las dos se aceptan, porque las dos se
+ * teclean:
  *
  *   - `1,500.50`, con coma de miles. Es como lo MUESTRA la pantalla, que usa
  *     `numeroComoTexto` con la coma de miles.
- *   - `1500,50`, con coma decimal. Es como se teclea un numero con decimales en
- *     Mexico.
+ *   - `1500,50`, con coma decimal. Es como se teclea un número con decimales
+ *     en México.
  *
- * Se distinguen por lo que sigue a la coma: si son tres digitos es un millar y
+ * Se distinguen por lo que sigue a la coma: si son tres dígitos es un millar y
  * la coma se quita; si no, es el separador decimal y se cambia por punto. Un
  * `replace(',', '.')` a secas no sirve: convierte "1,500.50" en "1.500.50", que
- * ya no es un numero, y el error que sale ("no es un numero") no dice nada del
+ * ya no es un número, y el error que sale ("no es un número") no dice nada del
  * formato.
  */
 export function montoNormalizado(texto: string): string {
@@ -278,10 +282,10 @@ export function montoNormalizado(texto: string): string {
 /**
  * El monto, como lo quiere `decimal(10, 2)`.
  *
- * Se controla aqui para que el que no se equivoco no se entere por el
- * servidor. El `0` se rechaza porque el esquema lo rechaza y porque la tabla
- * tiene `CHECK (monto > 0)`: un movimiento de cero no existe, y un trigger lo
- * recalcularia como si nada.
+ * Se controla aquí para que quien no se equivocó no se entere por el sistema.
+ * El `0` se rechaza porque las reglas de validación lo rechazan y porque la
+ * tabla tiene `CHECK (monto > 0)`: un movimiento de cero no existe, y la regla
+ * automática del sistema lo recalcularía como si nada.
  */
 export function problemaDeMonto(monto: string): string | null {
   const limpio = montoNormalizado(monto);
@@ -294,11 +298,11 @@ export function problemaDeMonto(monto: string): string | null {
 }
 
 /**
- * La categoria: `texto('La categoria', 80, 2)`.
+ * La categoría: `texto('La categoria', 80, 2)`.
  *
- * Se acotan los dos lados porque el servidor acota los dos, y el maximo es el
+ * Se acotan los dos lados porque el sistema acota los dos, y el máximo es el
  * que se olvida: "Renta del local de la calle Norte 1234, worries" pasa los
- * dos caracteres del minimo y vuelve con un 422 de "es de 80 caracteres".
+ * dos caracteres del mínimo y vuelve con un 422 de "es de 80 caracteres".
  */
 export function problemaDeCategoria(categoria: string): string | null {
   const limpia = categoria.trim();
@@ -308,12 +312,12 @@ export function problemaDeCategoria(categoria: string): string | null {
 }
 
 /**
- * El nombre de la cuenta: `texto('El nombre', 120)`, SIN minimo.
+ * El nombre de la cuenta: `texto('El nombre', 120)`, SIN mínimo.
  *
- * El servidor si acepta un nombre vacio (la tabla solo pide `NOT NULL` y
- * `UNIQUE`), asi que este limite de dos es de la pantalla y no un espejo del
- * esquema: una cuenta sin nombre es indistinguible de otra en la lista, que
- * es justo donde se mira cuando hay que encontrar un pago.
+ * El sistema sí acepta un nombre vacío (la tabla solo pide `NOT NULL` y
+ * `UNIQUE`), así que este límite de dos es de la pantalla y no un espejo de
+ * las reglas de validación: una cuenta sin nombre es indistinguible de otra en
+ * la lista, que es justo donde se mira cuando hay que encontrar un pago.
  */
 export function problemaDeNombreCuenta(nombre: string): string | null {
   const limpio = nombre.trim();
@@ -323,20 +327,20 @@ export function problemaDeNombreCuenta(nombre: string): string | null {
 }
 
 /**
- * La descripcion: `texto('La descripcion', 300)`, sin minimo.
+ * La descripción: `texto('La descripcion', 300)`, sin mínimo.
  *
- * Sin newline. `texto` rechaza cualquier caracter de control (`tieneControl`),
- * asi que la descripcion es un `input` de una linea y NO un `textarea`: un
- * "pulse enter por error" seria un 422 con un mensaje que no dice nada de los
- * saltos de linea. El `replace` de abajo es la red por si el campo recibe uno
- * pegado de otro lado.
+ * Sin saltos de línea. `texto` rechaza cualquier carácter de control
+ * (`tieneControl`), así que la descripción es un `input` de una línea y NO un
+ * `textarea`: un "pulse enter por error" sería un 422 con un mensaje que no
+ * dice nada de los saltos de línea. El `replace` de abajo es la red por si el
+ * campo recibe uno pegado de otro lado.
  */
 export function problemaDeDescripcion(descripcion: string): string | null {
   const limpia = unaLinea(descripcion);
   return limpia.length > 300 ? 'La descripción es de 300 caracteres.' : null;
 }
 
-/** Quita los saltos de linea, para lo que el esquema no acepta. */
+/** Quita los saltos de línea, para lo que las reglas de validación no aceptan. */
 export function unaLinea(texto: string): string {
   return texto.replace(/[\r\n\t]+/g, ' ').trim();
 }
@@ -347,11 +351,11 @@ export function saldoNegativo(saldo: number): boolean {
 }
 
 /**
- * Los totales del periodo, para la linea de arriba.
+ * Los totales del periodo, para la línea de arriba.
  *
- * Se suman los `saldo_periodo` de cada cuenta y no `saldo_actual`: el
- * resumen es de lo que paso en el rango, y mezclar las dos sumas es como se
- * cuadra mal un dia.
+ * Se suman los `saldo_periodo` de cada cuenta y no `saldo_actual`: el resumen
+ * es de lo que pasó en el rango, y mezclar las dos sumas es como se cuadra mal
+ * un día.
  */
 export function totalesDeResumen(resumen: ResumenCuenta[]): {
   ingresos: number;
@@ -369,12 +373,12 @@ export function totalesDeResumen(resumen: ResumenCuenta[]): {
 }
 
 /**
- * Los totales del cierre, para la linea de arriba.
+ * Los totales del cierre, para la línea de arriba.
  *
  * Se suma el `esperado` de cada cuenta y no el `saldo_actual`: el cierre es de
- * lo que deberia haber al terminar el dia, y el saldo actual arrastra los
+ * lo que debería haber al terminar el día, y el saldo actual arrastra los
  * movimientos con fecha futura. Se suman los cuatro y no se recalcula el
- * esperado a partir de los otros tres, porque el del servidor es el que vale.
+ * esperado a partir de los otros tres, porque el del sistema es el que vale.
  */
 export function totalesDeCierre(cuentas: CierreCuenta[]): {
   fondo: number;
@@ -419,7 +423,7 @@ export function totalesDeCorte(cuentas: CorteCuenta[]): {
 export class CajaApi {
   private readonly http = inject(HttpClient);
 
-  /** Las cuentas. Sin paginacion y sin envoltura: son pocas. */
+  /** Las cuentas. Sin paginación y sin envoltura: son pocas. */
   async cuentas(tipo?: TipoCuenta): Promise<Cuenta[]> {
     return firstValueFrom(
       this.http.get<Cuenta[]>(`${API}/caja/cuentas`, {
@@ -433,7 +437,7 @@ export class CajaApi {
     return firstValueFrom(this.http.post<Cuenta>(`${API}/caja/cuentas`, cuerpo));
   }
 
-  /** Las categorias en uso, para el desplegable del editor. */
+  /** Las categorías en uso, para el desplegable del editor. */
   async categorias(cuentaId?: number): Promise<CategoriaEnUso[]> {
     return firstValueFrom(
       this.http.get<CategoriaEnUso[]>(`${API}/caja/categorias`, {
@@ -462,7 +466,7 @@ export class CajaApi {
     if (opciones.cuenta_id !== undefined) params['cuenta_id'] = opciones.cuenta_id;
     if (opciones.tipo) params['tipo'] = opciones.tipo;
     if (opciones.categoria) params['categoria'] = opciones.categoria;
-    // El esquema lo lee como el texto 'true'/'false', no como booleano.
+    // Las reglas de validación lo leen como el texto 'true'/'false', no como booleano.
     if (opciones.con_factura !== undefined) {
       params['con_factura'] = opciones.con_factura ? 'true' : 'false';
     }
@@ -483,11 +487,11 @@ export class CajaApi {
   }
 
   /**
-   * Borra el movimiento. El unico DELETE de todo el proyecto.
+   * Borra el movimiento. La única baja de todo el proyecto.
    *
-   * Responde 204 sin cuerpo: lo que interesa despues es el saldo de la cuenta,
-   * y ese lo recalcula el trigger. Por eso quien llama vuelve a pedir las
-   * cuentas en vez de intentar restar el monto a mano.
+   * Responde 204 sin cuerpo: lo que interesa después es el saldo de la cuenta,
+   * y ese lo recalcula la regla automática del sistema. Por eso quien llama
+   * vuelve a pedir las cuentas en vez de intentar restar el monto a mano.
    */
   async eliminarMovimiento(id: number): Promise<void> {
     await firstValueFrom(this.http.delete<void>(`${API}/caja/movimientos/${id}`));
@@ -496,7 +500,7 @@ export class CajaApi {
   /**
    * El periodo por cuenta.
    *
-   * Aparte del listado y sin paginar, porque las sumas de una pagina no son
+   * Aparte del listado y sin paginar, porque las sumas de una página no son
    * las sumas del periodo. Sin fechas es toda la historia.
    */
   async resumen(desde?: string, hasta?: string): Promise<ResumenCuenta[]> {
@@ -507,11 +511,11 @@ export class CajaApi {
   }
 
   /**
-   * El cierre de caja de un dia.
+   * El cierre de caja de un día.
    *
-   * Sin fecha el backend usa el dia de HOY segun la base, no el del navegador:
-   * es la misma regla que el alta de un movimiento. Es de solo lectura, asi
-   * que no hay cuerpo ni estado que mandar.
+   * Sin fecha el sistema usa el día de HOY según el sistema, no el del
+   * navegador: es la misma regla que el alta de un movimiento. Es de solo
+   * lectura, así que no hay datos ni estado que mandar.
    */
   async cierre(fecha?: string): Promise<CierreDeCaja> {
     const params: Record<string, string> = {};
@@ -522,10 +526,11 @@ export class CajaApi {
   /**
    * El corte de caja de un rango de día y hora.
    *
-   * Los dos momentos son opcionales: sin `desde` el backend arranca en la
-   * medianoche de hoy y sin `hasta` termina ahora, los dos según el reloj de la
-   * base. La pantalla manda los valores tal como salen del `datetime-local`
-   * (`AAAA-MM-DDTHH:MM`), que es el formato que el esquema acepta.
+   * Los dos momentos son opcionales: sin `desde` el sistema arranca en la
+   * medianoche de hoy y sin `hasta` termina ahora, los dos según el reloj del
+   * sistema. La pantalla manda los valores tal como salen del `datetime-local`
+   * (`AAAA-MM-DDTHH:MM`), que es el formato que las reglas de validación
+   * aceptan.
    */
   async corte(desde?: string, hasta?: string): Promise<CorteDeCaja> {
     const params: Record<string, string> = {};

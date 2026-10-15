@@ -1,26 +1,26 @@
 <!--
   Clientes: listado + editor inline colapsable.
 
-  La misma pantalla que productos, precios y el catalogo: cabecera con la
-  accion principal, editor inline que se despliega ARRIBA de la tabla, barra
-  de filtros, tabla con sus acciones de fila, estado vacio y paginacion. El
-  diseno sale de `nucleo/pantallas.scss`.
+  La misma pantalla que productos, precios y el catálogo: cabecera con la
+  acción principal, editor inline que se despliega ARRIBA de la tabla, barra
+  de filtros, tabla con sus acciones de fila, estado vacío y paginación. El
+  diseño sale de `nucleo/pantallas.scss`.
 
   Lo propio de esta pantalla:
 
-  - El editor tiene mas campos que las demas (codigo, nombre, establo,
-    especie, estatus, telefono, rfc y direccion), asi que su rejilla es de
-    cuatro columnas con la direccion haciendo de campo ancho. Ver
+  - El editor tiene más campos que las demás (código, nombre, establo,
+    especie, estatus, teléfono, rfc y dirección), así que su rejilla es de
+    cuatro columnas con la dirección haciendo de campo ancho. Ver
     `clientes.scss`.
-  - El RFC vive en `datos_fiscales_cliente` y no en `clientes`, pero la API
-    de clientes SI lo acepta y escribe en las dos tablas. Por eso la
-    columna esta y el formulario tambien. La razon social no: no se
-    captura, y el servidor la guarda con el nombre del cliente.
+  - El RFC vive en `datos_fiscales_cliente` y no en `clientes`, pero el
+    servicio de clientes SÍ lo acepta y escribe en las dos tablas. Por eso la
+    columna está y el formulario también. La razón social no: no se
+    captura, y el sistema la guarda con el nombre del cliente.
   - La columna de estatus es un badge y no texto: "Inactivo" es la manera de
     que un cliente deje de ofrecerse, y tiene que verse de un vistazo.
 -->
 <section class="clientes">
-  <!-- Cabecera: titulo a la izquierda, accion principal a la derecha -->
+  <!-- Cabecera: título a la izquierda, acción principal a la derecha -->
   <div class="cabecera">
     <h1>Clientes</h1>
 
@@ -287,7 +287,7 @@
       @if (exportando()) {
         <span class="spinner" aria-hidden="true"></span> Exportando…
       } @else {
-        exportar excel
+        Exportar a Excel
       }
     </button>
   </div>

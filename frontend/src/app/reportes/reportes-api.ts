@@ -6,14 +6,14 @@ import { API } from '../nucleo/api';
 /**
  * Los tres reportes, en solo lectura.
  *
- * Son las vistas que 0001 dejo calculando y a las que nunca se les dio
- * pantalla: `vw_existencia_actual`, `vw_consumo_semanal_promedio` y
- * `vw_estado_cuenta_cliente`. Este modulo no tiene ni un `POST`: no hay
+ * Son las vistas que dejó calculando la primera entrega y a las que nunca se
+ * les dio pantalla: `vw_existencia_actual`, `vw_consumo_semanal_promedio` y
+ * `vw_estado_cuenta_cliente`. Este módulo no permite escribir nada: no hay
  * tabla debajo que guardar, son consultas.
  *
  * Los nombres de las tres clases y los tres tipos llevan el dominio (reportes)
- * y no un numero, igual que el resto de la app. El `Listado` es la misma forma
- * que devuelve toda la API: `datos`, `total`, `limite` y `offset`.
+ * y no un número, igual que el resto de la aplicación. El `Listado` es la misma
+ * forma que devuelve todo el servicio: `datos`, `total`, `limite` y `offset`.
  */
 
 export interface Listado<T> {
@@ -42,7 +42,7 @@ export interface Consumo {
   kg_promedio_semanal: number;
 }
 
-/** Cuanto debe un cliente, y cuando fue su ultima venta y su ultimo pago. */
+/** Cuánto debe un cliente, y cuándo fue su última venta y su último pago. */
 export interface EstadoCuenta {
   cliente_id: number;
   cliente: string;
@@ -63,17 +63,17 @@ export interface Filtros {
 }
 
 /**
- * Los parametros de cualquiera de los tres reportes.
+ * Los parámetros de cualquiera de los tres reportes.
  *
- * Es una funcion PURA y exportada para poder probarla sin levantar HTTP, que
- * es como se prueban las demas pantallas: el esquema del backend es `strict`,
- * asi que un parametro de mas da un 400 y lo que importa es QUE se manda y que
- * NO.
+ * Es una función PURA y exportada para poder probarla sin levantar el
+ * servicio, que es como se prueban las demás pantallas: las reglas de
+ * validación no admiten campos de más, así que un parámetro extra da un 400 y
+ * lo que importa es QUÉ se manda y qué NO.
  *
- * `buscar` solo viaja desde dos caracteres: con uno solo el `ILIKE` del
- * backend trae medio catalogo y la tabla deja de informar. La bandera se manda
- * como texto `'true'` y SOLO cuando va encendida: el esquema la valida con un
- * `enum('true','false')`, asi que no mandarla es la forma de decir "sin filtro".
+ * `buscar` solo viaja desde dos caracteres: con uno solo el sistema trae medio
+ * catálogo y la tabla deja de informar. La bandera se manda como texto `'true'`
+ * y SOLO cuando va encendida: el sistema la valida como 'true' o 'false', así
+ * que no mandarla es la forma de decir "sin filtro".
  */
 export function parametrosDe(
   filtros: Filtros,
@@ -94,7 +94,7 @@ export class ReportesApi {
   private readonly http = inject(HttpClient);
 
   /**
-   * Las tres llamadas son un `GET` con filtros y paginacion, y solo cambian la
+   * Las tres llamadas son consultas con filtros y paginación, y solo cambian la
    * ruta y el filtro propio de cada una.
    */
   private async listar<T>(
@@ -114,7 +114,7 @@ export class ReportesApi {
     });
   }
 
-  /** Consumo semanal promedio por cliente y producto (ultimas 8 semanas). */
+  /** Consumo semanal promedio por cliente y producto (últimas 8 semanas). */
   consumo(filtros: Filtros): Promise<Listado<Consumo>> {
     return this.listar<Consumo>('consumo-semanal', filtros);
   }

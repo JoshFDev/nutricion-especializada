@@ -10,9 +10,9 @@ import { API } from '../nucleo/api';
 import { ClientesApi, cuerpoDeCliente, type FormaCliente } from './clientes-api';
 
 /**
- * El cuerpo del cliente: lo que se manda al backend.
+ * El cuerpo del cliente: lo que se manda al sistema.
  *
- * Es la prueba de que la pantalla no normaliza distinto que el esquema de
+ * Es la prueba de que la pantalla no normaliza distinto que las reglas de
  * `clientes/esquemas.ts`: el codigo arriba en mayusculas y limpio, y los
  * opcionales vacios como `null` (la base prefiere "sin dato" a un string
  * de espacios).
@@ -49,12 +49,12 @@ describe('el cuerpo del cliente', () => {
     expect(cuerpo.especie_id).toBeNull();
     expect(cuerpo.telefono).toBeNull();
     expect(cuerpo.direccion).toBeNull();
-    // Sin RFC tambien es `null`: es lo que le dice al backend que borre el
+    // Sin RFC tambien es `null`: es lo que le dice al sistema que borre el
     // dato fiscal, no que guarde un string vacio.
     expect(cuerpo.rfc).toBeNull();
   });
 
-  it('el RFC va en mayusculas, como lo va a guardar el backend', () => {
+  it('el RFC va en mayusculas, como lo va a guardar el sistema', () => {
     const cuerpo = cuerpoDeCliente(forma({ rfc: '  xaxx010101000 ' }));
     expect(cuerpo.rfc).toBe('XAXX010101000');
   });
@@ -78,9 +78,9 @@ describe('el cuerpo del cliente', () => {
 /**
  * La ruta de exportar.
  *
- * Es lo unico de esta API que necesita el HTTP de verdad simulado, y se
+ * Es lo unico de este servicio que necesita la conexión de verdad simulada, y se
  * prueba por dos razones concretas: que pegue a `/exportar` y NO a
- * `/clientes` (que devolveria JSON, no un archivo), y que NO mande
+ * `/clientes` (que devolvería los datos, no un archivo), y que NO mande
  * `limite`/`offset`. Mandarlos haria que el excel saliera con solo la pagina
  * que se esta viendo, que es justo lo que el operador no pide cuando exporta.
  */

@@ -4,16 +4,15 @@ import { firstValueFrom } from 'rxjs';
 import { API, descargarExcel } from '../nucleo/api';
 
 /**
- * La API del estado de cuenta por cliente.
+ * El servicio del estado de cuenta por cliente.
  *
- * Son dos llamadas y las dos son de SOLO LECTURA: el listado de clientes con
- * su saldo (`GET /estado-cuenta`) y la hoja en Excel de uno
- * (`GET /estado-cuenta/:id/hoja`). No hay `POST` porque no hay nada que
- * guardar: la cuenta la calcula la base con las ventas y los abonos.
+ * Son dos llamadas y las dos son de SOLO LECTURA: el listado de clientes con su
+ * saldo y la hoja en Excel de uno. No hay nada que crear porque no hay nada
+ * que guardar: la cuenta la calcula el sistema con las ventas y los abonos.
  *
- * Los tipos son un espejo de los del backend (`estado-cuenta/modelo.ts`). No
- * se comparten porque el front y el back son dos paquetes aparte, y por eso
- * cada uno lleva de que archivo salio.
+ * Los tipos son un espejo de los de `estado-cuenta/modelo.ts`. No se comparten
+ * con el sistema (son dos partes), y por eso cada uno lleva de qué archivo
+ * salió.
  */
 
 /** La envoltura de los listados. `modelo.ts` -> `Listado`. */
@@ -24,7 +23,7 @@ export interface Listado<T> {
   offset: number;
 }
 
-/** Una fila del listado: cuanto debe un cliente y cuando se movio por ultima vez. */
+/** Una fila del listado: cuánto debe un cliente y cuándo se movió por última vez. */
 export interface RenglonEstadoCuenta {
   cliente_id: number;
   cliente: string;
@@ -43,14 +42,14 @@ export interface FiltrosEstadoCuenta {
 }
 
 /**
- * Los parametros del listado, como texto para la URL.
+ * Los parámetros del listado, como texto para la dirección.
  *
- * Es una funcion PURA y exportada para poder probarla sin levantar HTTP. El
- * esquema del backend es `strict`, asi que un parametro de mas da un 400 y lo
- * que importa es QUE se manda y que NO: la bandera solo viaja encendida (el
- * backend la lee con un `enum('true','false')`, y no mandarla es "sin filtro")
- * y `buscar` solo desde dos caracteres, porque con uno el `ILIKE` trae medio
- * catalogo.
+ * Es una función PURA y exportada para poder probarla sin levantar el
+ * servicio. Las reglas de validación no admiten campos de más, así que un
+ * parámetro extra da un 400 y lo que importa es QUÉ se manda y qué NO: la
+ * bandera solo viaja encendida (el sistema la lee como 'true' o 'false', y no
+ * mandarla es "sin filtro") y `buscar` solo desde dos caracteres, porque con
+ * uno el sistema trae medio catálogo.
  */
 export function parametrosEstadoCuenta(
   filtros: FiltrosEstadoCuenta,
@@ -69,7 +68,7 @@ export function parametrosEstadoCuenta(
 export class EstadoCuentaApi {
   private readonly http = inject(HttpClient);
 
-  /** El listado de clientes con su saldo y sus dos ultimas fechas. */
+  /** El listado de clientes con su saldo y sus dos últimas fechas. */
   async listar(filtros: FiltrosEstadoCuenta): Promise<Listado<RenglonEstadoCuenta>> {
     return firstValueFrom(
       this.http.get<Listado<RenglonEstadoCuenta>>(`${API}/estado-cuenta`, {
@@ -81,14 +80,14 @@ export class EstadoCuentaApi {
   /**
    * Baja la hoja de estado de cuenta del cliente como Excel.
    *
-   * NO se abre en una pestana: un `.xlsx` no lo abre el navegador. Va como
-   * `attachment` desde el backend y aqui se baja como archivo con el `<a>`
-   * temporal de `descargarExcel`, sin tocar la pagina.
+   * NO se abre en una pestaña: un `.xlsx` no lo abre el navegador. Va como
+   * archivo adjunto desde el sistema y aquí se baja como archivo con el `<a>`
+   * temporal de `descargarExcel`, sin tocar la página.
    *
-   * Devuelve cuantos movimientos se quedaron fuera de las 20 filas del papel:
-   * el backend lo manda en la cabecera `X-Renglones-Fuera`, que es lo unico
-   * que se puede leer de una respuesta que es un archivo y no JSON. La
-   * pantalla lo usa para avisar que la cuenta trae mas de lo que cabe.
+   * Devuelve cuántos movimientos se quedaron fuera de las 20 filas del papel:
+   * el sistema lo manda en la cabecera `X-Renglones-Fuera`, que es lo único
+   * que se puede leer de una respuesta que es un archivo y no datos. La
+   * pantalla lo usa para avisar que la cuenta trae más de lo que cabe.
    */
   async abrirHoja(
     clienteId: number,

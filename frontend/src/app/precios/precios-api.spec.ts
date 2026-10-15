@@ -8,12 +8,12 @@ import {
 } from './precios-api';
 
 /**
- * Las reglas del precio: el cuerpo normalizado que se manda y las que el
- * frontend SI puede decidir sola.
+ * Las reglas del precio: el cuerpo normalizado que se manda y las que la
+ * app SI puede decidir sola.
  *
  * El precio es el contraste del modulo: la regla de fondo (se traslapa o
- * no con otros) la decide el backend con su trigger; aqui solo se cuida
- * que el TEXTO que se manda sea el que el esquema acepta — el numero con
+ * no con otros) la decide el sistema con su regla automática; aqui solo se cuida
+ * que el TEXTO que se manda sea el que las reglas aceptan — el numero con
  * hasta dos decimales y la vigencia con orden.
  */
 
@@ -77,7 +77,7 @@ describe('la fecha de hoy', () => {
 });
 
 /**
- * Los query params de cada listado.
+ * Los parametros de cada listado.
  *
  * Los dos listados validan con `strictObject`, asi que sobra una clave rompe
  * la pantalla con un 400. Este caso ya paso: `cliente_id` se mandaba a los dos
@@ -129,7 +129,7 @@ describe('los criterios de cada vista', () => {
     expect(criteriosDe('publicos', { ...filtros, pagina: 1, limite: 25 }).offset).toBe(0);
   });
 
-  it('la vigencia se manda siempre, para que sea el backend el que decida', () => {
+  it('la vigencia se manda siempre, para que sea el sistema el que decida', () => {
     expect(criteriosDe('publicos', { ...filtros, vigencia: 'historicos' }).vigencia).toBe(
       'historicos',
     );

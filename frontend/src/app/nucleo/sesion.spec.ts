@@ -6,8 +6,8 @@ import { Sesion } from './sesion';
 
 /**
  * La sesion es la pieza de la que depende todo lo demas (el menu, las
- * guardas, el boton de salir), asi que se prueba con el HTTP de verdad
- * simulado: lo que interesa es que se guarde y se borre el token en los
+ * guardas, el boton de salir), asi que se prueba con la conexión de verdad
+ * simulada: lo que interesa es que se guarde y se borre la credencial en los
  * momentos justos, no que se llame a un metodo.
  */
 describe('Sesion', () => {
@@ -46,7 +46,7 @@ describe('Sesion', () => {
     expect(sesion.hayToken()).toBe(false);
     expect(sesion.perfil()).toBeNull();
     // `http.verify()` en el `afterEach` falla si aqui se colara una
-    // peticion: sin token no hay nada que preguntar.
+    // peticion: sin credencial no hay nada que preguntar.
   });
 
   it('guarda el token al entrar y lo vuelve a sacar al cargar la pagina', async () => {
@@ -124,8 +124,8 @@ describe('Sesion', () => {
     expect(sesion.puede('caja.eliminar')).toBe(false);
   });
 
-  it('expirar borra el token sin preguntar nada al backend', async () => {
-    // El token con el que se responde 401 ya no vale para nada, asi que
+  it('expirar borra el token sin preguntar nada al sistema', async () => {
+    // La credencial con la que se responde 401 ya no vale para nada, asi que
     // mandar `/auth/logout` con el seria una peticion que falla sola.
     const sesion = TestBed.inject(Sesion);
     const promesa = sesion.entrar('cajera@ejemplo.mx', 'secreta123');
@@ -139,10 +139,10 @@ describe('Sesion', () => {
     expect(sesion.sesionPerdida()).toBe(true);
   });
 
-  it('salir borra la sesion en el acto y aun asi avisa al backend', async () => {
+  it('salir borra la sesion en el acto y aun asi avisa al sistema', async () => {
     // La limpieza NO espera al logout. Si esperara, la navegacion a
-    // `/login` saldria despues del viaje de ida y vuelta al servidor y la
-    // pantalla se quedaria quieta viendolo — peor aun si el token ya estaba
+    // `/login` saldria despues del viaje de ida y vuelta al sistema y la
+    // pantalla se quedaria quieta viendolo — peor aun si la credencial ya estaba
     // muerto y el 401 disparaba una segunda navegacion encima.
     const sesion = TestBed.inject(Sesion);
     const promesa = sesion.entrar('cajera@ejemplo.mx', 'secreta123');
@@ -178,9 +178,9 @@ describe('Sesion', () => {
     expect(sesion.sesionPerdida()).toBe(false);
   });
 
-  it('salir sin token no le pregunta nada al backend', () => {
+  it('salir sin token no le pregunta nada al sistema', () => {
     // `http.verify()` del `afterEach` seria el que falte si saliera una
-    // peticion: sin token no hay sesion que cerrar del lado del servidor.
+    // peticion: sin credencial no hay sesion que cerrar del lado del sistema.
     const sesion = TestBed.inject(Sesion);
 
     sesion.salir();
@@ -189,7 +189,7 @@ describe('Sesion', () => {
   });
 
   it('marcar la contrasena cambiada quita la bandera local', async () => {
-    // El backend ya la puso en `false` en la base y dejo viva esta sesion.
+    // El sistema ya la puso en `false` en la base y dejo viva esta sesion.
     // Si la copia local no se actualiza, la guarda vuelve a apuntar a la
     // pantalla de cambio y la persona se queda en un ciclo.
     const sesion = TestBed.inject(Sesion);

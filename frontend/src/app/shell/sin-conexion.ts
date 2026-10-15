@@ -3,34 +3,33 @@ import { Router } from '@angular/router';
 import { Sesion } from '../nucleo/sesion';
 
 /**
- * Se llego aqui con un token que parece bueno pero el backend no responde.
+ * Se llegó aquí con una sesión que parece buena, pero el sistema no responde.
  *
- * `guardaSesion` manda a esta pantalla cuando `asegurarPerfil` revienta, y
- * casi siempre es que el backend esta caido o que el origen no esta en
- * `CORS_ORIGINS`. Un 500 de la API o un "no se pudo conectar" pelado
- * obligan a adivinar, y esa adivinanza se hace en la guardia de las ocho
- * de la manana.
+ * `guardaSesion` manda a esta pantalla cuando `asegurarPerfil` falla, y casi
+ * siempre es que el sistema está caído o que el origen de esta página no está
+ * permitido. Un mensaje en blanco obligaría a adivinar, así que se ofrece
+ * reintentar y no "cerrar sesión": si solo era que el sistema se estaba
+ * reiniciando, la persona sigue dentro de la app y lo único que necesita es
+ * un reintento.
  *
- * Se ofrece volver a intentar y no "cerrar sesion" a secas: si es que el
- * servidor estaba reiniciando, la persona sigue dentro de la app y lo unico
- * que necesita es un reintento.
+ * Nota para quien desarrolla: los detalles de cómo resolverlo (que el sistema
+ * esté encendido y que el origen de esta página esté permitido en el sistema)
+ * van abajo, en comentarios, y no se le muestran a quien usa el mostrador.
  */
 @Component({
   selector: 'app-sin-conexion',
   template: `
     <main class="pantalla">
       <section class="tarjeta">
-        <h1>No hay comunicacion con el servidor</h1>
+        <h1>No hay conexión</h1>
         <p>
           {{ mensaje() }}
         </p>
-        <ul>
-          <li>
-            El backend esta encendido (en desarrollo, <code>pnpm dev</code> dentro de
-            <code>backend/</code>).
-          </li>
-          <li>El origen de esta pagina esta en <code>CORS_ORIGINS</code> del backend.</li>
-        </ul>
+        <!--
+          Para quien desarrolla: si esto sale en desarrollo, revisa que el
+          sistema esté encendido (el que corre en esta computadora) y que el origen de esta
+          página esté permitido en la configuración del sistema.
+        -->
         <button type="button" (click)="reintentar()">Intentar de nuevo</button>
       </section>
     </main>
@@ -57,19 +56,9 @@ import { Sesion } from '../nucleo/sesion';
       font-size: 1.25rem;
     }
 
-    p,
-    li {
+    p {
       color: var(--texto-suave);
       font-size: 0.9375rem;
-    }
-
-    ul {
-      padding-left: 1.25rem;
-      margin: 0 0 1.25rem;
-    }
-
-    code {
-      font-size: 0.875em;
     }
 
     button {
@@ -91,13 +80,13 @@ export class SinConexion {
 
   readonly mensaje = (): string =>
     this.sesion.hayToken()
-      ? 'Tu sesion sigue guardada, pero no se pudo preguntar si continua viva.'
-      : 'No se pudo contactar al servidor.';
+      ? 'Tu sesión sigue iniciada, pero no pudimos comprobar la conexión.'
+      : 'No hay conexión con el sistema.';
 
   /**
-   * Reintenta desde la ruta de inicio, que es la que vuelve a preguntar los
-   * permisos. El token sigue en su sitio: si el servidor ya contesto, la
-   * persona entra sola y no tiene que volver a escribir su contrasena.
+   * Reintenta desde la pantalla de inicio, que es la que vuelve a preguntar
+   * los permisos. La sesión sigue en su sitio: si el sistema ya responde, la
+   * persona entra sola y no tiene que volver a escribir su contraseña.
    */
   async reintentar(): Promise<void> {
     await this.router.navigate(['/']);

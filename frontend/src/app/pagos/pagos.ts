@@ -48,17 +48,18 @@ import {
  *
  * Tres cosas que conviene tener presentes:
  *
- *   - **Un pago no se borra ni se corrige.** El backend no tiene PATCH ni
- *     DELETE: un pago mal capturado se arregla cancelando la nota que cubría,
- *     no borrando, y queda el rastro. Por eso aquí no hay edición: hay Ver.
+ *   - **Un pago no se borra ni se corrige.** El sistema no tiene forma de
+ *     actualizarlo ni de borrarlo: un pago mal capturado se arregla cancelando
+ *     la nota que cubría, no borrando, y queda el rastro. Por eso aquí no hay
+ *     edición: hay Ver.
  *   - **Lo que no se aplica es dinero real.** El saldo sin aplicar se descuenta
  *     del saldo del cliente (`fn_recalcular_saldo_cliente`), así que tiene que
  *     estar a la vista o el operador no sabe que hay un abono flotando.
- *   - **Cada aplicación se valida DOS veces**, como en el POS: aquí con el
- *     subtotal (el editor sabe cuánto vale cada nota), y en el backend contra
+ *   - **Cada aplicación se valida DOS veces**, como en el mostrador: aquí con el
+ *     subtotal (el editor sabe cuánto vale cada nota), y en el sistema contra
  *     el saldo REAL de la nota (una parcial ya trae cobrado). Es el mismo
- *     acuerdo de `problemaDeAplicacion`: el frontend avisa lo que puede y el
- *     backend comprueba lo que sabe.
+ *     acuerdo de `problemaDeAplicacion`: la pantalla avisa lo que puede y el
+ *     sistema comprueba lo que sabe.
  */
 
 @Component({
@@ -93,8 +94,8 @@ export class Pagos {
   /**
    * Cuántos renglones se ven por página, y la página que se está viendo.
    *
-   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
-   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   * La página se elige en SALTOS y se traduce a la posición al pedir, porque
+   * una posición guardada se queda vieja en cuanto cambia un filtro.
    */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -115,7 +116,7 @@ export class Pagos {
   /**
    * Si el listado lleva algo puesto, para poder ofrecer "Limpiar".
    *
-   * El buscador se cuenta con dos caracteres porque es lo que el backend
+   * El buscador se cuenta con dos caracteres porque es lo que el sistema
    * exige: con uno solo no filtra, y un "Limpiar" que aparece a la primera
    * letra confunde más de lo que ayuda.
    */
@@ -204,10 +205,10 @@ export class Pagos {
   /**
    * Busca con 250 ms de espera, igual que el resto de las pantallas.
    *
-   * Cada tecleo NO pega una petición: con el buscador abierto a media escritura
+   * Cada tecleo NO pega una consulta: con el buscador abierto a media escritura
    * son varias y la última es la única que sirve. Además, buscar vuelve
    * siempre a la página 1, porque quedarse en la 4 con un filtro nuevo es
-   * mirar un `offset` que ya no quiere decir nada.
+   * mirar una posición que ya no quiere decir nada.
    */
   aBuscar(texto: string): void {
     clearTimeout(this.temporizadorFiltros);
@@ -319,7 +320,7 @@ export class Pagos {
     this.limite.set(limite);
     this.cerrarDetalle();
     // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50 filas
-    // es pedir un `offset` que ya no corresponde a nada.
+    // es pedir una posición que ya no corresponde a nada.
     void this.cargarPagina(1);
   }
 
@@ -431,7 +432,7 @@ export class Pagos {
    * `poner*` y no `monto`: `monto` es la signal del pago.
    *
    * Se confirma con `change` (al salir del campo) y no con `input`, igual
-   * que las cantidades del POS: teclear "0." para escribir "0.5" no debe
+   * que las cantidades del mostrador: teclear "0." para escribir "0.5" no debe
    * perderse en la primera tecla.
    */
   ponerDeNota(notaId: number, valor: string): void {
@@ -524,7 +525,7 @@ export class Pagos {
   /**
    * Los errores del servicio, traducidos para quien cobra.
    *
-   * `MONTO_MAYOR_A_NOTA` es el que vale la pena tratar: el mensaje del backend
+   * `MONTO_MAYOR_A_NOTA` es el que vale la pena tratar: el mensaje del sistema
    * no dice de qué nota, y el `detalles` sí. La nota ya está en el editor, así
    * que su folio se pone aquí. El resto llega legible.
    */

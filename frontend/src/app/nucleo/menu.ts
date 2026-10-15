@@ -1,49 +1,49 @@
 /**
- * El catalogo de modulos de la app.
+ * El catálogo de módulos de la aplicación.
  *
- * Aqui esta la lista de que hay, en que orden sale en el menu y que permiso
+ * Aquí está la lista de qué hay, en qué orden sale en el menú y qué permiso
  * hace falta para verlo. Las RUTAS se generan a partir de esta misma tabla
  * (ver `app.routes.ts`) y no se escriben a mano en otro lado, y esa es toda
- * la gracia del asunto: anadir un modulo es AGREGAR UNA ENTRADA aqui, y es
- * imposible que el menu ofrezca algo que no tenga ruta o que la ruta exista
- * sin que el menu la ofrezca.
+ * la gracia del asunto: añadir un módulo es AGREGAR UNA ENTRADA aquí, y es
+ * imposible que el menú ofrezca algo que no tenga ruta o que la ruta exista
+ * sin que el menú la ofrezca.
  *
- * El orden de los grupos es el del dia de trabajo: lo que se usa todos los
- * dias arriba, y lo que se abre una vez al mes abajo. Es una decision de
- * la persona que usa esto, no del que lo programa, y por eso la tabla esta
- * en un archivo de un solo proposito y no escondida en el router.
+ * El orden de los grupos es el del día de trabajo: lo que se usa todos los
+ * días arriba, y lo que se abre una vez al mes abajo. Es una decisión de
+ * la persona que usa esto, no de quien lo programa, y por eso la tabla está
+ * en un archivo de un solo propósito y no escondida en el enrutador.
  */
 
 import type { Type } from '@angular/core';
 
-/** Un modulo al que se puede entrar. */
+/** Un módulo al que se puede entrar. */
 export interface Modulo {
-  /** La ruta de la app. Sin barra inicial. */
+  /** La ruta de la aplicación. Sin barra inicial. */
   ruta: string;
   etiqueta: string;
-  /** Sin este permiso, el modulo no aparece y su ruta no abre. */
+  /** Sin este permiso, el módulo no aparece y su ruta no abre. */
   permiso: string;
-  /** Que se va a hacer aqui. Lo lee el aviso de "pantalla pendiente". */
+  /** Qué se va a hacer aquí. Lo lee el aviso de "pantalla pendiente". */
   pendiente: string;
-  /** Nombre del icono SVG (sin extension, coincide con archivo en assets/icons). */
+  /** Nombre del icono SVG (sin extensión, coincide con archivo en assets/icons). */
   icon: string;
   /**
-   * La pantalla del modulo, si ya existe.
+   * La pantalla del módulo, si ya existe.
    *
-   * Opcional a proposito: sin esto sale la pantalla de "pendiente", y con
-   * esto sale la de verdad. La tabla sigue siendo la unica que decide que
-   * hay en el menu y que ruta hay, y ahora ADEMAS dice que pantalla es la
+   * Opcional a propósito: sin esto sale la pantalla de "pendiente", y con
+   * esto sale la de verdad. La tabla sigue siendo la única que decide qué
+   * hay en el menú y qué ruta hay, y ahora ADEMÁS dice qué pantalla es la
    * de cada uno, sin abrir una lista aparte que se pueda olvidar.
    *
-   * El import es dinamico y va dentro de la funcion, asi que el codigo del
-   * modulo se baja solo cuando se entra a el: poner aqui un
-   * `import { Notas }` de arriba haria que la pantalla del mostrador
-   * viajara en el bundle de la auditoria.
+   * El import es dinámico y va dentro de la función, así que el código del
+   * módulo se baja solo cuando se entra a él: poner aquí un
+   * `import { Notas }` de arriba haría que la pantalla del mostrador
+   * viajara en el paquete que descarga la auditoría.
    */
   carga?: () => Promise<Type<unknown>>;
 }
 
-/** Un grupo del menu lateral. El titulo no se puede filtrar. */
+/** Un grupo del menú lateral. El título no se puede filtrar. */
 export interface Grupo {
   titulo: string;
   modulos: Modulo[];
@@ -59,7 +59,7 @@ export const MENU: Grupo[] = [
     modulos: [
       {
         ruta: 'notas',
-        etiqueta: 'Notas de remision',
+        etiqueta: 'Notas de remisión',
         permiso: 'notas.ver',
         icon: 'clipboard',
         pendiente: 'Editar una nota ya capturada y reimprimir su PDF.',
@@ -68,22 +68,22 @@ export const MENU: Grupo[] = [
     ],
   },
   {
-    titulo: 'Catalogo',
+    titulo: 'Catálogo',
     modulos: [
       {
         ruta: 'productos',
         etiqueta: 'Productos',
         permiso: 'productos.ver',
         icon: 'package',
-        pendiente: 'Alta y edicion de productos con su clave y unidad.',
+        pendiente: 'Alta y edición de productos con su clave y unidad.',
         carga: () => import('../productos/productos').then((m) => m.Productos),
       },
       {
         ruta: 'categorias',
-        etiqueta: 'Categorias',
+        etiqueta: 'Categorías',
         permiso: 'categorias.ver',
         icon: 'tag',
-        pendiente: 'Categorias de producto y sus multipliers de rendimiento.',
+        pendiente: 'Categorías de producto y sus multiplicadores de rendimiento.',
         carga: () => import('../categorias/categorias').then((m) => m.Categorias),
       },
       {
@@ -99,7 +99,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Precios',
         permiso: 'precios.ver',
         icon: 'dollar-sign',
-        pendiente: 'Listas de precios por especie y las vigorencias.',
+        pendiente: 'Listas de precios por especie y las vigencias.',
         carga: () => import('../precios/precios').then((m) => m.Precios),
       },
       {
@@ -120,7 +120,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Clientes',
         permiso: 'clientes.ver',
         icon: 'users',
-        pendiente: 'Alta de clientes con su codigo, especie y datos fiscales.',
+        pendiente: 'Alta de clientes con su código, especie y datos fiscales.',
         carga: () => import('../clientes/clientes').then((m) => m.Clientes),
       },
     ],
@@ -141,7 +141,7 @@ export const MENU: Grupo[] = [
         etiqueta: 'Compras',
         permiso: 'compras.ver',
         icon: 'download',
-        pendiente: 'Registrar compras, entradas de mercancia y sus folios.',
+        pendiente: 'Registrar compras, entradas de mercancía y sus folios.',
         carga: () => import('../compras/compras').then((m) => m.Compras),
       },
       {
@@ -190,10 +190,10 @@ export const MENU: Grupo[] = [
       },
       {
         ruta: 'auditoria',
-        etiqueta: 'Auditoria',
+        etiqueta: 'Auditoría',
         permiso: 'auditoria.ver',
         icon: 'scroll',
-        pendiente: 'Las cinco bitacoras en solo lectura.',
+        pendiente: 'Las cinco bitácoras en solo lectura.',
         carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },
       {
@@ -216,15 +216,15 @@ export const MENU: Grupo[] = [
   },
 ];
 
-/** Todos los modulos, sin agrupar. Es lo que consume el router. */
+/** Todos los módulos, sin agrupar. Es lo que consume el enrutador. */
 export const MODULOS: Modulo[] = MENU.flatMap((grupo) => grupo.modulos);
 
 /**
- * Los grupos con lo que la persona SI puede ver.
+ * Los grupos con lo que la persona SÍ puede ver.
  *
- * Un grupo que se queda sin modulos no se devuelve: es el caso de la cajera
- * con Catalogo, y dejar un "CATALOGO" con nada adentro es ruido que hace
- * dudar de si algo fallo.
+ * Un grupo que se queda sin módulos no se devuelve: es el caso de la cajera
+ * con Catálogo, y dejar un "CATÁLOGO" con nada adentro es ruido que hace
+ * dudar de si algo falló.
  */
 export function menuPara(permisos: ReadonlySet<string>): Grupo[] {
   return MENU.map((grupo) => ({
@@ -234,12 +234,12 @@ export function menuPara(permisos: ReadonlySet<string>): Grupo[] {
 }
 
 /**
- * A donde va la persona al entrar: el primer modulo que puede ver.
+ * A dónde va la persona al entrar: el primer módulo que puede ver.
  *
- * Se elige el primero y no uno "principal" porque el menu ya esta ordenado
- * por uso, y ademas porque un modulo principal fijo por rol seria una
- * excepcion mas que mantener. Si no tiene ningun modulo, se devuelve `null`
- * y la app le dice eso en vez de dejarlo en un callejon sin salida.
+ * Se elige el primero y no uno "principal" porque el menú ya está ordenado
+ * por uso, y además porque un módulo principal fijo por rol sería una
+ * excepción más que mantener. Si no tiene ningún módulo, se devuelve `null`
+ * y la aplicación le dice eso en vez de dejarlo en un callejón sin salida.
  */
 export function primerModulo(permisos: ReadonlySet<string>): Modulo | null {
   return MODULOS.find((modulo) => permisos.has(modulo.permiso)) ?? null;

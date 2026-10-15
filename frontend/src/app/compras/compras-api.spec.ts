@@ -3,10 +3,10 @@ import { cuerpoDeCompra, estatusComoTexto, type ProductoOpcion } from './compras
 import { cambiarCantidad, cambiarKilos, lineaVacia, ponerPrecio, type LineaCompra } from './linea';
 
 /**
- * El cuerpo de la compra: lo que se manda al backend.
+ * El cuerpo de la compra: lo que se manda al sistema.
  *
- * Lo importante no es el `POST` sino lo que este cuerpo NO lleva. El esquema
- * del alta es `strict`: mandar `subtotal` (GENERATED) o `estatus` (lo mueven
+ * Lo importante no es el `POST` sino lo que este cuerpo NO lleva. Las reglas
+ * del alta son `strict`: mandar `subtotal` (GENERATED) o `estatus` (lo mueven
  * los pagos) da un 400 con un mensaje en ingles que no le dice nada a quien
  * esta capturando la compra.
  */
@@ -53,7 +53,7 @@ describe('el cuerpo de la compra', () => {
   });
 
   it('sin costo escrito, el renglon NO lleva precio_kg', () => {
-    // Si no va, lo resuelve el backend con el ultimo costo del proveedor en
+    // Si no va, lo resuelve el sistema con el ultimo costo del proveedor en
     // la fecha de la compra, que es el dato bueno.
     expect(cuerpoDeCompra(3, [linea()], ALMACEN_ID).renglones[0]).not.toHaveProperty('precio_kg');
   });
@@ -64,7 +64,7 @@ describe('el cuerpo de la compra', () => {
   });
 
   it('un costo de cero se manda, porque una cortesia vale cero', () => {
-    // Distinto de "no lo escribi": el `precioKg` del backend acepta 0.
+    // Distinto de "no lo escribi": el `precioKg` del sistema acepta 0.
     const conCero = ponerPrecio(linea(), 0);
     expect(conCero.precio_kg).toBe(0);
     expect(cuerpoDeCompra(3, [conCero], ALMACEN_ID).renglones[0].precio_kg).toBe('0');
@@ -105,7 +105,7 @@ describe('el cuerpo de la compra', () => {
     );
   });
 
-  it('una compra sin renglones no sale: el backend pide al menos uno', () => {
+  it('una compra sin renglones no sale: el sistema pide al menos uno', () => {
     expect(() => cuerpoDeCompra(3, [], ALMACEN_ID)).toThrow(/al menos un renglon/);
   });
 });

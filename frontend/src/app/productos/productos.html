@@ -1,18 +1,18 @@
 <!--
   Productos: listado + editor inline colapsable.
 
-  El listado trae por omision los productos ACTIVOS (el filtro decide), y el
-  boton del estado en la fila alterna `activo` con un PATCH que no abre el
-  editor (ver `alternaActivo`). La casilla de "Activo" del editor solos aparece
-  en la EDICION, porque el esquema de alta no la acepta.
+  El listado trae por omisión los productos ACTIVOS (el filtro decide), y el
+  botón del estado en la fila alterna `activo` con una actualización que no abre
+  el editor (ver `alternaActivo`). La casilla de "Activo" del editor solo
+  aparece en la EDICIÓN, porque las reglas de validación del alta no la aceptan.
 
   Dos filtros que conviene no confundir: el del LISTADO (`activo` suelto en
-  `productos/esquemas.ts`) y el del EDITOR (`activo` dentro del PATCH). El
-  primero decide que filas se ven; el segundo, si el producto se ofrece a la
-  venta.
+  `productos/esquemas.ts`) y el del EDITOR (`activo` dentro de la
+  actualización). El primero decide qué filas se ven; el segundo, si el producto
+  se ofrece a la venta.
 
-  El editor vive ANTES de la tabla (inline) y es colapsable. El boton que lo
-  despliega va en la cabecera, junto al titulo.
+  El editor vive ANTES de la tabla (inline) y es colapsable. El botón que lo
+  despliega va en la cabecera, junto al título.
 
   El diseño (botones, barra de filtros, tabla, estado vacío y paginación) es el
   de `nucleo/pantallas.scss`, el MISMO que usan precios, categorías y especies.
@@ -20,7 +20,7 @@
   las columnas.
 -->
 <section class="productos">
-  <!-- Cabecera: titulo a la izquierda, accion principal a la derecha -->
+  <!-- Cabecera: título a la izquierda, acción principal a la derecha -->
   <div class="cabecera">
     <h1>Productos</h1>
 
@@ -293,7 +293,7 @@
         @if (exportando()) {
           <span class="spinner" aria-hidden="true"></span> Exportando...
         } @else {
-          exportar excel
+          Exportar a Excel
         }
       </button>
     }
@@ -312,8 +312,8 @@
 
     Se distinguen los dos casos que antes iban juntos: no hay productos
     (lo resuelve crear uno) o los filtros no dejaron ninguno (lo resuelve
-    quitarlos). Con un solo mensaje, el que acababa de filtrar leia
-    "No hay productos que mostrar" y pensaba que se le habian perdido.
+    quitarlos). Con un solo mensaje, el que acababa de filtrar leía
+    "No hay productos que mostrar" y pensaba que se le habían perdido.
   -->
   @if (filas().length === 0 && !buscando()) {
     <div class="estado-vacio">

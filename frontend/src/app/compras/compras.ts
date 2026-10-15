@@ -57,7 +57,7 @@ import {
  * tabla no se mueve, el contexto se queda, y en una pantalla angosta el
  * comprobante baja con scroll normal en vez de saltar a otro lado.
  *
- * Por lo mismo, ya no hay dos vistas ni routes: la compra se captura en el
+ * Por lo mismo, ya no hay dos vistas ni rutas: la compra se captura en el
  * editor inline y su comprobante es la fila que se despliega. El que guarda
  * también ve el comprobante, en la misma tabla.
  *
@@ -65,14 +65,14 @@ import {
  *
  *   - **No hay editar.** Una compra se deshace CANCELÁNDOLA con un motivo, no
  *     editando renglones: editarlos dejaría el inventario con la entrada vieja
- *     y la nueva. La cancelación la bloquea el backend si ya hay pagos
+ *     y la nueva. La cancelación la bloquea el sistema si ya hay pagos
  *     (`COMPRA_CON_PAGO`), y la pantalla lo explica.
  *   - **No hay borrar.** Cancelar deja el documento con estatus 'cancelada' y
- *     devuelve los bultos a la bodega por trigger.
+ *     la regla automática del sistema devuelve los bultos a la bodega.
  *   - **El costo se puede dejar vacío.** Si no se escribe, lo resuelve el
- *     backend con el último costo de ESE proveedor (`producto_proveedor_precios`),
- *     y por eso el total de la captura es un preview que avisa cuando hay
- *     renglones sin costo (ver `haySinCosto`).
+ *     sistema con el último costo de ESE proveedor
+ *     (`producto_proveedor_precios`), y por eso el total de la captura es un
+ *     preview que avisa cuando hay renglones sin costo (ver `haySinCosto`).
  *   - **El listado pagina de verdad.** Antes tenía "cargar más", que pegaba las
  *     siguientes al final: con el filtro de fechas abierto se acababa con una
  *     tabla de cuatro pantallas sin forma de volver arriba.
@@ -91,7 +91,7 @@ export class Compras {
   private readonly sesion = inject(Sesion);
   private readonly toast = inject(ToastService);
 
-  /** Cancelar pide `compras.crear` (así lo exige el trigger de la base). */
+  /** Cancelar pide `compras.crear` (así lo exige la regla automática del sistema). */
   readonly puedeCrear = computed(() => this.sesion.puede('compras.crear'));
 
   readonly confirmModal = viewChild.required(ConfirmModal);
@@ -114,8 +114,8 @@ export class Compras {
   /**
    * Cuántos renglones se ven por página, y la página que se está viendo.
    *
-   * La página se elige en SALTOS y se traduce a `offset` al pedir, porque un
-   * `offset` guardado se queda viejo en cuanto cambia un filtro.
+   * La página se elige en SALTOS y se traduce a la posición al pedir, porque
+   * una posición guardada se queda vieja en cuanto cambia un filtro.
    */
   readonly limite = signal(25);
   readonly pagina = signal(1);
@@ -138,7 +138,7 @@ export class Compras {
   /**
    * Si el listado lleva algo puesto, para poder ofrecer "Limpiar".
    *
-   * El buscador se cuenta con dos caracteres porque es lo que el backend
+   * El buscador se cuenta con dos caracteres porque es lo que el sistema
    * exige: con uno solo no filtra, y un "Limpiar" que aparece a la primera
    * letra confunde más de lo que ayuda.
    */
@@ -175,13 +175,13 @@ export class Compras {
   readonly errorCaptura = signal<string | null>(null);
 
   /**
-   * La bodega a donde entra la mercancia.
+   * La bodega a donde entra la mercancía.
    *
    * Se elige en el alta con un selector (no es una constante): las bodegas
-   * viven en el catalogo (`/api/almacenes`) y el operador ve cual elige.
+   * viven en el catálogo de almacenes y el operador ve cuál elige.
    * Si no hay ninguna, el alta ofrece crear una en el acto a quien tenga
    * `almacenes.crear` — el administrador. Sin bodega, el guardado se
-   * bloquea con un aviso en vez de mandar un "almacen 1" que el backend va
+   * bloquea con un aviso en vez de mandar un "almacén 1" que el sistema va
    * a rechazar con un error raro.
    */
   readonly almacenes = signal<Almacen[]>([]);
@@ -271,10 +271,10 @@ export class Compras {
   /**
    * Busca con 250 ms de espera, igual que el resto de las pantallas.
    *
-   * Cada tecleo NO pega una petición: con el buscador abierto a media escritura
-   * son varias y la última es la única que sirve. Además, buscar vuelve
-   * siempre a la página 1, porque quedarse en la 4 con un filtro nuevo es
-   * mirar un `offset` que ya no quiere decir nada.
+   * Cada tecleo NO pega una consulta: con el buscador abierto a media
+   * escritura son varias y la última es la única que sirve. Además, buscar
+   * vuelve siempre a la página 1, porque quedarse en la 4 con un filtro nuevo
+   * es mirar una posición que ya no quiere decir nada.
    */
   buscar(texto: string): void {
     clearTimeout(this.temporizador);
@@ -328,7 +328,7 @@ export class Compras {
 
   /**
    * Vuelve a la primera página con el filtro que se tenga puesto, y cierra el
-   * comprobón: con filtros nuevos la compra abierta puede no estar en la
+   * comprobante: con filtros nuevos la compra abierta puede no estar en la
    * página, y un comprobante flotando sin su fila es peor que ninguno.
    */
   private async recargar(): Promise<void> {
@@ -364,12 +364,12 @@ export class Compras {
   }
 
   /**
-   * La bodega a la que entra la mercancia.
+   * La bodega a la que entra la mercancía.
    *
    * Se consulta cada vez que se abre el alta (y al entrar a la pantalla),
    * aunque ya se conozca: si el administrador la crea, la renombra o la
-   * borra en otra pestana, al volver a abrir el alta ya aparecen las buenas.
-   * Cuando la lista ya habia cargado y la elegida sigue viva, la seleccion
+   * borra en otra pestaña, al volver a abrir el alta ya aparecen las buenas.
+   * Cuando la lista ya había cargado y la elegida sigue viva, la selección
    * no se mueve.
    */
   private async cargarAlmacen(): Promise<void> {
@@ -380,7 +380,7 @@ export class Compras {
         this.almacenId.set(lista[0]?.id ?? null);
       }
     } catch {
-      // Sin bodegas (o sin conexion para leerlas) el alta se bloquea con el
+      // Sin bodegas (o sin conexión para leerlas) el alta se bloquea con el
       // aviso de `problemaParaGuardar`; el listado ya tiene su propio error.
       this.almacenes.set([]);
       this.almacenId.set(null);
@@ -395,9 +395,9 @@ export class Compras {
   /**
    * Crea la primera bodega desde el MISMO alta.
    *
-   * Con el sistema recien entregado no hay bodega, y hacer que el operador
+   * Con el sistema recién entregado no hay bodega, y hacer que el operador
    * salte a Catálogo › Almacenes para crearla (o que llame a otro lado) es
-   * justo lo que se queria evitar. Solo se ofrece a quien tenga el permiso;
+   * justo lo que se quería evitar. Solo se ofrece a quien tenga el permiso;
    * el resto ve el aviso de pedirlo. Al crearla, se selecciona sola.
    */
   async crearBodega(): Promise<void> {
@@ -443,7 +443,7 @@ export class Compras {
     this.limite.set(limite);
     this.cerrarDetalle();
     // Vuelve SIEMPRE a la página 1: quedarse en la 7 y pasar de 25 a 50 filas
-    // es pedir un `offset` que ya no corresponde a nada.
+    // es pedir una posición que ya no corresponde a nada.
     void this.cargarPagina(1);
   }
 
@@ -615,7 +615,7 @@ export class Compras {
 
       await this.cargarPagina(1);
       // Se despliega lo que devolvió el alta, que ya trae los renglones: pedir
-      // el detalle otra vez sería una segunda ida al servidor por lo mismo.
+      // el detalle otra vez sería una segunda ida al sistema por lo mismo.
       if (this.filas().some((otra) => otra.id === compra.id)) {
         this.detalle.set(compra);
         this.expandida.set(compra.id);
@@ -638,7 +638,7 @@ export class Compras {
     this.motivo.set('');
   }
 
-  /** El motivo es obligatorio (mínimo 3 letras en el backend). */
+  /** El motivo es obligatorio (mínimo 3 letras en el sistema). */
   readonly puedeCancelar = computed(() => this.motivo().trim().length >= 3 && !this.cancelando());
 
   /**
@@ -712,7 +712,7 @@ export class Compras {
   /**
    * El error de guardar, en el idioma del que está capturando.
    *
-   * `SIN_COSTO` es el que vale la pena tratar: el mensaje del backend no dice
+   * `SIN_COSTO` es el que vale la pena tratar: el mensaje del sistema no dice
    * DE QUÉ producto, y la pantalla sí lo sabe (está en el renglón). Los otros
    * (`PROVEEDOR_INACTIVO`, `PRODUCTO_INACTIVO`) ya vienen claros.
    */

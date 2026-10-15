@@ -6,7 +6,7 @@ import { MENU, MODULOS, menuPara, primerModulo, rutaDeInicio } from './menu';
  * prueban aqui y no en la pantalla del shell.
  */
 describe('el catalogo de modulos', () => {
-  it('cada modulo tiene un permiso con la forma que espera el backend', () => {
+  it('cada modulo tiene un permiso con la forma que espera el sistema', () => {
     // Espejo del CHECK de `permisos.codigo` en la base (0001_init.sql):
     // `^[a-z_]+\.[a-z_]+$`. Minusculas y guion BAJO; el guion medio NO cabe, asi
     // que un permiso como `estado-cuenta.ver` reventaria al insertarlo.
@@ -77,7 +77,7 @@ describe('menuPara', () => {
 
   it('conserva el orden del catalogo, no el de la lista de permisos', () => {
     // El orden del menu es una decision de la persona que usa la app: lo
-    // de todos los dias arriba. Si se respeta el `Set` que llega de la API
+    // de todos los dias arriba. Si se respeta el `Set` que llega del sistema
     // (cuyo orden no es ninguno), el menu se reacomoda solo.
     const menu = menuPara(new Set(['auditoria.ver', 'notas.ver', 'caja.ver']));
     expect(menu.flatMap((g) => g.modulos.map((m) => m.ruta))).toEqual([
@@ -109,10 +109,10 @@ describe('primerModulo', () => {
 });
 
 describe('el catalogo', () => {
-  it('tiene los dieciseis modulos del backend', () => {
-    // Es un candado, no una descripcion: si el backend gana un modulo y
+  it('tiene los dieciseis modulos del sistema', () => {
+    // Es un candado, no una descripcion: si el sistema gana un modulo y
     // este archivo no, el modulo nuevo es invisible en la app y nadie se
-    // da cuenta hasta que alguien lo pide. Son los dieciseis routers de
+    // da cuenta hasta que alguien lo pide. Son los dieciseis enrutadores de
     // negocio que monta `app.ts`, sin `salud` ni `auth`.
     expect(MODULOS).toHaveLength(16);
     expect(MENU.length).toBeGreaterThan(1);

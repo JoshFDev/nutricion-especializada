@@ -56,7 +56,7 @@ function forma(extra: Partial<FormaUsuario> = {}): FormaUsuario {
   };
 }
 
-// Los nombres y el orden son los que devuelve la API: el catalogo sale por
+// Los nombres y el orden son los que devuelve el sistema: el catalogo sale por
 // `ORDER BY nombre` (`usuarios/repositorio.ts`), no por id.
 const CATALOGO: Rol[] = [
   { id: 1, nombre: 'Administrador', descripcion: 'Dueña del negocio', es_admin: true },
@@ -138,7 +138,7 @@ describe('el cuerpo del alta', () => {
   });
 
   it('la omite entera en blanco: es cuando el servidor genera la temporal', () => {
-    // No va `''`: el esquema es `strictObject` y un `contrasena: ''` daria
+    // No va `''`: las reglas son `strictObject` y un `contrasena: ''` daria
     // 400 en vez de caer en la clave temporal.
     expect(cuerpoDeUsuario(forma(), [2])).not.toHaveProperty('contrasena');
   });
@@ -152,7 +152,7 @@ describe('el cuerpo del alta', () => {
   });
 
   it('no recorta la contrasena: los espacios adentro son parte de la clave', () => {
-    // El backend tampoca aplica `.trim()`, a proposito: recortarla aqui
+    // El sistema tampoco aplica `.trim()`, a proposito: recortarla aqui
     // cambiaria la clave sin aviso y la persona no podria entrar con lo que
     // le dieron.
     const cuerpo = cuerpoDeUsuario(forma({ contrasena: ' La Clave Es Esta ' }), [2]);
@@ -226,7 +226,7 @@ describe('el estado de la cuenta', () => {
   });
 
   it('ya no dice bloqueado cuando la fecha de bloqueo ya paso', () => {
-    // El backend limpia el bloqueo al entrar bien, pero la fila puede venir
+    // El sistema limpia el bloqueo al entrar bien, pero la fila puede venir
     // con la fecha puesta si nadie ha entrado desde entonces.
     const vencido = usuario({ bloqueado_hasta: '2026-01-09T12:00:00.000Z' });
     expect(estadoDeCuenta(vencido, ahora)).toBe('ok');

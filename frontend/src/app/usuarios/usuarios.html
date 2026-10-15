@@ -1,15 +1,15 @@
 <!--
   Usuarios: la lista, la ficha y el editor.
 
-  Los tres bloques son el mismo componente y se eligen con `if`, sin router
-  entre ellos: volver es un boton. Una ruta por vista haria que abrir la ficha
-  de alguien que no esta en la pagina actual se viera como una pantalla de
-  error nueva, y el menu ya marca cuando un modulo no existe.
+  Los tres bloques son el mismo componente y se eligen con `if`, sin enrutador
+  entre ellos: volver es un botón. Una ruta por vista haría que abrir la ficha
+  de alguien que no está en la página actual se viera como una pantalla de
+  error nueva, y el menú ya marca cuando un módulo no existe.
 
-  El panel de la clave temporal esta FUERA de los tres, al principio, a
-  proposito: se ve encima de cualquiera de ellos y no se va solo. Si el
-  operador la pierde, tiene que resetear de nuevo, y ahi ya nadie sabe si la
-  anterior llego a entregarse.
+  El panel de la clave temporal está FUERA de los tres, al principio, a
+  propósito: se ve encima de cualquiera de ellos y no se va solo. Si el
+  operador la pierde, tiene que resetear de nuevo, y ahí ya nadie sabe si la
+  anterior llegó a entregarse.
 -->
 @if (clave(); as datosClave) {
   <section class="bloque clave" role="alert">
@@ -17,7 +17,7 @@
     <p class="aviso">
       Esta clave se muestra <strong>una sola vez</strong>: en la base solo queda su huella, así que
       no hay forma de volver a leerla. Cópiala y entrégasela a la persona; en su primer ingreso la
-      app le va a pedir que la cambie.
+      aplicación le va a pedir que la cambie.
     </p>
 
     <div class="linea-clave">
@@ -127,7 +127,7 @@
       </div>
 
       <!--
-        La clave del alta, OPCIONAL. En blanco el servidor genera la
+        La clave del alta, OPCIONAL. En blanco el sistema genera la
         temporal de siempre (y sale el panel de una sola vez); escrita, se
         usa tal cual y la persona entra sin pendiente de cambio.
         `confirmar` no se manda: existe para que no se equivoquen al
@@ -233,15 +233,14 @@
             Imagen propia del LOGIN DE ESTE EQUIPO (no de la cuenta que se está
             editando). Se elige con un selector de archivos de este navegador,
             se comprime, se guarda en el navegador y NO se copia al proyecto ni
-            al servidor: vive solo en esta máquina. Por eso no va con las
-            miniaturas del servidor: esas se guardan en la cuenta, esta no.
+            al sistema: vive solo en esta máquina. Por eso no va con las
+            miniaturas del sistema: esas se guardan en la cuenta, esta no.
           -->
           <div class="fondo-propio">
             <h3>O con tu propia imagen</h3>
             <p class="pista">
               Se elige de este equipo (Imágenes, Descargas…), se guarda en el navegador y es el
-              fondo que verá el login a partir de ahora. No se copia nada al proyecto ni al
-              servidor.
+              fondo que verá el login a partir de ahora. No se copia nada al proyecto ni al sistema.
             </p>
 
             @if (fondoPropio(); as imagen) {

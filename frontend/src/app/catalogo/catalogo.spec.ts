@@ -7,13 +7,13 @@ import { cuerpoDeCatalogo, permisoDe, rutaDe } from './catalogo-api';
  * El resto del modulo es compartido; lo que no puede desincronizarse entre
  * las tres tablas es la URL y el prefijo de permiso, porque si un lado
  * cambia y el otro no, una de las tres pantallas deja de hablar con el
- * backend. Estas funciones son las UNICAS que saben la diferencia, y por
+ * sistema. Estas funciones son las UNICAS que saben la diferencia, y por
  * eso se prueban aqui y no en la pantalla.
  */
 
 describe('la ruta de cada recurso', () => {
   it('categorias va a categorias-producto, su unica diferencia', () => {
-    // El backend monta /api/categorias-producto, /api/especies y
+    // El sistema monta /api/categorias-producto, /api/especies y
     // /api/almacenes (`catalogo/controlador.ts`, `rutaDe`). Es el unico
     // lugar donde el nombre no es obvio.
     expect(rutaDe('categorias')).toBe('categorias-producto');

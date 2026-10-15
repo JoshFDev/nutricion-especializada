@@ -10,14 +10,14 @@ import { API } from '../nucleo/api';
 import { ProveedoresApi, cuerpoDeProveedor, type FormaProveedor } from './proveedores-api';
 
 /**
- * El cuerpo del proveedor: lo que se manda al backend.
+ * El cuerpo del proveedor: lo que se manda al sistema.
  *
- * Es la prueba de que la pantalla no normaliza distinto que el esquema de
- * `proveedores/esquemas.ts`. Lo que se comprueba aqui es lo que el esquema NO
- * hace: el nombre se limpia de los bordes (el backend no lo transforma) y los
+ * Es la prueba de que la pantalla no normaliza distinto que las reglas de
+ * `proveedores/esquemas.ts`. Lo que se comprueba aqui es lo que las reglas NO
+ * hacen: el nombre se limpia de los bordes (el sistema no lo transforma) y los
  * opcionales en blanco viajan como `null`, que es como los guarda la base.
  *
- * Y lo que NO se manda tambien es parte del contrato: `saldo_actual` y
+ * Y lo que NO se manda tambien cuenta: `saldo_actual` y
  * `activo` no aparecen en `CuerpoProveedor` porque el primero lo recalcula la
  * base y el segundo solo se puede cambiar por su cuenta (ver
  * `ProveedoresApi.alternarActivo`).
@@ -42,7 +42,7 @@ describe('el cuerpo del proveedor', () => {
   });
 
   it('NO mayusculiza el nombre, a diferencia del codigo de clientes', () => {
-    // El esquema de `clientes/esquemas.ts` sube el codigo a mayusculas; el de
+    // Las reglas de `clientes/esquemas.ts` suben el codigo a mayusculas; el de
     // proveedores no toca el nombre, y convertirlo aqui dejaria el listado
     // refrescado mostrando un nombre distinto al que se tecleo.
     const cuerpo = cuerpoDeProveedor(forma({ nombre: 'forrajeros del norte' }));
@@ -78,9 +78,9 @@ describe('el cuerpo del proveedor', () => {
 /**
  * La ruta de exportar.
  *
- * Es lo unico de esta API que necesita el HTTP de verdad simulado, y se
+ * Es lo unico de este servicio que necesita la conexión de verdad simulada, y se
  * prueba por dos razones concretas: que pegue a `/exportar` y NO a
- * `/proveedores` (que devolveria JSON, no un archivo), y que NO mande
+ * `/proveedores` (que devolvería los datos, no un archivo), y que NO mande
  * `limite`/`offset`. Mandarlos haria que el excel saliera con solo la pagina
  * que se esta viendo, que es justo lo que el operador no pide cuando exporta.
  */
@@ -135,8 +135,8 @@ describe('ProveedoresApi.exportarExcel', () => {
     expect(peticion.request.params.get('buscar')).toBe('forra');
   });
 
-  it('traduce el filtro de estado a lo que el backend entiende', async () => {
-    // El desplegable tiene tres opciones y el backend solo dos: "todos" es no
+  it('traduce el filtro de estado a lo que el sistema entiende', async () => {
+    // El desplegable tiene tres opciones y el sistema solo dos: "todos" es no
     // mandar el parametro, no mandar `activo=todos`.
     const api = TestBed.inject(ProveedoresApi);
 

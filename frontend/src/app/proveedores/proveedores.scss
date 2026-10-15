@@ -68,7 +68,7 @@
   box-shadow: 0 0 0 2px var(--acento-suave);
 }
 
-/* El backend marca el nombre repetido: se pinta el borde, no solo el texto
+/* El sistema marca el nombre repetido: se pinta el borde, no solo el texto
    de ayuda, porque el campo es lo que hay que corregir. */
 .campo input[aria-invalid='true'] {
   border-color: var(--peligro);

@@ -54,7 +54,7 @@
 
     <form [formGroup]="forma" (ngSubmit)="guardar()">
       <div class="bloque datos">
-        <label>
+        <label class="ancho">
           <span>Nombre</span>
           <input formControlName="nombre" autocomplete="off" />
           @if (problemaDe('nombre'); as problema) {
@@ -307,7 +307,7 @@
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="bloque">
+    <div class="bloque resumen">
       <dl>
         <dt>Puesto</dt>
         <dd>{{ ficha.puesto ?? '—' }}</dd>

@@ -234,6 +234,20 @@ export function menuPara(permisos: ReadonlySet<string>): Grupo[] {
 }
 
 /**
+ * Los módulos del grupo "Sistema" que la persona puede ver.
+ *
+ * El grupo "Sistema" NO se dibuja en el menú lateral: su única puerta es el
+ * desplegable de configuración de la barra. Por eso se expone aparte, para que
+ * ese desplegable salga de la MISMA tabla y no de una copia escrita a mano que
+ * se queda atrás cuando el catálogo gana un módulo. Con la copia, "Caja y
+ * bancos" y "Reportes" existían como ruta pero no había forma de abrirlos.
+ */
+export function modulosSistema(permisos: ReadonlySet<string>): Modulo[] {
+  const sistema = MENU.find((grupo) => grupo.titulo === 'Sistema');
+  return (sistema?.modulos ?? []).filter((modulo) => permisos.has(modulo.permiso));
+}
+
+/**
  * A dónde va la persona al entrar: el primer módulo que puede ver.
  *
  * Se elige el primero y no uno "principal" porque el menú ya está ordenado

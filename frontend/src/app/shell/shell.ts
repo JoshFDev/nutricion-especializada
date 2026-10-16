@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
-import { menuPara, type Grupo } from '../nucleo/menu';
+import { menuPara, modulosSistema, type Grupo } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
 import { ICONOS } from '../nucleo/iconos/iconos';
 import { ToastContainer } from '../nucleo/toast';
@@ -78,27 +78,25 @@ export class Shell {
     return this.sanitizer.bypassSecurityTrustHtml(svg);
   }
 
-  /** Opciones del menú Sistema (solo las que el usuario puede ver) */
+  /**
+   * Opciones del menú Sistema (solo las que el usuario puede ver).
+   *
+   * Salen de la MISMA tabla del menú lateral (`modulosSistema`, el grupo
+   * "Sistema") y no de una copia a mano: ese grupo no se dibuja en el
+   * lateral y este desplegable es su única puerta, así que una copia que se
+   * atrasa deja un módulo sin forma de abrirlo. "Salir" es la única que no es
+   * un módulo y se agrega aparte.
+   */
   readonly sistemaOpciones = computed(() => {
     const permisos = new Set(this.sesion.perfil()?.permisos ?? []);
-    const opciones: { etiqueta: string; ruta: string; icono: string; permiso: string }[] = [];
+    const opciones: { etiqueta: string; ruta: string; icono: string; permiso: string }[] =
+      modulosSistema(permisos).map((modulo) => ({
+        etiqueta: modulo.etiqueta,
+        ruta: `/${modulo.ruta}`,
+        icono: modulo.icon,
+        permiso: modulo.permiso,
+      }));
 
-    if (permisos.has('usuarios.ver')) {
-      opciones.push({
-        etiqueta: 'Usuarios y roles',
-        ruta: '/usuarios',
-        icono: 'user-cog',
-        permiso: 'usuarios.ver',
-      });
-    }
-    if (permisos.has('auditoria.ver')) {
-      opciones.push({
-        etiqueta: 'Auditoría',
-        ruta: '/auditoria',
-        icono: 'scroll',
-        permiso: 'auditoria.ver',
-      });
-    }
     // Salir siempre está disponible si hay sesión
     opciones.push({ etiqueta: 'Salir', ruta: '', icono: 'log-out', permiso: '' });
 
@@ -108,7 +106,7 @@ export class Shell {
   /** Verifica si el usuario tiene permisos para ver el desplegable de Sistema */
   readonly puedeVerSistema = computed(() => {
     const permisos = new Set(this.sesion.perfil()?.permisos ?? []);
-    return permisos.has('usuarios.ver') || permisos.has('auditoria.ver');
+    return modulosSistema(permisos).length > 0;
   });
 
   /** Cierra el menú de lado al elegir un módulo: en un celular tapar la pantalla es lo esperado. */

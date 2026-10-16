@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MENU, MODULOS, menuPara, primerModulo, rutaDeInicio } from './menu';
+import { MENU, MODULOS, menuPara, modulosSistema, primerModulo, rutaDeInicio } from './menu';
 
 /**
  * El menu es lo unico que decide que se ve en la app, asi que sus reglas se
@@ -89,6 +89,26 @@ describe('menuPara', () => {
 
   it('con un rol sin permisos no devuelve ningun grupo', () => {
     expect(menuPara(new Set())).toEqual([]);
+  });
+});
+
+describe('modulosSistema', () => {
+  it('devuelve solo lo que la persona puede ver, en el orden del catálogo', () => {
+    // El grupo "Sistema" no se dibuja en el lateral: estas son las opciones
+    // del engrane de configuración. "Caja y bancos" y "Reportes" faltaban
+    // porque ese desplegable tenía una copia a mano incompleta.
+    const rutas = modulosSistema(new Set(['caja.ver', 'auditoria.ver'])).map((m) => m.ruta);
+    expect(rutas).toEqual(['auditoria', 'caja']);
+  });
+
+  it('incluye caja y reportes cuando se tienen esos permisos', () => {
+    const rutas = modulosSistema(new Set(['caja.ver', 'reportes.ver'])).map((m) => m.ruta);
+    expect(rutas).toEqual(['reportes', 'caja']);
+  });
+
+  it('sin permisos de Sistema no devuelve nada', () => {
+    expect(modulosSistema(new Set(['notas.ver']))).toEqual([]);
+    expect(modulosSistema(new Set())).toEqual([]);
   });
 });
 

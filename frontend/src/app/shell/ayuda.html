@@ -1,0 +1,170 @@
+<!--
+  El botón de Ayuda de la barra y sus ventanas.
+
+  El botón va al lado del engrane de configuración y se viste igual: son dos
+  acciones de la barra, no una acción y un adorno. El menú que abre tiene las
+  cuatro cosas de una ayuda: la guía por sección, los atajos, el soporte y la
+  ficha de la aplicación.
+-->
+<div class="ayuda-dropdown">
+  <button
+    type="button"
+    class="ayuda-btn"
+    (click)="alternarMenu()"
+    [attr.aria-expanded]="menuAbierto()"
+    aria-haspopup="menu"
+    aria-label="Ayuda"
+    title="Ayuda"
+  >
+    <span class="ayuda-icon" [innerHTML]="icono('help-circle')"></span>
+  </button>
+
+  @if (menuAbierto()) {
+    <div class="ayuda-menu" role="menu">
+      <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('guia')">
+        <span class="item-icon" [innerHTML]="icono('book-open')"></span>
+        <span>Guía rápida</span>
+      </button>
+      <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('atajos')">
+        <span class="item-icon" [innerHTML]="icono('keyboard')"></span>
+        <span>Atajos de teclado</span>
+      </button>
+      <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('soporte')">
+        <span class="item-icon" [innerHTML]="icono('mail')"></span>
+        <span>Soporte</span>
+      </button>
+      <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('acerca')">
+        <span class="item-icon" [innerHTML]="icono('info')"></span>
+        <span>Acerca de</span>
+      </button>
+    </div>
+  }
+</div>
+
+<!--
+  El velo es un botón y no un div con clic por la misma razón que en el resto
+  del sistema: con un div, quien navega con el teclado se queda con la ventana
+  abierta y sin salida. Como botón, se cierra tabulando hasta él y pulsando
+  Return.
+-->
+@if (seccion(); as panel) {
+  <button type="button" class="ayuda-velo" aria-label="Cerrar la ayuda" (click)="cerrar()"></button>
+  <div class="ayuda-panel" role="dialog" aria-modal="true" aria-labelledby="ayuda-titulo">
+    <header class="panel-cabecera">
+      <h2 id="ayuda-titulo">{{ titulos[panel] }}</h2>
+      <button type="button" class="panel-cerrar" aria-label="Cerrar" (click)="cerrar()">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="panel-cuerpo">
+      @switch (panel) {
+        @case ('guia') {
+          <p class="intro">
+            Qué hace cada sección del sistema. Solo aparecen las que puedes abrir; toca una para ir
+            directamente a ella.
+          </p>
+          @for (grupo of guia(); track grupo.titulo) {
+            <section class="grupo-guia">
+              <h3>{{ grupo.titulo }}</h3>
+              <ul class="lista-guia">
+                @for (modulo of grupo.modulos; track modulo.ruta) {
+                  <li>
+                    <span class="guia-icono" [innerHTML]="icono(modulo.icon)"></span>
+                    <div class="guia-texto">
+                      <a [routerLink]="'/' + modulo.ruta" (click)="cerrar()">{{
+                        modulo.etiqueta
+                      }}</a>
+                      <p>{{ modulo.ayuda }}</p>
+                    </div>
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+        }
+
+        @case ('atajos') {
+          <p class="intro">
+            Los atajos que el sistema reconoce hoy, de la barra y de las capturas.
+          </p>
+          <ul class="lista-atajos">
+            @for (atajo of atajos; track atajo.accion) {
+              <li>
+                <span class="teclas">
+                  @for (tecla of atajo.teclas; track tecla) {
+                    <kbd>{{ tecla }}</kbd>
+                  }
+                </span>
+                <span class="atajo-accion">{{ atajo.accion }}</span>
+              </li>
+            }
+          </ul>
+        }
+
+        @case ('soporte') {
+          <p class="intro">
+            Si algo no cuadra, o necesitas una mano con el sistema, escríbenos y lo vemos.
+          </p>
+          <ul class="lista-contacto">
+            @if (info.soporte.correo) {
+              <li>
+                <span class="contacto-icono" [innerHTML]="icono('mail')"></span>
+                <a class="contacto-dato" [href]="'mailto:' + info.soporte.correo">{{
+                  info.soporte.correo
+                }}</a>
+              </li>
+            }
+            @if (info.soporte.telefono) {
+              <li>
+                <span class="contacto-icono" [innerHTML]="icono('help-circle')"></span>
+                <span class="contacto-dato">{{ info.soporte.telefono }}</span>
+              </li>
+            }
+            <li>
+              <span class="contacto-icono" [innerHTML]="icono('info')"></span>
+              <span class="contacto-dato">{{ info.soporte.horario }}</span>
+            </li>
+          </ul>
+        }
+
+        @case ('acerca') {
+          <div class="acerca">
+            <img class="acerca-logo" src="logo-nutricion.png" alt="" />
+            <h3 class="acerca-nombre">{{ info.nombre }}</h3>
+            <p class="acerca-version">Versión {{ info.version }}</p>
+            <p class="acerca-descripcion">{{ info.descripcion }}</p>
+
+            <dl class="acerca-datos">
+              <div>
+                <dt>Empresa</dt>
+                <dd>{{ info.empresa }}</dd>
+              </div>
+              <div>
+                <dt>Tecnología</dt>
+                <dd>{{ info.tecnologia }}</dd>
+              </div>
+              <div>
+                <dt>Soporte</dt>
+                <dd>{{ info.soporte.correo }}</dd>
+              </div>
+            </dl>
+
+            <p class="acerca-pie">
+              © {{ anio }} {{ info.empresa }}. Todos los derechos reservados.
+            </p>
+          </div>
+        }
+      }
+    </div>
+  </div>
+}

@@ -48,6 +48,9 @@
     <div class="usuario">
       <span class="nombre-usuario">{{ nombre() }}</span>
 
+      <!-- La ayuda va antes del engrane: primero "¿cómo?", luego "¿qué configuro?" -->
+      <app-ayuda />
+
       <!-- Dropdown Sistema (solo para usuarios con permisos de admin) -->
       @if (puedeVerSistema()) {
         <div class="sistema-dropdown">

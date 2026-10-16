@@ -25,6 +25,16 @@ export interface Modulo {
   permiso: string;
   /** Qué se va a hacer aquí. Lo lee el aviso de "pantalla pendiente". */
   pendiente: string;
+  /**
+   * Para qué sirve el módulo, en una línea, para la Ayuda.
+   *
+   * Va aparte de `pendiente` a propósito: `pendiente` describe lo que le
+   * FALTA a la pantalla, y eso deja de ser cierto en cuanto la pantalla
+   * existe. `ayuda` describe lo que la pantalla HACE, y sigue siendo cierto.
+   * Es obligatorio para que la guía no se quede con un módulo en blanco
+   * cuando se agrega uno nuevo.
+   */
+  ayuda: string;
   /** Nombre del icono SVG (sin extensión, coincide con archivo en assets/icons). */
   icon: string;
   /**
@@ -63,6 +73,8 @@ export const MENU: Grupo[] = [
         permiso: 'notas.ver',
         icon: 'clipboard',
         pendiente: 'Editar una nota ya capturada y reimprimir su PDF.',
+        ayuda:
+          'Captura las ventas del día: el cliente, los productos y el precio. También reimprime el PDF y cancela una nota.',
         carga: () => import('../notas/notas').then((m) => m.Notas),
       },
     ],
@@ -76,6 +88,7 @@ export const MENU: Grupo[] = [
         permiso: 'productos.ver',
         icon: 'package',
         pendiente: 'Alta y edición de productos con su clave y unidad.',
+        ayuda: 'El catálogo de lo que vendes: clave, nombre, unidad y si está activo.',
         carga: () => import('../productos/productos').then((m) => m.Productos),
       },
       {
@@ -84,6 +97,7 @@ export const MENU: Grupo[] = [
         permiso: 'categorias.ver',
         icon: 'tag',
         pendiente: 'Categorías de producto y sus multiplicadores de rendimiento.',
+        ayuda: 'Cómo se agrupan los productos y su rendimiento, para el consumo semanal.',
         carga: () => import('../categorias/categorias').then((m) => m.Categorias),
       },
       {
@@ -92,6 +106,7 @@ export const MENU: Grupo[] = [
         permiso: 'especies.ver',
         icon: 'cow',
         pendiente: 'Especies de cliente (bovino, porcino, etc.) y su rendimiento.',
+        ayuda: 'Las especies de cliente (bovino, porcino, etc.) y su rendimiento.',
         carga: () => import('../especies/especies').then((m) => m.Especies),
       },
       {
@@ -100,6 +115,7 @@ export const MENU: Grupo[] = [
         permiso: 'precios.ver',
         icon: 'dollar-sign',
         pendiente: 'Listas de precios por especie y las vigencias.',
+        ayuda: 'Los precios por producto, por especie y por cliente, con su vigencia.',
         carga: () => import('../precios/precios').then((m) => m.Precios),
       },
       {
@@ -108,6 +124,7 @@ export const MENU: Grupo[] = [
         permiso: 'almacenes.ver',
         icon: 'warehouse',
         pendiente: 'Las bodegas a donde entra la mercancía; las usa el alta de compras.',
+        ayuda: 'Las bodegas a donde entra la mercancía; las usa el alta de compras.',
         carga: () => import('../almacenes/almacenes').then((m) => m.Almacenes),
       },
     ],
@@ -121,6 +138,8 @@ export const MENU: Grupo[] = [
         permiso: 'clientes.ver',
         icon: 'users',
         pendiente: 'Alta de clientes con su código, especie y datos fiscales.',
+        ayuda:
+          'El alta de clientes con su código, especie y datos fiscales. Aquí también se ajusta su saldo.',
         carga: () => import('../clientes/clientes').then((m) => m.Clientes),
       },
     ],
@@ -134,6 +153,7 @@ export const MENU: Grupo[] = [
         permiso: 'proveedores.ver',
         icon: 'truck',
         pendiente: 'Proveedores y sus folios de compra.',
+        ayuda: 'Los proveedores y los folios de sus compras.',
         carga: () => import('../proveedores/proveedores').then((m) => m.Proveedores),
       },
       {
@@ -142,6 +162,7 @@ export const MENU: Grupo[] = [
         permiso: 'compras.ver',
         icon: 'download',
         pendiente: 'Registrar compras, entradas de mercancía y sus folios.',
+        ayuda: 'Registra la entrada de mercancía; al guardar sube el inventario.',
         carga: () => import('../compras/compras').then((m) => m.Compras),
       },
       {
@@ -150,6 +171,7 @@ export const MENU: Grupo[] = [
         permiso: 'inventario.ver',
         icon: 'bar-chart',
         pendiente: 'Existencia por producto y los ajustes y mermas.',
+        ayuda: 'La existencia por producto, y los ajustes y mermas.',
         carga: () => import('../inventario/inventario').then((m) => m.Inventario),
       },
     ],
@@ -163,6 +185,7 @@ export const MENU: Grupo[] = [
         permiso: 'pagos.ver',
         icon: 'credit-card',
         pendiente: 'Registrar pagos y aplicarlos a las notas abiertas.',
+        ayuda: 'Registra los abonos de los clientes y aplícalos a sus notas abiertas.',
         carga: () => import('../pagos/pagos').then((m) => m.Pagos),
       },
       {
@@ -171,6 +194,7 @@ export const MENU: Grupo[] = [
         permiso: 'estado_cuenta.ver',
         icon: 'file-text',
         pendiente: 'Saldo por cliente y su hoja de estado de cuenta para cobrar.',
+        ayuda: 'Cuánto debe cada cliente y su hoja de estado de cuenta para cobrar.',
         carga: () => import('../estado-cuenta/estado-cuenta').then((m) => m.EstadoCuenta),
       },
     ],
@@ -186,6 +210,7 @@ export const MENU: Grupo[] = [
         permiso: 'usuarios.ver',
         icon: 'user-cog',
         pendiente: 'Usuarios, roles y la clave de cada quien.',
+        ayuda: 'Los usuarios, sus roles y la clave de cada quien.',
         carga: () => import('../usuarios/usuarios').then((m) => m.Usuarios),
       },
       {
@@ -194,6 +219,7 @@ export const MENU: Grupo[] = [
         permiso: 'auditoria.ver',
         icon: 'scroll',
         pendiente: 'Las cinco bitácoras en solo lectura.',
+        ayuda: 'Las bitácoras de todo lo que pasa en el sistema, en solo lectura.',
         carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },
       {
@@ -202,6 +228,7 @@ export const MENU: Grupo[] = [
         permiso: 'reportes.ver',
         icon: 'pie-chart',
         pendiente: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
+        ayuda: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
         carga: () => import('../reportes/reportes').then((m) => m.Reportes),
       },
       {
@@ -210,6 +237,7 @@ export const MENU: Grupo[] = [
         permiso: 'caja.ver',
         icon: 'bank',
         pendiente: 'Cuentas, movimientos de ingreso y egreso, y su resumen.',
+        ayuda: 'Las cuentas de caja y banco, sus movimientos de ingreso y egreso, y el resumen.',
         carga: () => import('../caja/caja').then((m) => m.Caja),
       },
     ],

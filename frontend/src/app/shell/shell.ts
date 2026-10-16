@@ -1,18 +1,11 @@
-import {
-  Component,
-  ElementRef,
-  HostListener,
-  computed,
-  effect,
-  inject,
-  signal,
-} from '@angular/core';
+import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { menuPara, modulosSistema, type Grupo } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
 import { ICONOS } from '../nucleo/iconos/iconos';
 import { ToastContainer } from '../nucleo/toast';
+import { Ayuda } from './ayuda';
 
 /**
  * El marco de la aplicación: cabecera, menú lateral y el hueco de la pantalla.
@@ -31,7 +24,7 @@ import { ToastContainer } from '../nucleo/toast';
  */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, Ayuda],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -39,7 +32,6 @@ export class Shell {
   private readonly router = inject(Router);
   private readonly sesion = inject(Sesion);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly host = inject(ElementRef<HTMLElement>);
 
   /** Los grupos con lo que la persona puede ver, en el orden del catálogo. */
   readonly menu = computed(() => menuPara(new Set(this.sesion.perfil()?.permisos ?? [])));
@@ -133,15 +125,16 @@ export class Shell {
    * Cierra el desplegable de Sistema al hacer clic fuera de él.
    *
    * El clic del propio botón también llega aquí, así que se mira de dónde
-   * salió: si viene de dentro del marco no se toca nada, porque ese clic lo
-   * resuelve `alternarSistemaDropdown`. Sin esto el menú se quedaba abierto con
-   * el ratón en otro lado de la pantalla.
+   * salió: si viene de dentro del desplegable no se toca nada, porque ese clic
+   * lo resuelve `alternarSistemaDropdown`. Sin esto el menú se quedaba abierto
+   * con el ratón en otro lado de la pantalla, y hasta al abrir la Ayuda de al
+   * lado (que es otro desplegable) los dos quedaban abiertos a la vez.
    */
   @HostListener('document:click', ['$event'])
   onClicFuera(event: MouseEvent): void {
     if (!this.sistemaDropdownAbierto()) return;
     const origen = event.target;
-    if (origen instanceof Node && this.host.nativeElement.contains(origen)) return;
+    if (origen instanceof Element && origen.closest('.sistema-dropdown') !== null) return;
     this.cerrarSistemaDropdown();
   }
 

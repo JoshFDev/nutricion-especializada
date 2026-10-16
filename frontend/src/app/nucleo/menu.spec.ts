@@ -58,6 +58,16 @@ describe('el catalogo de modulos', () => {
       expect(modulo.permiso.endsWith('.ver'), modulo.ruta).toBe(true);
     }
   });
+
+  it('cada modulo trae su linea de ayuda, sin espacios de sobra', () => {
+    // La guia de la Ayuda se arma con esto. Un modulo sin texto saldria en
+    // blanco, que es peor que no ofrecerlo; y el campo es obligatorio en el
+    // tipo justo para que no se pueda agregar un modulo sin su linea.
+    for (const modulo of MODULOS) {
+      expect(modulo.ayuda.length, modulo.ruta).toBeGreaterThan(0);
+      expect(modulo.ayuda, modulo.ruta).toBe(modulo.ayuda.trim());
+    }
+  });
 });
 
 describe('menuPara', () => {

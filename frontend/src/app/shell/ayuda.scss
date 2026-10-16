@@ -1,0 +1,501 @@
+/*
+ * El botón de Ayuda y sus ventanas.
+ *
+ * El botón se ve igual que los otros de la barra (el de salir y el engrane):
+ * son la misma clase de control, así que no puede tener otro aspecto. La regla
+ * está repetida aquí y no compartida con `shell.scss` a propósito: los estilos
+ * de ese archivo son del shell y no cruzan a este componente, y mover la regla
+ * a los estilos globales para ahorrar estas líneas habría cambiado el marco
+ * entero por una ventana nueva.
+ */
+
+:host {
+  display: flex;
+  align-items: center;
+}
+
+.ayuda-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------ el botón */
+
+.ayuda-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  background: rgb(255 255 255 / 12%);
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 6px;
+  color: var(--sobre-acento);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    transform 0.06s ease,
+    box-shadow 0.12s ease;
+  flex-shrink: 0;
+}
+
+.ayuda-btn:hover {
+  background: rgb(255 255 255 / 22%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
+}
+
+.ayuda-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.ayuda-btn:focus-visible {
+  outline: 2px solid var(--sobre-acento);
+  outline-offset: 2px;
+}
+
+.ayuda-icon,
+.item-icon,
+.guia-icono,
+.contacto-icono,
+.panel-cerrar svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+  }
+}
+
+.ayuda-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--sobre-acento);
+}
+
+/* ------------------------------------------------------------------- el menú */
+
+.ayuda-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 200px;
+  padding: 0.375rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.625rem;
+  box-shadow:
+    0 10px 25px rgb(0 0 0 / 15%),
+    0 5px 10px rgb(0 0 0 / 10%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  animation: ayudaIn 0.12s ease-out;
+}
+
+@keyframes ayudaIn {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ayuda-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5625rem 0.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--texto-suave);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.ayuda-item:hover,
+.ayuda-item:focus-visible {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  outline: none;
+}
+
+.item-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--texto-suave);
+  opacity: 0.7;
+  transition:
+    color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.ayuda-item:hover .item-icon,
+.ayuda-item:focus-visible .item-icon {
+  color: var(--acento-texto);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ la ventana */
+
+.ayuda-velo {
+  position: fixed;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: rgb(0 0 0 / 40%);
+  z-index: 1100;
+  cursor: default;
+  animation: ayudaFade 0.15s ease-out;
+}
+
+.ayuda-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: min(80vh, 44rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 25%);
+  z-index: 1101;
+  overflow: hidden;
+  animation: ayudaSube 0.18s ease-out;
+}
+
+@keyframes ayudaFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ayudaSube {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.panel-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.panel-cabecera h2 {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.panel-cerrar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+  background: var(--superficie);
+  color: var(--texto-suave);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.panel-cerrar:hover {
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+.panel-cerrar:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.panel-cerrar svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.panel-cuerpo {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.intro {
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------- la guía */
+
+.grupo-guia {
+  margin-bottom: 1.25rem;
+}
+
+.grupo-guia:last-child {
+  margin-bottom: 0;
+}
+
+.grupo-guia h3 {
+  margin: 0 0 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-tenue);
+}
+
+.lista-guia {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.lista-guia li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.guia-icono {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+
+  svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}
+
+.guia-texto a {
+  color: var(--acento-texto);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-decoration: none;
+}
+
+.guia-texto a:hover {
+  text-decoration: underline;
+}
+
+.guia-texto p {
+  margin: 0.125rem 0 0;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------------ los atajos */
+
+.lista-atajos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.lista-atajos li {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.teclas {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex: none;
+  min-width: 9rem;
+}
+
+.teclas kbd {
+  display: inline-block;
+  min-width: 1.75rem;
+  padding: 0.1875rem 0.4375rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-bottom-width: 2px;
+  border-radius: 0.375rem;
+}
+
+.atajo-accion {
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------------ el soporte */
+
+.lista-contacto {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lista-contacto li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.contacto-icono {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+
+  svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}
+
+.contacto-dato {
+  font-size: 0.9375rem;
+  color: var(--texto);
+  text-decoration: none;
+}
+
+a.contacto-dato:hover {
+  color: var(--acento-texto);
+  text-decoration: underline;
+}
+
+/* ----------------------------------------------------------------- acerca de */
+
+.acerca {
+  text-align: center;
+}
+
+.acerca-logo {
+  width: 5rem;
+  height: 5rem;
+  padding: 0.5rem;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 1rem;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.acerca-nombre {
+  margin: 0.75rem 0 0.125rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--texto);
+}
+
+.acerca-version {
+  margin: 0;
+  color: var(--texto-tenue);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.acerca-descripcion {
+  margin: 0.75rem auto 0;
+  max-width: 28rem;
+  color: var(--texto-suave);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.acerca-datos {
+  margin: 1.25rem 0 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--borde);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.acerca-datos > div {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.acerca-datos dt {
+  flex: none;
+  width: 6.5rem;
+  color: var(--texto-tenue);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.acerca-datos dd {
+  margin: 0;
+  color: var(--texto);
+  font-size: 0.8125rem;
+}
+
+.acerca-pie {
+  margin: 1.25rem 0 0;
+  color: var(--texto-tenue);
+  font-size: 0.75rem;
+}
+
+/* Quien pidió menos movimiento no ve entrar nada. */
+@media (prefers-reduced-motion: reduce) {
+  .ayuda-menu,
+  .ayuda-velo,
+  .ayuda-panel {
+    animation: none;
+  }
+}

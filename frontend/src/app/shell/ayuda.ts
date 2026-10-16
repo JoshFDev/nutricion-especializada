@@ -9,21 +9,20 @@ import {
 } from '@angular/core';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
-import { ATAJOS } from '../nucleo/ayuda';
 import { ICONOS } from '../nucleo/iconos/iconos';
 import { INFO_SISTEMA } from '../nucleo/info';
 import { menuPara } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
 
-/** Los cuatro paneles que cuelgan del botón de ayuda. */
-type Seccion = 'guia' | 'atajos' | 'soporte' | 'acerca';
+/** Los paneles que cuelgan del botón de ayuda. */
+type Seccion = 'guia' | 'soporte' | 'acerca';
 
 /**
  * El botón de Ayuda de la barra: su menú y sus ventanas.
  *
- * Es el "?" de al lado del engrane, y trae las cuatro cosas que se preguntan
- * de un sistema que no se conoce: qué hace cada sección, qué atajos hay, a
- * dónde escribir si algo falla y qué versión es esta.
+ * Es el "?" de al lado del engrane, y trae las tres cosas que se preguntan de
+ * un sistema que no se conoce: qué hace cada sección, con quién hablar si algo
+ * falla y qué versión es esta.
  *
  * La guía NO es una lista escrita aparte: sale del mismo catálogo del menú
  * (`menuPara`), así que solo muestra lo que la persona puede abrir y un módulo
@@ -46,13 +45,11 @@ export class Ayuda {
   private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly info = INFO_SISTEMA;
-  readonly atajos = ATAJOS;
   readonly anio = new Date().getFullYear();
 
   /** El título de cada panel, por llave. */
   readonly titulos: Record<Seccion, string> = {
     guia: 'Guía rápida',
-    atajos: 'Atajos de teclado',
     soporte: 'Soporte',
     acerca: 'Acerca de',
   };

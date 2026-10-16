@@ -3,8 +3,8 @@
 
   El botón va al lado del engrane de configuración y se viste igual: son dos
   acciones de la barra, no una acción y un adorno. El menú que abre tiene las
-  cuatro cosas de una ayuda: la guía por sección, los atajos, el soporte y la
-  ficha de la aplicación.
+  tres cosas de una ayuda: la guía por sección, el soporte y la ficha de la
+  aplicación.
 -->
 <div class="ayuda-dropdown">
   <button
@@ -25,12 +25,8 @@
         <span class="item-icon" [innerHTML]="icono('book-open')"></span>
         <span>Guía rápida</span>
       </button>
-      <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('atajos')">
-        <span class="item-icon" [innerHTML]="icono('keyboard')"></span>
-        <span>Atajos de teclado</span>
-      </button>
       <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('soporte')">
-        <span class="item-icon" [innerHTML]="icono('mail')"></span>
+        <span class="item-icon" [innerHTML]="icono('help-circle')"></span>
         <span>Soporte</span>
       </button>
       <button type="button" class="ayuda-item" role="menuitem" (click)="abrir('acerca')">
@@ -93,48 +89,19 @@
           }
         }
 
-        @case ('atajos') {
-          <p class="intro">
-            Los atajos que el sistema reconoce hoy, de la barra y de las capturas.
-          </p>
-          <ul class="lista-atajos">
-            @for (atajo of atajos; track atajo.accion) {
-              <li>
-                <span class="teclas">
-                  @for (tecla of atajo.teclas; track tecla) {
-                    <kbd>{{ tecla }}</kbd>
-                  }
-                </span>
-                <span class="atajo-accion">{{ atajo.accion }}</span>
-              </li>
-            }
-          </ul>
-        }
-
         @case ('soporte') {
           <p class="intro">
-            Si algo no cuadra, o necesitas una mano con el sistema, escríbenos y lo vemos.
+            Este sistema lo desarrolla y lo mantiene tu proveedor. Para dudas, fallas o mejoras,
+            habla directamente con él.
           </p>
-          <ul class="lista-contacto">
-            @if (info.soporte.correo) {
-              <li>
-                <span class="contacto-icono" [innerHTML]="icono('mail')"></span>
-                <a class="contacto-dato" [href]="'mailto:' + info.soporte.correo">{{
-                  info.soporte.correo
-                }}</a>
-              </li>
-            }
-            @if (info.soporte.telefono) {
-              <li>
-                <span class="contacto-icono" [innerHTML]="icono('help-circle')"></span>
-                <span class="contacto-dato">{{ info.soporte.telefono }}</span>
-              </li>
-            }
-            <li>
-              <span class="contacto-icono" [innerHTML]="icono('info')"></span>
-              <span class="contacto-dato">{{ info.soporte.horario }}</span>
-            </li>
-          </ul>
+          <div class="tarjeta-contacto">
+            <span class="contacto-icono" [innerHTML]="icono('help-circle')"></span>
+            <div>
+              <p class="contacto-nombre">{{ info.proveedor.nombre }}</p>
+              <p class="contacto-detalle">{{ info.proveedor.rol }}</p>
+              <p class="contacto-detalle">{{ info.proveedor.horario }}</p>
+            </div>
+          </div>
         }
 
         @case ('acerca') {
@@ -150,12 +117,12 @@
                 <dd>{{ info.empresa }}</dd>
               </div>
               <div>
-                <dt>Tecnología</dt>
-                <dd>{{ info.tecnologia }}</dd>
+                <dt>Proveedor</dt>
+                <dd>{{ info.proveedor.nombre }}</dd>
               </div>
               <div>
-                <dt>Soporte</dt>
-                <dd>{{ info.soporte.correo }}</dd>
+                <dt>Contacto</dt>
+                <dd>{{ info.proveedor.horario }}</dd>
               </div>
             </dl>
 

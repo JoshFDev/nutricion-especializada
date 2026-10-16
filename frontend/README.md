@@ -56,9 +56,8 @@ lo que aparece lo escribieron los triggers de la base.
 | Archivo                                | Que decide                                                                                                                                                                                      |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/app/nucleo/menu.ts`               | Que modulos existen, en que orden y con que permiso. De esta tabla salen TAMBIEN las rutas, asi que el menu no puede ofrecer algo que no exista. Cada modulo trae su linea `ayuda` para la Guia |
-| `src/app/shell/ayuda.ts`               | El boton de Ayuda de la barra: su menu, la Guia, los atajos, el soporte y "Acerca de". La Guia sale de `menu.ts`, no de una lista aparte                                                        |
-| `src/app/nucleo/info.ts`               | Nombre, version, empresa y correo de soporte: lo que sale en "Acerca de". La version se sube a mano                                                                                             |
-| `src/app/nucleo/ayuda.ts`              | Los atajos de teclado, tal como los muestra la Ayuda                                                                                                                                            |
+| `src/app/shell/ayuda.ts`               | El boton de Ayuda de la barra: su menu, la Guia, el soporte y "Acerca de". La Guia sale de `menu.ts`, no de una lista aparte                                                                    |
+| `src/app/nucleo/info.ts`               | Nombre, version, empresa y proveedor del sistema: lo que sale en "Soporte" y en "Acerca de". La version se sube a mano                                                                          |
 | `src/app/nucleo/sesion.ts`             | El token, el perfil y los permisos. Un solo servicio, con signals                                                                                                                               |
 | `src/app/nucleo/interceptor-sesion.ts` | Le pone el token a todo y manda a `/login` cuando el servidor dice 401                                                                                                                          |
 | `src/app/nucleo/guarda-sesion.ts`      | Quien entra a donde                                                                                                                                                                             |
@@ -106,21 +105,19 @@ app ademas salta las animaciones de transicion cuando el destino es
 encima de la otra al cerrar la sesion.
 
 **La Ayuda no repite la lista de modulos.** El boton "?" de la barra (con
-Guia rapida, Atajos de teclado, Soporte y Acerca de) arma su Guia con la
-MISMA tabla del menu (`menuPara`), asi que solo muestra las secciones que la
-persona puede abrir, respeta su orden y un modulo nuevo aparece aqui solo.
-Lo unico a mano es el texto de cada uno (`ayuda` en `menu.ts`), y va
-obligatorio en el tipo justo para que no se pueda dar de alta un modulo que
-salga en blanco en la Guia. Los atajos que se documentan son los que existen:
-si uno se quita del codigo, se quita de `nucleo/ayuda.ts`, porque una guia
-que promete un atajo que no hace nada es peor que no tener la seccion.
+Guia rapida, Soporte y Acerca de) arma su Guia con la MISMA tabla del menu
+(`menuPara`), asi que solo muestra las secciones que la persona puede abrir,
+respeta su orden y un modulo nuevo aparece aqui solo. Lo unico a mano es el
+texto de cada uno (`ayuda` en `menu.ts`), y va obligatorio en el tipo justo
+para que no se pueda dar de alta un modulo que salga en blanco en la Guia.
 
-**La ficha de "Acerca de" vive en `nucleo/info.ts`.** Nombre, version,
-empresa y correo de soporte en un solo archivo, para que no digan cosas
-distintas en dos pantallas. El correo y el telefono de fabrica son de
-EJEMPLO: hay que cambiarlos antes de entregar.
+**El soporte es una persona, no un buzon.** `nucleo/info.ts` guarda el
+nombre del proveedor del sistema y sale tanto en "Soporte" como en "Acerca
+de". Es a proposito: en este tamaño de negocio el que contesta es quien
+desarrollo el sistema, no una mesa de ayuda, y un correo generico solo
+agrega un paso de mas.
 
-**Sin tests de componentes.** Hay 327 pruebas y ninguna levanta un
+**Sin tests de componentes.** Hay 324 pruebas y ninguna levanta un
 componente: cubren el menu, el mapeo de errores, la sesion, las cifras, el
 buscador y el cuerpo de las peticiones de cada pantalla, que es donde esta la
 logica que se rompe en silencio. Probar que un boton se dibuja sale mas caro

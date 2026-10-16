@@ -1,6 +1,9 @@
 import ExcelJS from 'exceljs';
 import { kilosComoTexto } from '../../core/valores.js';
 import type { Producto } from './modelo.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * El Excel de la LISTA de productos.
@@ -11,6 +14,24 @@ import type { Producto } from './modelo.js';
 export async function excelListaProductos(productos: Producto[]): Promise<Buffer> {
   const libro = new ExcelJS.Workbook();
   const hoja = libro.addWorksheet('Productos');
+
+  // Marca de agua con logo (solo para impresión)
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const logoPath = path.resolve(__dirname, '../../../frontend/src/images/LogoNutricion.png');
+    const raw = fs.readFileSync(logoPath);
+    const logoBuf = Buffer.alloc(raw.length);
+    raw.copy(logoBuf);
+    const logoId = libro.addImage({ buffer: raw as any, extension: 'png' });
+    hoja.addImage(logoId, {
+      tl: { col: 1.5, row: 3 },
+      ext: { width: 550, height: 200 },
+      editAs: 'absolute',
+    });
+  } catch {
+    // Si no se puede cargar el logo, continuar sin marca de agua
+  }
 
   libro.title = 'Listado de productos';
   libro.creator = 'Nutricion Especializada';

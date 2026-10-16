@@ -176,42 +176,77 @@
  * letras del codigo. Por eso viven aparte, con su propio bloque.
  */
 .vigencia {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 
+/*
+ * La etiqueta del filtro: una palabra clave, no una frase. Se compone en
+ * versalitas y con el gris tenue para que se lea como el titulo del control
+ * y no como otra opcion a pulsar.
+ */
 .etiqueta-filtro {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--texto-suave);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-tenue);
 }
 
-/* La vigencia como botones y no como desplegable: son solo tres opciones y es
-   el filtro que mas se cambia. En un `select` hay que abrirlo para ver que
-   esta puesto, y el valor por defecto ("Vigentes") es justo el que hace que
-   las otras dos no se ven. */
+.etiqueta-filtro .icono {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+/*
+ * La vigencia como botones y no como desplegable: son solo tres opciones y es
+ * el filtro que mas se cambia. En un `select` hay que abrirlo para ver que
+ * esta puesto, y el valor por defecto ("Vigentes") es justo el que hace que
+ * las otras dos no se ve.
+ *
+ * El control es una pildora: un riel hundido en el fondo y la opcion elegida
+ * encima, en el azul de la marca. Antes era un rectangulo de esquinas rectas
+ * con la activa en azul solido, que se leia como tres botones pegados y no
+ * como un solo interruptor.
+ */
 .segmentos {
   display: inline-flex;
-  padding: 2px;
+  gap: 0.125rem;
+  padding: 0.1875rem;
   background: var(--fondo);
   border: 1px solid var(--borde);
-  border-radius: 6px;
+  border-radius: 999px;
 }
 
 .segmento {
-  padding: 0.375rem 0.75rem;
+  padding: 0.375rem 0.875rem;
   font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--texto-suave);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: 999px;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
+}
+
+.segmento:hover:not(.activo):not(:disabled) {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: transparent;
 }
 
 .segmento.activo {
   color: var(--sobre-acento);
   background: var(--acento);
   font-weight: 600;
+  box-shadow: 0 1px 3px rgb(30 64 175 / 28%);
 }
 
 .controles {
@@ -301,16 +336,129 @@
   pointer-events: none;
 }
 
+/*
+ * Anchos fijos por columna.
+ *
+ * Con `table-layout: fixed` el navegador reparte el ancho segun esta tabla y
+ * no segun el contenido: sin esto la columna de producto crecia con un
+ * nombre largo y las de fecha y acciones se apretaban, cada vez de una
+ * manera. Los anchos son distintos en "Precio de lista" (cinco columnas) y
+ * en "Precio de cliente" (seis, con la de cliente), por eso la tabla lleva
+ * un modificador `.con-cliente`: los dos juegos suman 100%.
+ */
+.tabla {
+  table-layout: fixed;
+}
+
+.tabla th,
+.tabla td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Precio de lista: producto, precio, desde, hasta, acciones. */
+.col-producto {
+  width: 38%;
+}
+.col-precio {
+  width: 14%;
+}
+.col-desde {
+  width: 14%;
+}
+.col-hasta {
+  width: 16%;
+}
+.col-acciones {
+  width: 18%;
+}
+
+/* Precio de cliente: las mismas mas la columna de cliente. */
+.tabla.con-cliente .col-producto {
+  width: 26%;
+}
+.tabla.con-cliente .col-cliente {
+  width: 18%;
+}
+.tabla.con-cliente .col-precio {
+  width: 13%;
+}
+.tabla.con-cliente .col-desde {
+  width: 12%;
+}
+.tabla.con-cliente .col-hasta {
+  width: 15%;
+}
+.tabla.con-cliente .col-acciones {
+  width: 16%;
+}
+
+/* La cabecera sigue a su columna: "Desde" y "Hasta" van centradas como sus
+   fechas, y "Acciones" a la derecha como sus botones. Sin esto el titulo
+   quedaba a la izquierda y el dato a la derecha, y la columna no cuadraba. */
+.der {
+  text-align: right;
+}
+
+/* Las fechas, con cifras de ancho fijo: la columna no baila al cambiar de dia. */
+.col-desde,
+.col-hasta {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Producto y cliente identifican la fila: a la izquierda, no centrados. */
 .celda-producto {
   text-align: left;
   font-weight: 500;
 }
 
+/*
+ * La vigencia de cada fila.
+ *
+ * Un precio abierto lleva la pildora verde "Vigente"; uno cerrado, la fecha
+ * de fin en una pildora neutra. Las dos son pildoras para que la columna se
+ * lea de un vistazo: antes el cerrado era texto suelto y el abierto una
+ * etiqueta, y las dos filas se veian distintas sin decir nada distinto.
+ */
+.badge-vigente {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  vertical-align: middle;
+}
+
+.badge-vigente::before {
+  content: '';
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.chip-fecha {
+  display: inline-block;
+  padding: 0.0625rem 0.5rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-suave);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+}
+
 /* Un precio historico sigue en la tabla pero ya no aplica: se apaga para
    que se distinga de un vistazo, no solo por la fecha. */
 .historico {
   color: var(--texto-tenue);
+}
+
+/* Las dos acciones de la fila, del mismo ancho ("Editar" y "Cerrar"/"Reabrir"
+   se veian de distinto tamano). Ver `productos.scss`. */
+.acciones-fila button {
+  min-width: 4.25rem;
+  padding-inline: 0.5rem;
 }
 
 .codigo {

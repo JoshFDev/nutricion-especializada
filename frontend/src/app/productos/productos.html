@@ -297,6 +297,65 @@
         }
       </button>
     }
+
+    <!--
+      El cambio de vista: las mismas filas, en tabla o en fichas.
+
+      Va al final de la barra y separado con `margin-left: auto` (ver
+      `productos.scss`): no es un filtro más, es cómo se mira la lista, y
+      pegado a los desplegables se leería como otro filtro.
+    -->
+    <div class="vista-toggle" role="group" aria-label="Cómo ver el listado">
+      <button
+        type="button"
+        class="vista-opcion"
+        [class.activa]="vista() === 'tabla'"
+        [attr.aria-pressed]="vista() === 'tabla'"
+        (click)="cambiarVista('tabla')"
+        title="Ver en tabla"
+      >
+        <svg
+          class="icono"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+        <span class="oculto">Ver en tabla</span>
+      </button>
+
+      <button
+        type="button"
+        class="vista-opcion"
+        [class.activa]="vista() === 'fichas'"
+        [attr.aria-pressed]="vista() === 'fichas'"
+        (click)="cambiarVista('fichas')"
+        title="Ver en fichas"
+      >
+        <svg
+          class="icono"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        <span class="oculto">Ver en fichas</span>
+      </button>
+    </div>
   </div>
 
   @if (error(); as mensaje) {
@@ -332,72 +391,145 @@
   }
 
   @if (filas().length > 0) {
-    <div class="tabla-wrapper">
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Código</th>
-            <th scope="col">Nombre</th>
-            <th scope="col">Presentación (kg)</th>
-            <th scope="col">Categoría</th>
-            <th scope="col">Especie</th>
-            <th scope="col">Estado</th>
-            <th scope="col">Acciones</th>
-          </tr>
-        </thead>
-        <tbody [@filasAnimation]="recarga.valor()">
-          @for (producto of filas(); track producto.id) {
+    @if (vista() === 'tabla') {
+      <div class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
             <tr>
-              <td>{{ producto.codigo }}</td>
-              <td>{{ producto.nombre }}</td>
-              <td class="centro">{{ kilosComoTexto(producto.presentacion_kg) }} kg</td>
-              <td>{{ producto.categoria ?? '—' }}</td>
-              <td>{{ producto.especie ?? '—' }}</td>
-              <td class="centro">
-                <span class="badge" [class.badge-apagado]="!producto.activo">
-                  {{ producto.activo ? 'Activo' : 'De baja' }}
-                </span>
-              </td>
-              <td class="acciones-celda">
-                @if (puedeEditar()) {
-                  <div class="acciones-fila">
-                    <button
-                      type="button"
-                      class="accion-editar"
-                      (click)="editar(producto)"
-                      title="Editar"
-                      [attr.aria-label]="'Editar ' + producto.nombre"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      class="accion-estado"
-                      (click)="alternaActivo(producto)"
-                      [title]="producto.activo ? 'Dar de baja' : 'Activar'"
-                      [attr.aria-label]="
-                        (producto.activo ? 'Dar de baja ' : 'Activar ') + producto.nombre
-                      "
-                    >
-                      {{ producto.activo ? 'Baja' : 'Activar' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="accion-eliminar"
-                      (click)="eliminar(producto)"
-                      title="Eliminar"
-                      [attr.aria-label]="'Eliminar ' + producto.nombre"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                }
-              </td>
+              <th scope="col">Código</th>
+              <th scope="col">Nombre</th>
+              <th scope="col">Presentación (kg)</th>
+              <th scope="col">Categoría</th>
+              <th scope="col">Especie</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
             </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody [@filasAnimation]="recarga.valor()">
+            @for (producto of filas(); track producto.id) {
+              <tr>
+                <td>{{ producto.codigo }}</td>
+                <td>{{ producto.nombre }}</td>
+                <td class="centro">{{ kilosComoTexto(producto.presentacion_kg) }} kg</td>
+                <td>{{ producto.categoria ?? '—' }}</td>
+                <td>{{ producto.especie ?? '—' }}</td>
+                <td class="centro">
+                  <span class="badge" [class.badge-apagado]="!producto.activo">
+                    {{ producto.activo ? 'Activo' : 'De baja' }}
+                  </span>
+                </td>
+                <td class="acciones-celda">
+                  @if (puedeEditar()) {
+                    <div class="acciones-fila">
+                      <button
+                        type="button"
+                        class="accion-editar"
+                        (click)="editar(producto)"
+                        title="Editar"
+                        [attr.aria-label]="'Editar ' + producto.nombre"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        class="accion-estado"
+                        (click)="alternaActivo(producto)"
+                        [title]="producto.activo ? 'Dar de baja' : 'Activar'"
+                        [attr.aria-label]="
+                          (producto.activo ? 'Dar de baja ' : 'Activar ') + producto.nombre
+                        "
+                      >
+                        {{ producto.activo ? 'Baja' : 'Activar' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="accion-eliminar"
+                        (click)="eliminar(producto)"
+                        title="Eliminar"
+                        [attr.aria-label]="'Eliminar ' + producto.nombre"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <!--
+        La vista en fichas: la MISMA información de la fila, una tarjeta por
+        producto. Sirve para mirar el catálogo de un vistazo (nombre, presentación
+        y a qué categoría y especie pertenece) cuando no se está buscando una
+        fila concreta. Las acciones son las mismas de la tabla y con el mismo
+        tono (azul editar, ámbar estado, rojo eliminar).
+      -->
+      <ul class="rejilla" [@filasAnimation]="recarga.valor()">
+        @for (producto of filas(); track producto.id) {
+          <li class="ficha-producto" [class.apagada]="!producto.activo">
+            <div class="ficha-cabecera">
+              <span class="ficha-codigo">{{ producto.codigo }}</span>
+              <span class="badge" [class.badge-apagado]="!producto.activo">
+                {{ producto.activo ? 'Activo' : 'De baja' }}
+              </span>
+            </div>
+
+            <h3 class="ficha-nombre" [title]="producto.nombre">{{ producto.nombre }}</h3>
+
+            <div class="ficha-datos">
+              <div class="ficha-dato">
+                <span class="ficha-etiqueta">Presentación</span>
+                <span class="ficha-valor">{{ kilosComoTexto(producto.presentacion_kg) }} kg</span>
+              </div>
+              <div class="ficha-dato">
+                <span class="ficha-etiqueta">Categoría</span>
+                <span class="ficha-valor">{{ producto.categoria ?? '—' }}</span>
+              </div>
+              <div class="ficha-dato">
+                <span class="ficha-etiqueta">Especie</span>
+                <span class="ficha-valor">{{ producto.especie ?? '—' }}</span>
+              </div>
+            </div>
+
+            @if (puedeEditar()) {
+              <div class="acciones-fila ficha-acciones">
+                <button
+                  type="button"
+                  class="accion-editar"
+                  (click)="editar(producto)"
+                  title="Editar"
+                  [attr.aria-label]="'Editar ' + producto.nombre"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  class="accion-estado"
+                  (click)="alternaActivo(producto)"
+                  [title]="producto.activo ? 'Dar de baja' : 'Activar'"
+                  [attr.aria-label]="
+                    (producto.activo ? 'Dar de baja ' : 'Activar ') + producto.nombre
+                  "
+                >
+                  {{ producto.activo ? 'Baja' : 'Activar' }}
+                </button>
+                <button
+                  type="button"
+                  class="accion-eliminar"
+                  (click)="eliminar(producto)"
+                  title="Eliminar"
+                  [attr.aria-label]="'Eliminar ' + producto.nombre"
+                >
+                  Eliminar
+                </button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
 
     <div class="paginacion">
       <button

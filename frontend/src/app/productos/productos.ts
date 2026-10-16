@@ -30,6 +30,9 @@ import { ToastService } from '../nucleo/toast.service';
  * producto se ofrece a la venta.
  */
 
+/** Donde se recuerda si el listado se ve en tabla o en fichas. */
+const CLAVE_VISTA = 'productos:vista';
+
 @Component({
   selector: 'app-productos',
   templateUrl: './productos.html',
@@ -57,6 +60,16 @@ export class Productos {
   readonly filtroCategoria = signal<number | null>(null);
   readonly filtroEspecie = signal<number | null>(null);
   readonly exportando = signal(false);
+
+  /**
+   * Cómo se ve el listado: en tabla (por omisión) o en fichas.
+   *
+   * Es solo la FORMA de pintar las mismas filas que ya se trajeron: cambiar de
+   * vista no pide nada al servidor ni pierde los filtros ni la página. La
+   * elección se recuerda entre recargas (ver `cambiarVista`) porque en un
+   * mostrador la preferencia es de la persona, no de la sesión.
+   */
+  readonly vista = signal<'tabla' | 'fichas'>(this.leerVista());
 
   readonly categorias = signal<Catalogo[]>([]);
   readonly especies = signal<Catalogo[]>([]);
@@ -220,6 +233,33 @@ export class Productos {
     );
   }
 
+  // ------------------------------------------------------------- la vista
+
+  /**
+   * Cambia entre la tabla y las fichas, y lo recuerda para la próxima vez.
+   *
+   * Todo lo que toca `localStorage` va con `try`: en modo privado y en algunos
+   * navegadores la escritura falla, y no poder guardar una preferencia no es
+   * motivo para que el botón deje de cambiar la vista. Ver `shell.ts`, que usa
+   * el mismo cuidado para el ancho del menú.
+   */
+  cambiarVista(vista: 'tabla' | 'fichas'): void {
+    this.vista.set(vista);
+    try {
+      localStorage.setItem(CLAVE_VISTA, vista);
+    } catch {
+      /* si no se puede guardar, la vista igual cambia: solo no se recuerda */
+    }
+  }
+
+  private leerVista(): 'tabla' | 'fichas' {
+    try {
+      return localStorage.getItem(CLAVE_VISTA) === 'fichas' ? 'fichas' : 'tabla';
+    } catch {
+      return 'tabla';
+    }
+  }
+
   /**
    * Vuelve a la primera pagina con el filtro que se tenga puesto.
    *
@@ -268,8 +308,9 @@ export class Productos {
   async irAPagina(pagina: number): Promise<void> {
     if (pagina < 1 || pagina > this.paginasTotales() || pagina === this.pagina()) return;
     await this.cargarPagina(pagina);
+    // El listado puede estar en tabla o en fichas: se sube al que se esté viendo.
     document
-      .querySelector('.tabla-wrapper')
+      .querySelector('.tabla-wrapper, .rejilla')
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 

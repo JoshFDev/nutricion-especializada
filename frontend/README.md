@@ -18,8 +18,8 @@ Para que funcione hace falta el backend arriba (`pnpm dev` dentro de
 ## Que hay y que no
 
 Lo que hay es **todo**: sesion, login, cambio de contrasena, el marco con el
-menu, las doce pantallas del negocio y las cuatro de Sistema (Usuarios,
-Auditoria, Reportes, Caja y bancos). No queda ningun
+menu, las doce pantallas del negocio y las tres de Sistema (Usuarios,
+Auditoria, Caja y bancos). No queda ningun
 modulo con el aviso de "pantalla pendiente", y las rutas se siguen generando
 desde la misma tabla que arma el menu, asi que no puede salir un enlace a una
 pantalla que no exista.
@@ -111,13 +111,22 @@ respeta su orden y un modulo nuevo aparece aqui solo. Lo unico a mano es el
 texto de cada uno (`ayuda` en `menu.ts`), y va obligatorio en el tipo justo
 para que no se pueda dar de alta un modulo que salga en blanco en la Guia.
 
+**No existe `/reportes`.** Lo que enseñaba ya se enseña en otro lado: la
+existencia está en `/inventario` y lo que debe cada cliente en
+`/estado-cuenta`. Dejar una segunda pantalla con los mismos datos es tener dos
+respuestas a la misma pregunta, y en cuanto se vean desincronizadas una va a
+mentir sin avisar. Se borró el módulo entero (componente, servicio y permiso)
+en vez de esconderlo del menú, para que no quede código sin ruta; si algún día
+falta un reporte que no exista en ninguna otra pantalla, se agrega como
+módulo nuevo desde `menu.ts`.
+
 **El soporte es una persona, no un buzon.** `nucleo/info.ts` guarda el
 nombre del proveedor del sistema y sale tanto en "Soporte" como en "Acerca
 de". Es a proposito: en este tamaño de negocio el que contesta es quien
 desarrollo el sistema, no una mesa de ayuda, y un correo generico solo
 agrega un paso de mas.
 
-**Sin tests de componentes.** Hay 324 pruebas y ninguna levanta un
+**Sin tests de componentes.** Hay 316 pruebas y ninguna levanta un
 componente: cubren el menu, el mapeo de errores, la sesion, las cifras, el
 buscador y el cuerpo de las peticiones de cada pantalla, que es donde esta la
 logica que se rompe en silencio. Probar que un boton se dibuja sale mas caro

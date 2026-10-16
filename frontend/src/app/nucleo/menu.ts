@@ -223,15 +223,6 @@ export const MENU: Grupo[] = [
         carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },
       {
-        ruta: 'reportes',
-        etiqueta: 'Reportes',
-        permiso: 'reportes.ver',
-        icon: 'pie-chart',
-        pendiente: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
-        ayuda: 'Existencia, consumo semanal y estado de cuenta, en solo lectura.',
-        carga: () => import('../reportes/reportes').then((m) => m.Reportes),
-      },
-      {
         ruta: 'caja',
         etiqueta: 'Caja y bancos',
         permiso: 'caja.ver',
@@ -268,7 +259,7 @@ export function menuPara(permisos: ReadonlySet<string>): Grupo[] {
  * desplegable de configuración de la barra. Por eso se expone aparte, para que
  * ese desplegable salga de la MISMA tabla y no de una copia escrita a mano que
  * se queda atrás cuando el catálogo gana un módulo. Con la copia, "Caja y
- * bancos" y "Reportes" existían como ruta pero no había forma de abrirlos.
+ * bancos" existía como ruta pero no había forma de abrirlo.
  */
 export function modulosSistema(permisos: ReadonlySet<string>): Modulo[] {
   const sistema = MENU.find((grupo) => grupo.titulo === 'Sistema');

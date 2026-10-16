@@ -105,15 +105,10 @@ describe('menuPara', () => {
 describe('modulosSistema', () => {
   it('devuelve solo lo que la persona puede ver, en el orden del catálogo', () => {
     // El grupo "Sistema" no se dibuja en el lateral: estas son las opciones
-    // del engrane de configuración. "Caja y bancos" y "Reportes" faltaban
-    // porque ese desplegable tenía una copia a mano incompleta.
+    // del engrane de configuración. "Caja y bancos" faltaba porque ese
+    // desplegable tenía una copia a mano incompleta.
     const rutas = modulosSistema(new Set(['caja.ver', 'auditoria.ver'])).map((m) => m.ruta);
     expect(rutas).toEqual(['auditoria', 'caja']);
-  });
-
-  it('incluye caja y reportes cuando se tienen esos permisos', () => {
-    const rutas = modulosSistema(new Set(['caja.ver', 'reportes.ver'])).map((m) => m.ruta);
-    expect(rutas).toEqual(['reportes', 'caja']);
   });
 
   it('sin permisos de Sistema no devuelve nada', () => {
@@ -139,12 +134,12 @@ describe('primerModulo', () => {
 });
 
 describe('el catalogo', () => {
-  it('tiene los dieciseis modulos del sistema', () => {
+  it('tiene los quince modulos del sistema', () => {
     // Es un candado, no una descripcion: si el sistema gana un modulo y
     // este archivo no, el modulo nuevo es invisible en la app y nadie se
-    // da cuenta hasta que alguien lo pide. Son los dieciseis enrutadores de
+    // da cuenta hasta que alguien lo pide. Son los quince enrutadores de
     // negocio que monta `app.ts`, sin `salud` ni `auth`.
-    expect(MODULOS).toHaveLength(16);
+    expect(MODULOS).toHaveLength(15);
     expect(MENU.length).toBeGreaterThan(1);
   });
 });

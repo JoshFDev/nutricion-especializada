@@ -78,6 +78,16 @@
     <table class="tabla">
       <thead>
         <tr>
+          <th scope="col" class="seleccion-celda">
+            <input
+              type="checkbox"
+              aria-label="Seleccionar todos los clientes de esta página"
+              title="Seleccionar todo"
+              [checked]="todosSeleccionados()"
+              [indeterminate]="algunosSeleccionados()"
+              (change)="toggleTodo()"
+            />
+          </th>
           <th scope="col">Cliente</th>
           <th scope="col" class="num">Saldo</th>
           <th scope="col">Última venta</th>
@@ -88,9 +98,10 @@
       <tbody [@filasAnimation]="recarga.valor()">
         @for (renglon of filas(); track renglon.cliente_id) {
           <tr [class.a-favor]="renglon.saldo_actual < 0">
-            <td>
+            <td class="seleccion-celda">
               <input
                 type="checkbox"
+                [attr.aria-label]="'Seleccionar a ' + renglon.cliente"
                 [checked]="seleccionados().has(renglon.cliente_id)"
                 (change)="toggleFila(renglon.cliente_id)"
               />

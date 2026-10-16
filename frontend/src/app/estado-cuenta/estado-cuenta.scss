@@ -32,6 +32,26 @@
   font-size: 0.9375rem;
 }
 
+/* --------------------------------------------------------- la seleccion */
+
+/*
+ * La columna de las casillas: la de "seleccionar todo" en la cabecera y la de
+ * cada cliente. Es angosta, va alineada a la izquierda como el texto que
+ * precede a la primera columna, y la casilla se centra en ese carril.
+ */
+.seleccion-celda {
+  width: 2.75rem;
+  text-align: center;
+}
+
+.seleccion-celda input {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  vertical-align: middle;
+  margin: 0;
+}
+
 /* ------------------------------------------------------------------ el saldo */
 
 /* Los numeros no se parten a la mitad. */

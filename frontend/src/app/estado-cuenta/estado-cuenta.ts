@@ -56,12 +56,22 @@ export class EstadoCuenta {
 
   // ------------------------------------------------------------------ seleccion
   readonly seleccionados = signal<Set<number>>(new Set());
-  readonly todosSeleccionados = computed(() => {
-    const filas = this.filas();
-    if (filas.length === 0) return false;
+
+  /** Cuantos de los clientes que se estan viendo traen la casilla marcada. */
+  private readonly seleccionadosEnPagina = computed(() => {
     const sel = this.seleccionados();
-    return filas.every((f) => sel.has(f.cliente_id));
+    return this.filas().reduce((total, f) => total + (sel.has(f.cliente_id) ? 1 : 0), 0);
   });
+
+  /** La casilla de la cabecera: encendida solo si estan TODOS los de la pagina. */
+  readonly todosSeleccionados = computed(
+    () => this.filas().length > 0 && this.seleccionadosEnPagina() === this.filas().length,
+  );
+
+  /** A medias: hay algo marcado pero no todo. La casilla de la cabecera sale rayada. */
+  readonly algunosSeleccionados = computed(
+    () => this.seleccionadosEnPagina() > 0 && !this.todosSeleccionados(),
+  );
 
   /** Paginacion, igual que en el resto de los listados. */
   readonly limite = signal(25);

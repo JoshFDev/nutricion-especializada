@@ -7,11 +7,17 @@ import {
   AuditoriaApi,
   ETIQUETA_EVENTO,
   ETIQUETA_OPERACION,
+  ETIQUETA_TIPO_PRECIO,
   cambiosDeFila,
+  campoLegible,
   eventoSospechoso,
   fechaLegible,
   rangoDelMes,
   rangoIncoherente,
+  tablaLegible,
+  tipoCuentaLegible,
+  tipoInventarioLegible,
+  tipoPrecioLegible,
   type Cambio,
   type EventoAcceso,
   type Filtros,
@@ -196,11 +202,22 @@ export class Auditoria {
   fechaLegible = fechaLegible;
   eventoSospechoso = eventoSospechoso;
   montoComoTexto = montoComoTexto;
+  tablaLegible = tablaLegible;
+  campoLegible = campoLegible;
+  tipoInventarioLegible = tipoInventarioLegible;
+  tipoPrecioLegible = tipoPrecioLegible;
+  tipoCuentaLegible = tipoCuentaLegible;
   ETIQUETA_EVENTO = ETIQUETA_EVENTO;
   ETIQUETA_OPERACION = ETIQUETA_OPERACION;
 
   /** Los eventos de acceso, para el desplegable del filtro. */
   readonly eventos = Object.keys(ETIQUETA_EVENTO) as EventoAcceso[];
+
+  /** Los tres tipos de precio, para el desplegable del filtro. */
+  readonly tiposPrecio = Object.entries(ETIQUETA_TIPO_PRECIO).map(([valor, etiqueta]) => ({
+    valor,
+    etiqueta,
+  }));
 
   constructor() {
     // Con estos permisos puede que la pestana de "Cambios" no exista. Se

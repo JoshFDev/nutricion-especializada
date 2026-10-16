@@ -246,6 +246,129 @@ export const ETIQUETA_OPERACION: Record<Operacion, string> = {
   DELETE: 'Baja',
 };
 
+/*
+ * ------------------------------------------------------------- los codigos
+ *
+ * La base guarda codigos y la bitacora los enseña tal cual: `salida_venta`,
+ * `efectivo`, `publico`, `inventario_movimientos`. Quien revisa la bitacora es
+ * la persona que lleva el negocio, no quien escribio las tablas, y
+ * `salida_venta` no le dice si vendio o si le devolvieron algo. Aqui se traduce
+ * cada codigo a la frase que usa el resto de la aplicacion.
+ *
+ * Lo que no este en las tablas NO desaparece: se le quitan los guiones bajos y
+ * se le pone la primera letra en mayuscula (`humanizar`). Asi un codigo nuevo
+ * del sistema se lee igual de bien aunque nadie se acuerde de agregarlo aqui, y
+ * la pantalla nunca enseña `algo_raro` en crudo.
+ */
+
+/** El tipo de movimiento de inventario. */
+const ETIQUETA_TIPO_INVENTARIO: Record<string, string> = {
+  entrada_compra: 'Compra',
+  salida_venta: 'Venta',
+  ajuste_positivo: 'Ajuste que sube',
+  ajuste_negativo: 'Ajuste que baja',
+  merma: 'Merma',
+};
+
+export function tipoInventarioLegible(tipo: string): string {
+  return ETIQUETA_TIPO_INVENTARIO[tipo] ?? humanizar(tipo);
+}
+
+/** El tipo de precio: los mismos tres nombres que usa el filtro de la pestaña. */
+export const ETIQUETA_TIPO_PRECIO: Record<'cliente' | 'publico' | 'costo', string> = {
+  cliente: 'Precio de cliente',
+  publico: 'Precio de lista',
+  costo: 'Costo',
+};
+
+export function tipoPrecioLegible(tipo: 'cliente' | 'publico' | 'costo'): string {
+  return ETIQUETA_TIPO_PRECIO[tipo];
+}
+
+/** Efectivo o banco, el tipo de cuenta del movimiento de caja. */
+export const ETIQUETA_TIPO_CUENTA: Record<'efectivo' | 'banco', string> = {
+  efectivo: 'Efectivo',
+  banco: 'Banco',
+};
+
+export function tipoCuentaLegible(tipo: 'efectivo' | 'banco'): string {
+  return ETIQUETA_TIPO_CUENTA[tipo];
+}
+
+/**
+ * El nombre de una tabla del log, en palabras.
+ *
+ * Es lo que se lee en la columna "Qué" y en el titulo del detalle. Las tablas
+ * con regla de auditoria son las de `db/migrations`; `inventario_movimientos`
+ * es la unica respuesta que sabe dar la base, y quien abre la bitacora piensa
+ * en "Inventario".
+ */
+const ETIQUETA_TABLA: Record<string, string> = {
+  usuarios: 'Usuarios',
+  usuarios_roles: 'Permisos de usuario',
+  clientes: 'Clientes',
+  precios_cliente: 'Precios de cliente',
+  precios_publicos: 'Precios de lista',
+  notas_remision: 'Notas de remisión',
+  nota_remision_detalle: 'Renglones de nota',
+  pagos: 'Pagos',
+  pagos_aplicacion: 'Pagos aplicados',
+  inventario_movimientos: 'Inventario',
+  movimientos_financieros: 'Caja y bancos',
+  facturas: 'Facturas',
+  factura_nota: 'Facturas y notas',
+  compras: 'Compras',
+  compra_detalle: 'Renglones de compra',
+};
+
+export function tablaLegible(tabla: string): string {
+  return ETIQUETA_TABLA[tabla] ?? humanizar(tabla);
+}
+
+/**
+ * El nombre de una columna del detalle, en palabras.
+ *
+ * El detalle compara el registro de antes contra el de despues, campo por
+ * campo, y los campos son columnas: `precio_anterior`, `vigente_desde`,
+ * `motivo_cancelacion`. Se traducen los que no se entienden solos y el resto se
+ * humana; una columna que termina en `_id` se marca como numero, porque el
+ * valor que trae es el id y no el nombre de la cosa.
+ */
+const ETIQUETA_CAMPO: Record<string, string> = {
+  id: 'Número',
+  creado_en: 'Cuándo se creó',
+  actualizado_en: 'Cuándo se actualizó',
+  contrasena: 'Contraseña',
+  motivo_cancelacion: 'Motivo de cancelación',
+  forma_pago: 'Forma de pago',
+  limite_credito: 'Límite de crédito',
+  dias_credito: 'Días de crédito',
+  cantidad_bultos: 'Cantidad (bultos)',
+  vigente_desde: 'Vigente desde',
+  vigente_hasta: 'Vigente hasta',
+  fondo_login: 'Fondo de la pantalla de entrada',
+  fondo_establo: 'Fondo del establo',
+};
+
+export function campoLegible(campo: string): string {
+  return ETIQUETA_CAMPO[campo] ?? humanizar(campo, true);
+}
+
+/**
+ * Un identificador de la base en palabras.
+ *
+ * `precio_anterior` es "Precio anterior" y no "Precio_anterior". Con
+ * `conNumero`, los que terminan en `_id` llevan "(número)" para no prometer el
+ * nombre de la cosa cuando lo que se esta enseñando es su id.
+ */
+function humanizar(texto: string, conNumero = false): string {
+  const esId = conNumero && texto.endsWith('_id');
+  const base = esId ? texto.slice(0, -3) : texto;
+  const palabras = base.replace(/_/g, ' ').trim();
+  const titulo = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+  return esId ? `${titulo} (número)` : titulo;
+}
+
 /**
  * La fecha de la bitácora: día y hora.
  *

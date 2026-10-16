@@ -123,10 +123,6 @@ tr.sospechoso {
   background: var(--peligro-suave);
 }
 
-code {
-  font-size: 0.875rem;
-}
-
 /*
  * El saldo y el precio "antes" no se parten a la mitad con el `nowrap` que
  * trae el `.num` del compartido. Aqui los dos valores van juntos en la misma
@@ -254,4 +250,25 @@ button.velo-fondo:hover {
   width: 40%;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/*
+ * El valor de "antes" se apaga: lo que se viene a ver es en que quedo el
+ * registro, y el viejo solo sirve para comparar. Es el mismo criterio que en la
+ * tabla, donde el unico cambio que se resalta es el UPDATE.
+ */
+.valor-antes {
+  color: var(--texto-tenue);
+}
+
+/* El titulo del detalle lleva al lado su operacion (alta, cambio, baja) con el
+   mismo color que en la tabla: sin salir del modal ya se sabe que paso. */
+.hoja h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.hoja h2 .operacion {
+  margin-left: 0.5rem;
+  vertical-align: middle;
 }

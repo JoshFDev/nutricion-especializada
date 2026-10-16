@@ -3,10 +3,15 @@ import {
   ETIQUETA_EVENTO,
   ETIQUETA_OPERACION,
   cambiosDeFila,
+  campoLegible,
   eventoSospechoso,
   fechaLegible,
   rangoDelMes,
   rangoIncoherente,
+  tablaLegible,
+  tipoCuentaLegible,
+  tipoInventarioLegible,
+  tipoPrecioLegible,
   valorLegible,
   type Cambio,
   type EventoAcceso,
@@ -148,6 +153,57 @@ describe('las operaciones', () => {
     expect(ETIQUETA_OPERACION.INSERT).toBe('Alta');
     expect(ETIQUETA_OPERACION.UPDATE).toBe('Cambio');
     expect(ETIQUETA_OPERACION.DELETE).toBe('Baja');
+  });
+});
+
+// ------------------------------------------------------- los codigos en palabras
+
+describe('los codigos de la base, en palabras', () => {
+  it('el tipo de inventario dice que paso, no como se llama la columna', () => {
+    // `salida_venta` era la queja: quien revisa la bitacora no tiene por que
+    // saber que eso es una venta.
+    expect(tipoInventarioLegible('salida_venta')).toBe('Venta');
+    expect(tipoInventarioLegible('entrada_compra')).toBe('Compra');
+    expect(tipoInventarioLegible('ajuste_positivo')).toBe('Ajuste que sube');
+    expect(tipoInventarioLegible('ajuste_negativo')).toBe('Ajuste que baja');
+    expect(tipoInventarioLegible('merma')).toBe('Merma');
+  });
+
+  it('un tipo de inventario que nadie tradujo no se enseña en crudo', () => {
+    // El sistema puede ganar un tipo manana; la pantalla no puede quedarse
+    // enseñando `devolucion_cliente` con guion bajo.
+    expect(tipoInventarioLegible('devolucion_cliente')).toBe('Devolucion cliente');
+  });
+
+  it('el tipo de precio son los mismos tres nombres del filtro', () => {
+    expect(tipoPrecioLegible('cliente')).toBe('Precio de cliente');
+    expect(tipoPrecioLegible('publico')).toBe('Precio de lista');
+    expect(tipoPrecioLegible('costo')).toBe('Costo');
+  });
+
+  it('el tipo de cuenta', () => {
+    expect(tipoCuentaLegible('efectivo')).toBe('Efectivo');
+    expect(tipoCuentaLegible('banco')).toBe('Banco');
+  });
+
+  it('la tabla del log se nombra como la pantalla que la llena', () => {
+    expect(tablaLegible('inventario_movimientos')).toBe('Inventario');
+    expect(tablaLegible('notas_remision')).toBe('Notas de remisión');
+    expect(tablaLegible('factura_nota')).toBe('Facturas y notas');
+  });
+
+  it('una tabla desconocida se humana, no se pierde', () => {
+    expect(tablaLegible('otra_tabla')).toBe('Otra tabla');
+  });
+
+  it('el campo del detalle se lee, y el id avisa que es un numero', () => {
+    // `precio_anterior` con guion bajo era el otro extremo del problema: el
+    // detalle enseñaba los nombres de las columnas tal cual.
+    expect(campoLegible('precio_anterior')).toBe('Precio anterior');
+    expect(campoLegible('motivo_cancelacion')).toBe('Motivo de cancelación');
+    expect(campoLegible('creado_en')).toBe('Cuándo se creó');
+    expect(campoLegible('producto_id')).toBe('Producto (número)');
+    expect(campoLegible('campo_raro')).toBe('Campo raro');
   });
 });
 

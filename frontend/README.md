@@ -126,7 +126,16 @@ de". Es a proposito: en este tamaño de negocio el que contesta es quien
 desarrollo el sistema, no una mesa de ayuda, y un correo generico solo
 agrega un paso de mas.
 
-**Sin tests de componentes.** Hay 316 pruebas y ninguna levanta un
+**La auditoria habla en el idioma del negocio, no en el de la base.** La
+bitacora guarda codigos (`salida_venta`, `efectivo`, `inventario_movimientos`)
+y el detalle compara columnas (`precio_anterior`, `producto_id`). Quien la
+revisa es la persona que lleva el negocio, asi que `auditoria-api.ts` traduce
+cada codigo a su frase ("Venta", "Efectivo", "Inventario") y nombra las
+columnas en palabras. Lo que no este en las tablas no se enseña en crudo: se
+le quitan los guiones bajos. Asi un codigo o una columna que el sistema gane
+mañana se sigue leyendo sin tocar la pantalla.
+
+**Sin tests de componentes.** Hay 323 pruebas y ninguna levanta un
 componente: cubren el menu, el mapeo de errores, la sesion, las cifras, el
 buscador y el cuerpo de las peticiones de cada pantalla, que es donde esta la
 logica que se rompe en silencio. Probar que un boton se dibuja sale mas caro

@@ -63,7 +63,13 @@
    * columnas. Esta regla va DESPUÉS del partial, así que gana.
    */
   display: block;
-  max-width: 52rem;
+  /*
+   * Sin tope de ancho: la tarjeta se lee a lo ancho, alineada con la tabla de
+   * movimientos de abajo. Antes se topaba en 52rem y, como no se centraba,
+   * quedaba pegada a la izquierda con todo el hueco a la derecha; en un monitor
+   * ancho la pantalla se veía a medias. Vale igual para el cierre y el corte,
+   * que reusan esta caja.
+   */
   margin-bottom: 1.25rem;
   padding: 1rem 1.25rem;
   background: var(--superficie);
@@ -74,7 +80,6 @@
 .resumen-cabecera {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   margin-bottom: 0.875rem;
@@ -94,6 +99,13 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  /*
+   * Al borde derecho de la tarjeta. El `margin-left: auto` (y no un
+   * `space-between` en la cabecera) es lo que mantiene juntas las fechas y el
+   * botón de cerrar: con `space-between` la fecha quedaba suelta a media
+   * tarjeta y el botón al otro extremo.
+   */
+  margin-left: auto;
 }
 
 .resumen .al {
@@ -115,6 +127,20 @@
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/*
+ * Cada total, en su propia casilla.
+ *
+ * Antes eran tres números sueltos sobre la tarjeta y, a lo ancho, quedaban
+ * flotando sin relación. La casilla los agrupa: rótulo arriba y cifra abajo, y
+ * las tres llenan el ancho de la tarjeta como una fila de indicadores.
+ */
+.cifra {
+  padding: 0.75rem 0.875rem;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
 }
 
 .cifra dt {
@@ -168,6 +194,14 @@
 .por-cuenta .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * El aviso al pie es para leerse entero, no para barrer la pantalla: se acota
+ * el largo de la línea aunque la tarjeta vaya a lo ancho.
+ */
+.nota {
+  max-width: 72ch;
 }
 
 /* ----------------------------------------------------------- ingreso y egreso */

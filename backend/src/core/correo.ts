@@ -1,4 +1,4 @@
-import nodemailer, { type Transporter } from 'nodemailer';
+import nodemailer, { type Attachment, type Transporter } from 'nodemailer';
 import { env } from '../config/entorno.js';
 
 /**
@@ -14,9 +14,7 @@ export function obtenerTransporter(): Transporter {
   if (transporter) return transporter;
 
   const auth =
-    env.SMTP_USER || env.SMTP_PASS
-      ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-      : undefined;
+    env.SMTP_USER || env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined;
 
   transporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
@@ -33,6 +31,12 @@ export interface EnviarCorreoParams {
   subject: string;
   text: string;
   html?: string;
+  /**
+   * Adjuntos. Hoy solo se usa para incrustar el logo por `cid`: un correo
+   * con `html` que apunta a una URL del frontend se veria roto justo cuando
+   * el frontend no es publico, que es el caso normal en este sistema.
+   */
+  attachments?: Attachment[];
 }
 
 /**
@@ -50,5 +54,6 @@ export async function enviarCorreo(params: EnviarCorreoParams): Promise<void> {
     subject: params.subject,
     text: params.text,
     html: params.html,
+    attachments: params.attachments,
   });
 }

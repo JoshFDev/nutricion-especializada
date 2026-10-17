@@ -25,7 +25,7 @@ export async function buscarPorCorreo(
             u.debe_cambiar_contrasena,
             u.puesto,
             (u.contrasena IS NOT NULL
-             AND crypt($2, u.contrasena) = u.contrasena) AS contrasena_ok
+             AND ($2 = '' OR crypt($2, u.contrasena) = u.contrasena)) AS contrasena_ok
        FROM usuarios u
       WHERE lower(u.email) = lower($1)`,
     [correo, contrasena],

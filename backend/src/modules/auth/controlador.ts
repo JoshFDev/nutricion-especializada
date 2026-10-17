@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { cuerpo } from '../../core/validacion.js';
 import { NoAutenticado } from '../../core/errores.js';
-import type { CambiarContrasena, Login } from './esquemas.js';
+import type { CambiarContrasena, ForgotPassword, Login } from './esquemas.js';
 import * as servicio from './servicio.js';
 
 /**
@@ -47,4 +47,10 @@ export const cambiarContrasena = async (req: Request, res: Response): Promise<vo
     mensaje: 'Contrasena actualizada. Las demas sesiones se cerraron.',
     ...resultado,
   });
+};
+
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  const datos = cuerpo<ForgotPassword>(req);
+  await servicio.solicitarRecuperacion(req.db, datos);
+  res.status(200).json({ mensaje: 'Si el correo existe, se ha enviado una contraseña temporal.' });
 };

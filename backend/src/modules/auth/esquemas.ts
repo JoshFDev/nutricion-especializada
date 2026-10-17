@@ -13,7 +13,12 @@ export const loginEsquema = z.object({
   contrasena: z.string().min(1, 'La contrasena no puede ir vacia').max(200),
 });
 
+export const forgotPasswordEsquema = z.object({
+  correo: z.string().trim().max(200).pipe(z.email('El correo no tiene formato valido')),
+});
+
 export type Login = z.infer<typeof loginEsquema>;
+export type ForgotPassword = z.infer<typeof forgotPasswordEsquema>;
 
 export interface UsuarioFila {
   id: string;

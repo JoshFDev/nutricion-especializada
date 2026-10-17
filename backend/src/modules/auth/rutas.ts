@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validarBody } from '../../core/validacion.js';
 import { requiereSesion } from '../../middleware/permisos.js';
-import { cambiarContrasenaEsquema, loginEsquema } from './esquemas.js';
+import { cambiarContrasenaEsquema, forgotPasswordEsquema, loginEsquema } from './esquemas.js';
 import * as controlador from './controlador.js';
 
 export const rutasAuth = Router();
@@ -11,6 +11,7 @@ export const rutasAuth = Router();
  * este archivo exige sesion viva.
  */
 rutasAuth.post('/login', validarBody(loginEsquema), controlador.login);
+rutasAuth.post('/forgot-password', validarBody(forgotPasswordEsquema), controlador.forgotPassword);
 
 rutasAuth.get('/yo', requiereSesion, controlador.perfil);
 

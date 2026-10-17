@@ -7,11 +7,15 @@ import * as repo from './repositorio.js';
 import {
   mapearUsuario,
   type CambiarContrasena,
+  type ForgotPassword,
   type Login,
   type RespuestaLogin,
   type Perfil,
   type UsuarioFila,
 } from './esquemas.js';
+import { generarContrasenaTemporal } from '../usuarios/servicio.js';
+import * as repoUsuarios from '../usuarios/repositorio.js';
+import { enviarRecuperacionContrasena } from './correo.js';
 
 /**
  * Reglas de sesion.
@@ -172,4 +176,38 @@ export async function entrarComo(
   });
 
   return { token, usuario: mapearUsuario(usuario) };
+}
+
+/**
+ * Recuperacion de contrasena por correo.
+ *
+ * No revela si el correo esta registrado: la respuesta es la misma exista o
+ * no, igual que el login, para que nadie use este endpoint para averiguar
+ * que cuentas hay.
+ *
+ * Si el usuario existe y esta activo: se le genera una contrasena temporal,
+ * se guarda hasheada (con `debe_cambiar_contrasena` en TRUE, o sea que al
+ * entrar tendra que cambiarla), se cierran sus sesiones abiertas -- por si
+ * el motivo de la recuperacion es que le robaron la cuenta -- y se manda el
+ * correo. Un fallo del SMTP no se propaga: la solicitud ya hizo su trabajo y
+ * el usuario puede pedir otra.
+ */
+export async function solicitarRecuperacion(
+  cliente: PoolClient,
+  datos: ForgotPassword,
+): Promise<void> {
+  const usuario = await repo.buscarPorCorreo(cliente, datos.correo, '');
+
+  if (!usuario || !usuario.activo || !usuario.email) {
+    return;
+  }
+
+  const contrasenaTemporal = generarContrasenaTemporal();
+
+  await enTransaccionDe(cliente, async (c) => {
+    await repoUsuarios.ponerContrasena(c, Number(usuario.id), contrasenaTemporal);
+    await repoUsuarios.cerrarSesiones(c, Number(usuario.id), 'contrasena_reseteada');
+  });
+
+  await enviarRecuperacionContrasena(usuario.email, usuario.nombre, contrasenaTemporal);
 }

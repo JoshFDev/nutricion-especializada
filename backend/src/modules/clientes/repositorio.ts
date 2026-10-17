@@ -12,7 +12,7 @@ import type { ClienteFila, NotaResumenFila } from './modelo.js';
  */
 
 const CAMPOS = `c.id, c.codigo_cliente, c.nombre, c.establo, c.especie_id,
-                e.nombre AS especie, c.estatus, c.telefono, c.direccion,
+                e.nombre AS especie, c.estatus, c.telefono, c.email, c.direccion,
                 c.saldo_actual, c.creado_en, c.actualizado_en,
                 f.rfc, f.razon_social`;
 
@@ -140,10 +140,10 @@ export async function crear(cliente: PoolClient, datos: CrearCliente): Promise<C
   const fila = await consultarUno<ClienteFila>(
     cliente,
     `INSERT INTO clientes (codigo_cliente, nombre, establo, especie_id,
-                           estatus, telefono, direccion)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+                           estatus, telefono, email, direccion)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING id, codigo_cliente, nombre, establo, especie_id, estatus,
-               telefono, direccion, saldo_actual, creado_en, actualizado_en`,
+               telefono, email, direccion, saldo_actual, creado_en, actualizado_en`,
     [
       datos.codigo_cliente,
       datos.nombre,
@@ -151,6 +151,7 @@ export async function crear(cliente: PoolClient, datos: CrearCliente): Promise<C
       datos.especie_id ?? null,
       datos.estatus,
       datos.telefono ?? null,
+      datos.email ?? null,
       datos.direccion ?? null,
     ],
   );
@@ -181,6 +182,7 @@ export async function actualizar(
     'especie_id',
     'estatus',
     'telefono',
+    'email',
     'direccion',
     'saldo_actual',
   ]);
@@ -194,7 +196,7 @@ export async function actualizar(
     `UPDATE clientes SET ${asignaciones.join(', ')}
       WHERE id = $1
       RETURNING id, codigo_cliente, nombre, establo, especie_id, estatus,
-                telefono, direccion, saldo_actual, creado_en, actualizado_en`,
+                telefono, email, direccion, saldo_actual, creado_en, actualizado_en`,
     [id, ...seguros.map((c) => datos[c] ?? null)],
   );
 }

@@ -26,6 +26,7 @@ function forma(parcial: Partial<FormaCliente> = {}): FormaCliente {
     especie_id: '',
     estatus: 'Activo',
     telefono: '',
+    email: '',
     rfc: '',
     direccion: '',
     ...parcial,
@@ -48,6 +49,7 @@ describe('el cuerpo del cliente', () => {
     expect(cuerpo.establo).toBeNull();
     expect(cuerpo.especie_id).toBeNull();
     expect(cuerpo.telefono).toBeNull();
+    expect(cuerpo.email).toBeNull();
     expect(cuerpo.direccion).toBeNull();
     // Sin RFC tambien es `null`: es lo que le dice al sistema que borre el
     // dato fiscal, no que guarde un string vacio.

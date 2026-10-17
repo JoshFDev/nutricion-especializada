@@ -173,6 +173,7 @@ export class Clientes {
     especie_id: [''],
     estatus: this.fb.nonNullable.control<'Activo' | 'Inactivo'>('Activo'),
     telefono: [''],
+    email: ['', Validators.email],
     rfc: ['', validaRfc],
     direccion: [''],
     saldo_actual: [''],
@@ -205,9 +206,10 @@ export class Clientes {
    * formulario: lo que hay que corregir es el campo, y un mensaje suelto
    * obliga a buscar cuál de los ocho es.
    */
-  problemaDe(campo: 'codigo_cliente' | 'nombre' | 'rfc'): string | null {
+  problemaDe(campo: 'codigo_cliente' | 'nombre' | 'email' | 'rfc'): string | null {
     const control = this.forma.controls[campo];
     if (control.hasError('requerido')) return 'Este campo es obligatorio.';
+    if (control.hasError('email')) return 'El correo no tiene formato válido.';
     if (control.hasError('rfc')) return 'El RFC no cumple el formato del SAT.';
     if (control.hasError('duplicado')) return 'Ya existe un cliente con ese código.';
     return null;
@@ -395,6 +397,7 @@ export class Clientes {
       especie_id: '',
       estatus: 'Activo',
       telefono: '',
+      email: '',
       rfc: '',
       direccion: '',
       saldo_actual: '',
@@ -412,6 +415,7 @@ export class Clientes {
       especie_id: cliente.especie_id === null ? '' : String(cliente.especie_id),
       estatus: cliente.estatus,
       telefono: cliente.telefono ?? '',
+      email: cliente.email ?? '',
       rfc: cliente.rfc ?? '',
       direccion: cliente.direccion ?? '',
       saldo_actual: String(cliente.saldo_actual ?? ''),

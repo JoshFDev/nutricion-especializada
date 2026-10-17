@@ -3,6 +3,7 @@ import { consultar as consultarDB, consultarUno, enTransaccionDe } from '../../d
 import { env } from '../../config/entorno.js';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { resolverEfectivo } from '../precios/repositorio.js';
+import { enviarTicketNota } from './correo.js';
 import { excelListaNotas, excelNotaRemision } from './excel.js';
 import { pdfNotaRemision, renglonesFuera } from './pdf.js';
 import * as repo from './repositorio.js';
@@ -207,8 +208,25 @@ function nombreDelArchivo(nota: Nota, extension: string): string {
   return `nota-remision-${nota.folio}-${nota.fecha}.${extension}`;
 }
 
+/**
+ * Manda el ticket de la nota al correo del cliente, si tiene.
+ *
+ * Es a proposito un efecto de mejor esfuerzo: un correo que no sale (SMTP
+ * caido, direccion mal escrita) NUNCA puede tumbar la venta. Por eso el
+ * error se registra y se sigue, en vez de propagarse y revertir la nota.
+ */
+async function notificarTicket(c: PoolClient, nota: Nota, cancelada: boolean): Promise<void> {
+  const email = await repo.emailCliente(c, nota.cliente_id);
+  if (!email) return;
+  try {
+    await enviarTicketNota(email, nota.cliente, nota, cancelada);
+  } catch (error) {
+    console.error(`No se pudo enviar el ticket de la nota ${nota.folio} a ${email}:`, error);
+  }
+}
+
 export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number): Promise<Nota> {
-  return enTransaccionDe(cliente, async (c) => {
+  const nota = await enTransaccionDe(cliente, async (c) => {
     await revisarCliente(c, d.cliente_id);
 
     // El folio se toma PRIMERO, y con candado. Primero porque si un renglon
@@ -258,6 +276,11 @@ export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number
 
     return leer(c, notaId);
   });
+
+  // El aviso sale DESPUES del commit: si el SMTP tarda, no se retiene la
+  // conexion de base, y el ticket solo se manda de una nota ya guardada.
+  await notificarTicket(cliente, nota, false);
+  return nota;
 }
 
 export async function editar(cliente: PoolClient, id: number, d: EditarNota): Promise<Nota> {
@@ -396,7 +419,7 @@ export async function editar(cliente: PoolClient, id: number, d: EditarNota): Pr
 }
 
 export async function cancelar(cliente: PoolClient, id: number, motivo: string): Promise<Nota> {
-  return enTransaccionDe(cliente, async (c) => {
+  const nota = await enTransaccionDe(cliente, async (c) => {
     const fila = await repo.consultarNota(c, id);
     if (!fila) throw new NoEncontrado('Esa nota de remision no existe');
 
@@ -416,6 +439,11 @@ export async function cancelar(cliente: PoolClient, id: number, motivo: string):
 
     return leer(c, id);
   });
+
+  // El aviso de cancelacion tambien va despues del commit, por lo mismo que
+  // el del alta: no se retiene la conexion y solo se manda de lo ya guardado.
+  await notificarTicket(cliente, nota, true);
+  return nota;
 }
 
 export async function eliminar(cliente: PoolClient, id: number): Promise<void> {

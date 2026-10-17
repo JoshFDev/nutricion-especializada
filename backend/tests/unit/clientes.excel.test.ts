@@ -26,6 +26,7 @@ const cliente = (over: Partial<Cliente> = {}): Cliente => ({
   especie: 'Bovinos lecheros',
   estatus: 'Activo',
   telefono: '(222) 987 6543',
+  email: 'contacto@granjalosrobles.mx',
   direccion: 'Camino a la Sierra s/n',
   rfc: 'ROJG850101HDF3K9',
   razon_social: null,

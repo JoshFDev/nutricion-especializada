@@ -7,9 +7,9 @@ import { z } from 'zod';
  * tipo no puedan quedar desincronizados.
  *
  * OJO: los nombres de columna vienen de la tabla `clientes` de
- * db/migrations/0001_init.sql. No hay email ni limite_credito: el estatus
- * es texto ('Activo'/'Inactivo') y el saldo lo mantiene un trigger, por
- * eso no aparece en el esquema de creacion.
+ * db/migrations/0001_init.sql y de la 0019 (que agrega `email`). No hay
+ * limite_credito: el estatus es texto ('Activo'/'Inactivo') y el saldo lo
+ * mantiene un trigger, por eso no aparece en el esquema de creacion.
  *
  * El RFC es la excepcion: TAMPOCO es columna de `clientes`, vive en
  * `datos_fiscales_cliente`, pero si entra por aqui porque es lo que la
@@ -61,6 +61,23 @@ const textoOpcional = (max: number) =>
     .nullish()
     .transform((v) => (v === '' || v === undefined ? null : v));
 
+/**
+ * El correo de contacto. Opcional, y en blanco va `null`.
+ *
+ * Se recorta primero y el formato se comprueba despues, con la misma
+ * advertencia que el login: `z.email().trim()` valida ANTES de recortar y
+ * rechaza un correo pegado con espacios de mas.
+ */
+const correoCliente = z
+  .string()
+  .trim()
+  .max(200)
+  .nullish()
+  .transform((v) => (v === '' || v === undefined ? null : v))
+  .refine((v) => v === null || z.email().safeParse(v).success, {
+    message: 'El correo no tiene formato valido',
+  });
+
 const saldo = z.coerce.number().multipleOf(0.01).min(-9999999).max(9999999).nullish();
 
 export const crearClienteEsquema = z.object({
@@ -70,6 +87,7 @@ export const crearClienteEsquema = z.object({
   especie_id: z.coerce.number().int().positive().nullish(),
   estatus: estatusCliente.default('Activo'),
   telefono: textoOpcional(40),
+  email: correoCliente,
   direccion: textoOpcional(400),
   rfc: rfcCliente,
   saldo_actual: saldo,

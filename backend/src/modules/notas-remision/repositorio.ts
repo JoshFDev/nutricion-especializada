@@ -279,6 +279,21 @@ export async function consultarClienteImprimible(
 }
 
 /**
+ * El correo del cliente, para las notificaciones de la nota.
+ *
+ * Devuelve `null` cuando el cliente no tiene correo: es el caso normal y no
+ * un error, y por eso el servicio simplemente no manda nada.
+ */
+export async function emailCliente(cliente: PoolClient, id: number): Promise<string | null> {
+  const fila = await consultarUno<{ email: string | null }>(
+    cliente,
+    `SELECT email FROM clientes WHERE id = $1`,
+    [id],
+  );
+  return fila?.email ?? null;
+}
+
+/**
  * Renglones de la nota, del mas reciente al mas viejo.
  *
  * El orden es por id y no por producto: el detalle de una nota es un

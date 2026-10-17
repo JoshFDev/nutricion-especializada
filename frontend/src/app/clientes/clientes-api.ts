@@ -32,6 +32,7 @@ export interface Cliente {
   especie: string | null;
   estatus: 'Activo' | 'Inactivo';
   telefono: string | null;
+  email: string | null;
   direccion: string | null;
   rfc: string | null;
   razon_social: string | null;
@@ -67,6 +68,7 @@ export interface FormaCliente {
   especie_id: string;
   estatus: 'Activo' | 'Inactivo';
   telefono: string;
+  email: string;
   rfc: string;
   direccion: string;
   saldo_actual?: string;
@@ -80,6 +82,7 @@ export interface CuerpoCliente {
   especie_id: number | null;
   estatus: 'Activo' | 'Inactivo';
   telefono: string | null;
+  email: string | null;
   rfc: string | null;
   direccion: string | null;
   saldo_actual?: number;
@@ -105,6 +108,7 @@ export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
     especie_id: forma.especie_id === '' ? null : Number(forma.especie_id),
     estatus: forma.estatus,
     telefono: textoONull(forma.telefono),
+    email: textoONull(forma.email),
     rfc: textoONull(rfcNormalizado(forma.rfc)),
     direccion: textoONull(forma.direccion),
   };

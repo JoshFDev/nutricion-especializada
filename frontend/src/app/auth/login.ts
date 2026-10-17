@@ -1,8 +1,10 @@
+import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { errorLegible } from '../nucleo/api';
+import { API, errorLegible } from '../nucleo/api';
 import { leerFondo } from '../nucleo/fondo-login';
 import { Sesion } from '../nucleo/sesion';
 
@@ -49,6 +51,7 @@ const ESPERA_MINIMA_MS = 500;
 })
 export class Login {
   private readonly fb = inject(FormBuilder);
+  private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly ruta = inject(ActivatedRoute);
   private readonly sesion = inject(Sesion);
@@ -173,6 +176,101 @@ export class Login {
       await this.esperarElMinimo(arranque);
       this.enviando.set(false);
       this.error.set(errorLegible(e).mensaje);
+    }
+  }
+
+  /*
+   * La recuperación de la contraseña.
+   *
+   * Vive en esta misma tarjeta y NO en una ruta propia. Quien olvidó la
+   * contraseña ya está en la pantalla de entrar, y mandarlo a otra pantalla (y
+   * de vuelta) es un viaje que no aporta nada; además `/login` es la única ruta
+   * pública y abrir otra obliga a tocar las guardas. Se alterna con
+   * `modoRecuperar`, que no navega: solo cambia lo que se dibuja dentro.
+   *
+   * La petición se hace aquí y no en `Sesion` porque, a diferencia de entrar,
+   * no deja nada guardado: no hay credencial que escribir en `localStorage` ni
+   * perfil que refrescar. `Sesion` existe para eso. Es una petición suelta, la
+   * misma razón por la que `CambiarContrasena` llama a `HttpClient` directo.
+   */
+
+  /** Si la tarjeta está en modo «recuperar» en vez de «entrar». */
+  readonly modoRecuperar = signal(false);
+
+  /**
+   * El formulario de la recuperación.
+   *
+   * Aparte del de entrar a propósito: son dos envíos distintos a dos rutas
+   * distintas, y compartir un formGroup haría que un error de uno se pintara en
+   * el otro.
+   */
+  readonly recuperarForm = this.fb.nonNullable.group({
+    correo: ['', [Validators.required, Validators.email]],
+  });
+
+  readonly errorRecuperacion = signal<string | null>(null);
+  readonly mensajeRecuperacion = signal<string | null>(null);
+  readonly enviandoRecuperar = signal(false);
+
+  /** Pasa a la tarjeta al modo recuperación, en limpio. */
+  abrirRecuperacion(): void {
+    this.error.set(null);
+    this.errorRecuperacion.set(null);
+    this.mensajeRecuperacion.set(null);
+    this.recuperarForm.reset();
+    this.modoRecuperar.set(true);
+  }
+
+  /** Vuelve a la pantalla de entrar. */
+  volverAlLogin(): void {
+    this.errorRecuperacion.set(null);
+    this.mensajeRecuperacion.set(null);
+    this.modoRecuperar.set(false);
+  }
+
+  /** Igual que `tocado`, para el único campo de la recuperación. */
+  tocadoRecuperar(): boolean {
+    const control = this.recuperarForm.controls.correo;
+    return control.touched && control.invalid;
+  }
+
+  /**
+   * Pide una contraseña temporal para el correo escrito.
+   *
+   * El sistema COMPRUEBA que el correo exista antes de mandar nada (ver
+   * `modules/auth/servicio.ts`), así que un 404 aquí es el caso normal de
+   * haberse equivocado al teclear y se muestra como error. Un 200 solo llega
+   * si salió el correo de verdad.
+   */
+  async recuperar(): Promise<void> {
+    this.errorRecuperacion.set(null);
+    this.mensajeRecuperacion.set(null);
+    this.enviandoRecuperar.set(true);
+    this.recuperarForm.markAllAsTouched();
+
+    if (this.recuperarForm.invalid) {
+      this.enviandoRecuperar.set(false);
+      return;
+    }
+
+    const correo = this.recuperarForm.getRawValue().correo.trim();
+
+    try {
+      const respuesta = await firstValueFrom(
+        this.http.post<{ mensaje: string }>(`${API}/auth/forgot-password`, { correo }),
+      );
+      // El formulario se queda como está: si el correo no llegó, volver a
+      // pulsar el botón reenvía al mismo destino sin reescribirlo.
+      this.mensajeRecuperacion.set(respuesta.mensaje);
+    } catch (e) {
+      // Un correo sin formato válido lo señala el sistema con nombre propio
+      // (validación del campo `correo`); se pega al campo en vez de dejarlo
+      // flotando arriba sin decir de dónde viene.
+      const legible = errorLegible(e);
+      const deCorreo = legible.detalles.find((d) => d.campo === 'correo');
+      this.errorRecuperacion.set(deCorreo?.problema ?? legible.mensaje);
+    } finally {
+      this.enviandoRecuperar.set(false);
     }
   }
 

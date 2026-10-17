@@ -903,6 +903,44 @@ label {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Los enlaces de la tarjeta                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * «¿Olvidaste tu contraseña?» y «Volver a iniciar sesión».
+ *
+ * Los dos son botones de verdad (no navegan a ninguna ruta: cambian lo que se
+ * dibuja en la misma tarjeta), pero se leen como enlaces. Van centrados, sin
+ * fondo y en el color de acento, para que no compitan con el botón principal:
+ * el que importa sigue siendo «Entrar»/«Enviar».
+ */
+.enlace {
+  display: block;
+  width: 100%;
+  margin-top: 0.625rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  font-size: var(--t-label);
+  font-weight: 500;
+  color: var(--acento-texto);
+  text-align: center;
+  background: none;
+  border: 0;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 1px;
+  }
+}
+
 /*
  * El spinner del botón de entrar.
  *

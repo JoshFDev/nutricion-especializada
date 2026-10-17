@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { NoAutenticado, NoEncontrado } from '../../src/core/errores.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ErrorValidacion, NoAutenticado, NoEncontrado } from '../../src/core/errores.js';
 import * as auth from '../../src/modules/auth/servicio.js';
-import { falsoCliente } from './ayuda/falsoCliente.js';
+import { enviarRecuperacionContrasena } from '../../src/modules/auth/correo.js';
+import { falsoCliente, type FalsoCliente } from './ayuda/falsoCliente.js';
+
+/**
+ * El correo de recuperacion se falsea: lo que se prueba aqui es la DECISION
+ * (comprobar antes de mandar), no el SMTP. Sin este doble, la prueba cargaria
+ * nodemailer y trataria de hablar con el servidor de correo.
+ */
+vi.mock('../../src/modules/auth/correo.js', () => ({
+  enviarRecuperacionContrasena: vi.fn().mockResolvedValue(undefined),
+}));
 
 /**
  * Pruebas de las REGLAS de inicio de sesion, sin base de datos.
@@ -127,6 +137,71 @@ describe('iniciarSesion', () => {
       (c) => c.sql.includes('auditoria_accesos') && c.valores.includes('login_fallido'),
     );
     expect(fallos).toHaveLength(0);
+  });
+});
+
+describe('solicitarRecuperacion', () => {
+  const pedir = (db: FalsoCliente, correo: string) =>
+    auth.solicitarRecuperacion(db.cliente, { correo });
+
+  // Cada prueba parte de cero: se borran las llamadas que dejo la anterior.
+  // `clearAllMocks` NO borra la implementacion del doble (el
+  // `mockResolvedValue`), solo la lista de llamadas.
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rechaza con 404 si el correo no esta registrado, sin mandar nada', async () => {
+    // Este es el comportamiento que se pidio: comprobar ANTES de enviar. Si el
+    // correo no existe, no se toca la contrasena de nadie ni sale un correo
+    // hacia una direccion que quizas sea de otra persona.
+    const db = falsoCliente().responder([]);
+
+    await expect(pedir(db, 'nadie@ejemplo.local')).rejects.toBeInstanceOf(NoEncontrado);
+
+    expect(db.consultas.some((c) => c.sql.includes('UPDATE usuarios'))).toBe(false);
+    expect(enviarRecuperacionContrasena).not.toHaveBeenCalled();
+  });
+
+  it('rechaza con 404 si el usuario no tiene correo', async () => {
+    // Sin direccion no hay a donde mandar la temporal, asi que tampoco se
+    // puede decir que se hizo.
+    const db = falsoCliente().responder([usuarioOk({ email: null })]);
+
+    await expect(pedir(db, 'sincorreo@ejemplo.local')).rejects.toBeInstanceOf(NoEncontrado);
+    expect(enviarRecuperacionContrasena).not.toHaveBeenCalled();
+  });
+
+  it('no manda nada a una cuenta desactivada', async () => {
+    const db = falsoCliente().responder([usuarioOk({ activo: false })]);
+
+    await expect(pedir(db, 'admin@ejemplo.local')).rejects.toBeInstanceOf(ErrorValidacion);
+    expect(enviarRecuperacionContrasena).not.toHaveBeenCalled();
+  });
+
+  it('si el correo existe, cambia la contrasena y la manda por correo', async () => {
+    const db = falsoCliente()
+      .responder([usuarioOk()]) // buscarPorCorreo
+      .responder([]) // BEGIN
+      .responderConCambios(1) // ponerContrasena
+      .responder([]) // cerrarSesiones
+      .responder([]); // COMMIT
+
+    const r = await pedir(db, 'admin@ejemplo.local');
+
+    expect(r).toEqual({ correo: 'admin@ejemplo.local' });
+
+    // La contrasena se guarda hasheada (el `crypt` va en el SQL) y con la
+    // bandera puesta, o sea que al entrar tendra que cambiarla.
+    const update = db.consultas.find((c) => c.sql.includes('UPDATE usuarios'));
+    expect(update?.sql).toContain('crypt(');
+    expect(update?.sql).toContain('debe_cambiar_contrasena = TRUE');
+
+    // Y la temporal viaja a la direccion QUE ESTA EN LA BASE, no a la que se
+    // tecleo: si difieren en mayusculas o espacios, la que vale es la guardada.
+    expect(enviarRecuperacionContrasena).toHaveBeenCalledWith(
+      'admin@ejemplo.local',
+      'Administrador',
+      expect.any(String),
+    );
   });
 });
 

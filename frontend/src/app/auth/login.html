@@ -179,49 +179,108 @@
         la resolución real de la pantalla. Ver la nota de «Capas y texto» al
         final del SCSS.
       -->
-      <div class="tarjeta" [class.con-error]="error()">
+      <div class="tarjeta" [class.con-error]="error() || errorRecuperacion()">
         <header class="cabecera">
-          <h2 id="titulo-acceso">Iniciar sesión</h2>
-          <p class="cabecera__ayuda">Escribe tus credenciales para entrar.</p>
+          @if (modoRecuperar()) {
+            <h2 id="titulo-acceso">Recuperar contraseña</h2>
+            <p class="cabecera__ayuda">Escribe tu correo y te enviamos una contraseña temporal.</p>
+          } @else {
+            <h2 id="titulo-acceso">Iniciar sesión</h2>
+            <p class="cabecera__ayuda">Escribe tus credenciales para entrar.</p>
+          }
         </header>
 
-        @if (avisoSesionCerrada()) {
-          <p class="aviso aviso-info">Tu sesión se cerró. Vuelve a entrar para continuar.</p>
-        }
-
-        <form [formGroup]="form" (ngSubmit)="entrar()">
+        @if (modoRecuperar()) {
           <!--
+            La recuperación, en la misma tarjeta. No lleva el botón de
+            desarrollo: quien no puede entrar no tiene por qué ver el atajo.
+
+            El texto de ayuda lo pone la cabecera, así que aquí no se repite.
+            El correo se comprueba contra el sistema ANTES de mandar nada (un
+            correo que no está registrado devuelve 404 y se pinta abajo), que es
+            lo que se pidió: saber al instante si se escribió mal.
+          -->
+          <form [formGroup]="recuperarForm" (ngSubmit)="recuperar()">
+            <div class="campo">
+              <label for="correo-recuperar">Correo</label>
+              <input
+                id="correo-recuperar"
+                type="email"
+                formControlName="correo"
+                autocomplete="email"
+                inputmode="email"
+                enterkeyhint="go"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="nombre@correo.com"
+                autofocus
+                [class.invalido]="tocadoRecuperar()"
+                [attr.aria-invalid]="tocadoRecuperar()"
+                [attr.aria-describedby]="tocadoRecuperar() ? 'correo-recuperar-error' : null"
+              />
+              @if (tocadoRecuperar()) {
+                <p class="campo-error" id="correo-recuperar-error">
+                  Escribe un correo con formato válido.
+                </p>
+              }
+            </div>
+
+            @if (errorRecuperacion()) {
+              <p class="aviso aviso-error" role="alert">{{ errorRecuperacion() }}</p>
+            }
+            @if (mensajeRecuperacion()) {
+              <p class="aviso aviso-info" role="status">{{ mensajeRecuperacion() }}</p>
+            }
+
+            <button type="submit" class="principal" [disabled]="enviandoRecuperar()">
+              @if (enviandoRecuperar()) {
+                <span class="spinner" aria-hidden="true"></span>
+              }
+              <span>{{ enviandoRecuperar() ? 'Enviando...' : 'Enviar contraseña temporal' }}</span>
+            </button>
+
+            <button type="button" class="enlace" (click)="volverAlLogin()">
+              Volver a iniciar sesión
+            </button>
+          </form>
+        } @else {
+          @if (avisoSesionCerrada()) {
+            <p class="aviso aviso-info">Tu sesión se cerró. Vuelve a entrar para continuar.</p>
+          }
+
+          <form [formGroup]="form" (ngSubmit)="entrar()">
+            <!--
             Cada campo va en su bloque y no suelto. El margen vive en el bloque,
             no en el campo, para que el error salga DENTRO del bloque (entre el
             campo y el margen) y no empuje el botón de entrar hacia abajo cada
             vez que aparece, que es justo cuando se está escribiendo la
             contraseña.
           -->
-          <div class="campo">
-            <label for="correo">Correo</label>
-            <input
-              id="correo"
-              type="email"
-              formControlName="correo"
-              autocomplete="username"
-              inputmode="email"
-              enterkeyhint="next"
-              autocapitalize="none"
-              spellcheck="false"
-              placeholder="nombre@correo.com"
-              autofocus
-              [class.invalido]="tocado('correo')"
-              [attr.aria-invalid]="tocado('correo')"
-              [attr.aria-describedby]="tocado('correo') ? 'correo-error' : null"
-            />
-            @if (tocado('correo')) {
-              <p class="campo-error" id="correo-error">Escribe un correo con formato válido.</p>
-            }
-          </div>
+            <div class="campo">
+              <label for="correo">Correo</label>
+              <input
+                id="correo"
+                type="email"
+                formControlName="correo"
+                autocomplete="username"
+                inputmode="email"
+                enterkeyhint="next"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="nombre@correo.com"
+                autofocus
+                [class.invalido]="tocado('correo')"
+                [attr.aria-invalid]="tocado('correo')"
+                [attr.aria-describedby]="tocado('correo') ? 'correo-error' : null"
+              />
+              @if (tocado('correo')) {
+                <p class="campo-error" id="correo-error">Escribe un correo con formato válido.</p>
+              }
+            </div>
 
-          <div class="campo">
-            <label for="contrasena">Contraseña</label>
-            <!--
+            <div class="campo">
+              <label for="contrasena">Contraseña</label>
+              <!--
               El campo con el botón de ver la contraseña.
 
               Es la única concesión a la seguridad de la pantalla, y a cambio
@@ -232,79 +291,91 @@
               lleva `aria-pressed` para que el lector de pantalla diga si la
               contraseña está a la vista o no.
             -->
-            <div class="campo-contrasena">
-              <input
-                id="contrasena"
-                [type]="verContrasena() ? 'text' : 'password'"
-                formControlName="contrasena"
-                autocomplete="current-password"
-                enterkeyhint="go"
-                placeholder="Tu contraseña"
-                [class.invalido]="tocado('contrasena')"
-                [attr.aria-invalid]="tocado('contrasena')"
-                [attr.aria-describedby]="tocado('contrasena') ? 'contrasena-error' : null"
-              />
-              <button
-                type="button"
-                class="ver"
-                (click)="alternarContrasena()"
-                [attr.aria-pressed]="verContrasena()"
-                [attr.aria-label]="verContrasena() ? 'Ocultar la contraseña' : 'Ver la contraseña'"
-                [title]="verContrasena() ? 'Ocultar la contraseña' : 'Ver la contraseña'"
-              >
-                @if (verContrasena()) {
-                  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <path
-                      d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                    />
-                    <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.5" />
-                    <path
-                      d="M4 16L16 4"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                } @else {
-                  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <path
-                      d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                    />
-                    <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.5" />
-                  </svg>
-                }
-              </button>
+              <div class="campo-contrasena">
+                <input
+                  id="contrasena"
+                  [type]="verContrasena() ? 'text' : 'password'"
+                  formControlName="contrasena"
+                  autocomplete="current-password"
+                  enterkeyhint="go"
+                  placeholder="Tu contraseña"
+                  [class.invalido]="tocado('contrasena')"
+                  [attr.aria-invalid]="tocado('contrasena')"
+                  [attr.aria-describedby]="tocado('contrasena') ? 'contrasena-error' : null"
+                />
+                <button
+                  type="button"
+                  class="ver"
+                  (click)="alternarContrasena()"
+                  [attr.aria-pressed]="verContrasena()"
+                  [attr.aria-label]="
+                    verContrasena() ? 'Ocultar la contraseña' : 'Ver la contraseña'
+                  "
+                  [title]="verContrasena() ? 'Ocultar la contraseña' : 'Ver la contraseña'"
+                >
+                  @if (verContrasena()) {
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path
+                        d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      />
+                      <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.5" />
+                      <path
+                        d="M4 16L16 4"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  } @else {
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path
+                        d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      />
+                      <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.5" />
+                    </svg>
+                  }
+                </button>
+              </div>
+              @if (tocado('contrasena')) {
+                <p class="campo-error" id="contrasena-error">La contraseña no puede ir vacía.</p>
+              }
             </div>
-            @if (tocado('contrasena')) {
-              <p class="campo-error" id="contrasena-error">La contraseña no puede ir vacía.</p>
+
+            @if (error()) {
+              <p class="aviso aviso-error" role="alert">{{ error() }}</p>
             }
-          </div>
 
-          @if (error()) {
-            <p class="aviso aviso-error" role="alert">{{ error() }}</p>
-          }
-
-          <!--
+            <!--
             El botón se deshabilita mientras viaja la petición. Un doble clic
             manda dos inicios de sesión, y el segundo error (de sesión ya usada)
             se come el mensaje del primero. También dice «Entrando...» y enseña
             el spinner para que se vea que algo pasó: sin eso, en una red lenta
             parece que el clic no entró.
           -->
-          <button type="submit" class="principal" [disabled]="enviando()">
-            @if (enviando()) {
-              <span class="spinner" aria-hidden="true"></span>
-            }
-            <span>{{ enviando() ? 'Entrando...' : 'Entrar' }}</span>
-          </button>
-        </form>
+            <button type="submit" class="principal" [disabled]="enviando()">
+              @if (enviando()) {
+                <span class="spinner" aria-hidden="true"></span>
+              }
+              <span>{{ enviando() ? 'Entrando...' : 'Entrar' }}</span>
+            </button>
 
-        @if (esDesarrollo) {
-          <!--
+            <!--
+            Un `type="button"` y no un enlace: no navega a ningún lado, cambia
+            lo que se dibuja en la misma tarjeta. Con `type="submit"` dispararía
+            el inicio de sesión, y con un `<a href>` el navegador pediría una
+            ruta que no existe.
+          -->
+            <button type="button" class="enlace" (click)="abrirRecuperacion()">
+              ¿Olvidaste tu contraseña?
+            </button>
+          </form>
+
+          @if (esDesarrollo) {
+            <!--
             Acceso directo de desarrollo. Solo aparece con `ng serve`, y el
             sistema lo rechaza con 404 en producción (ver `app.ts` y
             `auth/rutas-dev.ts`), así que el candado no depende de que este
@@ -314,19 +385,20 @@
             petición distinta, a otra ruta, con otros datos, y mezclarla en el
             mismo formulario haría que el envío normal lo mandara.
           -->
-          <div class="desarrollo">
-            <button
-              type="button"
-              class="atajo"
-              (click)="entrarComoAdministrador()"
-              [disabled]="enviando()"
-            >
-              Entrar como administrador
-            </button>
-            <p>
-              Solo en desarrollo. Entra como el administrador de datos iniciales, sin contraseña.
-            </p>
-          </div>
+            <div class="desarrollo">
+              <button
+                type="button"
+                class="atajo"
+                (click)="entrarComoAdministrador()"
+                [disabled]="enviando()"
+              >
+                Entrar como administrador
+              </button>
+              <p>
+                Solo en desarrollo. Entra como el administrador de datos iniciales, sin contraseña.
+              </p>
+            </div>
+          }
         }
       </div>
     </section>

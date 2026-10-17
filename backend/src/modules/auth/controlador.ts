@@ -51,6 +51,8 @@ export const cambiarContrasena = async (req: Request, res: Response): Promise<vo
 
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   const datos = cuerpo<ForgotPassword>(req);
-  await servicio.solicitarRecuperacion(req.db, datos);
-  res.status(200).json({ mensaje: 'Si el correo existe, se ha enviado una contraseña temporal.' });
+  const { correo } = await servicio.solicitarRecuperacion(req.db, datos);
+  res.status(200).json({
+    mensaje: `Te enviamos una contraseña temporal a ${correo}. Revísala y cámbiala al entrar.`,
+  });
 };

@@ -178,12 +178,21 @@ export async function entrarComo(
   return { token, usuario: mapearUsuario(usuario) };
 }
 
+/** A donde fue la contrasena temporal, para que el controlador lo pueda decir. */
+export interface ResultadoRecuperacion {
+  correo: string;
+}
+
 /**
  * Recuperacion de contrasena por correo.
  *
- * No revela si el correo esta registrado: la respuesta es la misma exista o
- * no, igual que el login, para que nadie use este endpoint para averiguar
- * que cuentas hay.
+ * Primero COMPRUEBA que el correo este registrado: si no lo esta, no se manda
+ * nada y se responde con un 404 en vez del «listo» generico. Eso revela que
+ * cuentas existen, que es justo lo que el login evita, y es una decision
+ * deliberada para esta aplicacion: la atiende una persona en un mostrador y
+ * necesita saber al instante si se equivoco al teclear su correo, en vez de
+ * quedarse esperando un mensaje que nunca va a llegar. Si algun dia el sistema
+ * se expone en internet, esto hay que volver a pensarlo.
  *
  * Si el usuario existe y esta activo: se le genera una contrasena temporal,
  * se guarda hasheada (con `debe_cambiar_contrasena` en TRUE, o sea que al
@@ -195,11 +204,17 @@ export async function entrarComo(
 export async function solicitarRecuperacion(
   cliente: PoolClient,
   datos: ForgotPassword,
-): Promise<void> {
+): Promise<ResultadoRecuperacion> {
   const usuario = await repo.buscarPorCorreo(cliente, datos.correo, '');
 
-  if (!usuario || !usuario.activo || !usuario.email) {
-    return;
+  if (!usuario?.email) {
+    throw new NoEncontrado('Ese correo no esta registrado en el sistema');
+  }
+
+  if (!usuario.activo) {
+    throw new ErrorValidacion('No se puede recuperar esta cuenta', [
+      { campo: 'correo', problema: 'La cuenta esta inactiva. Pide ayuda al administrador.' },
+    ]);
   }
 
   const contrasenaTemporal = generarContrasenaTemporal();
@@ -209,5 +224,9 @@ export async function solicitarRecuperacion(
     await repoUsuarios.cerrarSesiones(c, Number(usuario.id), 'contrasena_reseteada');
   });
 
-  await enviarRecuperacionContrasena(usuario.email, usuario.nombre, contrasenaTemporal);
+  const destino = usuario.email;
+
+  await enviarRecuperacionContrasena(destino, usuario.nombre, contrasenaTemporal);
+
+  return { correo: destino };
 }

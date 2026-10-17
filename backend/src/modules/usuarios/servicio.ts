@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { enTransaccionDe } from '../../db/transaccion.js';
+import { enviarCuentaCreada } from './correo.js';
 import type { ActualizarUsuario, AsignarRoles, CrearUsuario, ListarUsuarios } from './esquemas.js';
 import type { Paginado, Usuario, UsuarioCreado } from './modelo.js';
 import { mapeoUsuario } from './modelo.js';
@@ -151,8 +152,26 @@ export async function crear(
   });
 
   void actualId;
+  const usuario = await obtener(db, id);
+  if (usuario.email) {
+    const nombreCompleto = [usuario.nombre, usuario.apellido_paterno, usuario.apellido_materno]
+      .filter(Boolean)
+      .join(' ');
+    try {
+      await enviarCuentaCreada({
+        nombre: nombreCompleto || usuario.nombre,
+        correo: usuario.email,
+        contrasenaTemporal: contrasenaElegida ? null : contrasenaTemporal,
+      });
+    } catch (error) {
+      console.error(
+        `No se pudo enviar el correo de alta al usuario ${usuario.id} (${usuario.email}):`,
+        error,
+      );
+    }
+  }
   return {
-    usuario: await obtener(db, id),
+    usuario,
     contrasenaTemporal: contrasenaElegida ? null : contrasenaTemporal,
   };
 }

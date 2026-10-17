@@ -46,6 +46,28 @@ const esquema = z.object({
   EMPRESA_RFC: z.string().default(''),
   EMPRESA_DIRECCION: z.string().default(''),
   EMPRESA_TELEFONO: z.string().default(''),
+
+  /**
+   * Correo saliente (SMTP). Con Gmail basta una contrasena de aplicacion:
+   * la cuenta normal no deja autenticar SMTP aunque la clave sea correcta.
+   *
+   * SMTP_SECURE NO puede ser `z.coerce.boolean()`: convertido desde texto,
+   * CUALQUIER cadena no vacia da true, "false" incluido, y con el puerto 587
+   * eso intenta TLS desde el saludo y la conexion falla. Solo "true" o "1"
+   * encienden el modo seguro.
+   */
+  SMTP_HOST: z.string().default('localhost'),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z
+    .union([z.boolean(), z.string()])
+    .default(false)
+    .transform((v) => (typeof v === 'boolean' ? v : v === 'true' || v === '1')),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  SMTP_FROM: z.string().default('Nutrición Especializada <no-reply@localhost>'),
+
+  /** URL del frontend, para armar los enlaces que van dentro del correo. */
+  APP_URL: z.string().default('http://localhost:4200'),
 });
 
 const parseado = esquema.safeParse(process.env);

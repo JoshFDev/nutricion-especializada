@@ -30,7 +30,10 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
-/.angular/cache
+# Se ignora toda la carpeta `.angular` (no solo `cache`) porque en este equipo
+# es un enlace a una carpeta fuera de OneDrive; como enlace, git la veía como
+# un archivo sin rastrear.
+/.angular
 .sass-cache/
 /connect.lock
 /coverage

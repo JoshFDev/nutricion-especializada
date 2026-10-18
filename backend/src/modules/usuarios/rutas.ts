@@ -4,6 +4,7 @@ import { validarBody, validarParams, validarQuery } from '../../core/validacion.
 import {
   actualizarUsuarioEsquema,
   asignarRolesEsquema,
+  codigoBajaEsquema,
   crearUsuarioEsquema,
   idUsuarioEsquema,
   listarUsuariosEsquema,
@@ -101,4 +102,28 @@ rutasUsuarios.post(
   requierePermiso('usuarios.editar'),
   validarParams(idUsuarioEsquema),
   controlador.resetearContrasena,
+);
+
+// --- Eliminar una cuenta (solo despues de desactivarla) ----------------
+//
+// Va por `usuarios.editar` y no por un permiso `usuarios.eliminar` nuevo: el
+// trigger de la base ya mapea el DELETE de `usuarios` a `usuarios.editar`
+// (`fn_trg_permiso` en 0001), asi que un permiso aparte en la ruta quedaria
+// desalineado con lo que exige la base. El control se refuerza con los
+// candados del servicio: no a la propia cuenta, no a la dueña, primero
+// desactivada y siempre un administrador vivo.
+
+rutasUsuarios.post(
+  '/:id/solicitar-eliminacion',
+  requierePermiso('usuarios.editar'),
+  validarParams(idUsuarioEsquema),
+  controlador.solicitarCodigoBaja,
+);
+
+rutasUsuarios.delete(
+  '/:id',
+  requierePermiso('usuarios.editar'),
+  validarParams(idUsuarioEsquema),
+  validarBody(codigoBajaEsquema),
+  controlador.eliminar,
 );

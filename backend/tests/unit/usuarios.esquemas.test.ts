@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { generarContrasenaTemporal } from '../../src/modules/usuarios/servicio.js';
-import { crearUsuarioEsquema, listarUsuariosEsquema } from '../../src/modules/usuarios/esquemas.js';
+import {
+  codigoBajaEsquema,
+  crearUsuarioEsquema,
+  listarUsuariosEsquema,
+} from '../../src/modules/usuarios/esquemas.js';
 
 /**
  * Pruebas de la parte que NO necesita base de datos.
@@ -138,6 +142,30 @@ describe('contrasena elegida en el alta', () => {
     // persona y no entraria nunca. Aqui se comprueba que NO hay trim.
     const clave = '  ConEspacios2026  ';
     expect(crearUsuarioEsquema.parse({ ...base, contrasena: clave }).contrasena).toBe(clave);
+  });
+});
+
+describe('esquema del codigo de baja', () => {
+  it('acepta exactamente 6 digitos', () => {
+    expect(codigoBajaEsquema.parse({ codigo: '042198' }).codigo).toBe('042198');
+  });
+
+  it('recorta los espacios de los lados', () => {
+    expect(codigoBajaEsquema.parse({ codigo: '  042198  ' }).codigo).toBe('042198');
+  });
+
+  it.each([
+    ['muy corto', '12345'],
+    ['muy largo', '1234567'],
+    ['con letras', '12345a'],
+    ['con espacios adentro', '12 34 56'],
+    ['vacio', ''],
+  ])('rechaza un codigo %s', (_caso, codigo) => {
+    expect(codigoBajaEsquema.safeParse({ codigo }).success).toBe(false);
+  });
+
+  it('rechaza campos que el cliente no deberia mandar', () => {
+    expect(codigoBajaEsquema.safeParse({ codigo: '123456', id: 7 }).success).toBe(false);
   });
 });
 

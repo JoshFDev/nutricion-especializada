@@ -131,3 +131,21 @@ export const asignarRolesEsquema = z.object({
 });
 
 export type AsignarRoles = z.infer<typeof asignarRolesEsquema>;
+
+/**
+ * El cuerpo de la eliminacion: el codigo que el administrador le pidio al
+ * empleado.
+ *
+ * Se exige como 6 digitos exactos para que el viaje al sistema no se haga
+ * con algo que ya se sabe que no va a coincidir (una letra, un codigo a
+ * medias). El mensaje del sistema es el que dice si el codigo es el que no
+ * era o si ya vencio; aqui solo se revisa la FORMA.
+ */
+export const codigoBajaEsquema = z.strictObject({
+  codigo: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{6}$/, 'El código son 6 dígitos'),
+});
+
+export type CodigoBaja = z.infer<typeof codigoBajaEsquema>;

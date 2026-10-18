@@ -2,9 +2,9 @@ import { randomInt } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { Conflicto, ErrorValidacion, NoEncontrado, ReglaNegocio } from '../../core/errores.js';
 import { enTransaccionDe } from '../../db/transaccion.js';
-import { enviarCuentaCreada } from './correo.js';
+import { enviarCodigoBaja, enviarCuentaCreada } from './correo.js';
 import type { ActualizarUsuario, AsignarRoles, CrearUsuario, ListarUsuarios } from './esquemas.js';
-import type { Paginado, Usuario, UsuarioCreado } from './modelo.js';
+import type { Paginado, Usuario, UsuarioCreado, UsuarioFila } from './modelo.js';
 import { mapeoUsuario } from './modelo.js';
 import * as repo from './repositorio.js';
 
@@ -48,6 +48,25 @@ export function generarContrasenaTemporal(largo = 16): string {
   const unaDeCada = CLASES.map((clase) => alAzar(clase));
   // Baraja para que las clases queden repartidas y no siempre al inicio.
   return [...unaDeCada, ...cuerpo].sort(() => randomInt(3) - 1).join('');
+}
+
+/* --- La eliminacion definitiva de una cuenta ---------------------------- */
+
+/**
+ * Cuanto dura el codigo de baja y cuantos errores se aguantan.
+ *
+ * No son numeros decorativos: 15 minutos es lo que tarda una llamada al
+ * empleado, y 5 intentos es lo que aleja a quien pruebe a adivinar sin
+ * volver loco a quien se equivoca al dictarlo. Con 6 digitos (un millon de
+ * combinaciones) y este tope, acertar por fuerza bruta no es viable.
+ */
+const VIGENCIA_MINUTOS = 15;
+const VIGENCIA_MS = VIGENCIA_MINUTOS * 60 * 1000;
+const MAX_INTENTOS_BAJA = 5;
+
+/** Un codigo de 6 digitos, facil de dictar por telefono. */
+export function generarCodigoBaja(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
 }
 
 /** Traduce el codigo de unicidad de Postgres a algo que el frontend sepa pintar. */
@@ -279,4 +298,167 @@ export async function resetearContrasena(
   });
 
   return { contrasenaTemporal, sesionesCerradas };
+}
+
+/* ---------------------------------------------------------------------- */
+/* La eliminacion definitiva de una cuenta                                */
+/* ---------------------------------------------------------------------- */
+
+/** El nombre para el correo, sin los `null` de los apellidos que faltan. */
+function nombreDe(usuario: {
+  nombre: string;
+  apellido_paterno: string;
+  apellido_materno: string | null;
+}): string {
+  return [usuario.nombre, usuario.apellido_paterno, usuario.apellido_materno]
+    .filter((parte) => parte !== null && parte !== '')
+    .join(' ');
+}
+
+/**
+ * Los candados comunes a pedir el codigo y a eliminar. Lanza si no se puede.
+ *
+ * Se escriben una vez porque las dos mitades del flujo tienen que exigir
+ * exactamente lo mismo: si la solicitud dejara pasar algo que la eliminacion
+ * rechaza, el administrador le pediria el codigo al empleado para nada.
+ *
+ * Las reglas, en orden:
+ *
+ *   1. No a tu propia cuenta: un administrador que se borra a si mismo se
+ *      queda fuera de su propio sistema y, si es el unico, ya no hay vuelta.
+ *   2. No a la dueña: `es_dueno` es la cuenta que garantiza que siempre haya
+ *      alguien capaz de administrar. Borrarla es justo lo que hay que evitar.
+ *   3. Primero desactivada: es la regla de negocio ("primero se desactiva,
+ *      luego se elimina"). Desactivar es reversible y ademas ya corre sus
+ *      propios candados; eliminar no tiene vuelta.
+ *   4. Tiene que quedar un administrador activo. Normalmente no salta —el
+ *      paso 3 ya obligo a que hubiera otro—, pero es barato y cubre el caso
+ *      raro de un admin inactivo.
+ */
+async function verificarPuedeEliminarse(
+  db: PoolClient,
+  actualId: number,
+  objetivo: UsuarioFila,
+): Promise<void> {
+  if (objetivo.id === String(actualId)) {
+    throw new ReglaNegocio('NO_SELF_ELIMINAR', 'No puedes eliminar tu propia cuenta');
+  }
+  if (objetivo.es_dueno) {
+    throw new ReglaNegocio('DUENO_INELIMINABLE', 'La cuenta de la dueña no se puede eliminar');
+  }
+  if (objetivo.activo) {
+    throw new ReglaNegocio(
+      'CUENTA_ACTIVA',
+      'Primero desactiva la cuenta; hasta entonces no se puede eliminar',
+    );
+  }
+  if (esAdmin(objetivo) && (await repo.contarAdminsActivos(db, Number(objetivo.id))) === 0) {
+    throw new ReglaNegocio('ULTIMO_ADMIN', 'No puedes eliminar al único administrador activo');
+  }
+}
+
+/**
+ * Manda un codigo de verificacion al correo del empleado.
+ *
+ * Devuelve a donde se mando, para que la pantalla pueda decirselo al
+ * administrador. El codigo NO vuelve: solo viaja al correo de la persona, que
+ * es justo el punto —el administrador tiene que pedirselo, no recibirlo el.
+ *
+ * Se exige que la cuenta tenga correo: sin el no hay forma de hacerle llegar
+ * el codigo a nadie, y sin codigo la eliminacion no se puede cerrar.
+ */
+export async function solicitarCodigoBaja(
+  db: PoolClient,
+  actualId: number,
+  id: number,
+): Promise<{ correo: string }> {
+  const objetivo = await repo.obtenerUsuario(db, id);
+  if (!objetivo) throw new NoEncontrado('El usuario no existe');
+
+  await verificarPuedeEliminarse(db, actualId, objetivo);
+
+  if (!objetivo.email) {
+    throw new ReglaNegocio(
+      'SIN_CORREO',
+      'Esa cuenta no tiene correo; no se le puede enviar el código de verificación',
+    );
+  }
+
+  const codigo = generarCodigoBaja();
+  const expiraEn = new Date(Date.now() + VIGENCIA_MS);
+  await repo.guardarCodigoBaja(db, id, codigo, expiraEn);
+
+  try {
+    await enviarCodigoBaja({
+      nombre: nombreDe(objetivo),
+      correo: objetivo.email,
+      codigo,
+      vigenciaMinutos: VIGENCIA_MINUTOS,
+    });
+  } catch (error) {
+    // Sin correo no hay codigo que teclear: se tira el que se acaba de
+    // guardar para no dejar un codigo valido que nadie recibio, y el error
+    // sale para que el administrador sepa que no se mando.
+    await repo.borrarCodigoBaja(db, id).catch(() => {
+      /* el error que importa es el del correo */
+    });
+    console.error(`No se pudo enviar el código de baja al usuario ${id}:`, error);
+    throw new ReglaNegocio(
+      'CORREO_NO_ENVIADO',
+      'No se pudo enviar el correo con el código. Inténtalo de nuevo.',
+    );
+  }
+
+  return { correo: objetivo.email };
+}
+
+/**
+ * Elimina la cuenta de verdad, con el codigo que dictó el empleado.
+ *
+ * El codigo se revisa FUERA de la transaccion. Es a proposito: un intento
+ * fallido tiene que sumarse aunque despues se lance el error, y lanzar dentro
+ * de una transaccion revierte todo lo que se hizo adentro, el `UPDATE` de los
+ * intentos incluido. El borrado de la fila si va en su transaccion, para que
+ * los triggers de auditoria y de permisos entren en el mismo COMMIT.
+ */
+export async function eliminarCuenta(
+  db: PoolClient,
+  actualId: number,
+  id: number,
+  codigo: string,
+): Promise<void> {
+  const objetivo = await repo.obtenerUsuario(db, id);
+  if (!objetivo) throw new NoEncontrado('El usuario no existe');
+
+  await verificarPuedeEliminarse(db, actualId, objetivo);
+
+  const estado = await repo.leerCodigoBaja(db, id, codigo);
+  if (!estado) {
+    throw new ReglaNegocio(
+      'SIN_CODIGO',
+      'Primero pide el código de verificación que le llega al correo del empleado',
+    );
+  }
+  if (estado.expirado) {
+    await repo.borrarCodigoBaja(db, id);
+    throw new ReglaNegocio('CODIGO_EXPIRADO', 'El código venció. Pide uno nuevo.');
+  }
+  if (!estado.coincide) {
+    const intentos = await repo.sumarIntentoBaja(db, id);
+    if (intentos >= MAX_INTENTOS_BAJA) {
+      await repo.borrarCodigoBaja(db, id);
+      throw new ReglaNegocio(
+        'CODIGO_AGOTADO',
+        'Demasiados intentos fallidos. Pide un código nuevo.',
+      );
+    }
+    throw new ReglaNegocio('CODIGO_INCORRECTO', 'El código no es correcto');
+  }
+
+  const borrado = await enTransaccionDe(db, (t) => repo.eliminarUsuario(t, id));
+  if (!borrado) {
+    // Se valido el codigo pero ya no habia fila: otra peticion la borro en el
+    // intermedio. No es un exito que haya que callar.
+    throw new NoEncontrado('Esa cuenta ya no existe');
+  }
 }

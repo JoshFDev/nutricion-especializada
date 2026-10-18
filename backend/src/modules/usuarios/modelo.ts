@@ -76,6 +76,19 @@ export interface Paginado<T> {
 }
 
 /**
+ * El estado del codigo de baja de un usuario, tal como lo devuelve Postgres.
+ *
+ * `coincide` lo calcula la base con crypt() para no sacar el codigo en claro
+ * de Postgres; `expirado` y `intentos` son los otros dos datos con los que el
+ * servicio decide si deja pasar la eliminacion o la corta.
+ */
+export interface EstadoCodigoBaja {
+  coincide: boolean;
+  expirado: boolean;
+  intentos: number;
+}
+
+/**
  * Lo que devuelve POST /api/usuarios. La contrasena temporal viaja aqui
  * y en ningun otro lado: se muestra una vez y nunca se vuelve a poder
  * leer, porque en la base solo esta el hash.

@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 import { consultar, consultarUno, contar } from '../../db/transaccion.js';
-import type { RolFila, UsuarioFila } from './modelo.js';
+import type { EstadoCodigoBaja, RolFila, UsuarioFila } from './modelo.js';
 
 /**
  * SQL del modulo de usuarios.
@@ -286,4 +286,94 @@ export async function contarAdminsActivos(
     [null, excluirUsuarioId ?? null],
   );
   return rows[0]?.total ?? 0;
+}
+
+/*
+ * --- El codigo de baja definitiva de una cuenta -------------------------
+ *
+ * Son cuatro operaciones sobre la misma tabla, y las cuatro se usan en el
+ * mismo flujo, asi que viven juntas. El codigo se guarda con crypt() y la
+ * comparacion pasa en la base: el texto en claro nunca sale de Postgres.
+ */
+
+/**
+ * Guarda (o reemplaza) el codigo de baja.
+ *
+ * Un solo renglon por usuario: pedir un codigo nuevo invalida el anterior, y
+ * eso es justo lo que se quiere cuando el administrador pide otro porque el
+ * primero no llego. Por eso `ON CONFLICT` en vez de acumular renglones.
+ */
+export async function guardarCodigoBaja(
+  cliente: PoolClient,
+  usuarioId: number,
+  codigo: string,
+  expiraEn: Date,
+): Promise<void> {
+  await cliente.query(
+    `INSERT INTO usuarios_codigo_baja (usuario_id, codigo_hash, expira_en)
+     VALUES ($1, crypt($2, gen_salt('bf', 10)), $3)
+     ON CONFLICT (usuario_id) DO UPDATE
+        SET codigo_hash = crypt($2, gen_salt('bf', 10)),
+            expira_en   = $3,
+            intentos    = 0,
+            creado_en   = now()`,
+    [usuarioId, codigo, expiraEn],
+  );
+}
+
+/**
+ * El estado del codigo que trae el usuario: si coincide, si ya vencio y
+ * cuantos fallos lleva. `null` si nunca se pidio uno.
+ */
+export async function leerCodigoBaja(
+  cliente: PoolClient,
+  usuarioId: number,
+  codigo: string,
+): Promise<EstadoCodigoBaja | null> {
+  return consultarUno<EstadoCodigoBaja>(
+    cliente,
+    `SELECT (codigo_hash = crypt($2, codigo_hash)) AS coincide,
+            (expira_en < now())                   AS expirado,
+            intentos
+       FROM usuarios_codigo_baja
+      WHERE usuario_id = $1`,
+    [usuarioId, codigo],
+  );
+}
+
+/**
+ * Un intento fallido mas. Devuelve el total para decidir si ya hay que
+ * tirar el codigo.
+ *
+ * Esto va FUERA de la transaccion de la eliminacion: un fallo tiene que
+ * contar aunque despues se lance el error, y un lanzamiento dentro de una
+ * transaccion revierte el `UPDATE` que lleva la cuenta.
+ */
+export async function sumarIntentoBaja(cliente: PoolClient, usuarioId: number): Promise<number> {
+  const fila = await consultarUno<{ intentos: number }>(
+    cliente,
+    `UPDATE usuarios_codigo_baja
+        SET intentos = intentos + 1
+      WHERE usuario_id = $1
+      RETURNING intentos`,
+    [usuarioId],
+  );
+  return fila?.intentos ?? 0;
+}
+
+/** Tira el codigo. Se usa al vencerlo, al agotar los intentos y al eliminarlo. */
+export async function borrarCodigoBaja(cliente: PoolClient, usuarioId: number): Promise<void> {
+  await cliente.query('DELETE FROM usuarios_codigo_baja WHERE usuario_id = $1', [usuarioId]);
+}
+
+/**
+ * Borra la cuenta de verdad. Devuelve si habia algo que borrar.
+ *
+ * El `rowCount` no se ignora: entre que se valido el codigo y que se llega
+ * aqui, otra peticion pudo haber borrado la misma cuenta, y sin este dato el
+ * segundo `DELETE` pareceria un exito cuando ya no hizo nada.
+ */
+export async function eliminarUsuario(cliente: PoolClient, id: number): Promise<boolean> {
+  const { rowCount } = await cliente.query('DELETE FROM usuarios WHERE id = $1', [id]);
+  return (rowCount ?? 0) > 0;
 }

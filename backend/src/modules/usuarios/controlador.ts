@@ -1,6 +1,12 @@
 import type { Request, Response } from 'express';
 import { cuerpo, consulta, parametros } from '../../core/validacion.js';
-import type { ActualizarUsuario, AsignarRoles, CrearUsuario, ListarUsuarios } from './esquemas.js';
+import type {
+  ActualizarUsuario,
+  AsignarRoles,
+  CodigoBaja,
+  CrearUsuario,
+  ListarUsuarios,
+} from './esquemas.js';
 import { FONDOS_LOGIN } from './fondos-login.js';
 import * as servicio from './servicio.js';
 
@@ -61,4 +67,22 @@ export const resetearContrasena = async (req: Request, res: Response): Promise<v
   const { id } = parametros<{ id: number }>(req);
   const { sesionId } = req.sesion!;
   res.json(await servicio.resetearContrasena(req.db, id, sesionId));
+};
+
+/**
+ * Manda el codigo de eliminacion al correo del empleado.
+ *
+ * Devuelve a donde fue, para que la pantalla se lo pueda decir al
+ * administrador. El codigo no vuelve: se lo pide a la persona.
+ */
+export const solicitarCodigoBaja = async (req: Request, res: Response): Promise<void> => {
+  const { id } = parametros<{ id: number }>(req);
+  res.json(await servicio.solicitarCodigoBaja(req.db, req.sesion!.usuarioId, id));
+};
+
+export const eliminar = async (req: Request, res: Response): Promise<void> => {
+  const { id } = parametros<{ id: number }>(req);
+  const { codigo } = cuerpo<CodigoBaja>(req);
+  await servicio.eliminarCuenta(req.db, req.sesion!.usuarioId, id, codigo);
+  res.status(204).end();
 };

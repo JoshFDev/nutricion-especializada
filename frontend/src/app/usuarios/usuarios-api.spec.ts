@@ -161,19 +161,32 @@ describe('el cuerpo del alta', () => {
 });
 
 describe('el cuerpo de la edicion', () => {
-  it('lleva solo los cinco campos que el esquema acepta', () => {
-    // El RFC y el correo NO estan: no se editan. Mandarlos seria mandarlos
-    // al vacio de la nada, porque el servicio los descarta.
+  it('lleva los cinco campos que se editan, correo incluido', () => {
+    // El RFC NO esta: no se edita, mandarlo seria mandarlo al vacio. El correo
+    // SI: es con lo que la persona entra y a donde le llegan los codigos, asi
+    // que un dedazo al dar de alta tiene que poder corregirse.
     const cuerpo = cuerpoDeActualizacion(forma());
     expect(Object.keys(cuerpo).sort()).toEqual([
       'apellido_materno',
       'apellido_paterno',
+      'email',
       'nombre',
       'puesto',
     ]);
     expect(cuerpo).not.toHaveProperty('rfc');
-    expect(cuerpo).not.toHaveProperty('email');
     expect(cuerpo).not.toHaveProperty('fecha_contratacion');
+  });
+
+  it('manda el correo recortado', () => {
+    expect(cuerpoDeActualizacion(forma({ email: ' juan@ejemplo.mx ' })).email).toBe(
+      'juan@ejemplo.mx',
+    );
+  });
+
+  it('manda el correo en blanco como null, no como cadena vacia', () => {
+    // `''` no es un correo valido y las reglas lo rechazarian con un 400; lo
+    // que se quiere decir con el campo vacio es "sin correo".
+    expect(cuerpoDeActualizacion(forma({ email: '   ' })).email).toBeNull();
   });
 
   it('nunca sale vacio, porque el esquema rechaza el cuerpo sin campos', () => {

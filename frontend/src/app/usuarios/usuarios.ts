@@ -56,11 +56,13 @@ import {
  *     verdad, igual que proveedores. Sale solo la gente activa, como en
  *     proveedores.
  *   - **Editor.** El mismo formulario para el alta y para la edición, y la
- *     diferencia real está en que al editar el RFC y el correo NO se pueden
- *     tocar: al actualizar no se aceptan y no es una limitación de la
- *     pantalla. Se muestran de todos modos, en solo lectura, para que quien
- *     edita vea el RFC que tiene la persona enfrente. En el alta además
- *     salen la clave y su confirmación, ambas OPCIONALES: en blanco el
+ *     diferencia real está en que al editar el RFC NO se puede tocar: al
+ *     actualizar no se acepta y no es una limitación de la pantalla. Se
+ *     muestra de todos modos, en solo lectura, para que quien edita vea el RFC
+ *     que tiene la persona enfrente. El correo SÍ se edita, porque es con lo
+ *     que la persona entra y a donde le llegan los códigos: un dedazo al darla
+ *     de alta tiene que poder corregirse sin borrar la cuenta. En el alta
+ *     además salen la clave y su confirmación, ambas OPCIONALES: en blanco el
  *     sistema genera la temporal de siempre, y escrita la usa tal cual y la
  *     persona nace sin pendiente de cambio.
  *   - **Detalle.** La ficha con los datos que no se editan (intentos
@@ -264,7 +266,7 @@ export class Usuarios {
   readonly editorAbierto = computed(() => this.editando() !== null);
   /** Sin id es el alta (ver `nuevo`). */
   readonly esAlta = computed(() => this.editando()?.id === undefined);
-  /** Al editar, el RFC y el correo no se tocan. */
+  /** Al editar, el RFC no se toca. El correo sí: ver el editor. */
   readonly rfcBloqueado = computed(() => !this.esAlta());
   /** El alta exige al menos un rol (`crearUsuarioEsquema`). */
   readonly faltaUnRol = computed(() => this.esAlta() && this.rolesMarcados().length === 0);

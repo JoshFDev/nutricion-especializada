@@ -182,7 +182,9 @@
           @if (problemaDe('email'); as problema) {
             <small class="ayuda">{{ problema }}</small>
           } @else if (rfcBloqueado()) {
-            <small class="pista">No se puede cambiar después del alta.</small>
+            <small class="pista"
+              >Es con lo que entra al sistema y a donde le llegan los códigos.</small
+            >
           }
         </label>
 
@@ -265,9 +267,10 @@
         </div>
       } @else {
         <p class="nota">
-          El RFC, el correo y los roles no se cambian aquí. Los roles se cambian en la ficha, porque
-          cambiar un permiso cierra las sesiones abiertas de esa persona y eso se ve a solas. Si el
-          RFC está mal, la baja y el alta de la persona es lo que corresponde, no editarlo.
+          El RFC y los roles no se cambian aquí. Los roles se cambian en la ficha, porque cambiar un
+          permiso cierra las sesiones abiertas de esa persona y eso se ve a solas. Si el RFC está
+          mal, la baja y el alta de la persona es lo que corresponde, no editarlo. El correo sí se
+          corrige aquí: un dedazo al darla de alta no debería costar la cuenta.
         </p>
       }
 

@@ -171,15 +171,20 @@ export interface CuerpoUsuario {
 /**
  * Lo que se manda al actualizar un usuario.
  *
- * Solo estos cinco campos. El sistema arma la actualización a partir de lo que
- * llega (`COLUMNAS_EDITABLES`), así que mandar de más no cambia el dato pero
- * sí mete ruido en el cable; y las reglas de validación rechazan los datos
- * vacíos con 400.
+ * El sistema arma la actualización a partir de lo que llega
+ * (`COLUMNAS_EDITABLES`), así que mandar de más no cambia el dato pero sí mete
+ * ruido en el cable; y las reglas de validación rechazan los datos vacíos con
+ * 400.
+ *
+ * El `email` SÍ va aquí a diferencia del RFC: es el dato con el que la persona
+ * entra y a donde le llegan los códigos, así que un dedazo al darla de alta
+ * tiene que poder corregirse sin borrar la cuenta. `null` la deja sin correo.
  */
 export interface CuerpoActualizacion {
   nombre?: string;
   apellido_paterno?: string;
   apellido_materno?: string | null;
+  email?: string | null;
   puesto?: string | null;
   activo?: boolean;
   /**
@@ -260,17 +265,21 @@ export function cuerpoDeUsuario(forma: FormaUsuario, roles: number[]): CuerpoUsu
 /**
  * Arma los datos de la edición.
  *
- * `activo` NO va con los otros cuatro: la baja y el alta se alternan con una
+ * `activo` NO va con los otros cinco: la baja y el alta se alternan con una
  * actualización de un solo campo desde el botón de la fila, para que dar de
  * baja a alguien no pueda reescribirle el nombre. Y se manda lo que hay, sin
  * comparar con la versión anterior: las reglas de validación piden al menos un
- * campo y estos cuatro siempre están, así que nunca se mandan datos vacíos.
+ * campo y estos cinco siempre están, así que nunca se mandan datos vacíos.
+ *
+ * El `email` sí va: al editar se puede corregir (ver `CuerpoActualizacion`). En
+ * blanco se manda como `null`, que es como el sistema dice "sin correo".
  */
 export function cuerpoDeActualizacion(forma: FormaUsuario): CuerpoActualizacion {
   return {
     nombre: forma.nombre.trim(),
     apellido_paterno: forma.apellido_paterno.trim(),
     apellido_materno: textoONull(forma.apellido_materno),
+    email: textoONull(forma.email),
     puesto: textoONull(forma.puesto),
   };
 }

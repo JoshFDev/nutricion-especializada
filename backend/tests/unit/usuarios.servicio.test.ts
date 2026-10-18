@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NoEncontrado } from '../../src/core/errores.js';
 import type { RolFila, UsuarioFila } from '../../src/modules/usuarios/modelo.js';
 import {
+  actualizar,
   eliminarCuenta,
   generarCodigoBaja,
   solicitarCodigoBaja,
@@ -220,6 +221,39 @@ describe('solicitarCodigoBaja: candados', () => {
 
     await expect(solicitarCodigoBaja(db.cliente, 1, 7)).rejects.toMatchObject({
       codigo: 'SIN_CORREO',
+    });
+  });
+});
+
+describe('actualizar: el correo', () => {
+  it('deja que el correo entre en el UPDATE de la edicion', async () => {
+    // Antes el correo estaba fuera de la lista blanca y editar no hacia nada;
+    // ahora es una columna editable mas.
+    const db = falsoCliente();
+    db.responder([fila()]); // obtenerUsuario
+    db.responderConCambios(1); // actualizarUsuario
+    db.responder([fila({ email: 'nuevo@ejemplo.local' })]); // obtener de vuelta
+
+    await actualizar(db.cliente, 1, 7, { email: 'nuevo@ejemplo.local' });
+
+    const update = db.consultas.find((c) => c.sql.includes('UPDATE usuarios SET'));
+    expect(update?.sql).toMatch(/email = \$2/);
+    expect(update?.valores).toContain('nuevo@ejemplo.local');
+  });
+
+  it('traduce el UNIQUE del correo a EMAIL_DUPLICADO en vez de reventar con un 500', async () => {
+    const db = falsoCliente();
+    db.responder([fila()]); // obtenerUsuario
+    db.fallar(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'usuarios_email_key',
+      }),
+    );
+
+    await expect(actualizar(db.cliente, 1, 7, { email: 'ya@existe.local' })).rejects.toMatchObject({
+      codigo: 'EMAIL_DUPLICADO',
+      estado: 409,
     });
   });
 });

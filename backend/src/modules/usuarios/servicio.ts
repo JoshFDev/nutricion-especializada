@@ -21,6 +21,7 @@ const COLUMNAS_EDITABLES = new Set([
   'nombre',
   'apellido_paterno',
   'apellido_materno',
+  'email',
   'puesto',
   'activo',
   'fondo_login',
@@ -225,7 +226,17 @@ export async function actualizar(
     }
   }
 
-  await repo.actualizarUsuario(db, id, campos);
+  try {
+    await repo.actualizarUsuario(db, id, campos);
+  } catch (error) {
+    // El UNIQUE de la base es la autoridad; aqui solo se traduce el codigo de
+    // Postgres a algo que el frontend sepa pintar pegado al campo del correo.
+    // Es el mismo trato que le da el alta en `crear()`.
+    if (esUnico(error, 'usuarios_email_key')) {
+      throw new Conflicto('EMAIL_DUPLICADO', 'Ya existe un usuario con ese correo');
+    }
+    throw error;
+  }
 
   // Desactivar mata sus sesiones abiertas ahora, no "cuando expire el
   // token": la cuenta ya no sirve para entrar.

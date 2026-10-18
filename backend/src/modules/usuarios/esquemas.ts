@@ -16,6 +16,27 @@ const RFC = /^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$/;
 const texto = (max: number) => z.string().trim().min(1).max(max);
 
 /**
+ * El correo, recortado ANTES de comprobar el formato.
+ *
+ * El orden NO es cosmetico: `z.email().trim()` comprueba el formato antes de
+ * recortar, asi que un correo pegado con espacios de mas ("  a@b.com  ", lo
+ * tipico al copiar y pegar) se rechazaria como invalido en vez de entrar bien.
+ * Se recorta primero, igual que en `auth/esquemas.ts`, que documenta el mismo
+ * tropiezo.
+ *
+ * `nullish()` deja pasar `null` ("sin correo", que es valido: el correo es
+ * opcional y sin el no hay a donde mandar el codigo de baja) y `undefined`
+ * ("no lo toques", que es lo que quiere decir un PATCH sin el campo). El texto
+ * vacio (`''`) NO pasa: no es un correo ni significa "no hay".
+ */
+const correo = z
+  .string()
+  .trim()
+  .max(200)
+  .pipe(z.email('El correo no tiene formato valido'))
+  .nullish();
+
+/**
  * La contrasena temporal que genera el sistema NO tiene que cumplir la
  * politica de contrasena fuerte: es de un solo uso y el usuario esta
  * obligado a cambiarla al entrar (debe_cambiar_contrasena). Exigirle
@@ -68,7 +89,7 @@ export const crearUsuarioEsquema = z.strictObject({
     .trim()
     .toUpperCase()
     .regex(RFC, 'El RFC no cumple el formato del SAT (12 o 13 caracteres)'),
-  email: z.email('El correo no tiene formato valido').max(200).nullish(),
+  email: correo,
   puesto: z.string().trim().max(120).nullish(),
   /**
    * La contrasena, si el administrador quiere ponerla el.
@@ -113,6 +134,17 @@ export const actualizarUsuarioEsquema = z
     nombre: texto(120).optional(),
     apellido_paterno: texto(120).optional(),
     apellido_materno: z.string().trim().max(120).nullish(),
+    /**
+     * El correo SI se puede corregir al editar.
+     *
+     * Es con lo que la persona entra y a donde le llegan los codigos (la baja
+     * y la recuperacion de clave), asi que un dedazo al darla de alta sale
+     * caro: antes no se aceptaba aqui y la unica salida era borrar y volver a
+     * dar de alta. El alta usa la MISMA regla (`correo`), para que no se pueda
+     * dar de alta un correo que despues la edicion rechace. `null` lo deja sin
+     * correo; `undefined` (no viene) lo deja igual.
+     */
+    email: correo,
     puesto: z.string().trim().max(120).nullish(),
     activo: z.boolean().optional(),
     // null = quitar la eleccion y volver al fondo por defecto. Se valida

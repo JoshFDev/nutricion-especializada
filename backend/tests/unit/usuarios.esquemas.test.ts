@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generarContrasenaTemporal } from '../../src/modules/usuarios/servicio.js';
 import {
+  actualizarUsuarioEsquema,
   codigoBajaEsquema,
   crearUsuarioEsquema,
   listarUsuariosEsquema,
@@ -65,6 +66,12 @@ describe('esquema de alta', () => {
 
   it('sube el RFC a mayusculas', () => {
     expect(crearUsuarioEsquema.parse({ ...base, rfc: 'godl900101hdr' }).rfc).toBe('GODL900101HDR');
+  });
+
+  it('acepta un correo con espacios de mas y lo recorta', () => {
+    // Misma regla que la edicion: recortar ANTES de comprobar el formato, o un
+    // correo pegado desde otro lado se rechazaria por "formato invalido".
+    expect(crearUsuarioEsquema.parse({ ...base, email: '  a@b.com  ' }).email).toBe('a@b.com');
   });
 
   it('acepta el & del RFC de persona fisica moral', () => {
@@ -142,6 +149,33 @@ describe('contrasena elegida en el alta', () => {
     // persona y no entraria nunca. Aqui se comprueba que NO hay trim.
     const clave = '  ConEspacios2026  ';
     expect(crearUsuarioEsquema.parse({ ...base, contrasena: clave }).contrasena).toBe(clave);
+  });
+});
+
+describe('esquema de la edicion', () => {
+  it('acepta el correo y lo recorta antes de validar el formato', () => {
+    // El orden importa: `z.email().trim()` comprueba el formato ANTES de
+    // recortar, y un correo pegado con espacios se rechazaria. Se recorta
+    // primero, igual que en el login.
+    expect(actualizarUsuarioEsquema.parse({ email: '  juan@ejemplo.mx  ' }).email).toBe(
+      'juan@ejemplo.mx',
+    );
+  });
+
+  it('deja el correo en null cuando se manda null: es "sin correo"', () => {
+    expect(actualizarUsuarioEsquema.parse({ email: null }).email).toBeNull();
+  });
+
+  it('no toca el correo si no viene en el cuerpo', () => {
+    expect(actualizarUsuarioEsquema.parse({ nombre: 'Maria' })).not.toHaveProperty('email');
+  });
+
+  it.each([
+    ['sin arroba', 'juan.ejemplo.mx'],
+    ['sin dominio', 'juan@'],
+    ['vacio', ''],
+  ])('rechaza un correo %s', (_caso, email) => {
+    expect(actualizarUsuarioEsquema.safeParse({ email }).success).toBe(false);
   });
 });
 

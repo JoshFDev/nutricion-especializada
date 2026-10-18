@@ -299,3 +299,36 @@ describe('los candados de la cuenta', () => {
     );
   });
 });
+
+describe('los candados de eliminar la cuenta', () => {
+  it('no te deja eliminar tu propia cuenta, y lo dice', () => {
+    const yo = usuario({ id: 7 });
+    expect(motivoDeCandado('eliminar', yo, 7, true)).toBe('No puedes eliminar tu propia cuenta.');
+  });
+
+  it('no deja eliminar a la dueña', () => {
+    const dueña = usuario({ id: 7, es_dueno: true, activo: false });
+    expect(motivoDeCandado('eliminar', dueña, 3, true)).toBe(
+      'La cuenta de la dueña no se puede eliminar.',
+    );
+  });
+
+  it('obliga a desactivar primero: una cuenta activa no se puede eliminar', () => {
+    const activa = usuario({ id: 7, activo: true });
+    expect(motivoDeCandado('eliminar', activa, 3, true)).toBe(
+      'Primero desactiva la cuenta; después se puede eliminar.',
+    );
+  });
+
+  it('deja eliminar a otra cuenta que ya esta dada de baja', () => {
+    const baja = usuario({ id: 7, activo: false });
+    expect(motivoDeCandado('eliminar', baja, 3, true)).toBeNull();
+  });
+
+  it('el candado de uno mismo manda sobre el de desactivar', () => {
+    // Siendo tu propia cuenta Y estando activa, el motivo que se lee tiene que
+    // ser el de siempre (no te borres), no el del paso previo.
+    const yo = usuario({ id: 7, activo: true });
+    expect(motivoDeCandado('eliminar', yo, 7, true)).toBe('No puedes eliminar tu propia cuenta.');
+  });
+});

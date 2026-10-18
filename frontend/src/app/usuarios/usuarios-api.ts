@@ -113,6 +113,18 @@ export interface Reseteo {
 }
 
 /**
+ * A dónde mandó el sistema el código para eliminar la cuenta.
+ *
+ * El código NO viene aquí: se manda solo al correo del empleado para que el
+ * administrador tenga que pedírselo. Esto es un acuse de dónde fue, para que
+ * la pantalla se lo diga y no se quede el administrador esperando un código
+ * que se fue a una dirección que no era.
+ */
+export interface SolicitudEliminacion {
+  correo: string;
+}
+
+/**
  * La forma del editor: lo que se teclea, sin normalizar.
  *
  * Los roles NO van en el formulario (son casillas sobre un catálogo), por eso
@@ -320,7 +332,7 @@ export function rolesEnLinea(usuario: Usuario): string {
 
 // --------------------------------------------------------- los candados
 
-export type AccionDeCuenta = 'desactivar' | 'quitar_admin';
+export type AccionDeCuenta = 'desactivar' | 'quitar_admin' | 'eliminar';
 
 /**
  * Por qué un botón NO se puede usar, en palabras. `null` si se puede.
@@ -331,6 +343,13 @@ export type AccionDeCuenta = 'desactivar' | 'quitar_admin';
  * página que está viendo), así que el botón se deja activo y es el sistema el
  * que responde: es mejor un 409 con su mensaje que un botón gris sin
  * explicación.
+ *
+ * La de `eliminar` es distinta: no hay servidor que consultar para saber si
+ * la cuenta se puede borrar. Depende de tres datos que la ficha YA tiene
+ * (`activo`, `es_dueno` y si es la propia), así que el botón se apaga con su
+ * motivo y no se deja al sistema para un caso que se ve desde aquí. El orden
+ * importa: primero lo que no tiene vuelta (uno mismo, la dueña) y al final el
+ * paso previo obligatorio (desactivar).
  */
 export function motivoDeCandado(
   accion: AccionDeCuenta,
@@ -341,6 +360,12 @@ export function motivoDeCandado(
   const esElMismo = usuario.id === idActual;
   if (accion === 'desactivar') {
     if (esElMismo) return 'No puedes desactivar tu propia cuenta.';
+    return null;
+  }
+  if (accion === 'eliminar') {
+    if (esElMismo) return 'No puedes eliminar tu propia cuenta.';
+    if (usuario.es_dueno) return 'La cuenta de la dueña no se puede eliminar.';
+    if (usuario.activo) return 'Primero desactiva la cuenta; después se puede eliminar.';
     return null;
   }
   if (esElMismo) return 'No puedes quitarte a ti mismo el rol de administrador.';
@@ -449,5 +474,31 @@ export class UsuariosApi {
    */
   async resetearContrasena(id: number): Promise<Reseteo> {
     return firstValueFrom(this.http.post<Reseteo>(`${API}/usuarios/${id}/resetear-contrasena`, {}));
+  }
+
+  /**
+   * Pide el código de eliminación. Llega al correo del empleado, no a la app.
+   *
+   * Es el primer paso de la baja definitiva: el sistema le manda un código a
+   * la persona, el administrador se lo pide y lo teclea en `eliminar`. Así la
+   * eliminación necesita el consentimiento de las dos partes y no depende de
+   * un solo clic.
+   */
+  async solicitarEliminacion(id: number): Promise<SolicitudEliminacion> {
+    return firstValueFrom(
+      this.http.post<SolicitudEliminacion>(`${API}/usuarios/${id}/solicitar-eliminacion`, {}),
+    );
+  }
+
+  /**
+   * Elimina la cuenta de verdad, con el código que dictó el empleado.
+   *
+   * El cuerpo va con `{ body }` porque DELETE no lleva cuerpo por defecto en
+   * el cliente de Angular, y el código es obligatorio: sin él el sistema
+   * responde 422. La fila desaparece y las referencias históricas quedan sin
+   * enlace (el log de auditoría conserva una copia de sus datos).
+   */
+  async eliminar(id: number, codigo: string): Promise<void> {
+    await firstValueFrom(this.http.delete<void>(`${API}/usuarios/${id}`, { body: { codigo } }));
   }
 }

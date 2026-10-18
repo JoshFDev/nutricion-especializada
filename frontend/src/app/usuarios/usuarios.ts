@@ -24,6 +24,7 @@ import {
 } from '../nucleo/fondo-login';
 import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
+import { ConfirmModal } from '../productos/confirm-modal';
 import {
   ETIQUETA_ESTADO,
   UsuariosApi,
@@ -145,7 +146,7 @@ export interface ClaveMostrada {
   selector: 'app-usuarios',
   templateUrl: './usuarios.html',
   styleUrl: './usuarios.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConfirmModal],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [filasAnimation],
 })
@@ -244,6 +245,15 @@ export class Usuarios {
   readonly errorImagen = signal<string | null>(null);
   readonly selectorImagen = viewChild.required<ElementRef<HTMLInputElement>>('selectorImagen');
 
+  /**
+   * El diálogo de confirmación, para las bajas que se hacen con un clic.
+   *
+   * Es el mismo `ConfirmModal` que usan catálogo, clientes o notas: la
+   * confirmación de una acción que no tiene vuelta va en un cuadro centrado y
+   * con su texto, no en un aviso que se va solo.
+   */
+  readonly confirmModal = viewChild.required(ConfirmModal);
+
   // ---------------------------------------------------------------- el editor
   readonly editando = signal<Usuario | null>(null);
   readonly guardando = signal(false);
@@ -277,6 +287,23 @@ export class Usuarios {
   readonly clave = signal<ClaveMostrada | null>(null);
   readonly copiada = signal(false);
   readonly errorClave = signal<string | null>(null);
+
+  // ---------------------------------------------------------- el eliminar
+  /**
+   * La cuenta que se está por eliminar, o `null` si el diálogo está cerrado.
+   *
+   * El diálogo tiene dos pasos porque el código lo tiene el empleado, no el
+   * administrador: primero se pide (el sistema lo manda al correo de la
+   * persona) y después se teclea el que la persona dictó.
+   */
+  readonly eliminando = signal<Usuario | null>(null);
+  readonly pasoEliminar = signal<'pedir' | 'codigo'>('pedir');
+  readonly codigoEliminar = signal('');
+  /** A dónde se mandó el código, para decirlo en el segundo paso. */
+  readonly correoCodigo = signal<string | null>(null);
+  readonly errorEliminar = signal<string | null>(null);
+  readonly enviandoCodigo = signal(false);
+  readonly eliminandoEnCurso = signal(false);
 
   readonly forma = this.fb.nonNullable.group(
     {
@@ -747,16 +774,37 @@ export class Usuarios {
   }
 
   /**
+   * Por qué no se puede eliminar todavía, o `null` si se puede.
+   *
+   * Los tres casos son datos que la ficha ya trae, así que el botón se apaga
+   * con su motivo en vez de mandar la petición para que el sistema conteste.
+   */
+  motivoDeEliminar(usuario: Usuario): string | null {
+    return motivoDeCandado('eliminar', usuario, this.idActual(), true);
+  }
+
+  /**
    * Da de baja o reactiva.
    *
    * Se actualiza un solo campo. Desactivar a alguien cierra sus sesiones en
-   * el sistema, así que la confirmación lo dice: no es un cambio reversible
-   * en el acto, es "se cae del sistema ahora".
+   * el sistema, así que se confirma antes: no es un cambio reversible en el
+   * acto, es "se cae del sistema ahora". Reactivar no se pregunta: no rompe
+   * nada y el error, si lo hay, lo dice el sistema.
    */
   async alternarActivo(): Promise<void> {
     const usuario = this.abierto();
     if (usuario === null || this.guardando()) return;
     if (motivoDeCandado('desactivar', usuario, this.idActual(), true) !== null) return;
+
+    if (usuario.activo) {
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Desactivar la cuenta',
+        mensaje: `${nombreCompleto(usuario)} dejará de poder entrar y se cerrarán sus sesiones abiertas en todos los equipos.`,
+        textoConfirmar: 'Desactivar',
+        variante: 'advertencia',
+      });
+      if (!confirmado) return;
+    }
 
     this.guardando.set(true);
     this.errorAccion.set(null);
@@ -844,6 +892,93 @@ export class Usuarios {
     } finally {
       this.guardando.set(false);
     }
+  }
+
+  // --------------------------------------------------------------- el eliminar
+
+  /**
+   * Abre el diálogo de eliminación de la cuenta abierta.
+   *
+   * Solo se llega aquí con una cuenta ya desactivada: el botón está apagado
+   * mientras siga activa (ver `motivoDeEliminar`), y el sistema lo vuelve a
+   * comprobar. El primer paso es pedir el código.
+   */
+  abrirEliminar(): void {
+    const usuario = this.abierto();
+    if (usuario === null) return;
+    this.pasoEliminar.set('pedir');
+    this.codigoEliminar.set('');
+    this.correoCodigo.set(null);
+    this.errorEliminar.set(null);
+    this.eliminando.set(usuario);
+  }
+
+  cerrarEliminar(): void {
+    if (this.eliminandoEnCurso()) return;
+    this.eliminando.set(null);
+    this.errorEliminar.set(null);
+    this.codigoEliminar.set('');
+  }
+
+  /**
+   * Manda el código al correo del empleado y pasa al paso de teclearlo.
+   *
+   * El código NO se muestra en la pantalla: quien lo recibe es la persona, y
+   * el administrador tiene que pedírselo. Si el correo no sale, el sistema
+   * responde con el error y aquí se pinta.
+   */
+  async solicitarCodigo(): Promise<void> {
+    const usuario = this.eliminando();
+    if (usuario === null || this.enviandoCodigo()) return;
+
+    this.enviandoCodigo.set(true);
+    this.errorEliminar.set(null);
+    try {
+      const respuesta = await this.api.solicitarEliminacion(usuario.id);
+      this.correoCodigo.set(respuesta.correo);
+      this.pasoEliminar.set('codigo');
+    } catch (falla) {
+      this.errorEliminar.set(errorLegible(falla).mensaje);
+    } finally {
+      this.enviandoCodigo.set(false);
+    }
+  }
+
+  /**
+   * Cierra la eliminación con el código que dictó el empleado.
+   *
+   * Al terminar se vuelve a la lista: la ficha ya no tiene a quién mostrar. El
+   * `recargar` va después de cerrar el diálogo para que la fila desaparezca del
+   * listado y no se quede un renglón fantasma.
+   */
+  async confirmarEliminar(): Promise<void> {
+    const usuario = this.eliminando();
+    if (usuario === null || this.eliminandoEnCurso()) return;
+
+    const codigo = this.codigoEliminar().trim();
+    if (codigo === '') {
+      this.errorEliminar.set('Escribe el código que te dictó la persona.');
+      return;
+    }
+
+    this.eliminandoEnCurso.set(true);
+    this.errorEliminar.set(null);
+    try {
+      await this.api.eliminar(usuario.id, codigo);
+      this.eliminando.set(null);
+      this.toast.exito(`Se eliminó la cuenta de ${nombreCompleto(usuario)}`);
+      this.volverALista();
+      await this.recargar();
+    } catch (falla) {
+      this.errorEliminar.set(errorLegible(falla).mensaje);
+    } finally {
+      this.eliminandoEnCurso.set(false);
+    }
+  }
+
+  /** El código, mientras se teclea: solo dígitos y hasta seis. */
+  alEscribirCodigo(valor: string): void {
+    this.codigoEliminar.set(valor.replace(/\D/g, '').slice(0, 6));
   }
 
   // ----------------------------------------------------------------- la clave

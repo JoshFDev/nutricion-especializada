@@ -6,15 +6,18 @@
   de alguien que no está en la página actual se viera como una pantalla de
   error nueva, y el menú ya marca cuando un módulo no existe.
 
-  El panel de la clave temporal está FUERA de los tres, al principio, a
-  propósito: se ve encima de cualquiera de ellos y no se va solo. Si el
-  operador la pierde, tiene que resetear de nuevo, y ahí ya nadie sabe si la
-  anterior llegó a entregarse.
+  La clave temporal y la eliminación salen en DIÁLOGOS centrados, no como
+  bloques pegados arriba: la clave se ve encima de cualquiera de las tres
+  vistas y no se va sola (si el operador la pierde, tiene que resetear de
+  nuevo y ahí ya nadie sabe si la anterior llegó a entregarse), y la
+  eliminación es un flujo de dos pasos que no cabe en la ficha. Los dos usan
+  el mismo velo y el mismo cuadro.
 -->
 @if (clave(); as datosClave) {
-  <section class="bloque clave" role="alert">
-    <h2>{{ datosClave.titulo }}</h2>
-    <p class="aviso">
+  <button type="button" class="velo" aria-label="Cerrar" (click)="cerrarClave()"></button>
+  <div class="dialogo clave" role="alertdialog" aria-modal="true" aria-labelledby="clave-titulo">
+    <h2 id="clave-titulo">{{ datosClave.titulo }}</h2>
+    <p>
       Esta clave se muestra <strong>una sola vez</strong>: en la base solo queda su huella, así que
       no hay forma de volver a leerla. Cópiala y entrégasela a la persona; en su primer ingreso la
       aplicación le va a pedir que la cambie.
@@ -26,20 +29,98 @@
     </div>
 
     @if (datosClave.sesionesCerradas !== null) {
-      <p class="nota">
+      <p>
         Se cerraron {{ datosClave.sesionesCerradas }}
         {{ datosClave.sesionesCerradas === 1 ? 'sesión abierta' : 'sesiones abiertas' }}. La tuya
         sigue viva, no te saques de la que estás usando.
       </p>
     } @else {
-      <p class="nota">La app le va a pedir el cambio de clave la primera vez que entre.</p>
+      <p>La app le va a pedir el cambio de clave la primera vez que entre.</p>
     }
 
     <div class="acciones">
-      <button type="button" (click)="cerrarClave()">Cerrar</button>
+      <button type="button" class="primario" (click)="cerrarClave()">Listo</button>
     </div>
-  </section>
+  </div>
 }
+
+@if (eliminando(); as victima) {
+  <button type="button" class="velo" aria-label="Cerrar" (click)="cerrarEliminar()"></button>
+  <div class="dialogo eliminar" role="dialog" aria-modal="true" aria-labelledby="eliminar-titulo">
+    @if (pasoEliminar() === 'pedir') {
+      <h2 id="eliminar-titulo">Eliminar la cuenta</h2>
+      <p>
+        Vas a eliminar la cuenta de <strong>{{ nombreCompleto(victima) }}</strong
+        >. Esto <strong>no tiene vuelta</strong>: la cuenta desaparece del sistema y no se puede
+        recuperar.
+      </p>
+      <p>
+        Para dejar constancia de que la persona está de acuerdo, el sistema le va a mandar un
+        <strong>código de 6 dígitos</strong> a su correo. Después pídeselo y escríbelo aquí.
+      </p>
+
+      @if (errorEliminar(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      <div class="acciones">
+        <button type="button" (click)="cerrarEliminar()">Cancelar</button>
+        <button
+          type="button"
+          class="primario peligro"
+          (click)="solicitarCodigo()"
+          [disabled]="enviandoCodigo()"
+        >
+          {{ enviandoCodigo() ? 'Enviando…' : 'Enviar el código' }}
+        </button>
+      </div>
+    } @else {
+      <h2 id="eliminar-titulo">Escribe el código</h2>
+      <p>
+        El código llegó al correo <strong>{{ correoCodigo() }}</strong
+        >. Pídeselo a {{ victima.nombre }} y escríbelo aquí para eliminar la cuenta.
+      </p>
+
+      <label class="campo-codigo">
+        <span>Código de 6 dígitos</span>
+        <input
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          placeholder="000000"
+          [value]="codigoEliminar()"
+          (input)="alEscribirCodigo($any($event.target).value)"
+          (keydown.enter)="confirmarEliminar()"
+        />
+      </label>
+
+      @if (errorEliminar(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      <div class="acciones">
+        <button
+          type="button"
+          (click)="solicitarCodigo()"
+          [disabled]="enviandoCodigo() || eliminandoEnCurso()"
+        >
+          {{ enviandoCodigo() ? 'Enviando…' : 'Reenviar el código' }}
+        </button>
+        <button
+          type="button"
+          class="primario peligro"
+          (click)="confirmarEliminar()"
+          [disabled]="eliminandoEnCurso() || codigoEliminar().length !== 6"
+        >
+          {{ eliminandoEnCurso() ? 'Eliminando…' : 'Eliminar la cuenta' }}
+        </button>
+      </div>
+    }
+  </div>
+}
+
+<app-confirm-modal />
 
 @if (editorAbierto()) {
   <!-- El editor reemplaza la vista de donde se abrio. Cancelar devuelve ahi. -->
@@ -347,17 +428,17 @@
         </p>
 
         <div class="acciones">
+          <button type="button" (click)="resetearContrasena()" [disabled]="guardando()">
+            Resetear contraseña
+          </button>
           <button
             type="button"
-            class="peligro"
+            [class.peligro]="ficha.activo"
             (click)="alternarActivo()"
             [disabled]="guardando() || motivoDeDesactivar(ficha) !== null"
             [title]="motivoDeDesactivar(ficha) ?? ''"
           >
             {{ ficha.activo ? 'Desactivar cuenta' : 'Reactivar cuenta' }}
-          </button>
-          <button type="button" (click)="resetearContrasena()" [disabled]="guardando()">
-            Resetear contraseña
           </button>
         </div>
 
@@ -404,6 +485,36 @@
         </div>
 
         <p class="pista">Al guardar, la persona tiene que entrar de nuevo.</p>
+      </div>
+
+      <!--
+        La zona de riesgo, aparte y a todo lo ancho: eliminar no es una acción
+        más de la ficha. Va con su propio fondo para que no se confunda con
+        "resetear la clave", y solo se habilita con la cuenta ya desactivada.
+      -->
+      <div class="bloque zona-peligro">
+        <h2>Eliminar la cuenta</h2>
+        <p class="nota">
+          Desactivar la cuenta es reversible; eliminarla no: la cuenta desaparece del sistema y no
+          se puede recuperar. Solo se puede con la cuenta ya desactivada, y hay que teclear un
+          código que el sistema le manda al correo de la persona.
+        </p>
+
+        <div class="acciones">
+          <button
+            type="button"
+            class="peligro"
+            (click)="abrirEliminar()"
+            [disabled]="guardando() || motivoDeEliminar(ficha) !== null"
+            [title]="motivoDeEliminar(ficha) ?? ''"
+          >
+            Eliminar la cuenta
+          </button>
+        </div>
+
+        @if (motivoDeEliminar(ficha); as candado) {
+          <small class="ayuda">{{ candado }}</small>
+        }
       </div>
     }
   </section>

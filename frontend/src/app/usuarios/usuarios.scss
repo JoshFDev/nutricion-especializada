@@ -90,41 +90,182 @@ td .tenue {
   border-color: var(--peligro);
 }
 
-/* -------------------------------------------------------------- la clave nueva */
+/* ------------------------------------------------------------- los diálogos */
 
 /*
- * El panel de la contrasena temporal.
+ * El velo y el cuadro central, compartidos por la clave temporal y la
+ * eliminación.
  *
- * Va sobre un fondo de aviso y el codigo en una caja de monoespaciada, sin
- * nada que lo recorte: lo que se va a entregar es eso, y tiene que poder
- * seleccionarse con el mouse cuando el portapapeles no esta disponible (ver
- * `copiarClave`, que falla en http sin TLS y deja el texto a mano).
+ * Antes la clave era un bloque pegado arriba de la pantalla: aparecía en la
+ * esquina y se confundía con el contenido de la vista de abajo. Como diálogo
+ * centrado se lee como lo que es —algo que interrumpe y hay que atender— y no
+ * compite con la ficha.
+ *
+ * Mismo patrón que `ConfirmModal` (productos/confirm-modal.ts): el velo es un
+ * botón y no un div con click, para que el teclado tenga por dónde cerrar, y el
+ * cuadro va fijo y centrado con `transform`. No se reusa ese componente porque
+ * este diálogo lleva contenido propio (el código, un campo), y meterlo a la
+ * fuerza volvería genérico lo que hoy es simple.
  */
-.clave {
-  max-width: 46rem;
-  padding: 1rem;
-  background: var(--acento-suave);
-  border: 1px solid var(--acento);
-  border-radius: 8px;
+.velo {
+  position: fixed;
+  inset: 0;
+  padding: 0;
+  background: rgb(0 0 0 / 40%);
+  border: 0;
+  z-index: 1000;
+  cursor: default;
+  animation: velo-entra 0.15s ease-out;
+}
+
+.dialogo {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 1.25rem;
+  overflow-y: auto;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-top: 4px solid var(--acento);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 20%);
+  animation: dialogo-entra 0.18s ease-out;
+}
+
+.dialogo h2 {
+  margin: 0 0 0.625rem;
+  font-size: 1.125rem;
+}
+
+.dialogo p:not(.error) {
+  margin: 0 0 0.875rem;
+  color: var(--texto-suave);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+/* El botón que cierra manda: en el diálogo las acciones van alineadas a la
+   derecha y sin el borde de arriba del compartido, que aquí sobra. */
+.dialogo .acciones {
+  margin-top: 1.25rem;
+  padding-top: 0.875rem;
+}
+
+/*
+ * La clave temporal en su diálogo, y el de eliminación con la barra roja.
+ */
+.dialogo.eliminar {
+  border-top-color: var(--peligro);
 }
 
 .linea-clave {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin: 0.75rem 0;
+  gap: 0.625rem;
+  margin: 0.75rem 0 1rem;
 }
 
 .linea-clave code {
   flex: 1;
-  padding: 0.5rem 0.75rem;
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
   font-size: 1.125rem;
   color: var(--texto);
   word-break: break-all;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  user-select: all;
+}
+
+/* El campo del código de eliminación: monoespaciado y grande, para teclearlo
+   con el número que dicta la persona. */
+.campo-codigo {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.campo-codigo span {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.campo-codigo input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 1.375rem;
+  letter-spacing: 0.5rem;
+  text-align: center;
+  color: var(--texto);
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  user-select: all;
+}
+
+.campo-codigo input:focus {
+  outline: none;
+  border-color: var(--peligro);
+  box-shadow: 0 0 0 3px var(--peligro-suave);
+}
+
+/* El mensaje de error dentro del diálogo: con el mismo rojo del compartido,
+   pero sin el margen de bloque que trae `.error`. */
+.dialogo .error {
+  margin: 0 0 0.875rem;
+}
+
+/*
+ * La zona de eliminar, dentro de la ficha.
+ *
+ * Va a todo lo ancho y con su propio fondo para que no se confunda con
+ * "resetear la clave": lo que hay aquí no tiene vuelta.
+ */
+.ficha > .zona-peligro {
+  grid-column: 1 / -1;
+  padding: 1rem;
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro);
+  border-radius: 8px;
+}
+
+.zona-peligro h2 {
+  color: var(--peligro-texto);
+}
+
+@keyframes velo-entra {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogo-entra {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .velo,
+  .dialogo {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------------------- el editor y la ficha */

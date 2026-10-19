@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { momento } from '../../src/core/valores.js';
-import { corteEsquema } from '../../src/modules/caja/esquemas.js';
 
 /**
  * Pruebas del corte de caja: el validador `momento` y su esquema.
@@ -43,36 +42,3 @@ describe('momento', () => {
   });
 });
 
-describe('corteEsquema', () => {
-  it('sin momentos deja que la base decida el rango', () => {
-    const r = corteEsquema.parse({});
-    expect(r.desde).toBeUndefined();
-    expect(r.hasta).toBeUndefined();
-  });
-
-  it('acepta los dos momentos y los deja con espacio', () => {
-    const r = corteEsquema.parse({ desde: '2026-10-14T08:00', hasta: '2026-10-14T14:30' });
-    expect(r).toEqual({ desde: '2026-10-14 08:00', hasta: '2026-10-14 14:30' });
-  });
-
-  it('un solo momento tambien vale: el otro lo completa el servidor', () => {
-    expect(corteEsquema.parse({ desde: '2026-10-14T08:00' }).hasta).toBeUndefined();
-    expect(corteEsquema.parse({ hasta: '2026-10-14T14:30' }).desde).toBeUndefined();
-  });
-
-  it('el mismo momento en los dos lados es un rango valido', () => {
-    expect(
-      corteEsquema.safeParse({ desde: '2026-10-14T08:00', hasta: '2026-10-14T08:00' }).success,
-    ).toBe(true);
-  });
-
-  it('un rango al reves es un 400', () => {
-    expect(
-      corteEsquema.safeParse({ desde: '2026-10-14T14:30', hasta: '2026-10-14T08:00' }).success,
-    ).toBe(false);
-  });
-
-  it('un parametro de mas es un 400, no un filtro ignorado', () => {
-    expect(corteEsquema.safeParse({ fecha: '2026-10-14' }).success).toBe(false);
-  });
-});

@@ -147,43 +147,9 @@ export const cierreEsquema = z
   })
   .strict();
 
-/**
- * El corte de caja de un RANGO de dia y hora.
- *
- * Es distinto del cierre, y la diferencia es toda la razon de que exista:
- *
- *   - El cierre es de UN dia entero y arquea el fondo esperado contra cada
- *     cuenta. El corte es de un MOMENTO a otro ("de 8:00 a 14:30") y solo
- *     mira lo que se movio dentro, sin fondo ni esperado: es el corte de
- *     media manana o del cambio de turno.
- *   - Por eso filtra por `creado_en` (la marca con hora) y no por `fecha`,
- *     que es una DATE sin hora. La pregunta "que entro entre las 8 y las 2"
- *     solo la puede responder la marca de captura.
- *
- * Los dos momentos son opcionales y se combinan con el reloj de la base: sin
- * `desde` arranca en la medianoche de hoy y sin `hasta` termina AHORA. Asi el
- * boton de "hoy hasta ahora" no manda nada y el servidor decide, que es la
- * misma regla del cierre y la del alta de un movimiento.
- *
- * Se exige `desde <= hasta` aqui y no en la base: comparar dos textos
- * `AAAA-MM-DD HH:MM` con el mismo ancho es comparar cronologia, y un rango al
- * reves devolveria todo en cero sin decir por que.
- */
-export const corteEsquema = z
-  .object({
-    desde: momento('desde').optional(),
-    hasta: momento('hasta').optional(),
-  })
-  .strict()
-  .refine((v) => v.desde === undefined || v.hasta === undefined || v.desde <= v.hasta, {
-    message: 'desde no puede ser posterior a hasta',
-    path: ['desde'],
-  });
-
 export type CrearCuenta = z.infer<typeof crearCuentaEsquema>;
 export type ListarCuentas = z.infer<typeof listarCuentasEsquema>;
 export type CrearMovimiento = z.infer<typeof crearMovimientoEsquema>;
 export type ListarMovimientos = z.infer<typeof listarMovimientosEsquema>;
 export type Resumen = z.infer<typeof resumenEsquema>;
 export type Cierre = z.infer<typeof cierreEsquema>;
-export type Corte = z.infer<typeof corteEsquema>;

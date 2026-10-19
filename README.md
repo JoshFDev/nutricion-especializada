@@ -193,7 +193,6 @@ Los tres módulos del último lote, y lo que cada uno decide.
 | `DELETE /movimientos/:id` | **El único DELETE de todo el proyecto**        |
 | `GET /resumen`            | Ingresos, egresos y saldo por cuenta y periodo |
 | `GET /cierre`             | El arqueo **esperado** de un día               |
-| `GET /corte`              | Lo que entró y salió entre dos momentos (rango de hora) |
 | `GET /categorias`         | Categorías usadas, para los desplegables       |
 
 - El saldo **no se manda nunca**: lo calcula el trigger
@@ -218,11 +217,6 @@ Los tres módulos del último lote, y lo que cada uno decide.
   esperado; cuando el día no es hoy, el esperado y el saldo actual pueden no
   coincidir porque el saldo actual arrastra los movimientos con fecha futura.
 
-- El corte (`GET /corte`) es **solo consulta** y también usa `caja.ver`: suma
-  lo que entró y salió entre dos momentos (día y hora) por cuenta, filtrando
-  por `creado_en` (cuándo se capturó, no la fecha de negocio). Sin `desde`
-  arranca en la medianoche de hoy y sin `hasta` termina ahora, ambos según el
-  reloj de la base.
 
 ### `facturacion` — factura al cliente (`/api/facturas`)
 

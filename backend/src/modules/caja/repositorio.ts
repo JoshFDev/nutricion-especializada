@@ -3,7 +3,6 @@ import { contar, consultar, consultarUno } from '../../db/transaccion.js';
 import { fechaComoTexto } from '../../core/valores.js';
 import type {
   Cierre,
-  Corte,
   CrearCuenta,
   CrearMovimiento,
   ListarCuentas,
@@ -12,7 +11,6 @@ import type {
 } from './esquemas.js';
 import type {
   FilaCierre,
-  FilaCorte,
   FilaCuenta,
   FilaMovimiento,
   Listado,
@@ -449,44 +447,3 @@ export async function cierrePorCuenta(
   );
 }
 
-/**
- * Lo que entro y salio de cada cuenta entre dos momentos.
- *
- * Filtra por `creado_en` y no por `fecha`, y esa es la diferencia entera con el
- * resumen y con el cierre: `fecha` es una DATE sin hora (el dia de negocio) y
- * `creado_en` es la marca con hora de cuando se capturo. Un corte "de las 8 a
- * las 2" solo lo puede responder `creado_en`.
- *
- * El `>= $1` y el `< $2 + 1 minuto` hacen el rango INCLUSIVO del minuto de
- * `hasta`: si `hasta` es `14:30`, un movimiento capturado a las 14:30:45
- * todavia entra, porque el operador escribe minutos y no segundos. Es la misma
- * idea que un `hasta` de fecha que incluye el dia completo.
- *
- * Las condiciones del rango van en el `ON`, no en un `WHERE`: tienen que
- * filtrar el JOIN y no las cuentas, o una cuenta sin movimientos en la ventana
- * desapareceria de la tabla. Aparece en cero, que es informacion (asi se ve que
- * esa cuenta no se movio), igual que en el resumen.
- *
- * El `saldo_actual` NO se lee: el corte no arquea la cuenta, solo mira la
- * ventana, asi que el saldo de la cuenta no tiene nada que hacer aqui.
- */
-export async function cortePorCuenta(
-  cliente: PoolClient,
-  q: Corte & { desde: string; hasta: string },
-): Promise<FilaCorte[]> {
-  return consultar<FilaCorte>(
-    cliente,
-    `SELECT cf.id AS cuenta_id, cf.nombre AS cuenta, cf.tipo,
-            COALESCE(SUM(CASE WHEN m.tipo = 'ingreso' THEN m.monto ELSE 0 END), 0)::TEXT AS ingresos,
-            COALESCE(SUM(CASE WHEN m.tipo = 'egreso'  THEN m.monto ELSE 0 END), 0)::TEXT AS egresos,
-            count(m.id)::TEXT AS movimientos
-       FROM cuentas_financieras cf
-       LEFT JOIN movimientos_financieros m
-              ON m.cuenta_id = cf.id
-             AND m.creado_en >= $1::timestamp
-             AND m.creado_en <  ($2::timestamp + interval '1 minute')
-      GROUP BY cf.id, cf.nombre, cf.tipo
-      ORDER BY cf.tipo, cf.nombre`,
-    [q.desde, q.hasta],
-  );
-}

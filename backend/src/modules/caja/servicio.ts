@@ -4,7 +4,6 @@ import { Conflicto, ErrorValidacion, NoEncontrado } from '../../core/errores.js'
 import { fechaComoTexto } from '../../core/valores.js';
 import type {
   Cierre,
-  Corte,
   CrearCuenta,
   CrearMovimiento,
   ListarCuentas,
@@ -14,8 +13,6 @@ import type {
 import type {
   CierreCuenta,
   CierreDeCaja,
-  CorteCuenta,
-  CorteDeCaja,
   Cuenta,
   Listado,
   Movimiento,
@@ -224,46 +221,6 @@ export async function cierre(cliente: PoolClient, q: Cierre): Promise<CierreDeCa
       egresos: Number(f.egresos),
       esperado: Number(f.esperado),
       saldo_actual: Number(f.saldo_actual),
-      movimientos: Number(f.movimientos),
-    })),
-  };
-}
-
-/**
- * El corte de caja de un rango de dia y hora.
- *
- * Es de SOLO LECTURA y no arquea nada: solo suma lo que entro y lo que salio
- * entre dos momentos, por cuenta. La diferencia con el cierre es la pregunta,
- * no el calculo: el cierre quiere saber cuanto deberia haber al terminar el
- * dia, y el corte cuanto se movio de una hora a otra.
- *
- * Los dos momentos se completan con el reloj de la BASE cuando faltan, por la
- * misma razon que el cierre usa `hoyEnLaBase`: la fecha y la hora que valen son
- * las del servidor, no las del navegador, y mezclar los dos relojes es como se
- * corta la ventana equivocada. Sin `desde` arranca en la medianoche de hoy y
- * sin `hasta` termina ahora.
- *
- * El rango resuelto vuelve en la respuesta (`desde`/`hasta`) para que la
- * pantalla lo muestre tal cual: un corte del que no se sabe la ventana no se
- * puede leer en voz alta junto a la caja.
- */
-export async function corte(cliente: PoolClient, q: Corte): Promise<CorteDeCaja> {
-  const [hoy, ahora] = await Promise.all([hoyEnLaBase(cliente), momentoEnLaBase(cliente)]);
-  const desde = q.desde ?? `${hoy} 00:00`;
-  const hasta = q.hasta ?? ahora;
-
-  const filas = await repo.cortePorCuenta(cliente, { desde, hasta });
-
-  return {
-    desde,
-    hasta,
-    generado_en: ahora,
-    cuentas: filas.map((f): CorteCuenta => ({
-      cuenta_id: f.cuenta_id,
-      cuenta: f.cuenta,
-      tipo: f.tipo,
-      ingresos: Number(f.ingresos),
-      egresos: Number(f.egresos),
       movimientos: Number(f.movimientos),
     })),
   };

@@ -23,11 +23,9 @@ import {
   problemaDeNombreCuenta,
   saldoNegativo,
   totalesDeCierre,
-  totalesDeCorte,
   totalesDeResumen,
   type CategoriaEnUso,
   type CierreDeCaja,
-  type CorteDeCaja,
   type Cuenta,
   type Movimiento,
   type MovimientoListado,
@@ -205,116 +203,6 @@ export class Caja {
   cambiarFechaCierre(valor: string): void {
     this.fechaCierre.set(valor);
     void this.cargarCierre();
-  }
-
-  // ------------------------------------------------------------------ el corte
-  /**
-   * El corte de caja: lo que entró y salió entre dos momentos del día.
-   *
-   * Es la otra mitad del cierre y no su copia. El cierre es de UN día entero y
-   * arquea el fondo esperado; el corte es de una VENTANA de horas ("de 8:00 a
-   * 14:30") y solo suma lo que se movió dentro, que es lo que se pide al
-   * cambiar de turno o al mediodía. Por eso el filtro es por día Y hora: dos
-   * `datetime-local`, no dos `date`.
-   *
-   * Empieza oculto y se calcula al abrirlo, como el cierre: es otra consulta y
-   * no algo que tenga que viajar en cada carga de la lista.
-   */
-  readonly corteVisible = signal(false);
-  readonly corte = signal<CorteDeCaja | null>(null);
-  readonly cargandoCorte = signal(false);
-  readonly errorCorte = signal<string | null>(null);
-  /**
-   * Los dos momentos de la ventana, en el formato del `datetime-local`
-   * (`AAAA-MM-DDTHH:MM`). Vacíos la primera vez: los pone el sistema con su
-   * "hoy a medianoche" y su "ahora".
-   */
-  readonly corteDesde = signal('');
-  readonly corteHasta = signal('');
-
-  readonly totalesCorte = computed(() => totalesDeCorte(this.corte()?.cuentas ?? []));
-
-  /**
-   * Un rango al revés, detectado antes de ir al sistema.
-   *
-   * Las reglas de validación también lo rechazan (`desde <= hasta`), pero
-   * avisar aquí evita un viaje y, sobre todo, deja el mensaje junto a los dos
-   * campos en vez de en un error al final. Los dos momentos llegan del
-   * `datetime-local` con el mismo ancho, así que compararlos como texto es
-   * compararlos en el tiempo.
-   */
-  readonly problemaCorte = computed(() => {
-    const desde = this.corteDesde();
-    const hasta = this.corteHasta();
-    if (desde !== '' && hasta !== '' && desde > hasta) {
-      return 'El inicio no puede ser posterior al final del corte.';
-    }
-    return null;
-  });
-
-  async abrirCorte(): Promise<void> {
-    this.corteVisible.set(true);
-    await this.cargarCorte();
-  }
-
-  cerrarCorte(): void {
-    this.corteVisible.set(false);
-  }
-
-  /**
-   * Pide el corte de la ventana elegida.
-   *
-   * Un momento vacío se omite y lo pone el sistema (medianoche de hoy o
-   * ahora). El rango que el sistema usó vuelve en la respuesta, y se copia a
-   * los campos que estaban vacíos para que los dos `datetime-local` muestren
-   * la ventana que de verdad se está mirando en vez de quedarse en blanco.
-   */
-  private async cargarCorte(): Promise<void> {
-    if (this.problemaCorte() !== null) {
-      this.corte.set(null);
-      this.errorCorte.set(this.problemaCorte());
-      return;
-    }
-
-    this.cargandoCorte.set(true);
-    this.errorCorte.set(null);
-    try {
-      const resultado = await this.api.corte(
-        this.corteDesde() || undefined,
-        this.corteHasta() || undefined,
-      );
-      this.corte.set(resultado);
-      if (this.corteDesde() === '') this.corteDesde.set(aMomentoDelInput(resultado.desde));
-      if (this.corteHasta() === '') this.corteHasta.set(aMomentoDelInput(resultado.hasta));
-    } catch (falla) {
-      this.corte.set(null);
-      this.errorCorte.set(errorLegible(falla).mensaje);
-    } finally {
-      this.cargandoCorte.set(false);
-    }
-  }
-
-  cambiarCorteDesde(valor: string): void {
-    this.corteDesde.set(valor);
-    void this.cargarCorte();
-  }
-
-  cambiarCorteHasta(valor: string): void {
-    this.corteHasta.set(valor);
-    void this.cargarCorte();
-  }
-
-  /**
-   * "Hoy hasta ahora": vacía la ventana y deja que el sistema la resuelva.
-   *
-   * Es el atajo que más se usa -- el corte del día en curso --, y por eso no
-   * lleva una fecha escrita: con los dos campos vacíos el sistema pone su
-   * medianoche de hoy y su hora actual, que son las que valen.
-   */
-  async corteHoyAhora(): Promise<void> {
-    this.corteDesde.set('');
-    this.corteHasta.set('');
-    await this.cargarCorte();
   }
 
   // --------------------------------------------------------------- el listado
@@ -523,7 +411,6 @@ export class Caja {
       // si no, seria otra consulta por cada alta o borrado sin que nadie la
       // este mirando.
       this.cierreVisible() ? this.cargarCierre() : Promise.resolve(),
-      this.corteVisible() ? this.cargarCorte() : Promise.resolve(),
       this.cargarPagina(inicio ? 1 : this.pagina()),
     ]);
   }
@@ -1059,6 +946,3 @@ export class Caja {
  * segundos. Solo para MOSTRAR lo que ya resolvió el sistema; lo que se manda
  * de vuelta lo normalizan las reglas de validación.
  */
-function aMomentoDelInput(momento: string): string {
-  return momento.replace(' ', 'T');
-}

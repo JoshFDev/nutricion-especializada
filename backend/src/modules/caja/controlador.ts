@@ -3,7 +3,6 @@ import { cuerpo, consulta, parametros } from '../../core/validacion.js';
 import * as servicio from './servicio.js';
 import type {
   Cierre,
-  Corte,
   CrearCuenta,
   CrearMovimiento,
   ListarCuentas,
@@ -57,10 +56,6 @@ export const controladorCaja = {
 
   cierre: async (req: Request, res: Response): Promise<void> => {
     res.json(await servicio.cierre(req.db, consulta<Cierre>(req)));
-  },
-
-  corte: async (req: Request, res: Response): Promise<void> => {
-    res.json(await servicio.corte(req.db, consulta<Corte>(req)));
   },
 
   listarCategorias: async (req: Request, res: Response): Promise<void> => {

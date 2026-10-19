@@ -231,19 +231,6 @@
         <h1>Caja y bancos</h1>
       </div>
       <div class="acciones-cabecera">
-        <button type="button" (click)="abrirCorte()">
-          <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
-            <path
-              d="M8 4.5V8l2.5 1.5"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          Corte de caja
-        </button>
         <button type="button" (click)="abrirCierre()">
           <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path
@@ -397,108 +384,6 @@
               <strong>esperado</strong> es lo que debería haber en cada cuenta: el fondo con el que
               abrió más lo que entró y menos lo que salió ese día. Cuenta lo que hay y compáralo con
               esta cifra; aquí no se guarda el conteo.
-            </p>
-          }
-        }
-      </section>
-    }
-
-    <!--
-      El corte de caja: lo que entró y salió entre dos momentos del día.
-
-      Es el hermano del cierre y no su copia. El cierre es de UN día entero y
-      arquea el fondo esperado; el corte es de una VENTANA de horas —"de 8:00 a
-      14:30"— y solo suma lo que se movió dentro, que es lo que se pide al
-      cambiar de turno o al mediodía. Por eso los dos campos son
-      `datetime-local` (día Y hora) y no `date`, y por eso aquí no hay fondo ni
-      esperado: solo entró y salió del rango.
-
-      "Hoy hasta ahora" es el atajo que más se usa: vacía la ventana y deja que
-      el sistema ponga su medianoche de hoy y su hora actual, que son las que
-      valen (no las del navegador).
-    -->
-    @if (corteVisible()) {
-      <section class="resumen corte">
-        <div class="resumen-cabecera">
-          <h2 class="resumen-titulo">Corte de caja</h2>
-          <div class="fechas">
-            <label class="fecha">
-              Del
-              <input
-                type="datetime-local"
-                [value]="corteDesde()"
-                (change)="cambiarCorteDesde($any($event.target).value)"
-              />
-            </label>
-            <span class="al" aria-hidden="true">al</span>
-            <label class="fecha">
-              <input
-                type="datetime-local"
-                [value]="corteHasta()"
-                (change)="cambiarCorteHasta($any($event.target).value)"
-                aria-label="Hasta"
-              />
-            </label>
-            <button type="button" class="chico" (click)="corteHoyAhora()">Hoy hasta ahora</button>
-          </div>
-          <button type="button" class="chico" (click)="cerrarCorte()">
-            <svg class="icono" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M4.5 4.5l7 7M11.5 4.5l-7 7"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-              />
-            </svg>
-            Cerrar
-          </button>
-        </div>
-
-        @if (cargandoCorte() && corte() === null) {
-          <p class="cargando">Calculando el corte…</p>
-        } @else if (errorCorte()) {
-          <p class="error">{{ errorCorte() }}</p>
-        } @else if (corte(); as rango) {
-          @if (rango.cuentas.length === 0) {
-            <p class="aviso">
-              No hay ninguna cuenta. Abre una en "Las cuentas" para poder cortar la caja.
-            </p>
-          } @else {
-            <dl class="cifras">
-              <div class="cifra">
-                <dt>Entró</dt>
-                <dd class="ingreso">{{ montoComoTexto(totalesCorte().ingresos) }}</dd>
-              </div>
-              <div class="cifra">
-                <dt>Salió</dt>
-                <dd class="egreso">{{ montoComoTexto(totalesCorte().egresos) }}</dd>
-              </div>
-            </dl>
-
-            <table class="por-cuenta">
-              <thead>
-                <tr>
-                  <th>La cuenta</th>
-                  <th class="num">Entró</th>
-                  <th class="num">Salió</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (cuenta of rango.cuentas; track cuenta.cuenta_id) {
-                  <tr>
-                    <td>{{ cuenta.cuenta }}</td>
-                    <td class="num ingreso">{{ montoComoTexto(cuenta.ingresos) }}</td>
-                    <td class="num egreso">{{ montoComoTexto(cuenta.egresos) }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-
-            <p class="nota">
-              El corte va del {{ rango.desde }} al {{ rango.hasta }} y se calculó a las
-              {{ rango.generado_en }}. Son los movimientos <strong>capturados</strong> en esa
-              ventana de horas —cuando se registraron, no la fecha de cada movimiento—, así que un
-              movimiento de ayer capturado hoy dentro del rango cuenta.
             </p>
           }
         }

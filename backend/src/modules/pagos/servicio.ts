@@ -11,6 +11,7 @@ import {
 } from './modelo.js';
 import type { CrearPago, ListarPagos } from './esquemas.js';
 import * as repo from './repositorio.js';
+import * as cajaRepo from '../caja/repositorio.js';
 
 /**
  * Reglas de cobranza.
@@ -140,6 +141,31 @@ export async function crear(cliente: PoolClient, d: CrearPago): Promise<Pago> {
 
     for (const a of d.aplicaciones) {
       await repo.insertarAplicacion(c, pagoId, a.nota_id, a.monto);
+    }
+
+    // El pago es dinero que entra a la caja: se anota tambien como
+    // movimiento de la cuenta que corresponda al metodo, para que el corte y
+    // el saldo de la cuenta reflejen el cobro. Sin esto, una venta pagada
+    // deja rastro en cartera pero no en caja, y el corte sale en ceros.
+    const tipoCuenta = d.metodo === 'Transferencia' || d.metodo === 'Depósito' ? 'banco' : 'efectivo';
+    let cuentas = await cajaRepo.listarCuentas(c, { tipo: tipoCuenta } as { tipo?: 'efectivo' | 'banco' });
+    if (cuentas.length === 0) {
+      cuentas = await cajaRepo.listarCuentas(c, {} as { tipo?: 'efectivo' | 'banco' });
+    }
+    const cuenta = cuentas[0];
+    if (cuenta) {
+      await cajaRepo.candearCuenta(c, cuenta.id);
+      await cajaRepo.crearMovimiento(c, {
+        cuenta_id: cuenta.id,
+        fecha,
+        tipo: 'ingreso',
+        categoria: 'Cobro de nota',
+        monto: d.monto,
+        cliente_id: d.cliente_id,
+        proveedor_id: null,
+        descripcion: `Pago ${pagoId}`,
+        tiene_factura: d.requiere_factura ?? false,
+      });
     }
 
     return leer(c, pagoId);

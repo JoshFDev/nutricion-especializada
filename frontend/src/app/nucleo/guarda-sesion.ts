@@ -53,7 +53,18 @@ export const guardaSesion: CanActivateFn = async (
   // demás queda cerrado. Se deja pasar solo el cierre de sesión, que está en la
   // cabecera y no pasa por aquí, para que la persona pueda salir si el cambio
   // no le sale y no quedarse encerrada.
-  if (sesion.perfil()?.debeCambiarContrasena) {
+  //
+  // El `startsWith` es imprescindible: esta guarda TAMBIÉN protege la ruta
+  // `/cambiar-contrasena` (app.routes.ts). Sin él, estando ya en esa pantalla
+  // devolvería un `UrlTree` hacia la misma URL, el router reprogramaría la
+  // navegación, la guarda correría otra vez y así infinitamente: ninguna ruta
+  // llega a activarse, con lo que la página queda en blanco y el bucle de
+  // microtareas se come la CPU. Es exactamente lo que le pasaba a quien
+  // entraba con la bandera de cambio obligatorio puesta (usuarios nuevos).
+  if (
+    sesion.perfil()?.debeCambiarContrasena &&
+    !estado.url.startsWith('/cambiar-contrasena')
+  ) {
     return router.parseUrl('/cambiar-contrasena');
   }
 

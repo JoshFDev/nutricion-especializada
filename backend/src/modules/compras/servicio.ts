@@ -5,6 +5,7 @@ import type { Compra, CompraListada, Listado, RenglonCompra } from './modelo.js'
 import { mapearCompra, mapearRenglonCompra } from './modelo.js';
 import type { CrearCompra, ListarCompras, RenglonCompra as RenglonEntrada } from './esquemas.js';
 import * as repo from './repositorio.js';
+import * as cajaRepo from '../caja/repositorio.js';
 
 /**
  * Reglas de compras.
@@ -101,6 +102,28 @@ export async function pagar(cliente: PoolClient, id: number): Promise<Compra> {
       compra_id: id,
       monto,
     });
+
+    // El pago a proveedor es dinero que sale de la caja: se anota como
+    // egreso en la cuenta disponible, para que el saldo y el cierre reflejen
+    // el gasto. Sin esto, una compra pagada deja rastro en cartera pero no
+    // en caja, igual que pasaba con los cobros de clientes.
+    const cuentas = await cajaRepo.listarCuentas(c, {} as { tipo?: 'efectivo' | 'banco' });
+    const cuenta = cuentas.find((x) => x.tipo === 'efectivo') ?? cuentas[0];
+    if (cuenta) {
+      const fechaPago = await hoyEnLaBase(c);
+      await cajaRepo.candearCuenta(c, cuenta.id);
+      await cajaRepo.crearMovimiento(c, {
+        cuenta_id: cuenta.id,
+        fecha: fechaPago,
+        tipo: 'egreso',
+        categoria: 'Pago a proveedor',
+        monto,
+        cliente_id: null,
+        proveedor_id: Number(antes.proveedor_id),
+        descripcion: `Pago compra ${id}`,
+        tiene_factura: false,
+      });
+    }
 
     return leer(c, id);
   });

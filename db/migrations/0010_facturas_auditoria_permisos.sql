@@ -68,6 +68,7 @@ COMMENT ON COLUMN pos.facturas.motivo_cancelacion IS
   'Por que se cancelo la factura. Obligatorio si estatus = cancelada, lo exige chk_facturas_motivo_cancelacion.';
 
 -- ------------------------------------------------------------- auditoria
+DROP TRIGGER IF EXISTS trg_facturas_auditoria ON pos.facturas;
 CREATE TRIGGER trg_facturas_auditoria
     AFTER INSERT OR UPDATE OR DELETE ON pos.facturas
     FOR EACH ROW EXECUTE FUNCTION pos.fn_auditoria();
@@ -76,11 +77,13 @@ CREATE TRIGGER trg_facturas_auditoria
 -- notas cubre cada factura, o sea DONDE ESTA EL DINERO de la factura. Una
 -- factura sin cambios en su bitacora pero con sus notas cambiadas es una
 -- factura que ya no dice lo que dice.
+DROP TRIGGER IF EXISTS trg_factura_nota_auditoria ON pos.factura_nota;
 CREATE TRIGGER trg_factura_nota_auditoria
     AFTER INSERT OR UPDATE OR DELETE ON pos.factura_nota
     FOR EACH ROW EXECUTE FUNCTION pos.fn_auditoria();
 
 -- ------------------------------------------------------------- permisos
+DROP TRIGGER IF EXISTS trg_permiso_facturas ON pos.facturas;
 CREATE TRIGGER trg_permiso_facturas
     BEFORE INSERT OR UPDATE OR DELETE ON pos.facturas
     FOR EACH ROW EXECUTE FUNCTION pos.fn_trg_permiso('facturas.solicitar','facturas.solicitar','facturas.emitir');
@@ -88,6 +91,7 @@ CREATE TRIGGER trg_permiso_facturas
 -- El vinculo entre la factura y la nota es parte del documento: mover una
 -- nota de una factura a otra cambia a quien se le factura cuanto, asi que
 -- exige el mismo permiso que mover la factura misma.
+DROP TRIGGER IF EXISTS trg_permiso_factura_nota ON pos.factura_nota;
 CREATE TRIGGER trg_permiso_factura_nota
     BEFORE INSERT OR UPDATE OR DELETE ON pos.factura_nota
     FOR EACH ROW EXECUTE FUNCTION pos.fn_trg_permiso('facturas.solicitar','facturas.solicitar','facturas.emitir');

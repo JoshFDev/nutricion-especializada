@@ -12,11 +12,15 @@
 -- pase de 10 caracteres, porque el prefijo es lo que se imprime en cada
 -- nota. Lo demas (cuando permite el alta, como se muestra y se busca) lo
 -- decide el codigo de la api, cuyos esquemas normalizan a mayusculas.
+--
+-- REAPLICABLE. Todo lo de este archivo lleva guarda (`IF EXISTS`,
+-- `IF NOT EXISTS`, `ON CONFLICT`) y el esquema va calificado con `pos.`:
+-- asi la migracion se puede volver a aplicar sin fallar, y sin depender
+-- del `search_path` que tenga puesto quien la corra.
+ALTER TABLE pos.folios
+    DROP CONSTRAINT IF EXISTS folios_serie_check;
 
-ALTER TABLE folios
-    DROP CONSTRAINT folios_serie_check;
-
-ALTER TABLE folios
+ALTER TABLE pos.folios
     ADD CONSTRAINT folios_serie_check
     CHECK (serie = btrim(serie) AND char_length(serie) <= 10);
 
@@ -27,10 +31,11 @@ ALTER TABLE folios
 -- alta de una nota la lee para saber de que talonario quemar. Arranca
 -- vacia (puros numeros), que es el formato del negocio; los folios se
 -- cargan aparte con `fn_allegar_folios` desde la pantalla del POS.
-CREATE TABLE serie_folio_activa (
+CREATE TABLE IF NOT EXISTS pos.serie_folio_activa (
     id             INTEGER PRIMARY KEY CHECK (id = 1),
     serie          TEXT NOT NULL CHECK (serie = btrim(serie) AND char_length(serie) <= 10),
     actualizada_en TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO serie_folio_activa (id, serie) VALUES (1, '');
+INSERT INTO pos.serie_folio_activa (id, serie) VALUES (1, '')
+    ON CONFLICT (id) DO NOTHING;

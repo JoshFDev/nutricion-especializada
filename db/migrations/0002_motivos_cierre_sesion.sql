@@ -14,7 +14,11 @@
 
 -- Se suelta la constraint vieja. Todas las filas actuales tienen valores
 -- del conjunto anterior, asi que el DROP no puede fallar por datos.
-ALTER TABLE pos.sesiones DROP CONSTRAINT sesiones_cierre_motivo_check;
+--
+-- El `IF EXISTS` es para que la migracion se pueda volver a aplicar: sin
+-- el, aplicarla dos veces falla con "la constraint no existe" y el runner
+-- se detiene, dejando las siguientes sin aplicar.
+ALTER TABLE pos.sesiones DROP CONSTRAINT IF EXISTS sesiones_cierre_motivo_check;
 
 -- Se vuelve a poner con el conjunto ampliado.
 ALTER TABLE pos.sesiones

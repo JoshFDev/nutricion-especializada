@@ -731,6 +731,20 @@ produccion la peticion cae en el 404 del final. Para quitarlo: borrar
 
 - Las migraciones nunca se editan una vez aplicadas: se agrega
   `0002_algo.sql`, `0003_algo.sql`, etc.
+- **Pero sí se pueden volver a aplicar.** Cada migración lleva guardas
+  (`DROP CONSTRAINT IF EXISTS`, `ADD COLUMN IF NOT EXISTS`,
+  `CREATE TRIGGER` con su `DROP TRIGGER IF EXISTS` delante,
+  `ON CONFLICT DO NOTHING`), que es lo que ya hacia 0005 y 0018. Es lo que
+  permite que una base "restaurada a medias" (el esquema entero pero el
+  registro de `schema_migrations` sin saberlo) se arregle sola, en vez de
+  que el runner se detenga en la primera y deje todas las siguientes sin
+  aplicar.
+  - La excepción es `0001_init.sql`, que se niega a re-aplicarse a
+    propósito, con un mensaje que dice que las correcciones van en un
+    archivo nuevo.
+  - La que se agrega después de la última (`0022_saldos_y_facturas.sql`)
+    no necesita guardas: el runner no la vuelve a correr porque el
+    registro dice que ya está.
 - Cada entidad de negocio (clientes, productos, notas de remisión...)
   vive en su propio módulo/feature, tanto en backend como en frontend.
 - Los datos reales de clientes **nunca** se suben al repositorio

@@ -13,8 +13,11 @@
 -- No se toca `activo` ni nada mas: esto es decorativo y no debe aparecer en
 -- ninguna consulta de negocio, de la misma manera que el puesto.
 
+-- El `IF NOT EXISTS` es para que la migracion se pueda volver a aplicar:
+-- sin el, aplicarla dos veces falla con "la columna ya existe" y el runner
+-- se detiene, dejando las siguientes sin aplicar.
 ALTER TABLE pos.usuarios
-    ADD COLUMN fondo_login TEXT;
+    ADD COLUMN IF NOT EXISTS fondo_login TEXT;
 
 DO $$
 BEGIN

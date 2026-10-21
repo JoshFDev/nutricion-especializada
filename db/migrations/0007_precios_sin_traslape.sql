@@ -92,6 +92,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_precios_publicos_sin_traslape ON pos.precios_publicos;
 CREATE TRIGGER trg_precios_publicos_sin_traslape
     BEFORE INSERT OR UPDATE ON precios_publicos
     FOR EACH ROW EXECUTE FUNCTION fn_trg_precios_publicos_sin_traslape();
@@ -128,6 +129,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_precios_cliente_sin_traslape ON pos.precios_cliente;
 CREATE TRIGGER trg_precios_cliente_sin_traslape
     BEFORE INSERT OR UPDATE ON precios_cliente
     FOR EACH ROW EXECUTE FUNCTION fn_trg_precios_cliente_sin_traslape();

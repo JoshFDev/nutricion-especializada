@@ -72,6 +72,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_direcciones_entrega_nombre_ci
 COMMENT ON INDEX pos.ux_direcciones_entrega_nombre_ci IS
   'Evita dos destinos que solo difieren en mayusculas o espacios ("Gomez" y "gomez").';
 
+DROP TRIGGER IF EXISTS trg_direcciones_updated ON pos.direcciones_entrega;
 CREATE TRIGGER trg_direcciones_updated
     BEFORE UPDATE ON pos.direcciones_entrega
     FOR EACH ROW EXECUTE FUNCTION pos.fn_set_actualizado_en();

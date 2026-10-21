@@ -90,6 +90,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_congelar_nota_pagada ON pos.notas_remision;
 CREATE TRIGGER trg_congelar_nota_pagada
     BEFORE UPDATE ON pos.notas_remision
     FOR EACH ROW EXECUTE FUNCTION fn_congelar_nota_pagada();
@@ -125,6 +126,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_congelar_renglones_nota ON pos.nota_remision_detalle;
 CREATE TRIGGER trg_congelar_renglones_nota
     BEFORE INSERT OR UPDATE OR DELETE ON pos.nota_remision_detalle
     FOR EACH ROW EXECUTE FUNCTION fn_congelar_renglones_nota();

@@ -3,10 +3,12 @@ import {
   Component,
   computed,
   inject,
+  Injector,
   signal,
   viewChild,
+  type ElementRef,
+  afterNextRender,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { montoComoTexto } from '../nucleo/cifras';
@@ -38,11 +40,21 @@ import { EstadoCuentaApi, type RenglonEstadoCuenta } from './estado-cuenta-api';
   styleUrl: './estado-cuenta.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [filasAnimation],
-  imports: [FormsModule, ConfirmModal],
+  imports: [ConfirmModal],
 })
 export class EstadoCuenta {
   private readonly api = inject(EstadoCuentaApi);
   private readonly avisos = inject(ToastService);
+  private readonly injector = inject(Injector);
+
+  /**
+   * El cuadro del diálogo, para meterle el foco al abrirlo.
+   *
+   * Sin esto el foco se queda en el botón "Ver" de la fila: el teclado
+   * seguía en la tabla, el Escape no llegaba al diálogo y había que ir a
+   * buscar el ratón para cerrar.
+   */
+  private readonly cuadroDialogo = viewChild<ElementRef<HTMLElement>>('dialogo');
 
   /**
    * El aviso de confirmación, el MISMO de las demás pantallas.
@@ -70,8 +82,6 @@ export class EstadoCuenta {
 
   /** El cliente del que se esta bajando la hoja, para no disparar dos veces. */
   readonly bajando = signal<number | null>(null);
-
-  readonly rangoHoja = signal<'todo' | 'semana' | 'mes'>('todo');
 
   // ------------------------------------------------------------------ seleccion
   readonly seleccionados = signal<Set<number>>(new Set());
@@ -198,7 +208,13 @@ export class EstadoCuenta {
     this.seleccionados.set(new Set());
   }
 
-  async imprimirGeneral(): Promise<void> {
+  /**
+   * Baja la hoja general de los clientes marcados.
+   *
+   * "General" porque es un solo archivo de Excel con una hoja por cliente, no
+   * una hoja por cliente: por eso el botón dice "Descargar" y no "Imprimir".
+   */
+  async descargarHojaGeneral(): Promise<void> {
     const ids = [...this.seleccionados()];
     if (ids.length === 0) return;
     this.bajando.set(-1);
@@ -243,18 +259,39 @@ export class EstadoCuenta {
       this.recarga.marcar();
     }
   }
-  mostrandoDialogo = signal(false);
-  clienteSeleccionado = signal<RenglonEstadoCuenta | null>(null);
-  fechaInicio = signal('');
-  fechaFin = signal('');
+  /**
+   * El cliente del que se esta bajando la hoja.
+   *
+   * Mientras haya uno, el dialogo esta abierto: antes habia una bandera
+   * aparte (`mostrandoDialogo`) que siempre iba junto con esta y hacia
+   * redoble trabajo. Con una sola se sabe si el dialogo esta abierto
+   * preguntandole al cliente.
+   */
+  readonly clienteSeleccionado = signal<RenglonEstadoCuenta | null>(null);
+  readonly fechaInicio = signal('');
+  readonly fechaFin = signal('');
+
+  /** Las dos fechas hay que ponerlas y la de inicio no puede ser posterior a la de fin. */
+  readonly fechasInvertidas = computed(() => {
+    const inicio = this.fechaInicio();
+    const fin = this.fechaFin();
+    return inicio !== '' && fin !== '' && inicio > fin;
+  });
+
+  /** Con esto se puede pedir la hoja de un periodo exacto. */
+  readonly fechasListas = computed(
+    () => this.fechaInicio() !== '' && this.fechaFin() !== '' && !this.fechasInvertidas(),
+  );
 
   abrirDialogo(cliente: RenglonEstadoCuenta): void {
     this.clienteSeleccionado.set(cliente);
-    this.mostrandoDialogo.set(true);
+    // El foco entra al cuadro del dialogo, ya dibujado.
+    afterNextRender(() => this.cuadroDialogo()?.nativeElement.focus(), {
+      injector: this.injector,
+    });
   }
 
   cerrarDialogo(): void {
-    this.mostrandoDialogo.set(false);
     this.clienteSeleccionado.set(null);
     this.fechaInicio.set('');
     this.fechaFin.set('');
@@ -296,12 +333,8 @@ export class EstadoCuenta {
   async generarHojaFechas(): Promise<void> {
     const c = this.clienteSeleccionado();
     if (c === null) return;
-    if (!this.fechaInicio() || !this.fechaFin()) return;
+    if (!this.fechasListas()) return;
     if (this.bajando() !== null) return;
-    if (this.fechaInicio() > this.fechaFin()) {
-      this.avisos.error('La fecha de inicio debe ser anterior o igual a la fecha de fin');
-      return;
-    }
     this.bajando.set(c.cliente_id);
     try {
       const fuera = await this.api.abrirHoja(c.cliente_id, 'personalizado', {

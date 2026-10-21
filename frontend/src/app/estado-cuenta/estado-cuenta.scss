@@ -32,22 +32,43 @@
   font-size: 0.9375rem;
 }
 
+/* ------------------------------------------------------- la barra de selección */
+
 /*
- * El desplegable del rango.
+ * La barra de lo que está marcado.
  *
- * Antes usaba `--fondo-campo`, una variable que NO existe en el sistema: una
- * variable sin definir no sale "negro", invalida la regla entera, y el
- * desplegable se quedaba con el fondo transparente del navegador. Con
- * `--superficie` —la que usa el resto de la aplicación— se ve como los demás.
+ * Sale aparte de la barra de filtros porque son cosas distintas: los filtros
+ * cambian lo que se ve, esta barra cambia lo que se hace. Y tiene su propio
+ * fondo para que se note que hay una selección en curso aunque se esté en
+ * otra página, porque la selección no se pierde al cambiar de página.
  */
-.casilla select {
-  padding: 0.375rem 0.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--borde);
-  background: var(--superficie);
-  color: var(--texto);
+.barra-seleccion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--acento);
+  border-radius: 8px;
+}
+
+.barra-seleccion .cuenta {
+  margin: 0;
   font-size: 0.9375rem;
-  min-width: 8rem;
+  color: var(--texto);
+}
+
+.barra-seleccion .cuenta strong {
+  font-weight: 600;
+}
+
+.barra-acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* --------------------------------------------------------- la seleccion */
@@ -116,6 +137,36 @@
   animation: velo-entra 0.15s ease-out;
 }
 
+/*
+ * El velo NO puede heredar los estilos de botón del sistema.
+ *
+ * El `button:hover:not(:disabled)` global tiene especificidad (0,2,1) —por el
+ * `:hover` y el `:not(:disabled)`— y el `.velo` tiene (0,1,0). El global le
+ * gana, así que al mover el cursor fuera del cuadro del diálogo TODO el fondo
+ * de la pantalla se ponía azul claro y le salía un borde azul de botón a la
+ * pantalla entera: el "brillo" que se veía.
+ *
+ * Aquí se le planta cara con una regla más específica: el velo se queda
+ * siempre con su velo negro, se esté encima o no.
+ */
+.velo:hover:not(:disabled),
+.velo:active:not(:disabled) {
+  color: inherit;
+  background: rgb(0 0 0 / 40%);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+/*
+ * Con el teclado el velo sí se marca, pero por dentro de la pantalla: un
+ * contorno del tamaño de la ventana parece un error de la página.
+ */
+.velo:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+
 .dialogo {
   position: fixed;
   top: 50%;
@@ -137,6 +188,52 @@
 .dialogo h2 {
   margin: 0 0 0.375rem;
   font-size: 1.125rem;
+}
+
+/*
+ * La cabecera del cuadro: de qué cliente es, y cuánto debe.
+ *
+ * El saldo va a la derecha en su propia caja porque es el dato que se busca
+ * al abrir esto: uno abre el estado de cuenta de un cliente para ver cuánto
+ * le debe, y si eso está escondido en la tabla hay que acordarse de la
+ * pantalla anterior.
+ */
+.dialogo-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.saldo-caja {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.saldo-caja span {
+  font-size: 0.75rem;
+  color: var(--texto-suave);
+}
+
+.saldo-caja strong {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.saldo-caja strong.saldo {
+  color: var(--peligro-texto);
+}
+
+.saldo-caja strong.a-favor {
+  color: var(--exito-texto);
 }
 
 /* La frase que explica qué se va a bajar y de quién. */
@@ -215,6 +312,13 @@
   align-self: flex-start;
 }
 
+/* Las fechas al revés: se avisa aquí y no con un toast que se pierde. */
+.periodo .aviso {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--peligro-texto);
+}
+
 .fechas {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -285,11 +389,22 @@
 
 /*
  * En una pantalla angosta los tres periodos no caben en una fila tan chica y
- * se leen mejor apilados que apretados.
+ * se leen mejor apilados que apretados. Lo mismo con la cabecera del cuadro:
+ * el saldo se baja abajo de la frase.
  */
 @media (max-width: 30rem) {
   .rangos,
   .fechas {
     grid-template-columns: 1fr;
+  }
+
+  .dialogo-cabecera {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .saldo-caja {
+    align-items: flex-start;
+    align-self: stretch;
   }
 }

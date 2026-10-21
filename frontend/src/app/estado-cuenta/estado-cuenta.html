@@ -34,28 +34,38 @@
   @if (hayFiltros()) {
     <button type="button" class="chico" (click)="limpiarFiltros()">Limpiar</button>
   }
-  <label class="casilla">
-    <select [ngModel]="rangoHoja()" (ngModelChange)="rangoHoja.set($event)">
-      <option value="todo">Todo</option>
-      <option value="semana">Esta semana</option>
-      <option value="mes">Este mes</option>
-    </select>
-    <span>Rango</span>
-  </label>
-  @if (seleccionados().size > 0) {
-    <button
-      type="button"
-      class="primario"
-      (click)="imprimirGeneral()"
-      [disabled]="bajando() !== null"
-    >
-      {{
-        bajando() === -1 ? 'Generando...' : 'Imprimir seleccionados (' + seleccionados().size + ')'
-      }}
-    </button>
-    <button type="button" class="chico" (click)="limpiarSeleccion()">Quitar selección</button>
-  }
 </div>
+
+<!--
+  La barra de la seleccion.
+
+  Las acciones de lo que esta marcado NO van en la barra de filtros: alla lo
+  que se hace es cambiar lo que se ve (buscar, filtrar) y estas botones
+  cambian lo que se hace (bajar la hoja).
+
+  Ademas la seleccion sobrevive al cambio de pagina, asi que el aviso tiene
+  que estar siempre a la vista: si alguien marca tres clientes en la pagina 1
+  y pasa a la 2, tiene que saber que todavia los lleva marcados.
+-->
+@if (seleccionados().size > 0) {
+  <div class="barra-seleccion">
+    <p class="cuenta">
+      <strong>{{ seleccionados().size }}</strong>
+      {{ seleccionados().size === 1 ? 'cliente seleccionado' : 'clientes seleccionados' }}
+    </p>
+    <div class="barra-acciones">
+      <button
+        type="button"
+        class="primario"
+        (click)="descargarHojaGeneral()"
+        [disabled]="bajando() !== null"
+      >
+        {{ bajando() === -1 ? 'Descargando…' : 'Descargar hoja general' }}
+      </button>
+      <button type="button" class="chico" (click)="limpiarSeleccion()">Quitar selección</button>
+    </div>
+  </div>
+}
 
 @if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
@@ -67,10 +77,19 @@
 
 @if (filas().length === 0 && !cargando()) {
   <div class="estado-vacio">
-    <h2>Sin clientes que mostrar</h2>
-    <p>No hay clientes que coincidan con la búsqueda.</p>
     @if (hayFiltros()) {
-      <button type="button" class="primario" (click)="limpiarFiltros()">Limpiar los filtros</button>
+      <h2>Ningún cliente coincide</h2>
+      <p>
+        No hay clientes que coincidan con lo que estás buscando. Prueba con otro nombre o quita los
+        filtros.
+      </p>
+      <button type="button" class="primario" (click)="limpiarFiltros()">Quitar los filtros</button>
+    } @else {
+      <h2>Todavía no hay clientes</h2>
+      <p>
+        El estado de cuenta se arma con las ventas y los pagos de cada cliente. Cuando registres
+        clientes y sus ventas, aquí sale lo que debe cada uno.
+      </p>
     }
   </div>
 } @else {
@@ -117,6 +136,7 @@
                 <button
                   type="button"
                   class="chico"
+                  title="Descargar la hoja de estado de cuenta de este cliente"
                   [disabled]="bajando() !== null"
                   (click)="ver(renglon)"
                 >
@@ -171,15 +191,37 @@
   el ratón, no había nada que tabular ni nada que contestara al teclado. Es el
   mismo patrón que el `ConfirmModal` del sistema y que el diálogo de
   eliminación de `usuarios`.
+
+  El `tabindex="-1"` y el foco que se le mete al abrir son para que el
+  teclado entre al diálogo solo: si el foco se queda en la fila de la tabla,
+  el Escape no llega y hay que buscar el ratón para cerrar.
 -->
-@if (mostrandoDialogo()) {
+@if (clienteSeleccionado(); as fila) {
   <button type="button" class="velo" aria-label="Cerrar" (click)="cerrarDialogo()"></button>
-  <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo">
-    <h2 id="hoja-titulo">Hoja de estado de cuenta</h2>
-    <p class="intro">
-      Elige el periodo de la hoja de Excel de <strong>{{ clienteSeleccionado()?.cliente }}</strong
-      >. La hoja sale con los movimientos del periodo y el saldo que queda.
-    </p>
+  <div
+    #dialogo
+    class="dialogo"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="hoja-titulo"
+    tabindex="-1"
+    (keydown.escape)="cerrarDialogo()"
+  >
+    <div class="dialogo-cabecera">
+      <div>
+        <h2 id="hoja-titulo">Hoja de estado de cuenta</h2>
+        <p class="intro">
+          Elige el periodo de la hoja de Excel de <strong>{{ fila.cliente }}</strong
+          >. La hoja sale con los movimientos del periodo y el saldo que queda.
+        </p>
+      </div>
+      <div class="saldo-caja">
+        <span>Saldo actual</span>
+        <strong [class.saldo]="fila.saldo_actual > 0" [class.a-favor]="fila.saldo_actual < 0">
+          {{ montoComoTexto(fila.saldo_actual) }}
+        </strong>
+      </div>
+    </div>
 
     <div class="rangos">
       <button type="button" class="rango" (click)="generarHoja('todo')">
@@ -214,15 +256,19 @@
             type="date"
             class="fecha-input"
             [value]="fechaFin()"
+            [max]="fechaInicio() || null"
             (change)="fechaFin.set($any($event.target).value)"
           />
         </label>
       </div>
+      @if (fechasInvertidas()) {
+        <p class="aviso">La fecha de inicio tiene que ser anterior a la de fin.</p>
+      }
       <button
         type="button"
         class="primario"
         (click)="generarHojaFechas()"
-        [disabled]="!fechaInicio() || !fechaFin()"
+        [disabled]="!fechasListas()"
       >
         Generar con esas fechas
       </button>

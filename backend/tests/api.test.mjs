@@ -199,6 +199,13 @@ const limpiarRastrosDeLaCorrida = async () => {
  * y la base queda con una contrasena que nadie mas va a saber. Con esta
  * restauracion previa la suite se autorepara sola: da igual como termino
  * la corrida anterior.
+ *
+ * Se hace por SQL directo y no por la API a proposito: la API, con buena
+ * razon, RECHAZA la contrasena del seed (es debil y la politica pide 12
+ * caracteres con mayuscula, minuscula y numero). Si el test dejara la
+ * cuenta del admin con 'NuevaClaveSegura2026', la siguiente corrida
+ * fallaria al hacer login y el usuario se quedaria sin la clave que
+ * documenta el README.
  */
 const restaurarSemilla = async () => {
   const r = await sqlDirecto(
@@ -611,15 +618,61 @@ if (loginNuevo.body.token) {
   revisar('el token nuevo funciona', perfilNuevo.status === 200);
 }
 
-// 10) Restaurar las contrasenas del seed.
+// 10) LA REGRESION: una cuenta SIN `usuarios.editar` tambien puede
+// cambiar su PROPIA contrasena.
 //
-// Esto se hace por SQL directo y no por la API a proposito: la API, con
-// buena razon, RECHAZA la contrasena del seed (es debil y la politica pide
-// 12 caracteres con mayuscula, minuscula y numero). Si el test dejara la
-// cuenta del admin con 'NuevaClaveSegura2026', la siguiente corrida
-// fallaria al hacer login y el usuario se quedaria sin la clave que
-// documenta el README.
+// Esto fallaba y no era un detalle del mensaje: la persona que entra por
+// "recuperar contraseña" recibe una temporal y el sistema la obliga a
+// cambiarla. Esa cuenta es una Cajera o una Empleada, o sea, una cuenta sin
+// `usuarios.editar`, y el trigger de permiso de la base pedia ese permiso
+// para CUALQUIER UPDATE sobre `usuarios`. El resultado era un 403 con el
+// mensaje "El usuario N no tiene el permiso usuarios.editar" y la persona
+// se quedaba trancada en la pantalla de "Cambia tu contraseña": el unico
+// camino era que el administrador le pusiera la clave a mano.
 //
+// La excepcion vive en la migracion 0021 (db/migrations).
+const nuevaClaveCajera = 'ClaveNuevaCajera2026';
+
+const loginCajeraCambio = await login('empleada@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+revisar('la cajera entra con la contrasena del seed', loginCajeraCambio.status === 200);
+const tokenCajeraCambio = loginCajeraCambio.body?.token;
+
+if (tokenCajeraCambio) {
+  const cambioCajeraPropio = await pedir('/api/auth/cambiar-contrasena', tokenCajeraCambio, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actual: 'CAMBIAR-ESTA-CLAVE', nueva: nuevaClaveCajera }),
+  });
+  revisar(
+    'una cuenta SIN usuarios.editar cambia su propia contrasena -> 200',
+    cambioCajeraPropio.status === 200,
+    JSON.stringify(cambioCajeraPropio.cuerpo),
+  );
+
+  // El sistema ya no le exige cambiarla.
+  const perfilCajeraCambio = await pedir('/api/auth/yo', tokenCajeraCambio);
+  revisar(
+    'la bandera de cambio pendiente queda en false',
+    perfilCajeraCambio.cuerpo?.debeCambiarContrasena === false,
+    JSON.stringify(perfilCajeraCambio.cuerpo?.debeCambiarContrasena),
+  );
+
+  // Y con la nueva contrasena se entra.
+  const loginCajeraConLaNueva = await login('empleada@ejemplo.local', nuevaClaveCajera);
+  revisar('la contrasena nueva de la cajera sirve', loginCajeraConLaNueva.status === 200);
+}
+
+// La contrasena de la cajera se vuelve a poner por SQL directo: mas abajo
+// hay otras pruebas que entran con la del seed.
+await sqlDirecto(
+  `UPDATE pos.usuarios
+      SET contrasena = crypt('CAMBIAR-ESTA-CLAVE', gen_salt('bf', 12)),
+          debe_cambiar_contrasena = true,
+          intentos_fallidos = 0,
+          bloqueado_hasta = NULL
+    WHERE email = 'empleada@ejemplo.local'`,
+);
+
 // ================================================================ usuarios
 // El modulo con el que la dueña da de alta a la gente. Aqui se prueba
 // sobre todo que los candados aguanten: que no se pueda quedar sin

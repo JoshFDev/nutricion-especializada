@@ -379,6 +379,35 @@ En la base y en la bitácora solo queda el hash, nunca la clave ni la temporal:
 la temporal la guarda el hash bcrypt y la entrega el servidor una sola vez,
 porque después de esa respuesta ya no existe en ningún lado.
 
+### Cambiar la PROPIA contraseña no pide `usuarios.editar`
+
+Cuando alguien entra con una contraseña temporal (la del alta, la del reseteo
+o la de "recuperar contraseña"), el sistema lo obliga a cambiarla con
+`POST /api/auth/cambiar-contrasena`. Esa ruta pide **sesión viva y la
+contraseña actual**, no `usuarios.editar`: cambiar tu propia clave no es
+editar la cuenta de otro.
+
+La base de datos también lo tenía que permitir, y no lo hacía: el trigger
+`trg_permiso_usuarios` pedía `usuarios.editar` para **cualquier** UPDATE
+sobre `usuarios`, así que una cuenta normal (Cajera, Empleada) que llegaba
+por recuperación se quedaba trancada en la pantalla de "Cambia tu contraseña"
+con un `403`: *"El usuario N no tiene el permiso usuarios.editar"*. El único
+camino era que el administrador le pusiera la clave a mano.
+
+La migración **0021** (`db/migrations/0021_usuarios_contrasena_propia.sql`)
+abre esa puerta y solo esa. `fn_cambio_contrasena_propio()` concede la
+excepción cuando se cumplen **las tres** condiciones:
+
+1. la fila es la del propio usuario de la sesión,
+2. la contraseña cambia de verdad en ese UPDATE, y
+3. no se toca nada más que los campos de la contraseña (`contrasena`,
+   `debe_cambiar_contrasena`, `intentos_fallidos`, `bloqueado_hasta` y
+   `actualizado_en`).
+
+`activo`, `es_dueno`, `email`, `rfc` y el resto de la cuenta siguen
+exigiendo `usuarios.editar`, y también cualquier fila que no sea la propia.
+Lo que se abre es exactamente lo que la aplicación ya permitía.
+
 ### Cómo la base de datos sabe quién está operando
 
 `current_user` devuelve el rol de Postgres, que es el mismo para todos,

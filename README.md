@@ -92,6 +92,9 @@ nutricion-especializada-pos/
 │   │   └── 0018_notas_cascade.sql              # borrar una nota cancelada limpia sus hijos
 │   ├── seeds/
 │   │   └── seed_demo.sql                  # datos de prueba (no reales)
+│   ├── scripts/
+│   │   ├── limpiar_datos_demo.sql         # vacia lo capturado, conserva la config
+│   │   └── limpiar_todo_salvo_admin.sql   # deja la base como recien migrada
 │   └── tests/                             # pruebas en SQL puro
 ├── backend/                               # Express + TypeScript
 │   ├── src/

@@ -164,48 +164,78 @@
     </select>
   </div>
 }
+<!--
+  El diálogo de "Ver": eligir el periodo de la hoja de Excel del cliente.
+
+  El velo es un BOTÓN y no un div: con el div el diálogo solo se cerraba con
+  el ratón, no había nada que tabular ni nada que contestara al teclado. Es el
+  mismo patrón que el `ConfirmModal` del sistema y que el diálogo de
+  eliminación de `usuarios`.
+-->
 @if (mostrandoDialogo()) {
-  <div class="dialogo">
-    <div class="dialogo-contenido">
-      <h2>Estado de cuenta - {{ clienteSeleccionado()?.cliente }}</h2>
-      <div class="opciones">
-        <button type="button" (click)="generarHoja('todo')">Todo</button>
-        <button type="button" (click)="generarHoja('semana')">Esta semana</button>
-        <button type="button" (click)="generarHoja('mes')">Este mes</button>
-      </div>
-      <div class="especificas">
-        <div class="campo-fecha">
-          <label for="f-inicio">Fecha inicio</label>
+  <button type="button" class="velo" aria-label="Cerrar" (click)="cerrarDialogo()"></button>
+  <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo">
+    <h2 id="hoja-titulo">Hoja de estado de cuenta</h2>
+    <p class="intro">
+      Elige el periodo de la hoja de Excel de <strong>{{ clienteSeleccionado()?.cliente }}</strong
+      >. La hoja sale con los movimientos del periodo y el saldo que queda.
+    </p>
+
+    <div class="rangos">
+      <button type="button" class="rango" (click)="generarHoja('todo')">
+        <strong>Todo</strong>
+        <span>Todos los movimientos</span>
+      </button>
+      <button type="button" class="rango" (click)="generarHoja('semana')">
+        <strong>Esta semana</strong>
+        <span>Desde el lunes</span>
+      </button>
+      <button type="button" class="rango" (click)="generarHoja('mes')">
+        <strong>Este mes</strong>
+        <span>Desde el primer día</span>
+      </button>
+    </div>
+
+    <div class="periodo">
+      <span class="titulo">O un periodo exacto</span>
+      <div class="fechas">
+        <label class="campo-fecha">
+          <span>Fecha inicio</span>
           <input
-            id="f-inicio"
             type="date"
             class="fecha-input"
             [value]="fechaInicio()"
             (change)="fechaInicio.set($any($event.target).value)"
           />
-        </div>
-        <div class="campo-fecha">
-          <label for="f-fin">Fecha fin</label>
+        </label>
+        <label class="campo-fecha">
+          <span>Fecha fin</span>
           <input
-            id="f-fin"
             type="date"
             class="fecha-input"
             [value]="fechaFin()"
             (change)="fechaFin.set($any($event.target).value)"
           />
-        </div>
-        <button
-          type="button"
-          class="primario"
-          (click)="generarHojaFechas()"
-          [disabled]="!fechaInicio() || !fechaFin()"
-        >
-          Fechas específicas
-        </button>
+        </label>
       </div>
-      <div class="dialogo-botones">
-        <button type="button" class="chico" (click)="cerrarDialogo()">Cancelar</button>
-      </div>
+      <button
+        type="button"
+        class="primario"
+        (click)="generarHojaFechas()"
+        [disabled]="!fechaInicio() || !fechaFin()"
+      >
+        Generar con esas fechas
+      </button>
+    </div>
+
+    <div class="dialogo-botones">
+      <button type="button" class="chico" (click)="cerrarDialogo()">Cancelar</button>
     </div>
   </div>
 }
+
+<!--
+  El aviso de confirmación, el mismo que usan las demás pantallas. Va al
+  final para que se dibuje ENCIMA del diálogo de arriba.
+-->
+<app-confirm-modal />

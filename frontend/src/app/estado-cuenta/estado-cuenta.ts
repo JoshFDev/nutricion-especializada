@@ -1,9 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
 import { montoComoTexto } from '../nucleo/cifras';
 import { ToastService } from '../nucleo/toast.service';
+import { ConfirmModal } from '../productos/confirm-modal';
 import { EstadoCuentaApi, type RenglonEstadoCuenta } from './estado-cuenta-api';
 
 /**
@@ -30,11 +38,22 @@ import { EstadoCuentaApi, type RenglonEstadoCuenta } from './estado-cuenta-api';
   styleUrl: './estado-cuenta.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [filasAnimation],
-  imports: [FormsModule],
+  imports: [FormsModule, ConfirmModal],
 })
 export class EstadoCuenta {
   private readonly api = inject(EstadoCuentaApi);
   private readonly avisos = inject(ToastService);
+
+  /**
+   * El aviso de confirmación, el MISMO de las demás pantallas.
+   *
+   * Antes esta pantalla usaba el `confirm()` del navegador: la cajita del
+   * sistema, que no se puede estilar y que en una pantalla de mostrador se
+   * ve como un mensaje de Windows perdido en medio de la aplicación. Con este
+   * modal sale con el mismo diseño que el resto del sistema, y se puede
+   * escribir el mensaje con el nombre del cliente adentro.
+   */
+  readonly confirmModal = viewChild.required(ConfirmModal);
 
   // ------------------------------------------------------------------ filtros
   readonly buscador = signal('');
@@ -242,10 +261,22 @@ export class EstadoCuenta {
   }
 
   async generarHoja(rango: 'todo' | 'semana' | 'mes'): Promise<void> {
-    if (!confirm('¿Generar el estado de cuenta en Excel?')) return;
     const c = this.clienteSeleccionado();
     if (c === null) return;
     if (this.bajando() !== null) return;
+
+    // El diálogo de rango se queda abierto debajo: si la persona cancela,
+    // vuelve a tener las opciones a la vista en vez de tener que volver a
+    // apretar "Ver" en la fila. El aviso sale ENCIMA (ver el `z-index` de
+    // `estado-cuenta.scss`).
+    const confirmado = await this.confirmModal().abrir({
+      titulo: 'Generar estado de cuenta',
+      mensaje: `¿Generar el estado de cuenta en Excel de ${c.cliente}?`,
+      textoConfirmar: 'Generar',
+      variante: 'normal',
+    });
+    if (!confirmado) return;
+
     this.bajando.set(c.cliente_id);
     try {
       const fuera = await this.api.abrirHoja(c.cliente_id, rango);

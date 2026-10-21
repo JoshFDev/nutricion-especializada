@@ -242,24 +242,33 @@ END $$;
 DO $$
 DECLARE v_e0 NUMERIC; v_e1 NUMERIC; v_nota BIGINT;
 BEGIN
-    -- Venta nueva, porque el bloque anterior borró la línea anterior
+    -- Venta nueva, porque el bloque anterior borró la línea anterior.
+    --
+    -- El folio se busca por la serie VACIA (la que usa la serie ACTIVA desde
+    -- la migracion 0012) y por un numero que el seed no toco: el seed crea
+    -- 2704, 2705 y 2706, y la nota del seed se lleva el 2704.
     INSERT INTO notas_remision (folio_id, cliente_id)
     SELECT f.id, c.id FROM folios f, clientes c
-     WHERE f.serie='A' AND f.folio_numero=1003 AND c.codigo_cliente='CL01'
+     WHERE f.serie='' AND f.folio_numero=2705 AND c.codigo_cliente='CL01'
     RETURNING id INTO v_nota;
+    IF v_nota IS NULL THEN
+        RAISE EXCEPTION 'no se pudo crear la nota de prueba (sin folios libres)';
+    END IF;
     INSERT INTO nota_remision_detalle (nota_id, producto_id, almacen_id,
                                        cantidad_bultos, precio_unit_kg)
     SELECT v_nota, (SELECT id FROM productos WHERE codigo='LAC'),
            (SELECT id FROM almacenes LIMIT 1), 7, 8.50;
 
     SELECT existencia_bultos INTO v_e0 FROM vw_existencia_actual WHERE codigo='LAC';
-    UPDATE notas_remision SET estatus='cancelada' WHERE id=v_nota;
+    -- El motivo es obligatorio desde la migracion 0008: una nota cancelada
+    -- tiene que decir POR QUE se cancelo.
+    UPDATE notas_remision SET estatus='cancelada', motivo_cancelacion='prueba' WHERE id=v_nota;
     SELECT existencia_bultos INTO v_e1 FROM vw_existencia_actual WHERE codigo='LAC';
     IF v_e1 <= v_e0 THEN
         RAISE EXCEPTION 'cancelar no devolvio el stock: % -> %', v_e0, v_e1;
     END IF;
     RAISE NOTICE 'OK al cancelar: existencia % -> %', v_e0, v_e1;
-    UPDATE notas_remision SET estatus='pendiente' WHERE id=v_nota;
+    UPDATE notas_remision SET estatus='pendiente', motivo_cancelacion=NULL WHERE id=v_nota;
     SELECT existencia_bultos INTO v_e1 FROM vw_existencia_actual WHERE codigo='LAC';
     IF v_e1 <> v_e0 THEN
         RAISE EXCEPTION 'revertir la cancelacion no restauro el stock: % vs %', v_e0, v_e1;
@@ -315,8 +324,14 @@ END $$;
 DO $$
 DECLARE v_a BIGINT; v_b BIGINT;
 BEGIN
+    -- El folio de la serie A lo crea esta misma prueba: desde la migracion
+    -- 0012 el talonario del negocio es de serie VACIA (puros numeros), asi
+    -- que ya no viene del seed.
+    INSERT INTO folios (serie, folio_numero) VALUES ('A', 1001)
+    ON CONFLICT (serie, folio_numero) DO NOTHING;
     SELECT id INTO v_a FROM folios WHERE serie='A' AND folio_numero=1001;
-    INSERT INTO folios (serie, folio_numero) VALUES ('B', 1001);
+    INSERT INTO folios (serie, folio_numero) VALUES ('B', 1001)
+    ON CONFLICT (serie, folio_numero) DO NOTHING;
     SELECT id INTO v_b FROM folios WHERE serie='B' AND folio_numero=1001;
     RAISE NOTICE 'OK: serie A folio 1001 = id %, serie B folio 1001 = id %', v_a, v_b;
 END $$;
@@ -344,7 +359,7 @@ DECLARE
 BEGIN
     -- Nota nueva CON VALOR para que la prueba sea real
     INSERT INTO notas_remision (folio_id, cliente_id)
-    SELECT (fn_siguiente_folio('A')).id, c.id FROM clientes c
+    SELECT (fn_siguiente_folio('')).id, c.id FROM clientes c
      WHERE c.codigo_cliente='CL01'
     RETURNING id INTO v_nota;
     IF v_nota IS NULL THEN

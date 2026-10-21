@@ -27,8 +27,25 @@
         type="password"
         formControlName="nueva"
         autocomplete="new-password"
-        [class.invalido]="form.controls.nueva.touched && form.controls.nueva.invalid"
+        [class.invalido]="
+          form.controls.nueva.touched && (form.controls.nueva.invalid || form.hasError('distinta'))
+        "
       />
+
+      <!--
+        El error que devuelve el sistema para el campo `nueva` se pega aqui,
+        al lado del campo. Antes solo se pintaba el de `actual`, y una
+        contraseña de mas de 200 caracteres o una que repitiera la actual
+        se quejaban con el texto genérico de arriba, sin decir cuál de los
+        dos campos era.
+      -->
+      @if (errorNueva()) {
+        <p class="campo-error">{{ errorNueva() }}</p>
+      } @else if (form.controls.nueva.touched && form.hasError('distinta')) {
+        <p class="campo-error">La nueva tiene que ser distinta de la actual.</p>
+      } @else if (form.controls.nueva.touched && form.controls.nueva.invalid) {
+        <p class="campo-error">La nueva no cumple las reglas.</p>
+      }
 
       <!--
         Las reglas se muestran mientras se escribe y no solo al salir del

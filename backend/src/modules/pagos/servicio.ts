@@ -143,16 +143,21 @@ export async function crear(cliente: PoolClient, d: CrearPago): Promise<Pago> {
       await repo.insertarAplicacion(c, pagoId, a.nota_id, a.monto);
     }
 
-    // El pago es dinero que entra a la caja: se anota tambien como
-    // movimiento de la cuenta que corresponda al metodo, para que el corte y
-    // el saldo de la cuenta reflejen el cobro. Sin esto, una venta pagada
-    // deja rastro en cartera pero no en caja, y el corte sale en ceros.
-    const tipoCuenta = d.metodo === 'Transferencia' || d.metodo === 'Depósito' ? 'banco' : 'efectivo';
-    let cuentas = await cajaRepo.listarCuentas(c, { tipo: tipoCuenta } as { tipo?: 'efectivo' | 'banco' });
-    if (cuentas.length === 0) {
-      cuentas = await cajaRepo.listarCuentas(c, {} as { tipo?: 'efectivo' | 'banco' });
-    }
-    const cuenta = cuentas[0];
+    /**
+     * El pago es dinero que entra a la caja: se anota tambien como
+     * movimiento de la cuenta que corresponda al metodo, para que el corte y
+     * el saldo de la cuenta reflejen el cobro. Sin esto, una venta pagada
+     * deja rastro en cartera pero no en caja, y el corte sale en ceros.
+     *
+     * La cuenta es la que pidio quien cobra (`cuenta_id`). Si no se pidio
+     * ninguna, se usa la primera del tipo, que es lo de siempre. Lo que
+     * NO se puede es que el dinero entre siempre a la misma sin que nadie
+     * lo decida: con dos cajas, el corte de una sale mal sin que nadie se
+     * entere de que hubo eleccion, porque no la hubo.
+     */
+    const tipoCuenta =
+      d.metodo === 'Transferencia' || d.metodo === 'Depósito' ? 'banco' : 'efectivo';
+    const cuenta = await elegirCuenta(c, d.cuenta_id, tipoCuenta);
     if (cuenta) {
       await cajaRepo.candearCuenta(c, cuenta.id);
       await cajaRepo.crearMovimiento(c, {
@@ -170,6 +175,45 @@ export async function crear(cliente: PoolClient, d: CrearPago): Promise<Pago> {
 
     return leer(c, pagoId);
   });
+}
+
+/**
+ * La cuenta que recibe el dinero.
+ *
+ * Si se pidio una, esa es: se comprueba que exista y que su tipo sea el
+ * que corresponde al metodo del pago (un efectivo no entra a un banco).
+ * Si no se pidio ninguna, se usa la primera del tipo, como antes.
+ */
+async function elegirCuenta(
+  c: PoolClient,
+  cuentaId: number | undefined,
+  tipo: 'efectivo' | 'banco',
+): Promise<{ id: number } | null> {
+  if (cuentaId !== undefined) {
+    const cuenta = await cajaRepo.consultarCuenta(c, cuentaId);
+    if (!cuenta) {
+      throw new ErrorValidacion(`La cuenta ${cuentaId} no existe`, {
+        campo: 'cuenta_id',
+        problema: 'Esa cuenta de caja no existe',
+      });
+    }
+    if (cuenta.tipo !== tipo) {
+      throw new ErrorValidacion(
+        `La cuenta ${cuentaId} es de tipo ${cuenta.tipo} y el pago es de tipo ${tipo}`,
+        {
+          campo: 'cuenta_id',
+          problema: `Esa cuenta no es del tipo que corresponde al metodo del pago`,
+        },
+      );
+    }
+    return cuenta;
+  }
+
+  let cuentas = await cajaRepo.listarCuentas(c, { tipo });
+  if (cuentas.length === 0) {
+    cuentas = await cajaRepo.listarCuentas(c, {});
+  }
+  return cuentas[0] ?? null;
 }
 
 /**

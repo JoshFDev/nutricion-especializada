@@ -302,6 +302,24 @@ export async function resetearContrasena(
   const objetivo = await repo.obtenerUsuario(db, id);
   if (!objetivo) throw new NoEncontrado('El usuario no existe');
 
+  /**
+   * A la dueña no se le resetea la contrasena.
+   *
+   * Borrarle la cuenta esta prohibido (`verificarPuedeEliminarse`), y
+   * esta es la otra forma de quedarse con ella: resetearle la clave y
+   * cambiar la temporal. El reseteo devuelve la contrasena en claro, asi
+   * que quien lo hace se queda con la cuenta.
+   *
+   * La dueña puede cambiar su propia contrasena ella misma, desde la
+   * pantalla de "cambia tu contrasena", que es el camino normal.
+   */
+  if (objetivo.es_dueno) {
+    throw new ReglaNegocio(
+      'DUENO_NO_RESETABLE',
+      'La contrasena de la dueña no se puede resetear desde aqui',
+    );
+  }
+
   const contrasenaTemporal = generarContrasenaTemporal();
   const sesionesCerradas = await enTransaccionDe(db, async (t) => {
     await repo.ponerContrasena(t, id, contrasenaTemporal);

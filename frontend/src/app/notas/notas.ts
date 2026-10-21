@@ -11,6 +11,7 @@ import { ConfirmModal } from '../productos/confirm-modal';
 import { Sesion } from '../nucleo/sesion';
 import { bultosComoTexto, kilosComoTexto, montoComoTexto } from '../nucleo/cifras';
 import { DireccionesApi, type DireccionEntrega } from './direcciones-api';
+import { CajaApi, type Cuenta } from '../caja/caja-api';
 import {
   agregar,
   cambiarCantidad,
@@ -122,6 +123,7 @@ export class Notas {
   private readonly api = inject(NotasApi);
   private readonly apiPagos = inject(PagosApi);
   private readonly apiDirecciones = inject(DireccionesApi);
+  private readonly apiCaja = inject(CajaApi);
   private readonly sesion = inject(Sesion);
 
   /** La confirmación de cambiar de cliente va por la ventana de aviso, no por la del navegador. */
@@ -801,10 +803,54 @@ export class Notas {
     this.metodoCobro.set('Efectivo');
     this.errorCobro.set(null);
     this.cobrando.set(nota.id);
+    this.cuentaCobro.set(null);
+    void this.cargarCuentasCobro();
   }
 
   /** Los métodos de pago, tal cual los acepta el sistema. */
   readonly metodos = METODOS_PAGO;
+
+  /**
+   * Las cuentas de caja y de banco, para poder elegir a cual entra el dinero.
+   *
+   * El selector SOLO aparece cuando hay mas de una cuenta del tipo que
+   * corresponde al metodo. Con una sola caja (lo normal) no hay nada que
+   * elegir y el formulario se queda como estaba: agregar un select que
+   * siempre dice lo mismo es ruido en una tablet de mostrador.
+   */
+  readonly cuentasCobro = signal<Cuenta[]>([]);
+  readonly cuentaCobro = signal<number | null>(null);
+
+  /**
+   * Las cuentas que se ofrecen para el metodo elegido.
+   *
+   * El efectivo va a una caja y la transferencia o el deposito, a un
+   * banco. Es la misma regla que usa el sistema: si no, el pago se
+   * rechaza por tipo.
+   */
+  readonly cuentasParaElMetodo = computed<Cuenta[]>(() => {
+    const tipo = this.metodoCobro() === 'Efectivo' ? 'efectivo' : 'banco';
+    return this.cuentasCobro().filter((c) => c.tipo === tipo);
+  });
+
+  /** El selector sale solo si hay algo que elegir. */
+  readonly hayVariasCuentas = computed(() => this.cuentasParaElMetodo().length > 1);
+
+  /**
+   * Carga las cuentas de caja y de banco.
+   *
+   * Se llama al abrir el formulario de cobro. Si la consulta falla, se
+   * sigue con el comportamiento de siempre (el sistema usa la primera
+   * del tipo): no vale la pena impedir cobrar porque no se pudo listar
+   * las cuentas.
+   */
+  private async cargarCuentasCobro(): Promise<void> {
+    try {
+      this.cuentasCobro.set(await this.apiCaja.cuentas());
+    } catch {
+      this.cuentasCobro.set([]);
+    }
+  }
 
   /**
    * Si el operador YA ESTÁ ESCRIBIENDO el monto.
@@ -875,6 +921,7 @@ export class Notas {
               monto: this.montoCobro(),
             },
           ],
+          this.cuentaCobro() ?? undefined,
         ),
       );
       this.cerrarCobro();

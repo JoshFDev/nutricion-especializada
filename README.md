@@ -166,7 +166,7 @@ base no parece de pruebas.
 # en una terminal
 PGDATABASE=nutr_test pnpm dev
 # en otra
-pnpm test:api       # 841 pruebas contra la API de verdad
+pnpm test:api       # 959 pruebas contra la API de verdad
 ```
 
 `nutr_test` se arma sola: el migrador la crea si no existe.
@@ -175,6 +175,11 @@ pnpm test:api       # 841 pruebas contra la API de verdad
 PGDATABASE=nutr_test pnpm migrar
 PGDATABASE=nutr_test pnpm migrar:seed
 ```
+
+El seed se puede volver a aplicar las veces que haga falta: inserta por
+nombre y no por id, y lo que ya esta no se duplica. Sin eso, aplicarlo dos
+veces fallaba (los ids del catalogo ya no eran 1, 2 y 3) y no habia forma de
+tener la base de pruebas al dia.
 
 La suite es reejecutable: limpia al empezar y al terminar, y usa una marca de
 agua por corrida en las tablas de auditoría para borrar solo lo que ella
@@ -410,6 +415,74 @@ excepción cuando se cumplen **las tres** condiciones:
 `activo`, `es_dueno`, `email`, `rfc` y el resto de la cuenta siguen
 exigiendo `usuarios.editar`, y también cualquier fila que no sea la propia.
 Lo que se abre es exactamente lo que la aplicación ya permitía.
+
+### El saldo del cliente: calculado, no escribible
+
+`clientes.saldo_actual` es un número **calculado**: lo que el cliente debe
+por sus notas, menos lo que ha abonado, más el ajuste manual. La migración
+**0022** (`db/migrations/0022_saldos_y_facturas.sql`) deja eso así de claro,
+y arregla tres cosas que estaban rotas:
+
+**1. Cancelar una nota pagada ya no inventa dinero.** La fórmula anterior
+sumaba las notas que no estaban canceladas y restaba *todos* los pagos, sin
+mirar a qué nota estaba aplicado cada pago. Al cancelar una nota ya pagada
+—que el propio 0008 dice que se tiene que poder hacer, porque es la única
+forma de deshacer un cobro— el cargo se iba pero el abono se quedaba, y el
+cliente aparecía con un crédito de $10,000 que nadie le entregó.
+
+Ahora la fórmula cuenta el dinero que **sigue vivo**: lo aplicado a notas que
+no están canceladas, más lo que del pago quedó sin aplicar. Si la venta se
+deshace, el cobro se deshace con ella.
+
+**2. El saldo no se puede escribir a mano.** `saldo_actual` estaba en la
+allowlist de columnas del módulo de clientes, así que un
+`PATCH /api/clientes/7 {"saldo_actual": 0}` **borraba la deuda** del
+cliente. Y al revés: la pantalla sí ofrecía ajustar el saldo a mano, pero
+ese valor lo sobrescribía el trigger en el siguiente movimiento, así que el
+ajuste era una mentira.
+
+Ahora hay dos columnas: `saldo_actual` (calculada, y con un trigger que
+rechaza que se escriba a mano) y `saldo_ajustado` (el delta manual, que sí
+se guarda y no lo borra el siguiente movimiento). La API acepta
+`saldo_ajustado` y **no** acepta `saldo_actual`.
+
+**3. La factura sigue a sus notas.** `facturas.monto_total` se calculaba una
+sola vez, al darla de alta, y ningún trigger lo volvía a recalcular. Si se
+corrigía una nota ya facturada, la factura seguía diciendo el total viejo: el
+documento fiscal que no debe existir. Ahora la base lo recalcula siempre.
+
+### El dinero entra a la caja que se elige
+
+`POST /api/pagos` acepta un `cuenta_id` opcional: la caja (o el banco) que
+recibe el dinero. Si no viene, se usa la primera cuenta del tipo que
+corresponde al método, que es lo de siempre.
+
+Lo que no se puede es que el dinero entre **siempre** a la misma: con dos
+cajas, el corte de una salía mal sin que nadie se enterara de que hubo
+elección, porque no la hubo. En la pantalla de cobranza el selector sale
+solo cuando hay más de una cuenta del tipo, porque con una sola caja no hay
+nada que elegir.
+
+### La fuerza bruta tiene freno
+
+`usuarios.intentos_fallidos` y `usuarios.bloqueado_hasta` existen en el
+esquema desde el principio, y **nadie las escribía**: el bloqueo estaba
+declarado y no implementado, y el login aceptaba intentos ilimitados.
+
+Ahora el login suma el intento fallido, bloquea la cuenta al quinto (quince
+minutos, y se levanta sola) y limpia el contador cuando se entra bien. El
+mensaje de "cuenta bloqueada" es distinto del de "contraseña incorrecta"
+porque son cosas distintas: una no se arregla escribiendo la contraseña
+otra vez.
+
+### `NODE_ENV` es obligatorio
+
+`NODE_ENV` no tiene valor por omisión: si falta, **la app no arranca** y lo
+dice. El valor por omisión era `development`, y `app.ts` monta las rutas de
+desarrollo (`POST /api/auth/dev/entrar-como`, que da un token de
+administrador sin contraseña) cuando vale exactamente `development`. Un
+despliegue que copiara el `.env` de ejemplo sin revisar esa línea se
+quedaba con esas rutas vivas.
 
 ### Cómo la base de datos sabe quién está operando
 

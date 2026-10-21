@@ -61,10 +61,7 @@ export const guardaSesion: CanActivateFn = async (
   // llega a activarse, con lo que la página queda en blanco y el bucle de
   // microtareas se come la CPU. Es exactamente lo que le pasaba a quien
   // entraba con la bandera de cambio obligatorio puesta (usuarios nuevos).
-  if (
-    sesion.perfil()?.debeCambiarContrasena &&
-    !estado.url.startsWith('/cambiar-contrasena')
-  ) {
+  if (sesion.perfil()?.debeCambiarContrasena && !estado.url.startsWith('/cambiar-contrasena')) {
     return router.parseUrl('/cambiar-contrasena');
   }
 
@@ -85,12 +82,32 @@ export const guardaSinSesion: CanActivateFn = async (): Promise<boolean | UrlTre
 
   if (!sesion.hayToken()) return true;
 
-  // Con credencial pero sin perfil no se decide nada: se deja pasar al inicio
-  // de sesión. Si la credencial estuviera buena, el menú se puede pintar sin
-  // preguntas.
-  if (!sesion.perfil()) return true;
+  /**
+   * Hay credencial, pero puede que el perfil todavia no este cargado: el
+   * token vive en el almacenamiento y el perfil en memoria, asi que al
+   * recargar la pagina (F5, o el navegador restaurando la pestaña) queda
+   * el primero sin el segundo.
+   *
+   * Antes, en ese caso, se dejaba pasar y se mostraba el formulario de
+   * inicio de sesion con la sesion VIVA: quien ya habia entrado tenia que
+   * escribir su contrasena otra vez. Preguntando el perfil, se manda a
+   * donde corresponde, que es lo que dice el objetivo de este archivo.
+   */
+  try {
+    const perfil = await sesion.asegurarPerfil();
+    if (perfil) {
+      return router.parseUrl(perfil.debeCambiarContrasena ? '/cambiar-contrasena' : '/');
+    }
+  } catch {
+    // No se pudo preguntar (el sistema esta caido, por ejemplo). Se deja
+    // pasar al inicio de sesion: es la pantalla que sabe avisar de que
+    // no hay conexion, y el error se vera ahi.
+    return true;
+  }
 
-  return router.parseUrl(sesion.perfil()!.debeCambiarContrasena ? '/cambiar-contrasena' : '/');
+  // La credencial no sirve: `asegurarPerfil` ya la limpio. Al inicio de
+  // sesion, como siempre.
+  return true;
 };
 
 /**

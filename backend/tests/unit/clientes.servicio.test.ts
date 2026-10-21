@@ -23,6 +23,7 @@ const FILA = {
   telefono: null,
   direccion: null,
   saldo_actual: '1500.50',
+  saldo_ajustado: '0.00',
   creado_en: new Date('2026-01-15T10:00:00Z'),
   actualizado_en: new Date('2026-01-15T10:00:00Z'),
 };
@@ -222,8 +223,14 @@ describe('actualizar', () => {
   });
 
   it('permite guardar el mismo codigo del propio cliente', async () => {
+    // Tres respuestas: el chequeo de duplicado, el UPDATE (que devuelve
+    // solo el id) y el releo de la fila completa. El releo existe
+    // porque el RETURNING de un UPDATE no puede traer `especie`, `rfc`
+    // ni `razon_social`, y porque el saldo lo recalcula un trigger: el
+    // valor bueno es el de DESPUES del UPDATE.
     const db = falsoCliente()
       .responder([{ existe: false }])
+      .responder([{ id: '5' }])
       .responder([FILA]);
 
     const r = await clientes.actualizar(db.cliente, 5, { codigo_cliente: 'C-001' });

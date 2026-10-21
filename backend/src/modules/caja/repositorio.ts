@@ -446,4 +446,3 @@ export async function cierrePorCuenta(
     [q.fecha],
   );
 }
-

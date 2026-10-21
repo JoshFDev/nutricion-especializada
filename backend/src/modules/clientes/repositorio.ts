@@ -13,7 +13,7 @@ import type { ClienteFila, NotaResumenFila } from './modelo.js';
 
 const CAMPOS = `c.id, c.codigo_cliente, c.nombre, c.establo, c.especie_id,
                 e.nombre AS especie, c.estatus, c.telefono, c.email, c.direccion,
-                c.saldo_actual, c.creado_en, c.actualizado_en,
+                c.saldo_actual, c.saldo_ajustado, c.creado_en, c.actualizado_en,
                 f.rfc, f.razon_social`;
 
 const FROM_CLIENTES = `FROM clientes c
@@ -140,10 +140,11 @@ export async function crear(cliente: PoolClient, datos: CrearCliente): Promise<C
   const fila = await consultarUno<ClienteFila>(
     cliente,
     `INSERT INTO clientes (codigo_cliente, nombre, establo, especie_id,
-                           estatus, telefono, email, direccion)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                           estatus, telefono, email, direccion, saldo_ajustado)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING id, codigo_cliente, nombre, establo, especie_id, estatus,
-               telefono, email, direccion, saldo_actual, creado_en, actualizado_en`,
+               telefono, email, direccion, saldo_actual, saldo_ajustado,
+               creado_en, actualizado_en`,
     [
       datos.codigo_cliente,
       datos.nombre,
@@ -153,6 +154,7 @@ export async function crear(cliente: PoolClient, datos: CrearCliente): Promise<C
       datos.telefono ?? null,
       datos.email ?? null,
       datos.direccion ?? null,
+      datos.saldo_ajustado ?? 0,
     ],
   );
   // RETURNING en un INSERT siempre trae fila; si no, el INSERT fallo.
@@ -171,9 +173,13 @@ export async function actualizar(
    * Los nombres de columna se citan como IDENTIFICADORES, nunca como
    * valores, asi que no se pueden pasar por los parametros. Por eso
    * necesitan una allowlist: zod ya garantiza que las claves sean
-   * conocidas, y este set las filtra otra vez. Lo que se busca es que no
-   * se pueda colar `saldo_actual`, que tiene un trigger que lo recalcula
-   * y quedaria mal si alguien lo escribiera directo.
+   * conocidas, y este set las filtra otra vez.
+   *
+   * `saldo_actual` NO esta aqui, y es a proposito: es un campo que
+   * CALCULA la base (notas menos abonos, mas el ajuste) y que ademas
+   * esta protegido por un trigger que rechaza la escritura a mano. Lo
+   * que la aplicacion escribe es `saldo_ajustado`, que es el delta
+   * manual y si se guarda.
    */
   const permitidos = new Set([
     'codigo_cliente',
@@ -184,21 +190,30 @@ export async function actualizar(
     'telefono',
     'email',
     'direccion',
-    'saldo_actual',
+    'saldo_ajustado',
   ]);
   const seguros = campos.filter((c) => permitidos.has(c));
   if (seguros.length === 0) return null;
 
   const asignaciones = seguros.map((campo, i) => `${String(campo)} = $${i + 2}`);
 
-  return consultarUno<ClienteFila>(
+  const resultado = await consultarUno<{ id: string }>(
     cliente,
     `UPDATE clientes SET ${asignaciones.join(', ')}
       WHERE id = $1
-      RETURNING id, codigo_cliente, nombre, establo, especie_id, estatus,
-                telefono, email, direccion, saldo_actual, creado_en, actualizado_en`,
+      RETURNING id`,
     [id, ...seguros.map((c) => datos[c] ?? null)],
   );
+  if (!resultado) return null;
+
+  // Se relee la fila completa con sus JOIN en vez de confiar en el
+  // RETURNING: el RETURNING de un UPDATE no puede traer `especie`,
+  // `rfc` ni `razon_social` (viven en otras tablas), y ademas el saldo lo
+  // recalcula un trigger, asi que el valor bueno es el de DESPUES del
+  // UPDATE, no el de antes.
+  return consultarUno<ClienteFila>(cliente, `SELECT ${CAMPOS} ${FROM_CLIENTES} WHERE c.id = $1`, [
+    id,
+  ]);
 }
 
 export async function eliminar(cliente: PoolClient, id: number): Promise<boolean> {

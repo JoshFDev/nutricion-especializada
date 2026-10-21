@@ -175,13 +175,27 @@ export async function saldoRestante(
   cliente: PoolClient,
   id: number,
 ): Promise<{ restante: string } | null> {
+  /**
+   * El `FOR UPDATE` es lo que evita que dos cajeros paguen la misma
+   * compra a la vez.
+   *
+   * Sin el candado, las dos peticiones leen el mismo saldo (digamos
+   * $5,000 pendientes), las dos insertan un pago de $5,000 y el
+   * proveedor queda con $10,000 abonados sobre una compra de $5,000:
+   * dinero creado de la nada, y dos egresos de caja por el mismo pago.
+   *
+   * Con el candado, la segunda transaccion espera a que la primera
+   * termine, y para entonces ya ve el saldo real y se topa con el
+   * "esta compra ya esta pagada".
+   */
   return consultarUno<{ restante: string }>(
     cliente,
     `SELECT (c.monto_total - COALESCE(
               (SELECT SUM(pp.monto) FROM pagos_proveedor pp WHERE pp.compra_id = c.id), 0
             ))::TEXT AS restante
        FROM compras c
-      WHERE c.id = $1`,
+      WHERE c.id = $1
+      FOR UPDATE`,
     [id],
   );
 }

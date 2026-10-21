@@ -92,9 +92,7 @@ describe('las guardas de sesion', () => {
       localStorage.setItem('ne.token', 'token-opaco-123');
 
       const promesa = correr(guardaSesion, '/notas');
-      http
-        .expectOne(`${API}/auth/yo`)
-        .flush({ ...perfil, debeCambiarContrasena: true });
+      http.expectOne(`${API}/auth/yo`).flush({ ...perfil, debeCambiarContrasena: true });
 
       expect(destino(await promesa)).toBe('/cambiar-contrasena');
     });
@@ -109,9 +107,7 @@ describe('las guardas de sesion', () => {
       localStorage.setItem('ne.token', 'token-opaco-123');
 
       const promesa = correr(guardaSesion, '/cambiar-contrasena');
-      http
-        .expectOne(`${API}/auth/yo`)
-        .flush({ ...perfil, debeCambiarContrasena: true });
+      http.expectOne(`${API}/auth/yo`).flush({ ...perfil, debeCambiarContrasena: true });
 
       expect(await promesa).toBe(true);
     });
@@ -136,11 +132,50 @@ describe('las guardas de sesion', () => {
       expect(await correr(guardaSinSesion, '/login')).toBe(true);
     });
 
-    it('deja el inicio de sesion quieto si hay credencial pero sin perfil cargado', async () => {
-      // Sin perfil no se puede decidir nada todavía: el menú se pinta solo.
+    it('con credencial y sin perfil cargado, pregunta y saca al inicio', async () => {
+      // La credencial esta guardada pero el perfil no: el token vive en el
+      // almacenamiento y el perfil en memoria, asi que al recargar la
+      // pagina (F5, o el navegador restaurando la pestaña) queda el primero
+      // sin el segundo.
+      //
+      // La guarda PREGUNTA. Antes no lo hacia, y se quedaba en el
+      // formulario de inicio de sesion con la sesion viva: quien ya habia
+      // entrado tenia que escribir su contrasena otra vez.
       localStorage.setItem('ne.token', 'token-opaco-123');
 
-      expect(await correr(guardaSinSesion, '/login')).toBe(true);
+      const promesa = correr(guardaSinSesion, '/login');
+      http.expectOne(`${API}/auth/yo`).flush(perfil);
+
+      expect(destino(await promesa)).toBe('/');
+    });
+
+    it('con credencial que ya no sirve, deja el inicio de sesion', async () => {
+      // El sistema responde 401: `asegurarPerfil` limpia la sesion y se
+      // entra al formulario, como siempre.
+      localStorage.setItem('ne.token', 'token-opaco-123');
+
+      const promesa = correr(guardaSinSesion, '/login');
+      http
+        .expectOne(`${API}/auth/yo`)
+        .flush(
+          { codigo: 'NO_AUTENTICADO', mensaje: 'La sesion no es valida' },
+          { status: 401, statusText: 'Unauthorized' },
+        );
+
+      expect(await promesa).toBe(true);
+    });
+
+    it('si el sistema no responde, deja el inicio de sesion', async () => {
+      // No se puede decidir nada. Se deja pasar al formulario, que es la
+      // pantalla que sabe avisar de que no hay conexion.
+      localStorage.setItem('ne.token', 'token-opaco-123');
+
+      const promesa = correr(guardaSinSesion, '/login');
+      http
+        .expectOne(`${API}/auth/yo`)
+        .flush('no hay servidor', { status: 503, statusText: 'Service Unavailable' });
+
+      expect(await promesa).toBe(true);
     });
 
     it('con sesion y la bandera puesta, manda a la pantalla de cambio', async () => {
@@ -149,14 +184,10 @@ describe('las guardas de sesion', () => {
       // termina si esa guarda deja pasar cuando ya está en el destino.
       localStorage.setItem('ne.token', 'token-opaco-123');
       const cargado = TestBed.inject(Sesion).asegurarPerfil();
-      http
-        .expectOne(`${API}/auth/yo`)
-        .flush({ ...perfil, debeCambiarContrasena: true });
+      http.expectOne(`${API}/auth/yo`).flush({ ...perfil, debeCambiarContrasena: true });
       await cargado;
 
-      expect(destino(await correr(guardaSinSesion, '/login'))).toBe(
-        '/cambiar-contrasena',
-      );
+      expect(destino(await correr(guardaSinSesion, '/login'))).toBe('/cambiar-contrasena');
     });
 
     it('con sesion en regla, saca del inicio de sesion hacia el inicio', async () => {

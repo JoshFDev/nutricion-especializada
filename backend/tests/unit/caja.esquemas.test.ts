@@ -41,4 +41,3 @@ describe('momento', () => {
     expect(() => valida(malo)).toThrow();
   });
 });
-

@@ -186,7 +186,15 @@ export class Clientes {
     email: ['', Validators.email],
     rfc: ['', validaRfc],
     direccion: [''],
-    saldo_actual: [''],
+    /**
+     * El ajuste manual, no el saldo.
+     *
+     * El saldo lo calcula el sistema (notas menos abonos, mas este
+     * ajuste) y no se puede escribir a mano. Lo que se captura es el
+     * AJUSTE: lo que el cliente debe de mas (o de menos) por algo que no
+     * son sus notas.
+     */
+    saldo_ajustado: [''],
   });
 
   montoComoTexto = montoComoTexto;
@@ -410,7 +418,7 @@ export class Clientes {
       email: '',
       rfc: '',
       direccion: '',
-      saldo_actual: '',
+      saldo_ajustado: '',
     });
     this.errorEditor.set(null);
     this.editando.set({} as Cliente);
@@ -428,7 +436,7 @@ export class Clientes {
       email: cliente.email ?? '',
       rfc: cliente.rfc ?? '',
       direccion: cliente.direccion ?? '',
-      saldo_actual: String(cliente.saldo_actual ?? ''),
+      saldo_ajustado: String(cliente.saldo_ajustado ?? ''),
     });
     this.errorEditor.set(null);
     this.editando.set(cliente);
@@ -501,11 +509,23 @@ export class Clientes {
     if (actual === null) return;
 
     if (actual.id !== undefined) {
-      const saldoForm = Number(this.forma.getRawValue().saldo_actual);
-      if (!Number.isNaN(saldoForm) && Math.abs(saldoForm - Number(actual.saldo_actual)) > 0.001) {
+      /**
+       * Se avisa cuando cambia el AJUSTE, y se dice de cuanto a cuanto.
+       *
+       * Antes se comparaba contra el saldo y el mensaje decia "estás
+       * cambiando el saldo del cliente de X a Y", pero el saldo no se
+       * puede cambiar: lo calcula el sistema. Ahora lo que se captura es
+       * el ajuste, y el mensaje lo dice en esos terminos.
+       */
+      const ajusteForm = Number(this.forma.getRawValue().saldo_ajustado ?? 0);
+      const ajusteActual = Number(actual.saldo_ajustado ?? 0);
+      if (!Number.isNaN(ajusteForm) && Math.abs(ajusteForm - ajusteActual) > 0.001) {
         const ok = await this.confirmModal().abrir({
-          titulo: 'Modificar saldo',
-          mensaje: `Estás cambiando el saldo del cliente de ${montoComoTexto(Number(actual.saldo_actual))} a ${montoComoTexto(saldoForm)}. ¿Confirmas que deseas modificarlo manualmente?`,
+          titulo: 'Modificar el ajuste del saldo',
+          mensaje:
+            `Estás cambiando el ajuste del saldo de ${montoComoTexto(ajusteActual)} a ` +
+            `${montoComoTexto(ajusteForm)}. Este ajuste se suma al saldo del cliente y no lo ` +
+            `borra el siguiente movimiento. ¿Confirmas?`,
           textoConfirmar: 'Confirmar',
           variante: 'advertencia',
         });
@@ -604,8 +624,22 @@ export class Clientes {
       await this.cargarPagina(this.pagina());
     } catch (falla) {
       const legible = errorLegible(falla);
-      if (legible.codigo === 'EN_USO') {
-        this.toast.advertencia(legible.mensaje);
+      /**
+       * El codigo que llega aqui es `REFERENCIA_EN_USO`, no `EN_USO`.
+       *
+       * `EN_USO` lo emiten a proposito los modulos de catalogo y de
+       * productos, que revisan las referencias antes de borrar y
+       * pueden decir QUE es lo que impide. Un borrado de cliente que
+       * revienta con una llave foranea lo traduce el middleware de
+       * errores a `REFERENCIA_EN_USO` (ver `backend/src/middleware/
+       * errores.ts`), y con la comparacion que habia aqui el aviso
+       * amable nunca salia: se veia un error rojo que decia "hace
+       * referencia a algo que NO EXISTE", que ademas es falso.
+       */
+      if (legible.codigo === 'REFERENCIA_EN_USO' || legible.codigo === 'EN_USO') {
+        this.toast.advertencia(
+          'No se puede eliminar: tiene notas de remisión o pagos. Márcalo como Inactivo para dejar de usarlo sin perder el historial.',
+        );
       } else {
         this.error.set(legible.mensaje);
         this.toast.error(legible.mensaje);

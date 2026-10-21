@@ -31,26 +31,49 @@ export class CambiarContrasena {
   private readonly router = inject(Router);
   private readonly sesion = inject(Sesion);
 
-  readonly form = this.fb.nonNullable.group({
-    actual: ['', [Validators.required]],
-    nueva: [
-      '',
-      [
-        Validators.required,
-        // Las mismas reglas que el sistema, y solo para no mandar a rechazar
-        // lo que el navegador ya puede decir. La regla que vale es la del
-        // sistema: si alguien la evade haciendo la petición a mano, allá se le
-        // para.
-        Validators.minLength(12),
-        Validators.pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/),
+  readonly form = this.fb.nonNullable.group(
+    {
+      actual: ['', [Validators.required]],
+      nueva: [
+        '',
+        [
+          Validators.required,
+          // Las mismas reglas que el sistema, y solo para no mandar a rechazar
+          // lo que el navegador ya puede decir. La regla que vale es la del
+          // sistema: si alguien la evade haciendo la petición a mano, allá se le
+          // para.
+          Validators.minLength(12),
+          Validators.maxLength(200),
+          Validators.pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/),
+        ],
       ],
-    ],
-    repetir: ['', [Validators.required]],
-  });
+      repetir: ['', [Validators.required]],
+    },
+    {
+      /**
+       * La nueva tiene que ser DISTINTA de la actual.
+       *
+       * Es una regla del grupo y no del control, porque depende de los dos
+       * campos a la vez. El sistema la pide (si no, la contraseña "nueva"
+       * seria la misma de antes y no habria cambiado nada), asi que el
+       * navegador tambien la pide: si no, la persona se lleva un 422 sin
+       * saber por que.
+       */
+      validators: [
+        (grupo) =>
+          grupo.get('actual')?.value !== '' &&
+          grupo.get('nueva')?.value === grupo.get('actual')?.value
+            ? { distinta: true }
+            : null,
+      ],
+    },
+  );
 
   readonly error = signal<string | null>(null);
   /** El error pegado a un campo, cuando el sistema lo señaló con nombre. */
   readonly errorActual = signal<string | null>(null);
+  /** El error pegado al campo de la contraseña nueva. */
+  readonly errorNueva = signal<string | null>(null);
   readonly exito = signal<string | null>(null);
   readonly enviando = signal(false);
 
@@ -82,6 +105,8 @@ export class CambiarContrasena {
 
   async cambiar(): Promise<void> {
     this.error.set(null);
+    this.errorActual.set(null);
+    this.errorNueva.set(null);
     this.enviando.set(true);
     this.form.markAllAsTouched();
 
@@ -131,6 +156,21 @@ export class CambiarContrasena {
       const deActual = legible.detalles.find((d) => d.campo === 'actual');
       if (deActual) {
         this.errorActual.set(deActual.problema);
+        return;
+      }
+      /**
+       * Y lo mismo con la NUEVA.
+       *
+       * El sistema valida la nueva con dos reglas que el navegador no
+       * comprueba: que no sea mas larga de 200 caracteres y que sea
+       * DISTINTA de la actual. Sin esto, la persona que escribe la misma
+       * contrasena recibia un 422 con el texto generico "Revisa los
+       * datos enviados", sin saber cual de los dos campos era el
+       * problema, y lo repetia.
+       */
+      const deNueva = legible.detalles.find((d) => d.campo === 'nueva');
+      if (deNueva) {
+        this.errorNueva.set(deNueva.problema);
         return;
       }
       this.error.set(legible.mensaje);

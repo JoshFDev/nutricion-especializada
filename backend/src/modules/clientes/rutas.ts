@@ -27,7 +27,12 @@ export const rutasClientes = Router();
 // ver clientes es muy distinto a borrarlos.
 rutasClientes.use(requiereSesion);
 
-rutasClientes.get('/', validarQuery(listarClientesEsquema), controlador.listar);
+rutasClientes.get(
+  '/',
+  requierePermiso('clientes.ver'),
+  validarQuery(listarClientesEsquema),
+  controlador.listar,
+);
 
 rutasClientes.get(
   '/exportar',
@@ -36,7 +41,12 @@ rutasClientes.get(
   controlador.exportarExcel,
 );
 
-rutasClientes.get('/:id', validarParams(idClienteEsquema), controlador.obtener);
+rutasClientes.get(
+  '/:id',
+  requierePermiso('clientes.ver'),
+  validarParams(idClienteEsquema),
+  controlador.obtener,
+);
 
 rutasClientes.post(
   '/',

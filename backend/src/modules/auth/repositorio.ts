@@ -24,11 +24,65 @@ export async function buscarPorCorreo(
             u.activo,
             u.debe_cambiar_contrasena,
             u.puesto,
+            u.intentos_fallidos,
+            (u.bloqueado_hasta IS NOT NULL AND u.bloqueado_hasta > now()) AS bloqueado,
             (u.contrasena IS NOT NULL
              AND ($2 = '' OR crypt($2, u.contrasena) = u.contrasena)) AS contrasena_ok
        FROM usuarios u
       WHERE lower(u.email) = lower($1)`,
     [correo, contrasena],
+  );
+}
+
+/**
+ * Suma un intento fallido y bloquea la cuenta si ya van muchos.
+ *
+ * El bloqueo se escribe con `bloqueado_hasta` (una fecha), no con un
+ * estado: asi se levanta solo, sin que nadie tenga que pasar alevando
+ * cuentas.
+ *
+ * Devuelve cuantos intentos lleva la cuenta, para poder decidir en el
+ * servicio si el error que se le avisa al usuario es "contrasena
+ * incorrecta" o "cuenta bloqueada".
+ */
+export async function sumarIntentoFallido(
+  cliente: PoolClient,
+  usuarioId: number,
+  maxIntentos: number,
+  minutosBloqueo: number,
+): Promise<number> {
+  const r = await consultarUno<{ intentos: number }>(
+    cliente,
+    `UPDATE usuarios
+        SET intentos_fallidos = intentos_fallidos + 1,
+            bloqueado_hasta = CASE
+              WHEN intentos_fallidos + 1 >= $2
+                THEN now() + ($3 || ' minutes')::INTERVAL
+              ELSE bloqueado_hasta
+            END
+      WHERE id = $1
+      RETURNING intentos_fallidos AS intentos`,
+    [usuarioId, maxIntentos, String(minutosBloqueo)],
+  );
+  return r?.intentos ?? 0;
+}
+
+/**
+ * Limpia el conteo de intentos fallidos.
+ *
+ * Entra bien es la prueba de que la persona es la dueña de la cuenta, asi
+ * que el contador vuelve a cero y el bloqueo (si lo habia) se levanta.
+ */
+export async function limpiarIntentosFallidos(
+  cliente: PoolClient,
+  usuarioId: number,
+): Promise<void> {
+  await cliente.query(
+    `UPDATE usuarios
+        SET intentos_fallidos = 0,
+            bloqueado_hasta = NULL
+      WHERE id = $1`,
+    [usuarioId],
   );
 }
 

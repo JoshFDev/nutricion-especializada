@@ -1148,6 +1148,26 @@
                               <option [value]="metodo">{{ metodo }}</option>
                             }
                           </select>
+                          <!--
+                          La cuenta a la que entra el dinero. Solo sale cuando hay
+                          mas de una del tipo que corresponde al metodo: con una
+                          sola caja no hay nada que elegir, y en una tablet de
+                          mostrador un select que siempre dice lo mismo es ruido.
+                          -->
+                          @if (hayVariasCuentas()) {
+                            <label class="oculto" for="cuenta-cobro">Caja o banco</label>
+                            <select
+                              id="cuenta-cobro"
+                              class="cobrar-metodo"
+                              [value]="cuentaCobro()"
+                              (change)="cuentaCobro.set(+$any($event.target).value)"
+                            >
+                              <option [value]="null">Elige la caja</option>
+                              @for (cuenta of cuentasParaElMetodo(); track cuenta.id) {
+                                <option [value]="cuenta.id">{{ cuenta.nombre }}</option>
+                              }
+                            </select>
+                          }
                           <button
                             type="button"
                             class="primario"

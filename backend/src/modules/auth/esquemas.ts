@@ -28,6 +28,19 @@ export interface UsuarioFila {
   debe_cambiar_contrasena: boolean;
   puesto: string | null;
   contrasena_ok: boolean;
+  /**
+   * Intentos fallidos de esta cuenta, y si esta bloqueada ahora mismo.
+   *
+   * Las dos columnas existen en el esquema desde el principio, pero nadie
+   * las escribia: el bloqueo por fuerza bruta estaba declarado y no
+   * implementado. Ahora si se usan (ver `servicio.ts`).
+   *
+   * `bloqueado` lo calcula la base y no la aplicacion: `bloqueado_hasta`
+   * es un TIMESTAMP sin zona horaria, y compararlo en JavaScript con el
+   * reloj del servidor daria resultados distintos segun donde corra.
+   */
+  intentos_fallidos: number;
+  bloqueado: boolean;
   permisos: string[] | null;
   roles: string[] | null;
 }

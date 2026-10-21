@@ -36,7 +36,20 @@ export interface Cliente {
   direccion: string | null;
   rfc: string | null;
   razon_social: string | null;
+  /**
+   * Lo que el cliente DEBE: notas menos abonos, mas el ajuste.
+   *
+   * Lo calcula el sistema. No se puede escribir a mano.
+   */
   saldo_actual: number;
+  /**
+   * El AJUSTE manual del saldo, en el mismo signo que el saldo.
+   *
+   * Es lo unico del saldo que se puede capturar: una deuda anterior que
+   * no viene de sus notas, un excused de arranque. Se suma al saldo
+   * calculado y no lo borra el siguiente movimiento.
+   */
+  saldo_ajustado: number;
   creado_en: string;
   actualizado_en: string;
 }
@@ -71,7 +84,8 @@ export interface FormaCliente {
   email: string;
   rfc: string;
   direccion: string;
-  saldo_actual?: string;
+  /** El ajuste manual del saldo, como texto (lo captura el editor). */
+  saldo_ajustado?: string;
 }
 
 /** Los datos al crear o actualizar un cliente, tal como los piden las reglas de validación. */
@@ -85,7 +99,7 @@ export interface CuerpoCliente {
   email: string | null;
   rfc: string | null;
   direccion: string | null;
-  saldo_actual?: number;
+  saldo_ajustado?: number;
 }
 
 /**
@@ -112,8 +126,8 @@ export function cuerpoDeCliente(forma: FormaCliente): CuerpoCliente {
     rfc: textoONull(rfcNormalizado(forma.rfc)),
     direccion: textoONull(forma.direccion),
   };
-  if (forma.saldo_actual !== undefined && forma.saldo_actual !== '') {
-    cuerpo.saldo_actual = Number(forma.saldo_actual);
+  if (forma.saldo_ajustado !== undefined && forma.saldo_ajustado !== '') {
+    cuerpo.saldo_ajustado = Number(forma.saldo_ajustado);
   }
   return cuerpo;
 }

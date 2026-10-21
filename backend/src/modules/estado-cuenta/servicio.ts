@@ -173,7 +173,7 @@ export async function hoja(
   cliente: PoolClient,
   clienteId: number,
   rango: 'todo' | 'semana' | 'mes' | 'personalizado' = 'todo',
-  opts?: { fecha_inicio?: string; fecha_fin?: string },
+  opts?: { fecha_inicio?: string | undefined; fecha_fin?: string | undefined },
 ): Promise<{ bytes: Buffer; nombreArchivo: string; renglonesFuera: number }> {
   const nuevo = await repo.buscarCliente(cliente, clienteId);
   if (nuevo === null) {
@@ -197,9 +197,18 @@ export async function hoja(
     ventas = ventas.filter((v) => v.fecha >= desdeIso);
     abonos = abonos.filter((a) => a.fecha >= desdeIso);
   }
-  if (rango === 'personalizado' && opts?.fecha_fin) {
-    ventas = ventas.filter((v) => v.fecha <= opts.fecha_fin);
-    abonos = abonos.filter((a) => a.fecha <= opts.fecha_fin);
+  /**
+   * La fecha de fin se guarda en una variable antes de filtrar.
+   *
+   * TypeScript no puede estrechar `opts.fecha_fin` dentro de la flecha:
+   * ahi `opts` podria haber cambiado, asi que vuelve a ser opcional y el
+   * filtro no compila. Guardandola en una constante, el estrechamiento
+   * se aplica una vez y las flechas la ven ya como string.
+   */
+  const fechaFin = opts?.fecha_fin;
+  if (rango === 'personalizado' && fechaFin) {
+    ventas = ventas.filter((v) => v.fecha <= fechaFin);
+    abonos = abonos.filter((a) => a.fecha <= fechaFin);
   }
   const aplicaciones = await repo.leerAplicacionesPorCliente(cliente, clienteId);
   const renglones = armarRenglones(

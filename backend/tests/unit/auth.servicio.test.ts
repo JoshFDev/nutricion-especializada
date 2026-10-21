@@ -31,14 +31,21 @@ const usuarioOk = (over: Record<string, unknown> = {}) => ({
   debe_cambiar_contrasena: true,
   puesto: 'Dueño',
   contrasena_ok: true,
+  intentos_fallidos: 0,
+  bloqueado: false,
   ...over,
 });
 
 describe('iniciarSesion', () => {
-  /** Prepara las tres respuestas que da el login: buscar, sesion, bitacora. */
+  /**
+   * Prepara las respuestas que da el login: buscar, limpiar los intentos
+   * fallidos, crear la sesion y anotar el acceso. La segunda existe desde
+   * que el login limpia el contador de intentos fallidos: entrar bien es
+   * la prueba de que la persona es la dueña de la cuenta.
+   */
   const preparar = (filas: unknown[]) => {
     const db = falsoCliente();
-    db.responder(filas).responder([]).responder([]);
+    db.responder(filas).responder([]).responder([]).responder([]);
     return db;
   };
 
@@ -137,6 +144,48 @@ describe('iniciarSesion', () => {
       (c) => c.sql.includes('auditoria_accesos') && c.valores.includes('login_fallido'),
     );
     expect(fallos).toHaveLength(0);
+  });
+
+  it('cuenta el intento fallido y avisa cuando la cuenta queda bloqueada', async () => {
+    // El quinto intento deja la cuenta bloqueada. Antes esto no pasaba:
+    // las columnas `intentos_fallidos` y `bloqueado_hasta` existian en
+    // el esquema pero no las escribia nadie, asi que el login aceptaba
+    // intentos ilimitados.
+    const db = falsoCliente()
+      .responder([usuarioOk({ contrasena_ok: false })]) // buscarPorCorreo
+      .responder([]) // registrarIntentoFallido
+      .responder([{ intentos: 5 }]); // sumarIntentoFallido
+
+    const error = await entrar(db, 'admin@ejemplo.local', 'mala').catch((e: Error) => e);
+    expect(error).toBeInstanceOf(NoAutenticado);
+    expect((error as Error).message).toMatch(/bloqueada por 5 intentos fallidos/);
+
+    const suma = db.consultas.find((c) => c.sql.includes('intentos_fallidos + 1'));
+    expect(suma).toBeDefined();
+    // Y el bloqueo se escribe con fecha, no con un estado: asi se levanta
+    // solo, sin que nadie tenga que ir alevando cuentas.
+    expect(suma?.sql).toContain('bloqueado_hasta');
+  });
+
+  it('avisa que la cuenta esta bloqueada en vez de "contrasena incorrecta"', async () => {
+    // Si la cuenta ya esta bloqueada, el mensaje tiene que decirlo: de lo
+    // contrario la persona que se equivoco cinco veces ve "contrasena
+    // incorrecta" una y otra vez y no entiende que tiene que esperar.
+    const db = falsoCliente()
+      .responder([usuarioOk({ contrasena_ok: false, bloqueado: true })]) // buscarPorCorreo
+      .responder([]); // registrarIntentoFallido
+
+    await expect(entrar(db, 'admin@ejemplo.local', 'mala')).rejects.toThrow(
+      /La cuenta esta bloqueada/,
+    );
+  });
+
+  it('entrar bien limpia el contador de intentos', async () => {
+    const db = preparar([usuarioOk()]);
+    await entrar(db, 'admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');
+
+    const limpieza = db.consultas.find((c) => c.sql.includes('intentos_fallidos = 0'));
+    expect(limpieza).toBeDefined();
   });
 });
 

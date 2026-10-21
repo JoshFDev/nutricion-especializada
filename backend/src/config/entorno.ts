@@ -5,7 +5,20 @@ cargarDotenv();
 
 const esquema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+
+  /**
+   * El modo en el que corre la app. OBLIGATORIO, sin valor por omision.
+   *
+   * Antes el valor por omision era 'development', y eso era un agujero:
+   * `app.ts` monta las rutas de desarrollo (`POST /api/auth/dev/entrar-como`,
+   * que da un token de administrador sin contrasena) cuando NODE_ENV vale
+   * exactamente 'development'. Un despliegue que copiase el .env de
+   * ejemplo sin revisar esa linea se quedaria con esas rutas vivas.
+   *
+   * Ahora, si falta, la app NO ARRANCA y lo dice. Es un fallo ruidoso en
+   * el arranque, mejor que un fallo silencioso en produccion.
+   */
+  NODE_ENV: z.enum(['development', 'test', 'production']),
 
   PGHOST: z.string().min(1),
   PGPORT: z.coerce.number().int().positive().default(5432),

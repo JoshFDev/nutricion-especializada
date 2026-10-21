@@ -111,6 +111,15 @@ export interface CuerpoPago {
   monto: string;
   requiere_factura: boolean;
   referencia: string | null;
+  /**
+   * La cuenta de caja (o de banco) que recibe el dinero.
+   *
+   * Opcional: si no viene, el sistema usa la primera del tipo que
+   * corresponde al metodo. En cuanto hay mas de una, la pantalla la
+   * manda, porque si no el corte de una caja sale mal sin que nadie se
+   * entere de que hubo eleccion.
+   */
+  cuenta_id?: number;
   aplicaciones: { nota_id: number; monto: string }[];
 }
 
@@ -139,11 +148,12 @@ export function cuerpoDePago(
   requiereFactura: boolean,
   referencia: string,
   aplicaciones: AplicacionEditor[],
+  cuentaId?: number,
 ): CuerpoPago {
   const conMonto = aplicaciones.filter((a) => montoNumerico(a.monto) > 0);
   const referenciaLimpia = referencia.trim();
 
-  return {
+  const cuerpo: CuerpoPago = {
     cliente_id: clienteId,
     fecha,
     metodo,
@@ -155,6 +165,15 @@ export function cuerpoDePago(
       monto: decimalComoTexto(a.monto, 2),
     })),
   };
+
+  // La cuenta solo va si se eligio una. Mandarla en `undefined` seria
+  // mandarla como ausente, que es lo mismo, pero asi queda claro que es
+  // opcional de verdad.
+  if (cuentaId !== undefined) {
+    cuerpo.cuenta_id = cuentaId;
+  }
+
+  return cuerpo;
 }
 
 /**

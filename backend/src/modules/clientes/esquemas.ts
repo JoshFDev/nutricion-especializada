@@ -78,7 +78,16 @@ const correoCliente = z
     message: 'El correo no tiene formato valido',
   });
 
-const saldo = z.coerce.number().multipleOf(0.01).min(-9999999).max(9999999).nullish();
+/**
+ * El ajuste manual del saldo.
+ *
+ * `saldo_actual` NO se puede escribir: lo calcula la base (notas menos
+ * abonos, mas el ajuste). Lo que la dueña captura a mano es el AJUSTE:
+ * un delta que se suma al saldo y que NO lo borra el siguiente
+ * movimiento. Antes estas dos cosas eran el mismo campo, y por eso el
+ * ajuste que se hacia a mano se perdia en cuanto se registraba una venta.
+ */
+const saldoAjustado = z.coerce.number().multipleOf(0.01).min(-9999999).max(9999999).nullish();
 
 export const crearClienteEsquema = z.object({
   codigo_cliente: codigoCliente,
@@ -90,7 +99,7 @@ export const crearClienteEsquema = z.object({
   email: correoCliente,
   direccion: textoOpcional(400),
   rfc: rfcCliente,
-  saldo_actual: saldo,
+  saldo_ajustado: saldoAjustado,
 });
 
 /**

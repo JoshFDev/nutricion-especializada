@@ -21,9 +21,23 @@ export async function excelListaProductos(productos: Producto[]): Promise<Buffer
     const __dirname = path.dirname(__filename);
     const logoPath = path.resolve(__dirname, '../../../frontend/src/images/LogoNutricion.png');
     const raw = fs.readFileSync(logoPath);
-    const logoBuf = Buffer.alloc(raw.length);
-    raw.copy(logoBuf);
-    const logoId = libro.addImage({ buffer: raw as any, extension: 'png' });
+    /**
+     * El tipo que pide exceljs para la imagen.
+     *
+     * Se saca del propio metodo (`Parameters<...>`) en vez de escribirlo a
+     * mano, porque exceljs declara en su `.d.ts` un `Buffer` LOCAL que
+     * `extends ArrayBuffer`, y ese no es el `Buffer` de Node: no se puede
+     * asignar el uno al otro sin conversion. El binario es el mismo en los
+     * dos casos, asi que el `unknown` no pierde nada.
+     *
+     * El `any` que habia antes tapaba el choque y de paso apagaba el
+     * chequeo de tipos de todo lo de alrededor.
+     */
+    type LogoBuffer = NonNullable<Parameters<typeof libro.addImage>[0]['buffer']>;
+    const logoId = libro.addImage({
+      buffer: raw as unknown as LogoBuffer,
+      extension: 'png',
+    });
     hoja.addImage(logoId, {
       tl: { col: 1.5, row: 3 },
       ext: { width: 550, height: 200 },

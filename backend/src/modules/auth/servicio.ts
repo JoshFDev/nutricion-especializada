@@ -30,6 +30,18 @@ import { enviarRecuperacionContrasena } from './correo.js';
 
 const MENSAJE_CREDENCIALES = 'Correo o contrasena incorrectos';
 
+/**
+ * Cuantos intentos fallidos se aguantan antes de bloquear la cuenta, y
+ * cuanto tiempo queda bloqueada.
+ *
+ * El bloqueo existe porque las columnas `intentos_fallidos` y
+ * `bloqueado_hasta` estan en el esquema desde el principio y NO las
+ * usaba nadie: el login aceptaba intentos ilimitados, asi que una
+ * contrasena predecible se caia en minutos.
+ */
+const MAX_INTENTOS_FALLIDOS = 5;
+const MINUTOS_BLOQUEO = 15;
+
 export interface ContextoPeticion {
   ip: string | null;
   userAgent: string | null;
@@ -56,8 +68,43 @@ export async function iniciarSesion(
       ip: ctx.ip,
       detalle: usuario ? 'contrasena incorrecta' : 'usuario inexistente',
     });
+
+    /**
+     * La cuenta bloqueada se avisa por separado. Aqui NO se filtra si el
+     * correo existe (eso sigue siendo el mismo mensaje para todos), pero
+     * si la cuenta esta bloqueada hay que decirlo: de lo contrario la
+     * persona que se equivoco cinco veces ve "contrasena incorrecta" una
+     * y otra vez y no entiende que lo que tiene que hacer es esperar.
+     */
+    if (usuario) {
+      if (usuario.bloqueado) {
+        throw new NoAutenticado(
+          `La cuenta esta bloqueada por intentos fallidos. Intenta de nuevo en ` +
+            `${MINUTOS_BLOQUEO} minutos o recupera la contrasena.`,
+        );
+      }
+
+      // El intento cuenta. A partir del quinto la cuenta queda bloqueada
+      // un rato, y hay que avisar de eso en vez del mensaje normal.
+      const intentos = await repo.sumarIntentoFallido(
+        cliente,
+        Number(usuario.id),
+        MAX_INTENTOS_FALLIDOS,
+        MINUTOS_BLOQUEO,
+      );
+      if (intentos >= MAX_INTENTOS_FALLIDOS) {
+        throw new NoAutenticado(
+          `La cuenta quedo bloqueada por ${MAX_INTENTOS_FALLIDOS} intentos fallidos. ` +
+            `Intenta de nuevo en ${MINUTOS_BLOQUEO} minutos o recupera la contrasena.`,
+        );
+      }
+    }
+
     throw new NoAutenticado(MENSAJE_CREDENCIALES);
   }
+
+  // Entro bien: el contador vuelve a cero y el bloqueo se levanta.
+  await repo.limpiarIntentosFallidos(cliente, Number(usuario.id));
 
   const token = generarToken();
 

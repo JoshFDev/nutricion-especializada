@@ -172,6 +172,8 @@ describe('mapearUsuario', () => {
     debe_cambiar_contrasena: true,
     puesto: 'Dueño',
     contrasena_ok: true,
+    intentos_fallidos: 0,
+    bloqueado: false,
     permisos: null,
     roles: null,
   };

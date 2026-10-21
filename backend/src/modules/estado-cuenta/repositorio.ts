@@ -132,6 +132,13 @@ interface AbonoCrudo {
  * porque cada lado trae sus propias columnas (la venta el folio de su nota, el
  * abono su metodo) y el orden de empate no es trivial: primero la venta y luego
  * el abono del mismo dia, que es como se ve en el mostrador.
+ *
+ * DEL ABONO SE MUESTRA SOLO EL QUE SIGUE VIVO. Un abono aplicado a una nota
+ * que se cancelo ya no descuenta nada (la venta se deshizo con ella), asi que
+ * no se lista: la hoja tiene que sumar exactamente lo mismo que resta el
+ * saldo del cliente, y el saldo lo calcula la base con esa misma regla.
+ * Si aqui saliera el abono entero, la suma de la hoja no cuadraria con el
+ * saldo que dice la ultima linea.
  */
 export async function leerMovimientos(
   cliente: PoolClient,
@@ -150,9 +157,17 @@ export async function leerMovimientos(
     ),
     consultar<AbonoCrudo>(
       cliente,
-      `SELECT p.fecha::TEXT AS fecha, p.metodo, p.monto::TEXT AS monto
+      `SELECT p.fecha::TEXT AS fecha,
+              p.metodo,
+              ( COALESCE(SUM(a.monto_aplicado) FILTER (WHERE n.estatus <> 'cancelada'), 0)
+                + (p.monto - COALESCE(SUM(a.monto_aplicado), 0)) )::TEXT AS monto
          FROM pagos p
+         LEFT JOIN pagos_aplicacion a ON a.pago_id = p.id
+         LEFT JOIN notas_remision   n ON n.id = a.nota_id
         WHERE p.cliente_id = $1
+        GROUP BY p.id, p.fecha, p.metodo, p.monto
+       HAVING ( COALESCE(SUM(a.monto_aplicado) FILTER (WHERE n.estatus <> 'cancelada'), 0)
+                + (p.monto - COALESCE(SUM(a.monto_aplicado), 0)) ) <> 0
         ORDER BY p.fecha, p.id`,
       [clienteId],
     ),

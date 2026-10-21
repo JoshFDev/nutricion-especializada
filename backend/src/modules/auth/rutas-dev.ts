@@ -36,7 +36,20 @@ export const rutasAuthDev = Router();
  * no se piden: se leen de la base como en cualquier login.
  */
 rutasAuthDev.post('/entrar-como', async (req, res): Promise<void> => {
-  if (env.NODE_ENV === 'production') {
+  /**
+   * Esta comprobacion es una segunda barrera, no la primera.
+   *
+   * La primera es que `app.ts` NO MONTA este router salvo que NODE_ENV
+   * valga exactamente 'development', asi que en produccion estas rutas
+   * no existen y lo que llega cae en el 404 de `app.ts`.
+   *
+   * Esta de aqui esta para el caso de que alguien monte el router a
+   * mano, o lo monte sin querer en otro sitio: si el entorno no es
+   * desarrollo, la ruta se hace la muerta. Es lo contrario de lo que
+   * hacia antes, que solo se cerraba en 'production' y dejaba vivo
+   * cualquier otro valor.
+   */
+  if (env.NODE_ENV !== 'development') {
     // Mismo cuerpo que el 404 del final de `app.ts`, para que un barrido de
     // la API no distinga "no existe" de "existe pero no la puedes usar".
     throw new NoEncontrado();

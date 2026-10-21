@@ -131,21 +131,46 @@ export class Productos {
     void this.cargarCatalogos();
     void this.recargar();
 
-    // Detectar cambios en el formulario para advertir al salir
-    effect(() => {
+    /**
+     * Detectar cambios en el formulario para advertir al salir.
+     *
+     * El `effect` vuelve a correr cada vez que cambian `editorVisible()`
+     * o `editando()`, o sea, cada vez que se abre o se cierra el editor.
+     * Si aqui se suscribe al `valueChanges` del formulario, cada
+     * corrida deja una suscripcion viva para siempre: el `valueChanges`
+     * de un FormGroup es un Subject que nunca se completa. Abriendo y
+     * cerrando el editor cincuenta veces, quedan cincuenta suscripciones
+     * disparando el mismo signal en cada tecla.
+     *
+     * Por eso la suscucion se guarda y se cancela antes de volver a
+     * hacerse. Y por eso se cancela tambien al destruirse el componente:
+     * `takeUntilDestroyed` se encarga de eso.
+     */
+    effect((onCleanup) => {
       if (this.editorVisible() && this.editando()) {
-        this.forma.valueChanges.subscribe(() => {
+        const suscripcion = this.forma.valueChanges.subscribe(() => {
           this.hayCambiosSinGuardar.set(this.forma.dirty);
         });
+        onCleanup(() => suscripcion.unsubscribe());
       } else {
         this.hayCambiosSinGuardar.set(false);
       }
     });
   }
 
-  toggleEditor(): void {
+  async toggleEditor(): Promise<void> {
     const abrir = !this.editorVisible();
-    if (abrir && this.hayCambiosSinGuardar()) {
+    /**
+     * `abrir` es VERDADERO cuando el editor esta CERRADO (es la negation
+     * de `editorVisible`).
+     *
+     * La condicion va al reves de lo que parece: lo que hay que
+     * impedir es CERRAR con cambios sin guardar, no abrir. Con la
+     * condicion al reves, el boton de abrir se bloqueaba (imposible, no
+     * hay cambios sin guardar con el editor cerrado) y en cambio se
+     * cerraba sin avisar, perdiendo lo capturado.
+     */
+    if (!abrir && this.hayCambiosSinGuardar()) {
       // Si hay cambios sin guardar, no cerrar directamente
       return;
     }
@@ -153,7 +178,7 @@ export class Productos {
     if (abrir) {
       this.nuevo();
     } else {
-      this.cancelar();
+      await this.cancelar();
     }
   }
 
@@ -368,9 +393,27 @@ export class Productos {
     this.editorVisible.set(true);
   }
 
-  cancelar(): void {
+  /**
+   * Cierra el editor.
+   *
+   * Si hay cambios sin guardar, PIDE CONFIRMACION antes de cerrar. Esto
+   * no era un extra: productos era el unico modulo que cerraba sin
+   * preguntar (el comentario decia "se podria agregar confirmacion aqui
+   * si se desea"), y con la condicion de `toggleEditor` al reves se
+   * perdia lo capturado sin avisar.
+   *
+   * Los demas modulos (clientes, proveedores, compras, pagos, caja) ya
+   * lo hacian con `confirmModal()`; aqui se hace igual.
+   */
+  async cancelar(): Promise<void> {
     if (this.hayCambiosSinGuardar()) {
-      // Se podría agregar confirmación aquí si se desea
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Descartar la captura',
+        mensaje: 'Hay cambios sin guardar que se van a perder. ¿Cerrar de todos modos?',
+        textoConfirmar: 'Descartar y cerrar',
+        variante: 'peligro',
+      });
+      if (!confirmado) return;
       this.hayCambiosSinGuardar.set(false);
     }
     this.editando.set(null);
@@ -401,7 +444,7 @@ export class Productos {
       }
       await this.recargar();
       this.hayCambiosSinGuardar.set(false);
-      this.cancelar();
+      await this.cancelar();
     } catch (falla) {
       console.error('[guardar] ERROR:', falla);
       const legible = errorLegible(falla);
@@ -421,7 +464,7 @@ export class Productos {
       this.guardar();
     } else if (event.key === 'Escape') {
       event.preventDefault();
-      this.cancelar();
+      void this.cancelar();
     }
   }
 

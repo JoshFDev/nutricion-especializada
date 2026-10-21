@@ -107,7 +107,7 @@ export async function pagar(cliente: PoolClient, id: number): Promise<Compra> {
     // egreso en la cuenta disponible, para que el saldo y el cierre reflejen
     // el gasto. Sin esto, una compra pagada deja rastro en cartera pero no
     // en caja, igual que pasaba con los cobros de clientes.
-    const cuentas = await cajaRepo.listarCuentas(c, {} as { tipo?: 'efectivo' | 'banco' });
+    const cuentas = await cajaRepo.listarCuentas(c, {});
     const cuenta = cuentas.find((x) => x.tipo === 'efectivo') ?? cuentas[0];
     if (cuenta) {
       const fechaPago = await hoyEnLaBase(c);

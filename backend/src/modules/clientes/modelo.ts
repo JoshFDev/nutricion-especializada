@@ -21,6 +21,7 @@ export interface ClienteFila {
   rfc: string | null;
   razon_social: string | null;
   saldo_actual: string;
+  saldo_ajustado: string;
   creado_en: Date;
   actualizado_en: Date;
 }
@@ -50,6 +51,15 @@ export interface Cliente {
   rfc: string | null;
   razon_social: string | null;
   saldo_actual: number;
+  /**
+   * El ajuste manual del saldo, en el mismo signo que el saldo.
+   *
+   * Va aparte del saldo porque son cosas distintas: `saldo_actual` lo
+   * calcula la base (notas menos abonos, mas este ajuste) y no se puede
+   * escribir; este si se puede, y es lo que la dueña captura cuando
+   * quiere que el cliente deba una cantidad que no viene de sus notas.
+   */
+  saldo_ajustado: number;
   creado_en: string;
   actualizado_en: string;
 }
@@ -91,6 +101,7 @@ export function mapeoCliente(fila: ClienteFila): Cliente {
     rfc: fila.rfc ?? null,
     razon_social: fila.razon_social ?? null,
     saldo_actual: Number(fila.saldo_actual),
+    saldo_ajustado: Number(fila.saldo_ajustado),
     creado_en: fila.creado_en.toISOString(),
     actualizado_en: fila.actualizado_en.toISOString(),
   };

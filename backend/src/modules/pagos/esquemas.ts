@@ -47,6 +47,19 @@ export const crearPagoEsquema = z
     monto: decimal(10, 2, 'monto'),
     requiere_factura: z.boolean().default(false),
     referencia: texto('La referencia', 60).optional().nullable(),
+    /**
+     * La cuenta de caja (o de banco) que recibe el dinero.
+     *
+     * Es OPCIONAL a proposito: si no viene, el pago entra a la primera
+     * cuenta del tipo que corresponde al metodo. Pero en cuanto hay mas
+     * de una, el que cobra tiene que poder decir a cual entra, porque si
+     * no el corte de caja sale mal sin que nadie se entere de que
+     * hubo eleccion: no la hubo.
+     *
+     * El servicio valida que la cuenta exista y que su tipo corresponda
+     * al metodo del pago (efectivo a una caja, transferencia a un banco).
+     */
+    cuenta_id: idPositivo.optional(),
     aplicaciones: z
       .array(aplicacionPagoEsquema)
       .max(50, 'Un pago no se reparte en mas de 50 notas')

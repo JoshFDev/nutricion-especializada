@@ -1,4 +1,5 @@
 import { enviarCorreo } from '../../core/correo.js';
+import { escaparHtml } from '../../core/correo-marca.js';
 import type { Nota } from './modelo.js';
 
 export async function enviarTicketNota(
@@ -30,19 +31,33 @@ ${renglones}
 Total: $${nota.subtotal.toFixed(2)}
 
 Gracias por su preferencia.`;
-  const html = `<p>Hola <strong>${clienteNombre}</strong>,</p>
+
+  /**
+   * Todo lo que va al cuerpo HTML se escapa.
+   *
+   * El nombre del cliente, la direccion de entrega y el nombre del
+   * producto los captura el personal en el mostrador, asi que no hace
+   * falta ser un atacante para que acaben con un `<b>` o con una etiqueta
+   * con un `onerror` dentro. En el visor de correo eso es HTML
+   * arbitrario, y un `<img src="http://...">` confirma la direccion de
+   * correo de quien lo recibe.
+   *
+   * `escaparHtml` ya existia y lo usan los correos de auth y de usuarios;
+   * este se habia quedado atras.
+   */
+  const html = `<p>Hola <strong>${escaparHtml(clienteNombre)}</strong>,</p>
 <p>${esCancelada ? 'Su nota de remisión ha sido cancelada:' : 'Detalle de su nota de remisión:'}</p>
 <ul>
-  <li><strong>Folio:</strong> ${nota.folio}</li>
-  <li><strong>Fecha:</strong> ${nota.fecha}</li>
-  <li><strong>Dirección de entrega:</strong> ${nota.direccion_entrega ?? ''}</li>
+  <li><strong>Folio:</strong> ${escaparHtml(nota.folio)}</li>
+  <li><strong>Fecha:</strong> ${escaparHtml(nota.fecha)}</li>
+  <li><strong>Dirección de entrega:</strong> ${escaparHtml(nota.direccion_entrega ?? '')}</li>
 </ul>
 <p><strong>Renglones:</strong></p>
 <ul>
 ${nota.renglones
   .map(
     (r) =>
-      `<li>${r.producto_nombre}: ${r.cantidad_bultos} bultos, ${r.kg_bulto} kg/bulto, $${r.precio_unit_kg.toFixed(2)}/kg = $${r.subtotal.toFixed(2)}</li>`,
+      `<li>${escaparHtml(r.producto_nombre)}: ${r.cantidad_bultos} bultos, ${r.kg_bulto} kg/bulto, $${r.precio_unit_kg.toFixed(2)}/kg = $${r.subtotal.toFixed(2)}</li>`,
   )
   .join('')}
 </ul>

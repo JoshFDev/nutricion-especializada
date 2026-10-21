@@ -31,6 +31,7 @@ const cliente = (over: Partial<Cliente> = {}): Cliente => ({
   rfc: 'ROJG850101HDF3K9',
   razon_social: null,
   saldo_actual: 15400.5,
+  saldo_ajustado: 0,
   creado_en: '2026-09-01T10:00:00.000Z',
   actualizado_en: '2026-09-01T10:00:00.000Z',
   ...over,

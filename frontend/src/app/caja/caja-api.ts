@@ -368,7 +368,6 @@ export function totalesDeCierre(cuentas: CierreCuenta[]): {
   );
 }
 
-
 // ---------------------------------------------------------------- las llamadas
 
 @Injectable({ providedIn: 'root' })

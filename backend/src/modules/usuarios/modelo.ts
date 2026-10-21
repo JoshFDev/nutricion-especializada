@@ -7,6 +7,7 @@
  */
 
 import { fondoDe, type FondoLogin } from './fondos-login.js';
+import { fechaComoTexto } from '../../core/valores.js';
 
 export interface RolFila {
   id: number;
@@ -118,7 +119,7 @@ export const mapeoUsuario = (fila: UsuarioFila): Usuario => ({
   apellido_materno: fila.apellido_materno,
   rfc: fila.rfc,
   email: fila.email,
-  fecha_contratacion: fila.fecha_contratacion.toISOString(),
+  fecha_contratacion: fechaComoTexto(fila.fecha_contratacion),
   puesto: fila.puesto,
   activo: fila.activo,
   es_dueno: fila.es_dueno,

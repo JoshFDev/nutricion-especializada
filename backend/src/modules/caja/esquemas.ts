@@ -1,13 +1,5 @@
 import { z } from 'zod';
-import {
-  decimal,
-  fecha,
-  idChico,
-  idPositivo,
-  momento,
-  paginacion,
-  texto,
-} from '../../core/valores.js';
+import { decimal, fecha, idChico, idPositivo, paginacion, texto } from '../../core/valores.js';
 
 /**
  * Esquemas de caja y bancos.

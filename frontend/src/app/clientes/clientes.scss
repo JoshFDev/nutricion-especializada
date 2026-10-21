@@ -110,9 +110,23 @@
  * nombre toma lo que sobra y las columnas cortas se quedan con lo justo, en
  * vez de que un nombre de 80 caracteres empuje la de acciones a partirse los
  * botones en dos líneas.
+ *
+ * UNA regla POR COLUMNA, y todas juntas sumar 100%.
+ *
+ * Antes había ocho reglas para nueve columnas: cuando se agregó la de correo
+ * se añadió la columna pero no su ancho, y las reglas quedaron corridas una
+ * posición (la sexta, "Saldo", ya era "Correo"). Peor: las ocho sumaban 106%, y
+ * con `table-layout: fixed` la columna que sobra —la de acciones— se queda sin
+ * ancho y sus botones se recortan con el `overflow: hidden` de la celda. Por
+ * eso no se veían NI "Editar" NI "Eliminar": estaban en la tabla, pero fuera
+ * de la pantalla.
+ *
+ * `min-width` es la red de seguridad: por debajo de este ancho la tabla se
+ * desplaza con la barra del contenedor en vez de estrujar las columnas.
  */
 .tabla {
   table-layout: fixed;
+  min-width: 68rem;
 }
 
 th,
@@ -123,29 +137,65 @@ td {
 }
 
 th:nth-child(1) {
-  width: 10%;
+  width: 8%;
 } /* Código */
 th:nth-child(2) {
-  width: 22%;
+  width: 15%;
 } /* Nombre */
 th:nth-child(3) {
-  width: 13%;
+  width: 9%;
 } /* Especie */
 th:nth-child(4) {
-  width: 15%;
+  width: 12%;
 } /* RFC */
 th:nth-child(5) {
-  width: 13%;
+  width: 10%;
 } /* Teléfono */
 th:nth-child(6) {
   width: 11%;
-} /* Saldo */
+} /* Correo */
 th:nth-child(7) {
-  width: 9%;
-} /* Estatus */
+  width: 8%;
+} /* Saldo */
 th:nth-child(8) {
-  width: 13%;
+  width: 8%;
+} /* Estatus */
+th:nth-child(9) {
+  width: 19%;
 } /* Acciones */
+
+/*
+ * La celda de acciones deja ENVOLVER.
+ *
+ * Aquí van tres botones ("Editar", "Baja"/"Activar" y "Eliminar") y no caben
+ * de sobra en una pantalla angosta. Con la celda de una línea, el tercero se
+ * salía por la derecha y quedaba cortado a media palabra; envolviendo, baja
+ * a la línea de abajo y se sigue viendo completo. Es lo mismo que hace la
+ * celda de acciones de las notas de remisión.
+ */
+.acciones-celda {
+  white-space: normal;
+}
+
+/* El encabezado de la columna de acciones sigue en una línea: el ajuste de
+   arriba es para el CONTENIDO de la celda, que es lo que puede partirse. */
+th.acciones-celda {
+  white-space: nowrap;
+}
+
+.acciones-fila {
+  flex-wrap: wrap;
+}
+
+/*
+ * Los tres botones miden lo mismo, como en productos: "Baja" es más corta que
+ * "Eliminar" y, sin un ancho común, en la fila se veía un botón más chico
+ * entre sus dos vecinos.
+ */
+.acciones-fila button {
+  min-width: 4.25rem;
+  padding-inline: 0.5rem;
+}
 
 /*
  * El RFC son 13 caracteres y ni uno más, así que la columna se dimensiona para

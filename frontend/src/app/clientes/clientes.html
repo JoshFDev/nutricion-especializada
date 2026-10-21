@@ -354,8 +354,8 @@
             <th scope="col">Teléfono</th>
             <th scope="col">Correo</th>
             <th scope="col" class="num">Saldo</th>
-            <th scope="col">Estatus</th>
-            <th scope="col">Acciones</th>
+            <th scope="col" class="centro">Estatus</th>
+            <th scope="col" class="acciones-celda">Acciones</th>
           </tr>
         </thead>
         <tbody [@filasAnimation]="recarga.valor()">
@@ -384,6 +384,26 @@
                       [attr.aria-label]="'Editar ' + cliente.nombre"
                     >
                       Editar
+                    </button>
+                    <!--
+                      Dar de baja y reactivar son las dos caras de lo mismo, y
+                      solo se ofrece la que toca: un cliente activo se da de
+                      baja y uno dado de baja se reactiva. NO es borrar: el
+                      historial (notas, pagos y saldo) se conserva, que es
+                      justo lo que lo diferencia de "Eliminar".
+                    -->
+                    <button
+                      type="button"
+                      class="accion-estado"
+                      (click)="alternaEstatus(cliente)"
+                      [disabled]="cambiandoEstatus() !== null"
+                      [title]="cliente.estatus === 'Activo' ? 'Dar de baja' : 'Reactivar'"
+                      [attr.aria-label]="
+                        (cliente.estatus === 'Activo' ? 'Dar de baja ' : 'Reactivar ') +
+                        cliente.nombre
+                      "
+                    >
+                      {{ cliente.estatus === 'Activo' ? 'Baja' : 'Activar' }}
                     </button>
                   }
                   @if (puedeEliminar()) {

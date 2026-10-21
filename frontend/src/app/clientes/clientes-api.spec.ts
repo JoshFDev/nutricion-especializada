@@ -78,6 +78,51 @@ describe('el cuerpo del cliente', () => {
 });
 
 /**
+ * El cambio de estatus desde la fila ("dar de baja" / "reactivar").
+ *
+ * Se prueba por dos razones concretas: que pegue a `/clientes/:id` con PATCH,
+ * y que mande SOLO el estatus. Mandar la ficha entera sería reescribir datos
+ * que alguien más pudo cambiar, y un cambio de estatus no los necesita.
+ */
+describe('ClientesApi.cambiarEstatus', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    http.verify();
+  });
+
+  it('hace PATCH a /api/clientes/:id con solo el estatus', async () => {
+    const api = TestBed.inject(ClientesApi);
+
+    const promesa = api.cambiarEstatus(7, 'Inactivo');
+    const peticion = http.expectOne(`${API}/clientes/7`);
+    expect(peticion.request.method).toBe('PATCH');
+    expect(peticion.request.body).toEqual({ estatus: 'Inactivo' });
+
+    peticion.flush({});
+    await promesa;
+  });
+
+  it('reactiva mandando el estatus Activo', async () => {
+    const api = TestBed.inject(ClientesApi);
+
+    const promesa = api.cambiarEstatus(7, 'Activo');
+    const peticion = http.expectOne(`${API}/clientes/7`);
+    expect(peticion.request.body).toEqual({ estatus: 'Activo' });
+
+    peticion.flush({});
+    await promesa;
+  });
+});
+
+/**
  * La ruta de exportar.
  *
  * Es lo unico de este servicio que necesita la conexión de verdad simulada, y se

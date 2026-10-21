@@ -165,6 +165,19 @@ export class ClientesApi {
     return firstValueFrom(this.http.patch<Cliente>(`${API}/clientes/${id}`, cuerpo));
   }
 
+  /**
+   * Cambia SOLO el estatus del cliente: lo que hace "dar de baja" y su
+   * contrario, "reactivar".
+   *
+   * El sistema acepta actualizaciones parciales (`PATCH`), así que aquí no se
+   * manda el resto de la ficha. Mandarlo sería reescribir datos que alguien
+   * más pudo cambiar mientras tanto, y un cambio de estatus no los necesita:
+   * de eso se encarga el `UPDATE` con una sola columna.
+   */
+  async cambiarEstatus(id: number, estatus: 'Activo' | 'Inactivo'): Promise<Cliente> {
+    return firstValueFrom(this.http.patch<Cliente>(`${API}/clientes/${id}`, { estatus }));
+  }
+
   /** Borra. 204 si salió. */
   async eliminar(id: number): Promise<void> {
     await firstValueFrom(this.http.delete(`${API}/clientes/${id}`));

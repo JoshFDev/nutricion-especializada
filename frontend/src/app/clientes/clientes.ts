@@ -152,6 +152,16 @@ export class Clientes {
   readonly puedeEliminar = computed(() => this.sesion.puede('clientes.eliminar'));
 
   /**
+   * El id del cliente al que se le está cambiando el estatus desde la fila.
+   *
+   * Es un id y no un simple booleano para poder saber EN QUÉ fila va el
+   * cambio. Mientras hay uno en vuelo, los botones de todas las filas se
+   * apagan: dos cambios de estatus a la vez se pisarían, y el aviso del
+   * segundo ("Cliente reactivado") saldría sobre una lista que ya cambió.
+   */
+  readonly cambiandoEstatus = signal<number | null>(null);
+
+  /**
    * Si el botón de guardar se puede pulsar.
    *
    * Son permisos DISTINTOS: el sistema pide `clientes.crear` al crear y
@@ -524,6 +534,50 @@ export class Clientes {
       this.errorEditor.set(legible.mensaje);
     } finally {
       this.guardando.set(false);
+    }
+  }
+
+  /**
+   * Da de baja o reactiva un cliente desde la fila, sin abrir el editor.
+   *
+   * DAR DE BAJA NO ES BORRAR. Dar de baja deja al cliente de aparecer en las
+   * ventas, pero sus notas, sus pagos y su saldo se conservan: es lo que
+   * hace falta cuando ya no se le vende pero todavía hay que saber qué se le
+   * debe. Por eso son dos botones distintos, y por eso el aviso dice que el
+   * historial se queda.
+   *
+   * Y el contrario también es un botón: un cliente dado de baja por error se
+   * reactiva desde aquí, sin abrir el editor a buscar el campo de estatus.
+   */
+  async alternaEstatus(cliente: Cliente): Promise<void> {
+    // Un cambio a la vez: mientras uno está en vuelo, el resto espera.
+    if (this.cambiandoEstatus() !== null) return;
+
+    const darDeBaja = cliente.estatus === 'Activo';
+    const confirmado = await this.confirmModal().abrir({
+      titulo: darDeBaja ? 'Dar de baja cliente' : 'Reactivar cliente',
+      mensaje: darDeBaja
+        ? `¿Dar de baja a ${cliente.nombre}? Dejará de ofrecerse en las ventas, pero sus notas, sus pagos y su saldo se conservan.`
+        : `¿Reactivar a ${cliente.nombre}? Volverá a ofrecerse en las ventas.`,
+      textoConfirmar: darDeBaja ? 'Dar de baja' : 'Reactivar',
+      variante: darDeBaja ? 'advertencia' : 'normal',
+    });
+    if (!confirmado) return;
+
+    this.cambiandoEstatus.set(cliente.id);
+    this.error.set(null);
+    try {
+      await this.api.cambiarEstatus(cliente.id, darDeBaja ? 'Inactivo' : 'Activo');
+      this.toast.exito(darDeBaja ? 'Cliente dado de baja' : 'Cliente reactivado');
+      // Se recarga la página que se está viendo: si el filtro es "Activos" y
+      // el cliente se acaba de dar de baja, su fila desaparece de la lista.
+      await this.cargarPagina(this.pagina());
+    } catch (falla) {
+      const legible = errorLegible(falla);
+      this.error.set(legible.mensaje);
+      this.toast.error(legible.mensaje);
+    } finally {
+      this.cambiandoEstatus.set(null);
     }
   }
 

@@ -118,6 +118,25 @@ td .tenue {
   animation: velo-entra 0.15s ease-out;
 }
 
+/*
+ * El velo no puede heredar los estilos de botón del sistema: el
+ * `button:hover:not(:disabled)` global le gana por especificidad y al mover
+ * el cursor fuera del cuadro la pantalla entera se ponía azul claro.
+ */
+.velo:hover:not(:disabled),
+.velo:active:not(:disabled) {
+  color: inherit;
+  background: rgb(0 0 0 / 40%);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.velo:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+
 .dialogo {
   position: fixed;
   top: 50%;

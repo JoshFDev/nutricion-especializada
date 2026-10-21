@@ -832,6 +832,18 @@ a:hover .menu-icon,
     background: rgb(0 0 0 / 35%);
   }
 
+  /* El velo es un botón y no puede heredar el hover genérico de los botones
+     del compartido: al mover el cursor por encima se pondría azul claro en
+     vez de oscurecerse, y se vería un brillo raro en la pantalla. */
+  .velo:hover:not(:disabled),
+  .velo:active:not(:disabled) {
+    color: inherit;
+    background: rgb(0 0 0 / 35%);
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+
   .contenido {
     padding: 0.875rem;
   }

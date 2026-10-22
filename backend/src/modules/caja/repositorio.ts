@@ -155,7 +155,11 @@ export async function proveedorExiste(cliente: PoolClient, id: number): Promise<
 
 export async function crearMovimiento(
   cliente: PoolClient,
-  d: CrearMovimiento & { fecha: string; pago_id?: number | null; pago_proveedor_id?: number | null },
+  d: CrearMovimiento & {
+    fecha: string;
+    pago_id?: number | null;
+    pago_proveedor_id?: number | null;
+  },
 ): Promise<number> {
   const f = await consultarUno<{ id: string }>(
     cliente,

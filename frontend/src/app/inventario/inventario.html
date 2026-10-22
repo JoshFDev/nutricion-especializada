@@ -59,6 +59,31 @@
   }
 
   <!--
+    Los avisos de stock negativo.
+
+    La tabla `alertas` de la base la llena el trigger del sistema cada vez
+    que un movimiento deja el stock en negativo, y antes no la leia nadie:
+    el aviso se guardaba y no llegaba a ninguna pantalla. Esto es el
+    HISTORICO; el estado actual se ve en la tabla de abajo, donde el
+    negativo va en rojo y el filtro de "vacios" los saca.
+
+    Solo salen los ultimos: la lista completa vive en el reporte.
+  -->
+  @if (!alertasVacias()) {
+    <div class="alertas">
+      <p class="alertas-titulo">Avisos de stock</p>
+      <ul>
+        @for (alerta of alertas(); track alerta.id) {
+          <li>
+            <span class="alerta-fecha">{{ fechaDeAlerta(alerta) }}</span>
+            <span class="alerta-texto">{{ alerta.descripcion }}</span>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+  <!--
     El editor de ajustes y mermas. No es "nuevo": siempre es de UN renglón que
     ya existe en la tabla, así que no lleva selectores de producto ni de
     almacén. Arriba el formulario, abajo el kardex del producto.

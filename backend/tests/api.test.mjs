@@ -5273,9 +5273,7 @@ revisar(
 );
 revisar(
   'y el cobro recien hecho NO esta entre los que no llegaron a la caja',
-  (conciliacion.cuerpo?.pagos_sin_movimiento ?? []).every(
-    (p) => p.id !== conSobrante.cuerpo?.id,
-  ),
+  (conciliacion.cuerpo?.pagos_sin_movimiento ?? []).every((p) => p.id !== conSobrante.cuerpo?.id),
   JSON.stringify(conciliacion.cuerpo?.pagos_sin_movimiento),
 );
 revisar(

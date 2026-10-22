@@ -8,9 +8,10 @@ import {
 } from '@angular/core';
 import { filasAnimation, Recarga } from '../nucleo/animaciones';
 import { errorLegible } from '../nucleo/api';
-import { bultosComoTexto, decimalComoTexto } from '../nucleo/cifras';
+import { bultosComoTexto, decimalComoTexto, fechaComoTexto } from '../nucleo/cifras';
 import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
+import { ReportesApi, type Alerta } from '../nucleo/reportes-api';
 import { ConfirmModal } from '../productos/confirm-modal';
 import {
   InventarioApi,
@@ -64,6 +65,7 @@ type TipoManual = 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
 })
 export class Inventario {
   private readonly api = inject(InventarioApi);
+  private readonly apiReportes = inject(ReportesApi);
   private readonly sesion = inject(Sesion);
   private readonly toast = inject(ToastService);
   readonly confirmModal = viewChild.required(ConfirmModal);
@@ -115,8 +117,48 @@ export class Inventario {
 
   bultosComoTexto = bultosComoTexto;
 
+  // --------------------------------------------------------------- las alertas
+  /**
+   * Los avisos de stock negativo.
+   *
+   * La tabla `alertas` la llena el trigger de la base cada vez que un
+   * movimiento deja el stock en negativo, y antes no la leia nadie: el
+   * aviso se guardaba y no llegaba a ninguna pantalla. Aqui se ven los
+   * ultimos.
+   *
+   * Esto es el HISTORICO. El estado actual del stock ya se ve en la tabla
+   * de abajo (el filtro de "vacios" muestra lo que esta en cero o en
+   * negativo, y el negativo se pinta en rojo).
+   */
+  readonly alertas = signal<Alerta[]>([]);
+  readonly alertasVacias = signal(true);
+
   constructor() {
     void this.recargar();
+    void this.cargarAlertas();
+  }
+
+  /**
+   * Las alertas recientes.
+   *
+   * Si la peticion falla, la pantalla NO se avisa: las alertas son un
+   * extra, y el inventario tiene que seguir funcionando sin ellas. Lo
+   * unico que pasa es que el panel no sale.
+   */
+  private async cargarAlertas(): Promise<void> {
+    try {
+      const respuesta = await this.apiReportes.alertas({ limite: 5 });
+      this.alertas.set(respuesta.datos);
+      this.alertasVacias.set(respuesta.datos.length === 0);
+    } catch {
+      this.alertas.set([]);
+      this.alertasVacias.set(true);
+    }
+  }
+
+  /** La fecha de la alerta, en el formato que se lee. */
+  fechaDeAlerta(alerta: Alerta): string {
+    return fechaComoTexto(alerta.creado_en);
   }
 
   // ------------------------------------------------------------- el listado

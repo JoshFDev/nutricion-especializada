@@ -30,6 +30,22 @@ export function bultosComoTexto(valor: number): string {
   return numeroComoTexto(valor, 2);
 }
 
+/**
+ * Una fecha ISO, en el formato de los documentos: DD-MM-AAAA.
+ *
+ * La fecha se pasa por el objeto `Date` y se lee en la HORA LOCAL de quien
+ * mira, que es lo que se pregunta ("¿cuándo pasó esto?"). Un `slice(0, 10)`
+ * sobre el texto ISO se quedaria con la fecha en UTC, que en Mexico es un
+ * dia anterior.
+ */
+export function fechaComoTexto(iso: string): string {
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return iso;
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  return `${dia}-${mes}-${fecha.getFullYear()}`;
+}
+
 /** Cantidades de producto: bultos a 2 decimales, kilos a 3. Ver `kg_bulto`. */
 export function kilosComoTexto(valor: number): string {
   return numeroComoTexto(valor, 3);

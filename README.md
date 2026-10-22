@@ -499,6 +499,53 @@ mensaje de "cuenta bloqueada" es distinto del de "contraseña incorrecta"
 porque son cosas distintas: una no se arregla escribiendo la contraseña
 otra vez.
 
+### La cartera y la caja se pueden cruzar
+
+Un cobro se anota en **dos** tablas: en `pagos` (la cartera, lo que el
+cliente debe) y en `movimientos_financieros` (la caja, de dónde salió el
+dinero). Antes no había forma de cruzarlas, y un cobro anotado dos veces
+en la caja se comía el saldo de una cuenta sin que nadie lo notara.
+
+La migración **0024** agrega el vínculo (`movimientos_financieros.pago_id`
+y `.pago_proveedor_id`) y un índice **único** por vínculo: un cobro no
+puede tener dos movimientos de caja. `GET /api/reportes/conciliacion-caja`
+cruza las dos tablas y dice qué no cuadra.
+
+### El historial no se borra, y se dice cuál
+
+- **Un cliente con historial no se borra.** Sus notas, sus pagos, sus
+  facturas, sus precios pactados y sus movimientos de caja se harían
+  pedazos con él. Antes reventaba con un 23503 que el traductor de
+  errores convertía en *"hace referencia a algo que no existe"*: es
+  falso, lo que existe es el historial. Ahora se cuenta y se dice.
+- **Una nota cancelada con un pago tampoco se borra.** Al borrarla, sus
+  aplicaciones de pago se irían con ella (la FK es `ON DELETE CASCADE`)
+  y el pago volvería a ser un abono a cuenta, contando entero en el
+  saldo: borrar la nota **deshacía** la cancelación. El cobro se anula
+  cancelando la nota, y la nota se queda como su respaldo.
+
+### Los roles dejan de ser un dominio cerrado
+
+`roles.nombre` tenía un `CHECK` que solo admitía `'Administrador'`,
+`'Empleada'` y `'Cajera'`, y `fn_es_admin()` buscaba el rol por **nombre**,
+así que un rol nuevo con `es_admin = TRUE` no era administrador.
+
+La migración **0025** suelta el `CHECK` y hace que el **flag** `es_admin`
+sea lo que manda. Los roles siguen siendo tres en la práctica (el seed
+pone tres y no hay pantalla para crear más), pero la base ya no lo
+prohíbe, y agregar un rol es un `INSERT`, como los que hizo el seed.
+
+### Las alertas de stock se ven
+
+`fn_verificar_stock` llena la tabla `alertas` cada vez que un movimiento
+deja el stock en negativo, y **nadie la leía**: crecía sin límite y el
+aviso no llegaba a ninguna pantalla.
+
+Ahora la pantalla de **inventario** muestra los últimos avisos (el
+histórico; el estado actual ya se veía, con el filtro de "vacios" y el
+negativo en rojo), y `GET /api/reportes/alertas` los da todos, con el
+permiso `reportes.ver`.
+
 ### `NODE_ENV` es obligatorio
 
 `NODE_ENV` no tiene valor por omisión: si falta, **la app no arranca** y lo

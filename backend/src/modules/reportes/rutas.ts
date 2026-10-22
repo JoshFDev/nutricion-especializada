@@ -59,3 +59,12 @@ rutasReportes.get(
   validarQuery(reporteAlertasEsquema),
   controlador.alertas,
 );
+
+/**
+ * La conciliacion entre la cartera y la caja.
+ *
+ * Un cobro se anota en dos tablas (la cartera y la caja) y el vinculo entre
+ * las dos permite cruzarlas. Esto dice si hay cobros que no llegaron a la
+ * caja, o que llegaron con otro monto.
+ */
+rutasReportes.get('/conciliacion-caja', requierePermiso('reportes.ver'), controlador.conciliacion);

@@ -283,3 +283,97 @@ export async function listarAlertas(
     offset: q.offset,
   };
 }
+
+// ------------------------------------------------------ conciliacion caja
+/**
+ * Los cobros de la cartera y los movimientos de la caja, uno contra otro.
+ *
+ * Un cobro se anota en DOS tablas: en `pagos` (lo que el cliente debe) y en
+ * `movimientos_financieros` (de donde salio el dinero). La migracion 0024
+ * dejo el vinculo entre las dos (`movimientos_financieros.pago_id`), y esto
+ * es lo que se puede hacer con el.
+ *
+ * Lo que se busca:
+ *
+ *   - `pagos_sin_movimiento`: un cobro que llego a la cartera pero no a la
+ *     caja. Es dinero que se conto y no se registro.
+ *   - `movimientos_con_otro_monto`: el movimiento existe pero no por el
+ *     mismo dinero. Salen cuando alguien corrigio el pago a mano.
+ *   - `pagos_con_dos_movimientos`: dos movimientos para el mismo cobro. El
+ *     indice unico de 0024 lo impide, asi que esto deberia salir siempre en
+ *     cero: esta ahi para que se note si el indice se llegara a quitar.
+ *
+ * Los movimientos que NO vienen de un cobro (renta, flete, nomina) no se
+ * cuentan como faltantes: no son cobros.
+ */
+export async function conciliacionCaja(cliente: PoolClient): Promise<{
+  pagos_sin_movimiento: { id: number; cliente: string | null; monto: number; fecha: string }[];
+  movimientos_con_otro_monto: {
+    pago_id: number;
+    movimiento_id: number;
+    monto_pago: number;
+    monto_movimiento: number;
+  }[];
+  pagos_con_dos_movimientos: { pago_id: number; movimientos: number }[];
+}> {
+  const sinMovimiento = await consultar<{
+    id: string;
+    cliente: string | null;
+    monto: string;
+    fecha: Date | string;
+  }>(
+    cliente,
+    `SELECT p.id, c.nombre AS cliente, p.monto::TEXT AS monto, p.fecha
+       FROM pagos p
+       LEFT JOIN clientes c ON c.id = p.cliente_id
+       LEFT JOIN movimientos_financieros m ON m.pago_id = p.id
+      WHERE m.id IS NULL
+      ORDER BY p.fecha DESC, p.id DESC
+      LIMIT 200`,
+  );
+
+  const otroMonto = await consultar<{
+    pago_id: string;
+    movimiento_id: string;
+    monto_pago: string;
+    monto_movimiento: string;
+  }>(
+    cliente,
+    `SELECT p.id AS pago_id, m.id AS movimiento_id,
+            p.monto::TEXT AS monto_pago, m.monto::TEXT AS monto_movimiento
+       FROM pagos p
+       JOIN movimientos_financieros m ON m.pago_id = p.id
+      WHERE p.monto <> m.monto
+      ORDER BY p.id DESC
+      LIMIT 200`,
+  );
+
+  const dosMovimientos = await consultar<{ pago_id: string; movimientos: string }>(
+    cliente,
+    `SELECT p.id AS pago_id, count(m.id)::TEXT AS movimientos
+       FROM pagos p
+       JOIN movimientos_financieros m ON m.pago_id = p.id
+      GROUP BY p.id
+     HAVING count(m.id) > 1
+      LIMIT 200`,
+  );
+
+  return {
+    pagos_sin_movimiento: sinMovimiento.map((p) => ({
+      id: Number(p.id),
+      cliente: p.cliente,
+      monto: Number(p.monto),
+      fecha: fechaComoTexto(p.fecha),
+    })),
+    movimientos_con_otro_monto: otroMonto.map((m) => ({
+      pago_id: Number(m.pago_id),
+      movimiento_id: Number(m.movimiento_id),
+      monto_pago: Number(m.monto_pago),
+      monto_movimiento: Number(m.monto_movimiento),
+    })),
+    pagos_con_dos_movimientos: dosMovimientos.map((m) => ({
+      pago_id: Number(m.pago_id),
+      movimientos: Number(m.movimientos),
+    })),
+  };
+}

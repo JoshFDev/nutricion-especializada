@@ -242,6 +242,10 @@ const mapear = (f: {
   descripcion: string | null;
   tiene_factura: boolean;
   creado_en: Date;
+  /** El cobro de la cartera que produjo este movimiento, si hubo uno. */
+  pago_id: string | null;
+  /** Y el pago a proveedor, para el otro lado. */
+  pago_proveedor_id: string | null;
 }): Movimiento => ({
   id: Number(f.id),
   cuenta_id: f.cuenta_id,
@@ -258,4 +262,6 @@ const mapear = (f: {
   descripcion: f.descripcion,
   tiene_factura: f.tiene_factura,
   creado_en: f.creado_en.toISOString(),
+  pago_id: f.pago_id === null ? null : Number(f.pago_id),
+  pago_proveedor_id: f.pago_proveedor_id === null ? null : Number(f.pago_proveedor_id),
 });

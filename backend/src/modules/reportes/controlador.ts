@@ -35,4 +35,14 @@ export const controladorReportes = {
   alertas: async (req: Request, res: Response): Promise<void> => {
     res.json(await repo.listarAlertas(req.db, consulta<ReporteAlertas>(req)));
   },
+
+  /**
+   * La conciliacion entre la cartera y la caja.
+   *
+   * No lleva paginacion: son pocas filas (los que NO cuadran) y el
+   * operador los tiene que ver todos de una vez.
+   */
+  conciliacion: async (req: Request, res: Response): Promise<void> => {
+    res.json(await repo.conciliacionCaja(req.db));
+  },
 };

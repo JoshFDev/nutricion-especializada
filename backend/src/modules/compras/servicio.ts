@@ -97,7 +97,7 @@ export async function pagar(cliente: PoolClient, id: number): Promise<Compra> {
       throw new Conflicto('COMPRA_YA_PAGADA', 'Esta compra ya está pagada', { id });
     }
 
-    await repo.insertarPago(c, {
+    const pagoProveedor = await repo.insertarPago(c, {
       proveedor_id: Number(antes.proveedor_id),
       compra_id: id,
       monto,
@@ -122,6 +122,9 @@ export async function pagar(cliente: PoolClient, id: number): Promise<Compra> {
         proveedor_id: Number(antes.proveedor_id),
         descripcion: `Pago compra ${id}`,
         tiene_factura: false,
+        // El vinculo con el pago de la cartera, para poder cruzarlo con el
+        // egreso de la caja (migracion 0024).
+        pago_proveedor_id: pagoProveedor,
       });
     }
 

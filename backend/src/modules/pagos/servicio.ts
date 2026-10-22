@@ -170,6 +170,19 @@ export async function crear(cliente: PoolClient, d: CrearPago): Promise<Pago> {
         proveedor_id: null,
         descripcion: `Pago ${pagoId}`,
         tiene_factura: d.requiere_factura ?? false,
+        /**
+         * El vinculo con el cobro de la cartera.
+         *
+         * El mismo cobro queda anotado en DOS tablas: en `pagos` (lo que
+         * el cliente debe) y en `movimientos_financieros` (de donde salio
+         * el dinero). Sin este vinculo no habia forma de cruzarlos, y un
+         * cobro anotado dos veces en la caja se comia el saldo de una
+         * cuenta sin que nadie lo notara.
+         *
+         * El indice unico de la migracion 0024 hace que un cobro no
+         * pueda tener dos movimientos de caja.
+         */
+        pago_id: pagoId,
       });
     }
 

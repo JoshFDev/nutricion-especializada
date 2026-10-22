@@ -211,12 +211,15 @@ export async function saldoRestante(
 export async function insertarPago(
   cliente: PoolClient,
   d: { proveedor_id: number; compra_id: number; monto: string },
-): Promise<void> {
-  await cliente.query(
+): Promise<number> {
+  const r = await consultarUno<{ id: string }>(
+    cliente,
     `INSERT INTO pagos_proveedor (proveedor_id, compra_id, monto)
-     VALUES ($1, $2, $3)`,
+     VALUES ($1, $2, $3)
+     RETURNING id`,
     [d.proveedor_id, d.compra_id, d.monto],
   );
+  return Number(r?.id);
 }
 
 /**

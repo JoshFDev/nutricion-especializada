@@ -5056,6 +5056,78 @@ revisar(
   JSON.stringify(nota4TrasPagar.cuerpo?.estatus),
 );
 
+// ---------------------------------------------- LA REGRESION DEL VINCULO
+//
+// Un cobro se anota en DOS tablas: en `pagos` (la cartera, lo que el
+// cliente debe) y en `movimientos_financieros` (la caja, de donde salio el
+// dinero). Antes no habia forma de cruzarlos, y un cobro anotado dos veces
+// en la caja se comia el saldo de una cuenta sin que nadie lo notara.
+//
+// La migracion 0024 dejo el vinculo (`movimientos_financieros.pago_id`) y un
+// indice unico que hace imposible el doble asiento.
+const vinculos = await sqlDirecto(
+  `SELECT m.pago_id, m.monto::TEXT AS monto, p.monto::TEXT AS monto_pago
+     FROM pos.movimientos_financieros m
+     JOIN pos.pagos p ON p.id = m.pago_id
+    WHERE p.id = $1`,
+  [conSobrante.cuerpo?.id],
+);
+revisar(
+  'el cobro tiene su movimiento de caja con el vinculo',
+  vinculos.rows.length === 1,
+  JSON.stringify(vinculos.rows),
+);
+revisar(
+  'y el movimiento es por el mismo dinero',
+  vinculos.rows[0]?.monto === vinculos.rows[0]?.monto_pago,
+  JSON.stringify(vinculos.rows[0]),
+);
+
+// Y el doble asiento es IMPOSIBLE, no solo improbable.
+let dobleAsiento = 'NO SE RECHAZO';
+try {
+  await sqlDirecto(
+    `INSERT INTO pos.movimientos_financieros
+        (cuenta_id, fecha, tipo, categoria, cliente_id, monto, descripcion, pago_id)
+     SELECT cuenta_id, CURRENT_DATE, 'ingreso', 'Cobro de nota', cliente_id, monto, 'otro', pago_id
+       FROM pos.movimientos_financieros WHERE pago_id = $1`,
+    [conSobrante.cuerpo?.id],
+  );
+} catch (falla) {
+  dobleAsiento = String(falla.message ?? falla);
+}
+revisar(
+  'y un cobro NO puede tener dos movimientos de caja',
+  dobleAsiento !== 'NO SE RECHAZO',
+  dobleAsiento.slice(0, 120),
+);
+
+// Y la conciliacion los cruza: el cobro recien hecho NO aparece entre los
+// que no llegaron a la caja.
+//
+// OJO: la conciliacion puede encontrar cobros SIN movimiento, y eso no es
+// un fallo: el seed mete un anticipo por SQL (un abono a cuenta que nunca
+// entro a la caja), y ese sale. Lo que no puede salir es un cobro hecho
+// por la API, que siempre lleva su movimiento.
+const conciliacion = await pedir('/api/reportes/conciliacion-caja', tokenAdmin);
+revisar(
+  'la conciliacion responde -> 200',
+  conciliacion.status === 200,
+  JSON.stringify(conciliacion.cuerpo?.error),
+);
+revisar(
+  'y el cobro recien hecho NO esta entre los que no llegaron a la caja',
+  (conciliacion.cuerpo?.pagos_sin_movimiento ?? []).every(
+    (p) => p.id !== conSobrante.cuerpo?.id,
+  ),
+  JSON.stringify(conciliacion.cuerpo?.pagos_sin_movimiento),
+);
+revisar(
+  'y ningun cobro tiene dos movimientos',
+  (conciliacion.cuerpo?.pagos_con_dos_movimientos ?? []).length === 0,
+  JSON.stringify(conciliacion.cuerpo?.pagos_con_dos_movimientos),
+);
+
 // El trigger de la base tambien frena el exceso, no solo el servicio: si
 // esto pasara, un script de psql podria cobrar de mas una nota. Se usa el
 // pago con sobrante (tiene 50 disponibles) contra una nota ya pagada.

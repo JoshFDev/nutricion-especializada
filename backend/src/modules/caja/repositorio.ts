@@ -32,6 +32,7 @@ import type {
 const COLUMNAS_MOVIMIENTO = `
   m.id, m.cuenta_id, m.fecha, m.tipo, m.categoria, m.cliente_id, m.proveedor_id,
   m.monto, m.descripcion, m.tiene_factura, m.creado_en,
+  m.pago_id, m.pago_proveedor_id,
   cf.nombre AS cuenta_nombre, cf.tipo AS cuenta_tipo,
   c.nombre  AS cliente_nombre,
   p.nombre  AS proveedor_nombre
@@ -154,14 +155,14 @@ export async function proveedorExiste(cliente: PoolClient, id: number): Promise<
 
 export async function crearMovimiento(
   cliente: PoolClient,
-  d: CrearMovimiento & { fecha: string },
+  d: CrearMovimiento & { fecha: string; pago_id?: number | null; pago_proveedor_id?: number | null },
 ): Promise<number> {
   const f = await consultarUno<{ id: string }>(
     cliente,
     `INSERT INTO movimientos_financieros
         (cuenta_id, fecha, tipo, categoria, cliente_id, proveedor_id, monto,
-         descripcion, tiene_factura)
-     VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9)
+         descripcion, tiene_factura, pago_id, pago_proveedor_id)
+     VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
       d.cuenta_id,
@@ -173,6 +174,8 @@ export async function crearMovimiento(
       d.monto,
       d.descripcion ?? null,
       d.tiene_factura,
+      d.pago_id ?? null,
+      d.pago_proveedor_id ?? null,
     ],
   );
   return Number(f?.id);

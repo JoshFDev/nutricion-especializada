@@ -31,6 +31,18 @@ export interface FilaMovimiento {
   descripcion: string | null;
   tiene_factura: boolean;
   creado_en: Date;
+  /**
+   * El cobro de la cartera que produjo este movimiento, o NULL si el
+   * movimiento no viene de un cobro (renta, flete, nomina).
+   *
+   * Es el vinculo que permite seguir un cobro de punta a punta: la nota
+   * que cubrio, el pago que la liquido y el movimiento de caja que salio
+   * de ahi. Sin el, los dos asientos del mismo cobro (la cartera y la
+   * caja) no se podian cruzar.
+   */
+  pago_id: string | null;
+  /** Y el pago a proveedor, para el otro lado. */
+  pago_proveedor_id: string | null;
   cuenta_nombre: string;
   cuenta_tipo: TipoCuenta;
   cliente_nombre: string | null;
@@ -62,6 +74,13 @@ export interface Movimiento {
   descripcion: string | null;
   tiene_factura: boolean;
   creado_en: string;
+  /**
+   * El cobro de la cartera que produjo este movimiento, o NULL si el
+   * movimiento no viene de un cobro.
+   */
+  pago_id: number | null;
+  /** Y el pago a proveedor, para el otro lado. */
+  pago_proveedor_id: number | null;
 }
 
 export interface MovimientoListado {

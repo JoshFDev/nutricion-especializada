@@ -282,7 +282,7 @@ export async function contarAdminsActivos(
         AND (u.es_dueno
              OR EXISTS (SELECT 1 FROM usuarios_roles ur
                           JOIN roles r ON r.id = ur.rol_id
-                         WHERE ur.usuario_id = u.id AND r.nombre = 'Administrador'))`,
+                         WHERE ur.usuario_id = u.id AND r.es_admin))`,
     [null, excluirUsuarioId ?? null],
   );
   return rows[0]?.total ?? 0;

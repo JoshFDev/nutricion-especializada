@@ -1258,6 +1258,79 @@ revisar(
   JSON.stringify(cambiarRoles.cuerpo?.roles?.map((r) => r.nombre)),
 );
 
+// ---------------------------------------- LA REGRESION DE LOS ROLES PROPIOS
+//
+// `roles.nombre` tenia un CHECK que solo admitia tres nombres
+// ('Administrador', 'Empleada', 'Cajera'), y `fn_es_admin()` buscaba el rol
+// por NOMBRE, asi que un rol nuevo con `es_admin = TRUE` no era
+// administrador. La migracion 0025 suelta el CHECK y hace que el flag
+// `es_admin` sea lo que manda.
+//
+// Aun no hay pantalla para crear roles (eso es una funcion, no un
+// arreglo), asi que el rol de prueba se crea por SQL, que es como los
+// creo el seed.
+const rolNuevo = await sqlDirecto(
+  `INSERT INTO pos.roles (nombre, descripcion, es_admin) VALUES ('PRUEBA-PUESTO', 'Rol de prueba', false) RETURNING id`,
+);
+const idRolNuevo = rolNuevo.rows[0].id;
+const permisoVerClientes = await sqlDirecto(
+  `SELECT id FROM pos.permisos WHERE codigo = 'clientes.ver'`,
+);
+await sqlDirecto(`INSERT INTO pos.roles_permisos (rol_id, permiso_id) VALUES ($1, $2)`, [
+  idRolNuevo,
+  permisoVerClientes.rows[0].id,
+]);
+
+// El rol nuevo sale en el catalogo que usa el formulario de edicion.
+const catalogoRoles = await pedir('/api/usuarios/roles', tokenAdmin);
+revisar(
+  'el rol nuevo sale en el catalogo de roles',
+  catalogoRoles.status === 200 &&
+    (catalogoRoles.cuerpo ?? []).some((r) => r.nombre === 'PRUEBA-PUESTO'),
+  JSON.stringify(catalogoRoles.cuerpo).slice(0, 200),
+);
+
+// Y se puede asignar a un usuario, y ese usuario tiene sus permisos.
+const asignarRolNuevo = await pedir(`/api/usuarios/${idNuevo}/roles`, tokenAdmin, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ roles: [idRolNuevo] }),
+});
+revisar(
+  'asignar el rol nuevo -> 200',
+  asignarRolNuevo.status === 200,
+  JSON.stringify(asignarRolNuevo.cuerpo).slice(0, 160),
+);
+revisar(
+  'y el usuario queda con el rol nuevo',
+  asignarRolNuevo.cuerpo?.roles?.some((r) => r.nombre === 'PRUEBA-PUESTO'),
+  JSON.stringify(asignarRolNuevo.cuerpo?.roles?.map((r) => r.nombre)),
+);
+
+// Con `es_admin = TRUE` el rol SI es administrador (antes solo contaba el
+// que se llamaba 'Administrador').
+await sqlDirecto(`UPDATE pos.roles SET es_admin = true WHERE id = $1`, [idRolNuevo]);
+await sqlDirecto('BEGIN');
+await sqlDirecto(`SELECT set_config('app.usuario_id', $1, true)`, [String(idNuevo)]);
+const sesionDelNuevo = await sqlDirecto(
+  `SELECT pos.fn_es_admin() AS admin, pos.fn_tiene_permiso('clientes.ver') AS permiso`,
+);
+await sqlDirecto('ROLLBACK');
+await sqlDirecto(`UPDATE pos.roles SET es_admin = false WHERE id = $1`, [idRolNuevo]);
+revisar(
+  'con es_admin = TRUE, el flag manda (y el permiso tambien)',
+  sesionDelNuevo.rows[0]?.admin === true && sesionDelNuevo.rows[0]?.permiso === true,
+  JSON.stringify(sesionDelNuevo.rows[0]),
+);
+
+// Limpieza del rol de prueba.
+await sqlDirecto(`DELETE FROM pos.usuarios_roles WHERE usuario_id = $1 AND rol_id = $2`, [
+  idNuevo,
+  idRolNuevo,
+]);
+await sqlDirecto(`DELETE FROM pos.roles_permisos WHERE rol_id = $1`, [idRolNuevo]);
+await sqlDirecto(`DELETE FROM pos.roles WHERE id = $1`, [idRolNuevo]);
+
 // --- resetear contrasena ---
 const reseteo = await pedir(`/api/usuarios/${idNuevo}/resetear-contrasena`, tokenAdmin, {
   method: 'POST',

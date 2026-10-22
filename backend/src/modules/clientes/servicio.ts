@@ -96,6 +96,36 @@ export async function actualizar(
 }
 
 export async function eliminar(cliente: PoolClient, id: number): Promise<void> {
+  const actual = await repo.obtenerPorId(cliente, id);
+  if (!actual) throw new NoEncontrado(`No existe el cliente ${id}`);
+
+  /**
+   * Un cliente con historial NO se borra.
+   *
+   * El borrado se lleva por delante lo que lo apunta (las notas, los pagos,
+   * las facturas, los precios pactados, los movimientos de caja) y con eso
+   * se lleva tambien la historia del cliente. Por eso la regla de
+   * negocio es "primero se desactiva, luego se elimina": desactivar es
+   * reversible y deja de ofrecerlo en las ventas, sin perder nada.
+   *
+   * Antes esto no se comprobaba y el borrado reventaba con un 23503, que
+   * el traductor de errores convertia en "hace referencia a algo que no
+   * existe". Es falso: lo que existe es el historial, y el mensaje no
+   * decia QUE habia ni cuantos. Ahora se cuenta y se dice.
+   */
+  const usos = await repo.contarUsos(cliente, id);
+  if (usos.length > 0) {
+    const detalle = usos
+      .map((u) => `${u.total} ${u.total === 1 ? u.singular : u.plural}`)
+      .join(' y ');
+    throw new Conflicto(
+      'EN_USO',
+      `No se puede borrar a ${actual.nombre}: tiene ${detalle}. ` +
+        `Márcalo como Inactivo para dejar de ofrecerlo en las ventas sin perder su historial.`,
+      { usos },
+    );
+  }
+
   if (!(await repo.eliminar(cliente, id))) {
     throw new NoEncontrado(`No existe el cliente ${id}`);
   }

@@ -288,15 +288,30 @@ describe('actualizar', () => {
 });
 
 describe('eliminar', () => {
+  /**
+   * El doble de prueba con las respuestas que espera el borrado.
+   *
+   * El servicio ahora hace, en este orden: busca al cliente (para decir
+   * su nombre en el mensaje), cuenta lo que lo apunta (cinco consultas,
+   * una por tipo) y solo entonces borra.
+   */
+  const dobleParaBorrar = () => {
+    const db = falsoCliente();
+    db.responder([FILA]); // obtenerPorId
+    for (let i = 0; i < 5; i++) db.responder([{ total: '0' }]); // contarUsos
+    db.responderConCambios(1); // borrar datos fiscales
+    db.responderConCambios(1); // borrar el cliente
+    return db;
+  };
+
   it('lanza 404 si no habia nada que borrar', async () => {
-    // Dos consultas: primero datos fiscales y despues el cliente.
-    const db = falsoCliente().responderConCambios(0).responderConCambios(0);
+    const db = falsoCliente().responder([]);
 
     await expect(clientes.eliminar(db.cliente, 999)).rejects.toBeInstanceOf(NoEncontrado);
   });
 
   it('no falla si si habia', async () => {
-    const db = falsoCliente().responderConCambios(0).responderConCambios(1);
+    const db = dobleParaBorrar();
 
     await expect(clientes.eliminar(db.cliente, 5)).resolves.toBeUndefined();
   });
@@ -305,11 +320,33 @@ describe('eliminar', () => {
     // La FK de `datos_fiscales_cliente` no trae ON DELETE CASCADE: si el
     // dato fiscal se borrara despues (o no se borrara), un cliente con rfc
     // no se podria eliminar y saldria un 409 de "esta en uso".
-    const db = falsoCliente().responderConCambios(1).responderConCambios(1);
+    const db = dobleParaBorrar();
 
     await clientes.eliminar(db.cliente, 5);
 
-    expect(db.consultas[0]?.sql).toContain('DELETE FROM datos_fiscales_cliente');
-    expect(db.consultas[1]?.sql).toContain('DELETE FROM clientes');
+    const borrados = db.consultas.filter((c) => c.sql.includes('DELETE FROM'));
+    expect(borrados[0]?.sql).toContain('DELETE FROM datos_fiscales_cliente');
+    expect(borrados[1]?.sql).toContain('DELETE FROM clientes');
+  });
+
+  it('NO borra un cliente que tiene historial, y dice cuanto', async () => {
+    // Un cliente con notas y pagos no se borra: sus notas, sus pagos y sus
+    // facturas se harian pedazos con el.
+    const db = falsoCliente();
+    db.responder([FILA]); // obtenerPorId
+    db.responder([{ total: '3' }]); // notas de remision
+    db.responder([{ total: '2' }]); // pagos
+    db.responder([{ total: '0' }]); // facturas
+    db.responder([{ total: '0' }]); // precios pactados
+    db.responder([{ total: '0' }]); // movimientos de caja
+
+    const error = await clientes.eliminar(db.cliente, 5).catch((e: Error) => e);
+
+    expect(error).toBeInstanceOf(Conflicto);
+    expect((error as Error).message).toMatch(/3 notas de remisión/);
+    expect((error as Error).message).toMatch(/2 pagos/);
+    expect((error as Error).message).toMatch(/Inactivo/);
+    // Y no se borra nada.
+    expect(db.consultas.some((c) => c.sql.includes('DELETE FROM'))).toBe(false);
   });
 });

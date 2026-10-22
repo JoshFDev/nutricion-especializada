@@ -459,6 +459,37 @@ export async function eliminar(cliente: PoolClient, id: number): Promise<void> {
       );
     }
 
+    /**
+     * Una nota con un pago aplicado NO se puede borrar.
+     *
+     * El pago es un documento: no se borra ni se corrige (ver
+     * `pagos/rutas.ts`). Lo que lo anula es CANCELAR la nota que cubria,
+     * y la migracion 0022 hace que al cancelarla el pago deje de contar en
+     * el saldo del cliente.
+     *
+     * Si ademas se borrara la nota, sus aplicaciones se irian con ella (la
+     * FK es ON DELETE CASCADE) y el pago se quedaria SIN NADA que lo
+     * respaldara: volveria a ser un abono a cuenta y volveria a contar
+     * entero en el saldo, dejando al cliente con un credito que nadie le
+     * entrego. O sea: borrar la nota DESHACIA la cancelacion.
+     *
+     * Asi que la nota se queda. Es el respaldo del cobro anulado, y el
+     * folio se libera por otra via (la pantalla del talonario).
+     *
+     * El caso normal de esta pantalla es el contrario: una nota capturada
+     * por error, que no tiene pagos y se borra sin problema.
+     */
+    const pagos = await repo.pagosAplicadosA(c, id);
+    if (pagos.length > 0) {
+      throw new Conflicto(
+        'NOTA_CON_PAGO',
+        'Esta nota tiene un pago aplicado y no se puede eliminar. ' +
+          'El pago ya quedo anulado al cancelar la nota, pero la nota hace ' +
+          'falta como respaldo. Si el pago esta mal, se cancela la nota.',
+        { pagos: pagos.map((p) => p.id) },
+      );
+    }
+
     if (!(await repo.eliminarNota(c, id))) {
       throw new NoEncontrado('Esa nota de remision no existe');
     }

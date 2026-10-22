@@ -216,6 +216,55 @@ export async function actualizar(
   ]);
 }
 
+/**
+ * Cuanto lo apunta a este cliente, por tipo de cosa.
+ *
+ * Lo usa el servicio para NO dejar borrar un cliente con historial, y para
+ * decir QUE lo apunta. Sin esto, el borrado revienta con un 23503 que el
+ * traductor de errores vuelve "hace referencia a algo que no existe", que
+ * es falso: lo que existe es el historial del cliente.
+ *
+ * Cada cosa trae su nombre en singular y en plural, porque "nota de
+ * remisión" en plural es "notas de remisión" y no "nota de remisións": la
+ * 's' va en la palabra del medio, no al final.
+ */
+export async function contarUsos(
+  cliente: PoolClient,
+  id: number,
+): Promise<{ singular: string; plural: string; total: number }[]> {
+  const usos: { singular: string; plural: string; total: number }[] = [];
+
+  const agrega = async (singular: string, plural: string, sql: string) => {
+    const r = await consultarUno<{ total: string }>(cliente, sql, [id]);
+    const total = Number(r?.total ?? 0);
+    if (total > 0) usos.push({ singular, plural, total });
+  };
+
+  await agrega(
+    'nota de remisión',
+    'notas de remisión',
+    'SELECT count(*)::TEXT AS total FROM notas_remision WHERE cliente_id = $1',
+  );
+  await agrega('pago', 'pagos', 'SELECT count(*)::TEXT AS total FROM pagos WHERE cliente_id = $1');
+  await agrega(
+    'factura',
+    'facturas',
+    'SELECT count(*)::TEXT AS total FROM facturas WHERE cliente_id = $1',
+  );
+  await agrega(
+    'precio pactado',
+    'precios pactados',
+    'SELECT count(*)::TEXT AS total FROM precios_cliente WHERE cliente_id = $1',
+  );
+  await agrega(
+    'movimiento de caja',
+    'movimientos de caja',
+    'SELECT count(*)::TEXT AS total FROM movimientos_financieros WHERE cliente_id = $1',
+  );
+
+  return usos;
+}
+
 export async function eliminar(cliente: PoolClient, id: number): Promise<boolean> {
   // `datos_fiscales_cliente` referencia a `clientes` SIN ON DELETE CASCADE,
   // asi que sin este DELETE el borrado se caeria con un 23503 en cuanto

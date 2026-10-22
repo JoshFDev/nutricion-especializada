@@ -631,6 +631,66 @@ revisar(
 const borrado = await pedir(`/api/clientes/${id}`, token, { method: 'DELETE' });
 revisar('DELETE borra', borrado.status === 204, JSON.stringify(borrado.cuerpo));
 
+// --------------------------------------- LA REGRESION DEL HISTORIAL DEL CLIENTE
+//
+// Un cliente con historial NO se puede borrar: sus notas, sus pagos, sus
+// facturas, sus precios pactados y sus movimientos de caja se harian
+// pedazos con el.
+//
+// Antes no se comprobaba y el borrado reventaba con un 23503, que el
+// traductor de errores convertia en "hace referencia a algo que NO EXISTE".
+// Es falso: lo que existe es el historial, y el mensaje no decia QUE habia
+// ni cuantos.
+const clienteConHistorial = await pedir('/api/clientes', token, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ codigo_cliente: 'HISTORIAL-1', nombre: 'Cliente con historial' }),
+});
+revisar(
+  'cliente para la regresion del historial -> 201',
+  clienteConHistorial.status === 201,
+  JSON.stringify(clienteConHistorial.cuerpo).slice(0, 120),
+);
+const idConHistorial = clienteConHistorial.cuerpo.id;
+
+// Se le cuelga una nota (por SQL directo: todavia no hay productos con
+// existencias en este punto de la suite).
+const folioHistorial = (
+  await sqlDirecto(`SELECT id FROM pos.folios WHERE estatus = 'disponible' ORDER BY id LIMIT 1`)
+).rows[0].id;
+await sqlDirecto(
+  `INSERT INTO pos.notas_remision (folio_id, cliente_id, subtotal) VALUES ($1, $2, 100)`,
+  [folioHistorial, idConHistorial],
+);
+
+const borrarConHistorial = await pedir(`/api/clientes/${idConHistorial}`, token, {
+  method: 'DELETE',
+});
+revisar(
+  'borrar un cliente CON historial -> 409',
+  borrarConHistorial.status === 409 && borrarConHistorial.cuerpo?.codigo === 'EN_USO',
+  JSON.stringify(borrarConHistorial.cuerpo).slice(0, 200),
+);
+revisar(
+  'y el mensaje dice QUE tiene (cuantas notas)',
+  /nota de remisión/.test(borrarConHistorial.cuerpo?.error ?? ''),
+  borrarConHistorial.cuerpo?.error,
+);
+revisar(
+  'y sugiere marcarlo como Inactivo',
+  /Inactivo/.test(borrarConHistorial.cuerpo?.error ?? ''),
+  borrarConHistorial.cuerpo?.error,
+);
+revisar(
+  'y el cliente sigue ahi',
+  (await pedir(`/api/clientes/${idConHistorial}`, token)).status === 200,
+);
+
+// Limpieza de lo que dejo la regresion.
+await sqlDirecto(`DELETE FROM pos.notas_remision WHERE cliente_id = $1`, [idConHistorial]);
+await sqlDirecto(`DELETE FROM pos.clientes WHERE id = $1`, [idConHistorial]);
+await sqlDirecto(`UPDATE pos.folios SET estatus = 'disponible' WHERE id = $1`, [folioHistorial]);
+
 // ---------------------------------------------------------------- permisos
 // Los roles estan definidos en 0001_init.sql: la Empleada opera el mostrador
 // (puede dar de alta clientes) pero no toca lo sensible. La Cajera solo cobra.
@@ -4381,6 +4441,29 @@ revisar(
   'borrar una nota que no esta cancelada -> 409',
   borrarNota.status === 409 && borrarNota.cuerpo?.codigo === 'NOTA_NO_CANCELADA',
   JSON.stringify(borrarNota.cuerpo),
+);
+
+// Y una nota CANCELADA CON UN PAGO tampoco se puede borrar.
+//
+// Si se borrara, sus aplicaciones de pago se irian con ella (la FK es ON
+// DELETE CASCADE) y el pago se quedaria sin nada que lo respaldara:
+// volveria a ser un abono a cuenta y volveria a contar entero en el saldo
+// del cliente. O sea, borrar la nota DESHACIA la cancelacion, y el
+// cliente se quedaba con un credito que nadie le entrego.
+//
+// La nota se queda: es el respaldo del cobro anulado.
+const borrarConPago = await pedir(`/api/notas-remision/${notaBaseId}`, tokenAdmin, {
+  method: 'DELETE',
+});
+revisar(
+  'borrar una nota cancelada CON PAGO -> 409',
+  borrarConPago.status === 409 && borrarConPago.cuerpo?.codigo === 'NOTA_CON_PAGO',
+  JSON.stringify(borrarConPago.cuerpo),
+);
+revisar(
+  'y el mensaje dice que se cancele la nota',
+  /anulado al cancelar la nota/.test(borrarConPago.cuerpo?.error ?? ''),
+  borrarConPago.cuerpo?.error,
 );
 
 // -------------------------------------------------------------- listado

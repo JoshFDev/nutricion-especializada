@@ -773,6 +773,29 @@ export async function resumenDeTalonarios(cliente: PoolClient): Promise<ResumenT
   }));
 }
 
+/**
+ * Los pagos que estan aplicados a una nota.
+ *
+ * Lo usa el servicio para NO dejar borrar una nota que tiene un pago
+ * encima: al borrarla, sus aplicaciones se irian con ella y el pago se
+ * quedaria sin nada que lo respaldara (volveria a ser un abono a cuenta y
+ * volveria a contar entero en el saldo del cliente).
+ */
+export async function pagosAplicadosA(
+  cliente: PoolClient,
+  notaId: number,
+): Promise<{ id: string; monto: string }[]> {
+  return consultar<{ id: string; monto: string }>(
+    cliente,
+    `SELECT p.id, p.monto::TEXT AS monto
+       FROM pagos p
+       JOIN pagos_aplicacion a ON a.pago_id = p.id
+      WHERE a.nota_id = $1
+      ORDER BY p.id`,
+    [notaId],
+  );
+}
+
 export async function eliminarNota(cliente: PoolClient, id: number): Promise<boolean> {
   const filaNota = await consultarUno<{ folio_id: string }>(
     cliente,

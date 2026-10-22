@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requierePermiso, requiereSesion } from '../../middleware/permisos.js';
 import { validarQuery } from '../../core/validacion.js';
 import {
+  reporteAlertasEsquema,
   reporteConsumoEsquema,
   reporteEstadoCuentaEsquema,
   reporteExistenciaEsquema,
@@ -9,11 +10,11 @@ import {
 import { controladorReportes as controlador } from './controlador.js';
 
 /**
- * Rutas de reportes. Tres GET, todos con el mismo permiso.
+ * Rutas de reportes. Cuatro GET, todos con el mismo permiso.
  *
- * Hay un solo permiso (`reportes.ver`) para las tres y no es un atajo: las
- * tres son de solo lectura y ninguna trae precios, asi que separarlas daria
- * tres permisos que se conceden siempre juntos. La razon larga esta en la
+ * Hay un solo permiso (`reportes.ver`) para las cuatro y no es un atajo: las
+ * cuatro son de solo lectura y ninguna trae precios, asi que separarlas daria
+ * cuatro permisos que se conceden siempre juntos. La razon larga esta en la
  * migracion 0016.
  *
  * Los caminos son `kebab-case` como el resto de la API y son fijos, asi que
@@ -42,4 +43,19 @@ rutasReportes.get(
   requierePermiso('reportes.ver'),
   validarQuery(reporteEstadoCuentaEsquema),
   controlador.estadoCuenta,
+);
+
+/**
+ * Las alertas de la base.
+ *
+ * La tabla `alertas` la llenan los triggers (hoy, el de stock negativo) y
+ * antes no la leia nadie: crecia sin limite y el aviso no llegaba a ninguna
+ * pantalla. El estado actual del stock si se ve en la pantalla de
+ * inventario; esto es el HISTORICO de cuando se quedo sin.
+ */
+rutasReportes.get(
+  '/alertas',
+  requierePermiso('reportes.ver'),
+  validarQuery(reporteAlertasEsquema),
+  controlador.alertas,
 );

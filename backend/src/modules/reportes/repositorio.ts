@@ -1,8 +1,19 @@
 import type { PoolClient } from 'pg';
 import { contar, consultar } from '../../db/transaccion.js';
 import { fechaComoTexto } from '../../core/valores.js';
-import type { ReporteConsumo, ReporteEstadoCuenta, ReporteExistencia } from './esquemas.js';
-import type { Listado, RenglonConsumo, RenglonEstadoCuenta, RenglonExistencia } from './modelo.js';
+import type {
+  ReporteAlertas,
+  ReporteConsumo,
+  ReporteEstadoCuenta,
+  ReporteExistencia,
+} from './esquemas.js';
+import type {
+  Listado,
+  RenglonAlerta,
+  RenglonConsumo,
+  RenglonEstadoCuenta,
+  RenglonExistencia,
+} from './modelo.js';
 
 /**
  * SQL de los tres reportes.
@@ -203,6 +214,69 @@ export async function listarEstadoCuenta(
       // negativo, y el null se conserva tal cual.
       ultima_venta: f.ultima_venta === null ? null : fechaComoTexto(f.ultima_venta),
       ultimo_pago: f.ultimo_pago === null ? null : fechaComoTexto(f.ultimo_pago),
+    })),
+    total,
+    limite: q.limite,
+    offset: q.offset,
+  };
+}
+
+// --------------------------------------------------------------- alertas
+/**
+ * Las alertas de la base, de la mas nueva a la mas vieja.
+ *
+ * A diferencia de los otros tres reportes, este NO lee de una vista: la
+ * tabla `alertas` se llena desde un trigger y no tiene vista. Se filtra por
+ * tipo y por si ya se atendio, y se pagina.
+ */
+export async function listarAlertas(
+  cliente: PoolClient,
+  q: ReporteAlertas,
+): Promise<Listado<RenglonAlerta>> {
+  const valores: unknown[] = [];
+  const condiciones: string[] = [];
+
+  if (q.tipo !== undefined) {
+    valores.push(q.tipo);
+    condiciones.push(`tipo = $${valores.length}`);
+  }
+  if (q.atendida) {
+    condiciones.push('atendida');
+  }
+
+  const total = await contar(
+    cliente,
+    `SELECT count(*)::TEXT AS total FROM alertas ${donde(condiciones)}`,
+    valores,
+  );
+
+  const filas = await consultar<{
+    id: string;
+    tipo: string;
+    descripcion: string;
+    tabla_origen: string | null;
+    registro_id: string | null;
+    atendida: boolean;
+    creado_en: Date;
+  }>(
+    cliente,
+    `SELECT id, tipo, descripcion, tabla_origen, registro_id, atendida, creado_en
+       FROM alertas
+       ${donde(condiciones)}
+      ORDER BY creado_en DESC, id DESC
+      ${pagina(valores)}`,
+    paginacion(valores, q),
+  );
+
+  return {
+    datos: filas.map((f) => ({
+      id: Number(f.id),
+      tipo: f.tipo,
+      descripcion: f.descripcion,
+      tabla_origen: f.tabla_origen,
+      registro_id: f.registro_id === null ? null : Number(f.registro_id),
+      atendida: f.atendida,
+      creado_en: f.creado_en.toISOString(),
     })),
     total,
     limite: q.limite,

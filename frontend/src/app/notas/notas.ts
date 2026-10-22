@@ -1156,11 +1156,13 @@ export class Notas {
   async borrarDireccion(id: number): Promise<void> {
     const borrada = this.direcciones().find((otra) => otra.id === id);
     if (borrada === undefined) return;
-    if (
-      !confirmar(`¿Borrar "${borrada.nombre}" del catalogo? Las notas que ya la traen no cambian.`)
-    ) {
-      return;
-    }
+    const confirmado = await this.confirmModal().abrir({
+      titulo: 'Borrar el destino',
+      mensaje: `¿Borrar "${borrada.nombre}" del catálogo? Las notas que ya la traen no cambian.`,
+      textoConfirmar: 'Borrar',
+      variante: 'peligro',
+    });
+    if (!confirmado) return;
 
     this.errorDireccion.set(null);
     try {
@@ -1352,12 +1354,24 @@ export class Notas {
    */
   async devolver(nota: NotaListada): Promise<void> {
     this.cerrarCancelacion();
-    if (this.hayLineas() && !confirmar('Se borra la nota que llevas capturando.')) return;
-    if (
-      this.editando() !== null &&
-      !confirmar(`Se abandona la corrección de ${this.editando()?.folio}.`)
-    )
-      return;
+    if (this.hayLineas()) {
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Empezar una devolución',
+        mensaje: 'Se borra la nota que llevas capturando.',
+        textoConfirmar: 'Seguir con la devolución',
+        variante: 'advertencia',
+      });
+      if (!confirmado) return;
+    }
+    if (this.editando() !== null) {
+      const confirmado = await this.confirmModal().abrir({
+        titulo: 'Empezar una devolución',
+        mensaje: `Se abandona la corrección de ${this.editando()?.folio}.`,
+        textoConfirmar: 'Seguir con la devolución',
+        variante: 'advertencia',
+      });
+      if (!confirmado) return;
+    }
 
     this.error.set(null);
     try {
@@ -1743,15 +1757,4 @@ export class Notas {
     if (estatus === 'pagada') return 'Pagada';
     return 'Cancelada';
   }
-}
-
-/**
- * La ventana de confirmación para las cosas que se pierden sin avisar.
- *
- * Va en una función aparte y no suelta en la pantalla para que se pueda ver de
- * un vistazo que son las únicas preguntas que hace la aplicación, y para que si
- * algún día se cambia a una ventana propia se cambie en un solo lugar.
- */
-function confirmar(pregunta: string): boolean {
-  return window.confirm(pregunta);
 }

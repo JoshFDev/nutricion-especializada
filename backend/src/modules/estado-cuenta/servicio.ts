@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { NoEncontrado } from '../../core/errores.js';
+import { hoyEnLaBase } from '../../db/transaccion.js';
 import { componerFolio } from '../notas-remision/modelo.js';
 import * as excel from './excel.js';
 import * as excelGeneral from './excel-general.js';
@@ -163,6 +164,35 @@ export async function listar(
 }
 
 /**
+ * El primer dia del rango, en 'AAAA-MM-DD'.
+ *
+ * La fecha viene de la base (el 'hoy' de Postgres) y se arma con sus
+ * partes, sin pasar por `toISOString()`: ese metodo convierte a UTC, y en un
+ * huso negativo (Mexico, UTC-6) un dia local se convierte al dia ANTERIOR.
+ * Es el mismo corrimiento que arregla `fechaComoTexto` en el resto del
+ * proyecto, y por eso la fecha se arma a mano y no con el metodo.
+ */
+function inicioDelRango(hoy: string, rango: 'semana' | 'mes'): string {
+  const partes = hoy.split('-').map(Number);
+  // `hoy` viene de la base como 'AAAA-MM-DD'. Si viniera vacia (que no
+  // deberia), el rango se cae al dia 1 del mes en vez de inventar una fecha.
+  const anio = partes[0] ?? 1970;
+  const mes = partes[1] ?? 1;
+  const dia = partes[2] ?? 1;
+
+  if (rango === 'mes') {
+    return `${anio}-${String(mes).padStart(2, '0')}-01`;
+  }
+
+  // La semana empieza en domingo, como en el calendario del mostrador.
+  const diaDeSemana = new Date(anio, mes - 1, dia).getDay();
+  const inicio = new Date(anio, mes - 1, dia - diaDeSemana);
+  return `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}-${String(
+    inicio.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+/**
  * La hoja de estado de cuenta de UN cliente, lista para el navegador.
  *
  * El nombre del archivo NO lleva el nombre del cliente: queda colgando en la
@@ -181,15 +211,22 @@ export async function hoja(
   }
 
   let { ventas, abonos } = await repo.leerMovimientos(cliente, clienteId);
-  const hoy = new Date();
+  /**
+   * El "hoy" es el de la BASE, no el del servidor.
+   *
+   * El rango "semana" y "mes" decide que dias entran en la hoja, asi que si
+   * el reloj del servidor y el de Postgres no coinciden (que es lo normal:
+   * el servidor de la app y el de la base no tienen por que estar en la
+   * misma zona, ni tener la misma hora), la hoja incluye o excluye un dia
+   * distinto del que define la base, y sus totales no cuadran con el
+   * `saldo_actual` que dice la ultima linea.
+   *
+   * Los otros siete modulos usan `hoyEnLaBase()` por esto mismo.
+   */
+  const hoy = await hoyEnLaBase(cliente);
   let desdeIso: string | null = null;
-  if (rango === 'semana') {
-    const dia = hoy.getDay();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - dia);
-    desdeIso = inicio.toISOString().split('T')[0]!;
-  } else if (rango === 'mes') {
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    desdeIso = inicio.toISOString().split('T')[0]!;
+  if (rango === 'semana' || rango === 'mes') {
+    desdeIso = inicioDelRango(hoy, rango);
   } else if (rango === 'personalizado' && opts?.fecha_inicio) {
     desdeIso = opts.fecha_inicio;
   }
@@ -249,7 +286,10 @@ export async function hoja(
   };
 
   const { bytes, renglonesFuera } = await excel.excelEstadoCuenta(cuenta);
-  const hoyArchivo = new Date().toISOString().split('T')[0];
+  // El nombre del archivo lleva el dia de la BASE, por lo mismo que el
+  // rango: si el servidor va un dia adelante, el archivo se guarda con
+  // el dia de mañana.
+  const hoyArchivo = await hoyEnLaBase(cliente);
   return {
     bytes,
     nombreArchivo: `estado-cuenta-cliente-${nuevo.cliente_id}-${hoyArchivo}.xlsx`,
@@ -268,7 +308,7 @@ export async function general(
   }));
   const { bytes, renglonesFuera, escritos } =
     await excelGeneral.excelEstadoCuentaGeneral(renglones);
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = await hoyEnLaBase(cliente);
   return {
     bytes,
     nombreArchivo: `estado-cuenta-general-${hoy}.xlsx`,

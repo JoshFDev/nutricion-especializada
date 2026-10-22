@@ -29,6 +29,15 @@ export const routes: Routes = [
   },
   {
     path: 'sin-conexion',
+    // SIN GUARDA, y a proposito.
+    //
+    // Esta pantalla existe para cuando el sistema NO responde. Si tuviera
+    // `guardaSesion`, la guarda intentaria preguntar `/auth/yo`, fallaria
+    // (por eso estamos aqui) y volveria a mandar a `/sin-conexion`: un
+    // bucle que se come la CPU y deja la pagina en blanco.
+    //
+    // Que se pueda ver sin sesion no importa: lo que muestra es un aviso de
+    // que no hay conexion y un boton de reintentar. No hay datos.
     loadComponent: () => import('./shell/sin-conexion').then((m) => m.SinConexion),
   },
 

@@ -53,6 +53,24 @@ export const reporteEstadoCuentaEsquema = z
   })
   .strict();
 
+/**
+ * Las alertas de la base (stock negativo, avisos del sistema).
+ *
+ * La tabla `alertas` la lleno el trigger `fn_verificar_stock` cada vez que
+ * un movimiento deja el stock en negativo. Antes no la leia nadie: la tabla
+ * crecia sin limite y el aviso no llegaba a ninguna pantalla. El estado
+ * ACTUAL del stock si se ve (la pantalla de inventario tiene el filtro
+ * `vacios`), asi que lo que faltaba era el historico.
+ */
+export const reporteAlertasEsquema = z
+  .object({
+    tipo: texto('El tipo', 40).optional(),
+    atendida: bandera,
+    ...paginacion,
+  })
+  .strict();
+
 export type ReporteExistencia = z.infer<typeof reporteExistenciaEsquema>;
 export type ReporteConsumo = z.infer<typeof reporteConsumoEsquema>;
 export type ReporteEstadoCuenta = z.infer<typeof reporteEstadoCuentaEsquema>;
+export type ReporteAlertas = z.infer<typeof reporteAlertasEsquema>;

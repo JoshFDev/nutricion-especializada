@@ -18,6 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verificar": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "verificar:todo": "pnpm verificar && pnpm test:api && pnpm test:sql",
     "test": "vitest run",
     "test:watch": "vitest",
     "migrar": "tsx scripts/migrar.ts",

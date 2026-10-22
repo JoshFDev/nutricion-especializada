@@ -1,7 +1,12 @@
 import type { Request, Response } from 'express';
 import { consulta } from '../../core/validacion.js';
 import * as repo from './repositorio.js';
-import type { ReporteConsumo, ReporteEstadoCuenta, ReporteExistencia } from './esquemas.js';
+import type {
+  ReporteAlertas,
+  ReporteConsumo,
+  ReporteEstadoCuenta,
+  ReporteExistencia,
+} from './esquemas.js';
 
 /**
  * El controlador de reportes, de solo lectura.
@@ -25,5 +30,9 @@ export const controladorReportes = {
 
   estadoCuenta: async (req: Request, res: Response): Promise<void> => {
     res.json(await repo.listarEstadoCuenta(req.db, consulta<ReporteEstadoCuenta>(req)));
+  },
+
+  alertas: async (req: Request, res: Response): Promise<void> => {
+    res.json(await repo.listarAlertas(req.db, consulta<ReporteAlertas>(req)));
   },
 };

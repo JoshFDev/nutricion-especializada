@@ -57,3 +57,19 @@ export interface RenglonEstadoCuenta {
   /** La fecha de su ultimo pago, o NULL si nunca ha abonado. */
   ultimo_pago: string | null;
 }
+
+/**
+ * Una fila de `alertas`: el aviso que dejo un trigger.
+ *
+ * Hoy la llena `fn_verificar_stock` cuando un movimiento deja el stock en
+ * negativo.
+ */
+export interface RenglonAlerta {
+  id: number;
+  tipo: string;
+  descripcion: string;
+  tabla_origen: string | null;
+  registro_id: number | null;
+  atendida: boolean;
+  creado_en: string;
+}

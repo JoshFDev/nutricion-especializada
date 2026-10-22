@@ -157,6 +157,13 @@ cd backend
 pnpm verificar      # formato, lint, tipos y pruebas unitarias
 ```
 
+`pnpm verificar` **no** corre las pruebas de integración: necesitan la API
+corriendo. Para correr todo:
+
+```bash
+pnpm verificar:todo   # verificar + integración + las suites en SQL
+```
+
 Las pruebas de integración necesitan la API corriendo **contra una base de
 pruebas**, nunca contra la real: la suite cambia contraseñas y borra
 registros, y por eso lee `/api/salud` antes de tocar nada y se sale si la
@@ -185,6 +192,23 @@ La suite es reejecutable: limpia al empezar y al terminar, y usa una marca de
 agua por corrida en las tablas de auditoría para borrar solo lo que ella
 misma escribió, sin tocar los rastros del seed. Por eso se puede correr las
 veces que haga falta sin dejar basura detrás.
+
+### Las pruebas en SQL (`db/tests/`)
+
+Hay dos suites en SQL (`test_bugs.sql` y `test_auditoria.sql`, 69
+comprobaciones) que prueban la base sin pasar por la API. Se corren con:
+
+```bash
+pnpm test:sql
+```
+
+El script **crea una base de descarte** (`nutr_test_sql`), aplica **todas**
+las migraciones y el seed, y corre las dos suites. A propósito:
+
+- La base es de descarte porque el script **borra** la base que crea. Se
+  niega a correr si le piden la base de desarrollo (la de `backend/.env`).
+- Aplica todas las migraciones, no solo `0001_init.sql`: si corre contra un
+  esquema atrasado, las pruebas están probando otra base.
 
 ## Caja, facturación y auditoría
 
@@ -487,21 +511,38 @@ quedaba con esas rutas vivas.
 ### Cómo la base de datos sabe quién está operando
 
 `current_user` devuelve el rol de Postgres, que es el mismo para todos,
-así que no sirve para saber qué persona hizo un cambio. Por eso el
-backend anuncia el usuario al abrir cada transacción:
+así que no sirve para saber qué persona hizo un cambio. Por eso el backend
+anuncia el usuario en la conexión, antes de abrir la transacción:
 
 ```sql
-BEGIN;
-SELECT fn_iniciar_sesion(1, '192.168.1.20');   -- id del usuario + IP
+SELECT set_config('app.usuario_id', '1', false);   -- id del usuario
 UPDATE clientes SET nombre = '...' WHERE id = 5;
-COMMIT;
 ```
 
-`fn_iniciar_sesion` usa `set_config(..., TRUE)`, o sea **LOCAL**: el
-valor se borra al cerrar la transacción y no se filtra a la petición
-siguiente. A partir de ahí, `fn_usuario_actual()` lo devuelven todos los
-triggers de auditoría. Si no se llama, los triggers graban
+A partir de ahí, `fn_usuario_actual()` lo devuelven todos los triggers de
+auditoría y de permisos. Si no se anuncia, los triggers graban
 `usuario_id = NULL` (se ve como `(sistema)` en las vistas).
+
+El `false` del `set_config` es **scope de sesión**: el valor dura en la
+conexión hasta que se devuelve al pool, y por eso hay que limpiarlo antes
+(`backend/src/middleware/sesion.ts` lo hace). Con scope de transacción
+(`true`) el valor se perdería al terminar la sentencia, que es exactamente
+lo que le pasa a `fn_iniciar_sesion`:
+
+```sql
+-- OJO: esto NO es lo que hace el backend.
+BEGIN;
+SELECT fn_iniciar_sesion(1, '192.168.1.20');
+UPDATE clientes SET nombre = '...' WHERE id = 5;
+COMMIT;   -- <-- aqui el valor desaparece
+```
+
+`fn_iniciar_sesion` (0001) usa `set_config(..., TRUE)`: el valor vive solo
+dentro de la transacción. Si alguien la usa como si fuera el mecanismo
+oficial, y la llamada queda **fuera** de la transacción que hace el
+cambio, el `UPDATE` de la derecha corre sin identidad y **pasa sin
+autorizar**: los triggers de permiso ven "usuario NULL" y dejan escribir.
+El backend no la usa por eso; usa `set_config(..., false)`.
 
 > **Limitación conocida:** un usuario con acceso a la base de datos
 > podría hacer `SET app.usuario_id` y suplantar a otro. Para cerrarlo

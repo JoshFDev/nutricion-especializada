@@ -102,13 +102,25 @@ export function decimalComoTexto(valor: number | string, decimales: number): str
  * el documento dice 1,00, el operador deja de fiarse de la pantalla, y con
  * razón.
  *
- * Elige Math.round y no una suma de epsilon a propósito. Sobre el número
- * binario el empate exacto (.5) no existe casi nunca, así que sumar 0.0000001
- * «para arreglarlo» sería mover dinero en la mayoría de los casos y movería de
- * verdad los casos que están cerca del redondeo. La vista previa es una vista
- * previa; el monto que vale es el del sistema.
+ * EL EMPATE EXACTO. `Math.round` redondea la mitad hacia arriba, como el
+ * NUMERIC de Postgres, pero sobre el número BINARIO: 2.675 no es exactamente
+ * 2.675 en la memoria del navegador, es 2.67499999999999982..., y
+ * `Math.round(2.675 * 100)` da 267 (2.67) donde la base da 268 (2.68).
+ *
+ * Por eso los centavos se pasan primero por `toPrecision(15)`: quita el
+ * ruido binario y deja el decimal que la persona escribio. 2.675 -> 267.5 ->
+ * 268. Y NO es un epsilon: no suma nada al numero, solo lo limpia. Lo que
+ * se decide sigue siendo el decimal, no un numero inflado.
+ *
+ * El caso de un numero que de verdad esta a 0.00000000000001 del empate
+ * sigue siendo indeterminate, como en cualquier lado; la diferencia es que
+ * ese numero no es representable en dinero.
+ *
+ * Y aunque la vista previa y el documento no coincidan en un caso raro, el
+ * monto que vale es el del sistema: aqui solo se prepara lo que se ve.
  */
 export function redondearMonto(valor: number): number {
   if (!Number.isFinite(valor)) return 0;
-  return Math.round(valor * 100) / 100;
+  const centimos = Math.round(Number((valor * 100).toPrecision(15)));
+  return centimos / 100;
 }

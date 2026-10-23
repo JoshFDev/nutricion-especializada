@@ -38,10 +38,15 @@ for (const archivo of ['package.json', 'pnpm-lock.yaml']) {
 }
 
 console.log('[recursos] Instalando dependencias de produccion...');
-execSync('pnpm install --prod --frozen-lockfile --ignore-scripts', {
-  cwd: destino,
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-});
+try {
+  execSync('pnpm install --prod --no-frozen-lockfile --ignore-scripts', {
+    cwd: destino,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+} catch (error) {
+  console.error('[recursos] Fallo instalando dependencias de produccion');
+  throw error;
+}
 
 console.log('[recursos] Backend de produccion listo');

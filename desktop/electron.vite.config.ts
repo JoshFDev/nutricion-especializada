@@ -35,12 +35,11 @@ export default defineConfig({
     },
   },
   renderer: {
-    root: resolve(aqui, 'src/renderer'),
     build: {
-      outDir: resolve(aqui, 'out/renderer'),
+      outDir: resolve(aqui, 'dist-electron/renderer'),
       emptyOutDir: true,
       rollupOptions: {
-        input: resolve(aqui, 'src/renderer/index.html'),
+        input: {},
       },
     },
   },

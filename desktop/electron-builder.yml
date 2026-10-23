@@ -37,6 +37,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
 artifactName: "NutricionEspecializada-Setup-${version}.${ext}"
+electronVersion: "39.8.10"
 publish:
   provider: github
   releaseType: release

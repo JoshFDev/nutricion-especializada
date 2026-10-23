@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_ENV=development electron-vite dev",
-    "compilar": "electron-vite build",
+    "compilar": "tsc -p tsconfig.json",
     "recursos": "node scripts/preparar-backend.mjs",
     "empaquetar": "electron-builder",
     "build": "pnpm build:backend && pnpm build:frontend && pnpm compilar && pnpm recursos && pnpm empaquetar",
@@ -26,7 +26,7 @@
     "@types/node": "^24.10.1",
     "@types/pg": "^8.23.1",
     "cross-env": "^10.1.0",
-    "electron": "^39.2.6",
+    "electron": "39.8.10",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.1",
     "typescript": "^5.9.3"

@@ -2,6 +2,9 @@ import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import { env, origenesCORS } from './config/entorno.js';
 import { prepararSesion } from './middleware/sesion.js';
 import { manejadorErrores } from './middleware/errores.js';
@@ -130,10 +133,38 @@ export function crearApp(): Express {
     app.use('/api/auth/dev', rutasAuthDev);
   }
 
-  // 9. Cualquier otra ruta de /api no existe
-  app.use('/api', (_req, _res, next) => {
-    next(new NoEncontrado('Ese endpoint no existe'));
-  });
+  // 9. Servir frontend estático en producción/escritorio
+  if (env.NODE_ENV === 'production') {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const rutasFrontend = [
+      path.resolve(__dirname, '..', '..', 'frontend', 'dist', 'frontend', 'browser'),
+      path.resolve(__dirname, '..', '..', 'frontend', 'dist', 'frontend'),
+      path.resolve(process.cwd(), '..', 'frontend', 'dist', 'frontend', 'browser'),
+      path.resolve(process.cwd(), '..', 'frontend', 'dist', 'frontend'),
+    ];
+
+    const staticPath = rutasFrontend.find((ruta) => existsSync(ruta));
+    if (staticPath) {
+      app.use(express.static(staticPath));
+      app.get(/^(?!\/api).*/, (_req, res) => {
+        res.sendFile(path.join(staticPath, 'index.html'));
+      });
+      app.use('/api', (_req, _res, next) => {
+        next(new NoEncontrado('Ese endpoint no existe'));
+      });
+    } else {
+      console.warn('No se encontró el build del frontend. Solo se servirá la API.');
+      app.use('/api', (_req, _res, next) => {
+        next(new NoEncontrado('Ese endpoint no existe'));
+      });
+    }
+  } else {
+    // 9. Cualquier otra ruta de /api no existe
+    app.use('/api', (_req, _res, next) => {
+      next(new NoEncontrado('Ese endpoint no existe'));
+    });
+  }
 
   // 10. Manejador de errores. Siempre el ultimo: Express lo reconoce
   //     por tener 4 argumentos, y todo lo que se registre despues ya

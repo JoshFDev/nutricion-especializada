@@ -1,0 +1,42 @@
+appId: com.nutricionespecializada.pos
+productName: Nutricion Especializada
+directories:
+  output: release
+  buildResources: resources
+
+# El proceso principal y el preload. Las dependencias de produccion de
+# desktop/ (electron-updater, embedded-postgres, pg) las agrega
+# electron-builder automaticamente desde package.json.
+files:
+  - dist-electron/**
+  - package.json
+
+# Backend, frontend y migraciones viajan fuera del asar para que el backend
+# pueda leerlos con rutas normales del sistema de archivos.
+extraResources:
+  - from: backend-produccion
+    to: backend
+  - from: ../frontend/dist/frontend
+    to: frontend/dist/frontend
+  - from: ../db/migrations
+    to: db/migrations
+
+asar: true
+asarUnpack:
+  - "**/node_modules/embedded-postgres/**"
+  - "**/node_modules/@embedded-postgres/**"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+artifactName: "NutricionEspecializada-Setup-${version}.${ext}"
+publish:
+  provider: github
+  releaseType: release

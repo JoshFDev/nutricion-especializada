@@ -59,14 +59,27 @@ export async function iniciarSesion(
    * mal". Si se distinguen, el endpoint sirve para averiguar que correos
    * estan registrados en el sistema.
    */
-  const credencialesOk = usuario !== null && usuario.contrasena_ok && usuario.activo;
+  /**
+   * `!usuario.bloqueado` es parte de la condicion, no un chequeo posterior.
+   *
+   * Sin esto, una cuenta bloqueada dejaba entrar a quien acertara la
+   * contrasena: el bloqueo solo detenia los intentos EQUIVOCADOS, y el
+   * primer intento correcto despues del bloqueo abria sesion. La cuenta
+   * queda bloqueada para todos hasta que venza el plazo.
+   */
+  const credencialesOk =
+    usuario !== null && usuario.contrasena_ok && usuario.activo && !usuario.bloqueado;
 
   if (!credencialesOk || !usuario) {
     await repo.registrarIntentoFallido(cliente, {
       usuarioId: usuario ? Number(usuario.id) : null,
       correo: datos.correo,
       ip: ctx.ip,
-      detalle: usuario ? 'contrasena incorrecta' : 'usuario inexistente',
+      detalle: usuario
+        ? usuario.bloqueado
+          ? 'cuenta bloqueada'
+          : 'contrasena incorrecta'
+        : 'usuario inexistente',
     });
 
     /**

@@ -180,6 +180,22 @@ describe('iniciarSesion', () => {
     );
   });
 
+  it('no deja entrar con la contrasena correcta si la cuenta esta bloqueada', async () => {
+    // El bloqueo no puede depender de que la contrasena este mal: si la
+    // cuenta esta bloqueada, hasta la contrasena correcta espera a que
+    // venza el plazo. Antes `credencialesOk` no miraba `bloqueado` y este
+    // caso abria sesion.
+    const db = preparar([usuarioOk({ bloqueado: true })]);
+
+    await expect(entrar(db, 'admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE')).rejects.toThrow(
+      /La cuenta esta bloqueada/,
+    );
+
+    expect(db.consultas.some((c) => c.sql.includes('INSERT INTO sesiones'))).toBe(false);
+    const auditoria = db.consultas.find((c) => c.sql.includes('auditoria_accesos'));
+    expect(auditoria?.valores).toContain('cuenta bloqueada');
+  });
+
   it('entrar bien limpia el contador de intentos', async () => {
     const db = preparar([usuarioOk()]);
     await entrar(db, 'admin@ejemplo.local', 'CAMBIAR-ESTA-CLAVE');

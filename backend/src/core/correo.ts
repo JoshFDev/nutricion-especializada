@@ -10,6 +10,17 @@ import { env } from '../config/entorno.js';
  */
 let transporter: Transporter | null = null;
 
+/**
+ * Limites para no dejar una peticion colgada hablando con el SMTP.
+ *
+ * Nodemailer espera dos minutos para conectar y hasta diez para el socket.
+ * Un ticket es un extra, no la venta: si Gmail no contesta, es mejor perder
+ * el aviso que retener la peticion y una conexion del pool ese tiempo.
+ */
+const TIEMPO_CONEXION_MS = 10_000;
+const TIEMPO_SALUDO_MS = 10_000;
+const TIEMPO_SOCKET_MS = 30_000;
+
 export function obtenerTransporter(): Transporter {
   if (transporter) return transporter;
 
@@ -20,6 +31,9 @@ export function obtenerTransporter(): Transporter {
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
+    connectionTimeout: TIEMPO_CONEXION_MS,
+    greetingTimeout: TIEMPO_SALUDO_MS,
+    socketTimeout: TIEMPO_SOCKET_MS,
     ...(auth ? { auth } : {}),
   });
 

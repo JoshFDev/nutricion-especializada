@@ -209,20 +209,34 @@ function nombreDelArchivo(nota: Nota, extension: string): string {
 }
 
 /**
- * Manda el ticket de la nota al correo del cliente, si tiene.
+ * Prepara el aviso del ticket sin esperar al SMTP.
  *
- * Es a proposito un efecto de mejor esfuerzo: un correo que no sale (SMTP
- * caido, direccion mal escrita) NUNCA puede tumbar la venta. Por eso el
- * error se registra y se sigue, en vez de propagarse y revertir la nota.
+ * La lectura del correo si se espera, porque usa la conexion de la peticion
+ * y esa conexion se devuelve al terminar la respuesta. El ENVIO, en cambio,
+ * se agenda para el siguiente ciclo: la venta ya esta guardada y no tiene
+ * por que pagar los segundos que tarde Gmail (o los minutos que tarde si no
+ * contesta).
+ *
+ * Es un efecto de mejor esfuerzo: si el correo no sale, se registra y se
+ * sigue. El error del envio tampoco puede tumbar una nota que ya se
+ * confirmo.
  */
-async function notificarTicket(c: PoolClient, nota: Nota, cancelada: boolean): Promise<void> {
-  const email = await repo.emailCliente(c, nota.cliente_id);
-  if (!email) return;
+async function prepararAvisoTicket(c: PoolClient, nota: Nota, cancelada: boolean): Promise<void> {
+  let leido: string | null = null;
   try {
-    await enviarTicketNota(email, nota.cliente, nota, cancelada);
+    leido = await repo.emailCliente(c, nota.cliente_id);
   } catch (error) {
-    console.error(`No se pudo enviar el ticket de la nota ${nota.folio} a ${email}:`, error);
+    console.error(`No se pudo leer el correo del cliente de la nota ${nota.folio}:`, error);
+    return;
   }
+  const email = leido;
+  if (!email) return;
+
+  setImmediate(() => {
+    void enviarTicketNota(email, nota.cliente, nota, cancelada).catch((error) => {
+      console.error(`No se pudo enviar el ticket de la nota ${nota.folio} a ${email}:`, error);
+    });
+  });
 }
 
 export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number): Promise<Nota> {
@@ -277,9 +291,9 @@ export async function crear(cliente: PoolClient, d: CrearNota, usuarioId: number
     return leer(c, notaId);
   });
 
-  // El aviso sale DESPUES del commit: si el SMTP tarda, no se retiene la
-  // conexion de base, y el ticket solo se manda de una nota ya guardada.
-  await notificarTicket(cliente, nota, false);
+  // El aviso sale DESPUES del commit: el ticket solo se manda de una nota
+  // ya guardada, y el envio no retiene la respuesta.
+  await prepararAvisoTicket(cliente, nota, false);
   return nota;
 }
 
@@ -441,8 +455,8 @@ export async function cancelar(cliente: PoolClient, id: number, motivo: string):
   });
 
   // El aviso de cancelacion tambien va despues del commit, por lo mismo que
-  // el del alta: no se retiene la conexion y solo se manda de lo ya guardado.
-  await notificarTicket(cliente, nota, true);
+  // el del alta: solo se manda de lo ya guardado y no se espera al SMTP.
+  await prepararAvisoTicket(cliente, nota, true);
   return nota;
 }
 

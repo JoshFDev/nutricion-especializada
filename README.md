@@ -89,7 +89,16 @@ nutricion-especializada-pos/
 │   │   ├── 0015_permisos_almacenes.sql         # los almacenes dejan de ser un id fijo
 │   │   ├── 0016_permisos_reportes.sql          # expone las tres vistas de reportes
 │   │   ├── 0017_permisos_estado_cuenta.sql     # cobranza por cliente + hoja Excel
-│   │   └── 0018_notas_cascade.sql              # borrar una nota cancelada limpia sus hijos
+│   │   ├── 0018_notas_cascade.sql              # borrar una nota cancelada limpia sus hijos
+│   │   ├── 0019_clientes_email.sql
+│   │   ├── 0020_usuarios_codigo_baja.sql
+│   │   ├── 0021_usuarios_contrasena_propia.sql
+│   │   ├── 0022_saldos_y_facturas.sql
+│   │   ├── 0023_alertas_y_validacion_pago.sql
+│   │   ├── 0024_movimientos_vinculo_cobro.sql  # el cobro y su movimiento de caja
+│   │   ├── 0025_roles_abiertos.sql
+│   │   ├── 0026_indices_consultas.sql          # indices para los listados
+│   │   └── 0027_sesiones_indice_duplicado.sql  # suelta un indice que ya era UNIQUE
 │   ├── seeds/
 │   │   └── seed_demo.sql                  # datos de prueba (no reales)
 │   ├── scripts/

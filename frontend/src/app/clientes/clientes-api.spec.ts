@@ -193,4 +193,15 @@ describe('ClientesApi.exportarExcel', () => {
     );
     expect((await pedir(api, {})).request.params.has('estatus')).toBe(false);
   });
+
+  it('manda el filtro de saldo, para que el archivo traiga lo que se ve', async () => {
+    // La pantalla dice "exporta lo que hay filtrado". Si el filtro de saldo
+    // se queda en casa, el archivo sale con clientes que la tabla no mostraba.
+    const api = TestBed.inject(ClientesApi);
+
+    expect((await pedir(api, { saldo: 'con_saldo' })).request.params.get('saldo')).toBe(
+      'con_saldo',
+    );
+    expect((await pedir(api, {})).request.params.has('saldo')).toBe(false);
+  });
 });

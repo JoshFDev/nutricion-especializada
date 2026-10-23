@@ -326,7 +326,7 @@ export class Clientes {
         saldo: this.saldoConsulta(),
         limite: this.limite(),
         offset: (pagina - 1) * this.limite(),
-      } as any);
+      });
 
       // Se borró la última fila de la última página: la que se pide ya no
       // existe. Se retrocede una en vez de dejar una tabla vacía con el
@@ -396,7 +396,8 @@ export class Clientes {
       await this.api.exportarExcel({
         buscar: this.textoBusqueda(),
         estatus: this.estatusConsulta(),
-      } as any);
+        saldo: this.saldoConsulta(),
+      });
       this.toast.exito('Clientes exportados a Excel');
     } catch (falla) {
       this.toast.error(errorLegible(falla).mensaje);

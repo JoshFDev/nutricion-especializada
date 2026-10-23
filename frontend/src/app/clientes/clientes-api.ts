@@ -211,10 +211,15 @@ export class ClientesApi {
    * entero aunque en la pantalla se esté viendo la segunda de tres páginas.
    * Por eso está fuera de `listar()` y no es un `listar` con otros parámetros.
    */
-  async exportarExcel(filtro: { buscar?: string; estatus?: 'Activo' | 'Inactivo' }): Promise<void> {
+  async exportarExcel(filtro: {
+    buscar?: string;
+    estatus?: 'Activo' | 'Inactivo';
+    saldo?: 'todos' | 'con_saldo' | 'sin_saldo' | 'a_favor' | 'adeudado';
+  }): Promise<void> {
     const params: Record<string, string> = {};
     if (filtro.buscar) params['buscar'] = filtro.buscar;
     if (filtro.estatus) params['estatus'] = filtro.estatus;
+    if (filtro.saldo) params['saldo'] = filtro.saldo;
 
     const respuesta = await firstValueFrom(
       this.http.get(`${API}/clientes/exportar`, {

@@ -58,6 +58,19 @@ export async function clienteExiste(cliente: PoolClient, id: number): Promise<bo
   return f !== null;
 }
 
+/**
+ * Trae la nota y la BLOQUEA hasta el final de la transaccion.
+ *
+ * El bloqueo es lo que evita facturar la misma nota dos veces cuando dos
+ * peticiones llegan a la vez: las dos leen la nota, las dos ven que no
+ * tiene factura activa, y las dos insertan. Con `FOR UPDATE`, la segunda
+ * espera a que la primera termine y su comprobacion posterior ya ve la
+ * factura recien creada.
+ *
+ * El servicio pide las notas ordenadas por id, asi que dos facturas que
+ * compartan notas no se bloquean en orden distinto ni se quedan en
+ * interbloqueo.
+ */
 export async function notaParaFactura(
   cliente: PoolClient,
   id: number,
@@ -74,7 +87,8 @@ export async function notaParaFactura(
     `SELECT n.id, n.cliente_id, n.subtotal, n.estatus, f.serie, f.folio_numero
        FROM notas_remision n
        JOIN folios f ON f.id = n.folio_id
-      WHERE n.id = $1`,
+      WHERE n.id = $1
+      FOR UPDATE OF n`,
     [id],
   );
   if (!f) return null;

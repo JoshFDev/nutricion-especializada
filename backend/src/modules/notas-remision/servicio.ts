@@ -613,27 +613,48 @@ async function prepararRenglones(
   // o en el mismo almacen con distinto kg por bulto.
   const consumo = new Map<string, number>();
 
+  /**
+   * Lo ya leido en esta misma nota.
+   *
+   * El candado y la existencia dependen del par producto-almacen, y el
+   * almacen se repite en todos los renglones de una nota normal. Sin estas
+   * memorias, una nota de diez renglones pedia diez veces lo mismo y hacia
+   * diez viajes a la base antes de insertar una sola linea.
+   */
+  const existencias = new Map<string, { existencia: number; productoActivo: boolean }>();
+  const almacenesRevisados = new Set<number>();
+
   for (const r of renglones) {
     const clave = `${r.producto_id}:${r.almacen_id}`;
     const yaPedido = consumo.get(clave) ?? 0;
     const pedido = Number(r.cantidad_bultos);
 
-    // Candado ANTES de leer la existencia. Al reves, dos peticiones que
-    // venden el mismo producto se leen la misma existencia y las dos pasan
-    // el chequeo: 20 bultos vendidos con 12 en el almacen.
-    await repo.candearProductoAlmacen(cliente, r.producto_id, r.almacen_id);
-
-    const info = await repo.existencia(cliente, r.producto_id, r.almacen_id);
+    let info = existencias.get(clave);
     if (!info) {
-      throw new ErrorValidacion(`El producto ${r.producto_id} no existe`, [
-        { campo: 'producto_id', problema: `El producto ${r.producto_id} no existe` },
-      ]);
+      // Candado ANTES de leer la existencia. Al reves, dos peticiones que
+      // venden el mismo producto se leen la misma existencia y las dos pasan
+      // el chequeo: 20 bultos vendidos con 12 en el almacen.
+      await repo.candearProductoAlmacen(cliente, r.producto_id, r.almacen_id);
+
+      const leida = await repo.existencia(cliente, r.producto_id, r.almacen_id);
+      if (!leida) {
+        throw new ErrorValidacion(`El producto ${r.producto_id} no existe`, [
+          { campo: 'producto_id', problema: `El producto ${r.producto_id} no existe` },
+        ]);
+      }
+      info = leida;
+      existencias.set(clave, info);
     }
-    if (!(await repo.almacenExiste(cliente, r.almacen_id))) {
-      throw new ErrorValidacion(`El almacen ${r.almacen_id} no existe`, [
-        { campo: 'almacen_id', problema: `El almacen ${r.almacen_id} no existe` },
-      ]);
+
+    if (!almacenesRevisados.has(r.almacen_id)) {
+      if (!(await repo.almacenExiste(cliente, r.almacen_id))) {
+        throw new ErrorValidacion(`El almacen ${r.almacen_id} no existe`, [
+          { campo: 'almacen_id', problema: `El almacen ${r.almacen_id} no existe` },
+        ]);
+      }
+      almacenesRevisados.add(r.almacen_id);
     }
+
     if (!info.productoActivo) {
       throw new ReglaNegocio('PRODUCTO_INACTIVO', 'No se puede vender un producto dado de baja', {
         producto_id: r.producto_id,

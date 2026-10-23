@@ -171,6 +171,10 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
    * mas de 2^53 notas eso no es un numero, es una aproximacion. Aqui
    * todavia no, pero el mismo helper se usa en `total` de todos los
    * listados y conviene que la cuenta venga exacta.
+   *
+   * Los renglones y los kilos salen de un solo `LATERAL`: antes eran dos
+   * subconsultas correlacionadas por fila, o sea dos recorridos del mismo
+   * detalle por cada nota de la pagina.
    */
   const filas = await consultar<{
     id: string;
@@ -190,10 +194,14 @@ export async function listar(cliente: PoolClient, q: ListarNotas): Promise<Lista
             f.folio_numero, f.serie,
             c.nombre AS cliente_nombre,
             v.nombre AS vendedor_nombre,
-            (SELECT count(*) FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS renglones,
-            (SELECT COALESCE(SUM(d.cantidad_bultos * d.kg_bulto), 0)
-               FROM nota_remision_detalle d WHERE d.nota_id = n.id)::TEXT AS kg_total
+            det.renglones, det.kg_total
      ${FROM_NOTA}
+     LEFT JOIN LATERAL (
+       SELECT count(*)::TEXT AS renglones,
+              COALESCE(SUM(d.cantidad_bultos * d.kg_bulto), 0)::TEXT AS kg_total
+         FROM nota_remision_detalle d
+        WHERE d.nota_id = n.id
+     ) det ON true
      ${donde}
      ${ordenDeNotas(q.ordenar)}
      LIMIT $${valores.length + 1} OFFSET $${valores.length + 2}`,

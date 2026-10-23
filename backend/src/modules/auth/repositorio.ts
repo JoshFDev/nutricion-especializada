@@ -168,12 +168,25 @@ export async function cerrarSesion(cliente: PoolClient, sesionId: number): Promi
   return (resultado.rowCount ?? 0) > 0;
 }
 
-/** Sesiones muertas que se limpian al arrancar. Ver servicio.ts. */
+/**
+ * Sesiones muertas que se limpian al arrancar.
+ *
+ * Se borran dos clases de fila:
+ *
+ *   1. Las cerradas hace mas de `diasAntiguedad` dias. La sesion ya no
+ *      sirve para nada; el rastro de quien entro esta en
+ *      `auditoria_accesos`, que es la tabla que existe para eso.
+ *   2. Las EXPIRADAS que siguen con `cerrada_en` en NULL. Nadie las cierra
+ *      cuando vence el token: el middleware simplemente las rechaza, y sin
+ *      esta condicion se quedarian en la tabla para siempre.
+ */
 export async function podarSesiones(cliente: PoolClient, diasAntiguedad: number): Promise<number> {
   const resultado = await cliente.query(
     `DELETE FROM sesiones
-      WHERE cerrada_en IS NOT NULL
-        AND cerrada_en < now() - ($1 || ' days')::interval`,
+      WHERE (cerrada_en IS NOT NULL
+             AND cerrada_en < now() - ($1 || ' days')::interval)
+         OR (cerrada_en IS NULL
+             AND expira_en < now())`,
     [String(diasAntiguedad)],
   );
   return resultado.rowCount ?? 0;

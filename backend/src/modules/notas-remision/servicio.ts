@@ -222,7 +222,7 @@ function nombreDelArchivo(nota: Nota, extension: string): string {
  * confirmo.
  */
 async function prepararAvisoTicket(c: PoolClient, nota: Nota, cancelada: boolean): Promise<void> {
-  let leido: string | null = null;
+  let leido: string | null;
   try {
     leido = await repo.emailCliente(c, nota.cliente_id);
   } catch (error) {

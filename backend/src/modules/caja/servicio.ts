@@ -48,12 +48,12 @@ import * as repo from './repositorio.js';
  * metiendolos a otra cuenta, que es peor. El saldo se devuelve en cada
  * respuesta para que se vea.
  *
- * HUECO CONOCIDO, a proposito y no por olvido: capturar un pago NO registra
- * solo el movimiento de caja. `pagos` y `movimientos_financieros` son tablas
- * distintas y ningun trigger las une, asi que hoy un abono se anota dos
- * veces: una en `/api/pagos` (cartera) y otra en `/api/caja/movimientos`
- * (efectivo). Unirlos de verdad es un cambio de esquema, no un endpoint, asi
- * que queda para cuando se arme el frontend y se vea que pantalla lo pide.
+ * Un cobro se anota en DOS tablas, y no es una duplicacion: `pagos` dice
+ * cuanto bajo la deuda del cliente y `movimientos_financieros` dice a que
+ * cuenta entro el dinero. Desde 0024 el pago crea su movimiento de caja en
+ * la misma transaccion y `pago_id` los vincula; el indice unico impide que
+ * el mismo cobro tenga dos movimientos. Por eso esta pantalla NO debe
+ * capturar a mano el movimiento de un pago: se anotaria dos veces.
  */
 
 /**

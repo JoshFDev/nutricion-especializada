@@ -4,7 +4,7 @@ Sistema para automatizar los procesos que hoy se llevan en Excel:
 punto de venta (notas de remisión), inventario semanal, cartera de
 clientes y proveedores, y flujo de caja/bancos.
 
-## Estado actual del proyecto — Avance 1
+## Estado actual del proyecto
 
 **Modelo de datos (PostgreSQL)** — completo
 

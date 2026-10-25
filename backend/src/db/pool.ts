@@ -20,7 +20,8 @@ export const pool = new Pool({
   max: env.DB_MAX_CONEXIONES,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
-  options: `-c search_path=${env.DB_SCHEMA},public`,
+  options: `-c search_path=${env.DB_SCHEMA},public -c client_encoding=UTF8`,
+  client_encoding: 'UTF8',
   application_name: 'api-nutricion',
 });
 

@@ -853,3 +853,4 @@ produccion la peticion cae en el 404 del final. Para quitarlo: borrar
   ambas rutas con la misma fabrica (`construir(clave)` en
   `catalogo/rutas.ts`).
 - El frontend es zoneless, con signals y sin NgModules.
+# test

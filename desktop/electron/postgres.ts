@@ -17,6 +17,7 @@ export async function iniciarPostgres(rutas: Rutas) {
     password: rutas.password,
     port: rutas.puertoPg,
     persistent: true,
+    initdbFlags: ['--encoding=UTF8', '--locale=C'],
   });
 
   if (!yaExiste) {
@@ -34,6 +35,7 @@ export async function iniciarPostgres(rutas: Rutas) {
     user: rutas.usuario,
     password: rutas.password,
     database: 'postgres',
+    client_encoding: 'UTF8',
   });
 
   try {

@@ -1,9 +1,15 @@
 import { app, BrowserWindow } from 'electron';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { obtenerRutas } from './rutas.js';
 import { iniciarPostgres, detenerPostgres } from './postgres.js';
 import { aplicarMigracionesEscritorio } from './migrar-escritorio.js';
 import { iniciarBackend, detenerBackend } from './backend.js';
+
+// Este archivo se compila como ESM (package.json tiene "type": "module"),
+// y en ESM no existe __dirname.
+const dirname = fileURLToPath(new URL('.', import.meta.url));
 
 let ventana: BrowserWindow | null = null;
 let apagando = false;
@@ -19,7 +25,7 @@ function crearVentana() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      preload: join(__dirname, 'preload.cjs'),
+      preload: join(dirname, existsSync(join(dirname, 'preload.cjs')) ? 'preload.cjs' : 'preload.js'),
     },
   });
 

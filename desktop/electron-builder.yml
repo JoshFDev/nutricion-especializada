@@ -14,17 +14,29 @@ files:
 # Backend, frontend y migraciones viajan fuera del asar para que el backend
 # pueda leerlos con rutas normales del sistema de archivos.
 extraResources:
+  # electron-builder omite el node_modules que esta en la raiz de un
+  # extraResource. Por eso las dependencias del backend se copian aparte:
+  # el origen es la propia carpeta node_modules, no un directorio que la
+  # contenga.
   - from: backend-produccion
     to: backend
+    filter:
+      - "**/*"
+      - "!node_modules/**/*"
+  - from: backend-produccion/node_modules
+    to: backend/node_modules
+    filter:
+      - "**/*"
   - from: ../frontend/dist/frontend
     to: frontend/dist/frontend
+    filter:
+      - "**/*"
   - from: ../db/migrations
     to: db/migrations
+    filter:
+      - "**/*"
 
-asar: true
-asarUnpack:
-  - "**/node_modules/embedded-postgres/**"
-  - "**/node_modules/@embedded-postgres/**"
+asar: false
 
 win:
   target:
@@ -38,6 +50,4 @@ nsis:
   deleteAppDataOnUninstall: false
 artifactName: "NutricionEspecializada-Setup-${version}.${ext}"
 electronVersion: "39.8.10"
-publish:
-  provider: github
-  releaseType: release
+# publish deshabilitado: la app no usa auto-update

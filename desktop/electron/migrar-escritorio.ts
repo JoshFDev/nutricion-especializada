@@ -17,7 +17,7 @@ export async function aplicarMigracionesEscritorio(config: {
   user: string;
   password: string;
 }) {
-  const cliente = new pg.Client(config);
+  const cliente = new pg.Client({ ...config, client_encoding: 'UTF8' });
   await cliente.connect();
 
   try {

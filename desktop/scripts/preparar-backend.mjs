@@ -39,7 +39,7 @@ for (const archivo of ['package.json', 'pnpm-lock.yaml']) {
 
 console.log('[recursos] Instalando dependencias de produccion...');
 try {
-  execSync('pnpm install --prod --no-frozen-lockfile --ignore-scripts', {
+  execSync('pnpm install --prod --no-frozen-lockfile --ignore-scripts --ignore-workspace --node-linker=hoisted', {
     cwd: destino,
     stdio: 'inherit',
     shell: process.platform === 'win32',

@@ -1,6 +1,6 @@
 node_modules
 dist-electron
-release
+release*/
 backend-produccion
 resources/pgsql
 *.log

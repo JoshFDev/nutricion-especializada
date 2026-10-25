@@ -19,7 +19,7 @@ function crearVentana() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      preload: join(import.meta.dirname, 'preload.cjs'),
+      preload: join(__dirname, 'preload.cjs'),
     },
   });
 

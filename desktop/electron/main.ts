@@ -27,6 +27,19 @@ function crearVentana() {
     backgroundColor: '#f7f4ec',
     autoHideMenuBar: true,
     title: 'Nutrición Especializada',
+    // En Windows quitamos la barra de título nativa y dejamos sólo los
+    // botones de minimizar/maximizar/cerrar encima de la barra azul de la
+    // aplicación. Así la ventana se ve integrada y no como un marco gris.
+    ...(process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: '#1e3a8a',
+            symbolColor: '#ffffff',
+            height: 56,
+          },
+        }
+      : {}),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -34,6 +47,13 @@ function crearVentana() {
       preload: join(dirname, existsSync(join(dirname, 'preload.cjs')) ? 'preload.cjs' : 'preload.js'),
     },
   });
+
+  // Doble seguro contra el menú File/Edit/View/Window/Help. En Windows el
+  // `Menu.setApplicationMenu(null)` global ya lo quita, pero si alguna
+  // versión de Electron vuelve a dibujarlo al crear la ventana, esto lo
+  // elimina de esta ventana concreta.
+  ventana.removeMenu();
+  ventana.setMenuBarVisibility(false);
 
   // Mostrar la ventana sólo cuando el frontend ya pintó evita el destello
   // blanco del arranque.

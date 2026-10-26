@@ -1062,6 +1062,25 @@ label {
  */
 
 /* ------------------------------------------------------------------ */
+/* Barra de título en la app de escritorio                             */
+/* ------------------------------------------------------------------ */
+
+/*
+ * En Electron la barra nativa está oculta, así que el fondo de la pantalla
+ * también tiene que servir para mover la ventana. La tarjeta de acceso no
+ * arrastra: ahí están los campos y los botones.
+ */
+:host-context(.escritorio) {
+  .pantalla {
+    -webkit-app-region: drag;
+  }
+
+  .acceso {
+    -webkit-app-region: no-drag;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Cuando el sistema pide menos movimiento                             */
 /* ------------------------------------------------------------------ */
 

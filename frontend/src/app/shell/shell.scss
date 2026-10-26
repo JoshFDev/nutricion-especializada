@@ -130,6 +130,37 @@
   }
 }
 
+/*
+ * Barra de título de la app de escritorio.
+ *
+ * Electron oculta la barra nativa y deja los botones de la ventana encima
+ * de la barra azul (ver `titleBarOverlay` en `desktop/electron/main.ts`).
+ * Para que eso se sienta como una sola pieza:
+ *
+ *   - La barra entera se puede arrastrar para mover la ventana.
+ *   - Los controles que hay dentro (menú, usuario, configuración, salir) no
+ *     arrastran, porque si no el clic se convertiría en un movimiento.
+ *   - Se reserva el ancho de los botones de Windows a la derecha.
+ */
+:host-context(.escritorio) {
+  .barra {
+    padding-right: 9.25rem;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+
+  .hamburguesa,
+  .sidebar-toggle,
+  .usuario,
+  .salir,
+  .sistema-btn,
+  .sistema-dropdown,
+  .sistema-dropdown-menu,
+  app-ayuda {
+    -webkit-app-region: no-drag;
+  }
+}
+
 @keyframes pulso {
   0%,
   100% {

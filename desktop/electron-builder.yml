@@ -35,6 +35,10 @@ extraResources:
     to: db/migrations
     filter:
       - "**/*"
+  # Cuenta inicial y credenciales SMTP. Se genera desde backend/.env con
+  # scripts/preparar-configuracion.mjs y está ignorado por git.
+  - from: configuracion.local.json
+    to: configuracion.json
 
 asar: false
 

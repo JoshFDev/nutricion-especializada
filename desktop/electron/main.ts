@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,8 @@ import { obtenerRutas } from './rutas.js';
 import { iniciarPostgres, detenerPostgres } from './postgres.js';
 import { aplicarMigracionesEscritorio } from './migrar-escritorio.js';
 import { iniciarBackend, detenerBackend } from './backend.js';
+import { leerConfiguracion } from './configuracion.js';
+import { crearAdminInicial } from './admin-inicial.js';
 
 // Este archivo se compila como ESM (package.json tiene "type": "module"),
 // y en ESM no existe __dirname.
@@ -16,17 +18,27 @@ let apagando = false;
 
 function crearVentana() {
   ventana = new BrowserWindow({
-    width: 1400,
+    width: 1440,
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    title: 'Nutricion Especializada',
+    center: true,
+    show: false,
+    backgroundColor: '#f7f4ec',
+    autoHideMenuBar: true,
+    title: 'Nutrición Especializada',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
       preload: join(dirname, existsSync(join(dirname, 'preload.cjs')) ? 'preload.cjs' : 'preload.js'),
     },
+  });
+
+  // Mostrar la ventana sólo cuando el frontend ya pintó evita el destello
+  // blanco del arranque.
+  ventana.once('ready-to-show', () => {
+    ventana?.show();
   });
 
   ventana.on('closed', () => {
@@ -43,6 +55,7 @@ function crearVentana() {
 
 async function arrancar() {
   const rutas = obtenerRutas();
+  const configuracion = leerConfiguracion();
   console.log('[main] Rutas:', rutas.datos);
 
   try {
@@ -52,6 +65,21 @@ async function arrancar() {
     await aplicarMigracionesEscritorio(pgConfig);
     console.log('[main] Migraciones listas');
 
+    const admin = await crearAdminInicial(pgConfig, configuracion.admin);
+    if (admin.creada) {
+      dialog.showMessageBoxSync({
+        type: 'info',
+        title: 'Cuenta de administrador creada',
+        message: 'La cuenta de administrador quedó lista.',
+        detail:
+          `Correo: ${configuracion.admin.email}\n` +
+          `Contraseña temporal: ${configuracion.admin.contrasena}\n\n` +
+          'Al iniciar sesión el sistema pedirá cambiarla por una tuya.',
+        buttons: ['Entendido'],
+        noLink: true,
+      });
+    }
+
     await iniciarBackend({
       pgHost: pgConfig.host,
       pgPort: pgConfig.port,
@@ -59,12 +87,18 @@ async function arrancar() {
       pgUser: pgConfig.user,
       pgPassword: pgConfig.password,
       puertoApi: rutas.puertoApi,
+      smtp: configuracion.smtp,
     });
     console.log('[main] Backend listo');
 
     crearVentana();
   } catch (error) {
-    console.error('[main] Error arrancando:', error);
+    const mensaje = error instanceof Error ? error.stack ?? error.message : String(error);
+    console.error('[main] Error arrancando:', mensaje);
+    dialog.showErrorBox(
+      'No se pudo iniciar Nutricion Especializada',
+      `La aplicación no pudo arrancar.\n\n${mensaje}`,
+    );
     await apagar();
   }
 }
@@ -81,6 +115,9 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    // Sin esto Electron dibuja el menú File/Edit/View/Window/Help, que no
+    // aporta nada a la aplicación y además se ve encima de la interfaz.
+    Menu.setApplicationMenu(null);
     void arrancar();
   });
 }

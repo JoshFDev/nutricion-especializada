@@ -24,6 +24,14 @@ export async function iniciarBackend(config: {
   pgUser: string;
   pgPassword: string;
   puertoApi: number;
+  smtp: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    from: string;
+  };
 }) {
   const cwd = carpetaBackend();
   const script = join(cwd, 'dist', 'index.js');
@@ -54,9 +62,12 @@ export async function iniciarBackend(config: {
       JWT_EXPIRES_IN: '8h',
       EMPRESA_NOMBRE: 'Nutricion Especializada',
       APP_URL: `http://127.0.0.1:${config.puertoApi}`,
-      SMTP_HOST: 'localhost',
-      SMTP_PORT: '25',
-      SMTP_SECURE: 'false',
+      SMTP_HOST: config.smtp.host,
+      SMTP_PORT: String(config.smtp.port),
+      SMTP_SECURE: String(config.smtp.secure),
+      SMTP_USER: config.smtp.user,
+      SMTP_PASS: config.smtp.pass,
+      SMTP_FROM: config.smtp.from,
     },
     stdio: 'inherit',
   });

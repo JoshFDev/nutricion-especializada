@@ -1,0 +1,18 @@
+{
+  "admin": {
+    "nombre": "Joshua",
+    "apellidoPaterno": "Administrador",
+    "email": "tu-correo@ejemplo.com",
+    "rfc": "XAXX010101000",
+    "puesto": "Administrador",
+    "contrasena": "UnaClaveTemporal123"
+  },
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "secure": false,
+    "user": "tu-correo@ejemplo.com",
+    "pass": "contraseña-de-aplicación-de-gmail",
+    "from": "Nutrición Especializada <tu-correo@ejemplo.com>"
+  }
+}

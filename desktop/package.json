@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development electron-vite dev",
     "compilar": "tsc -p tsconfig.json",
-    "recursos": "node scripts/preparar-backend.mjs",
+    "recursos": "node scripts/preparar-configuracion.mjs && node scripts/preparar-backend.mjs",
     "empaquetar": "electron-builder",
     "build": "pnpm build:backend && pnpm build:frontend && pnpm compilar && pnpm recursos && pnpm empaquetar",
     "build:dir": "pnpm build:backend && pnpm build:frontend && pnpm compilar && pnpm recursos && pnpm empaquetar --dir",

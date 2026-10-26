@@ -1,3 +1,4 @@
+import './compatibilidad.js';
 import EmbeddedPostgres from 'embedded-postgres';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';

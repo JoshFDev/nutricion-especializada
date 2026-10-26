@@ -3,6 +3,7 @@ dist-electron
 release*/
 backend-produccion
 resources/pgsql
+configuracion.local.json
 *.log
 .env
 .env.*

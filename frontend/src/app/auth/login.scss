@@ -1066,12 +1066,15 @@ label {
 /* ------------------------------------------------------------------ */
 
 /*
- * En Electron la barra nativa está oculta, así que el fondo de la pantalla
- * también tiene que servir para mover la ventana. La tarjeta de acceso no
- * arrastra: ahí están los campos y los botones.
+ * En Electron la barra nativa está oculta. Para mover la ventana se usa el
+ * bloque de la marca, que es la zona grande de la izquierda, y no toda la
+ * pantalla: si toda la pantalla fuera arrastrable, la barra de desplazamiento
+ * del login dejaría de responder cuando la ventana es baja.
+ *
+ * La tarjeta de acceso tampoco arrastra: ahí están los campos y los botones.
  */
 :host-context(.escritorio) {
-  .pantalla {
+  .marca {
     -webkit-app-region: drag;
   }
 

@@ -34,7 +34,9 @@ function crearVentana() {
       ? {
           titleBarStyle: 'hidden' as const,
           titleBarOverlay: {
-            color: '#1e3a8a',
+            // Transparente para que se vea la barra azul (o la foto del
+            // login) por debajo y los botones queden integrados.
+            color: '#00000000',
             symbolColor: '#ffffff',
             height: 56,
           },

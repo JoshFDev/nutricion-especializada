@@ -114,8 +114,11 @@ async function arrancar() {
     console.log('[main] Backend listo');
 
     crearVentana();
-  } catch (error) {
-    const mensaje = error instanceof Error ? error.stack ?? error.message : String(error);
+  } catch (error: any) {
+    const mensaje =
+      error && typeof error === 'object'
+        ? error.stack || error.message || JSON.stringify(error, Object.getOwnPropertyNames(error))
+        : String(error);
     console.error('[main] Error arrancando:', mensaje);
     dialog.showErrorBox(
       'No se pudo iniciar Nutricion Especializada',

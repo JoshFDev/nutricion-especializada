@@ -11,13 +11,10 @@
     </button>
 
     <!--
-      El boton del sidebar va a la IZQUIERDA, junto a la marca, y no donde
-      estaba antes (en el extremo derecho, junto al usuario). El control de
-      algo va del lado de lo que controla: el menu del que habla este boton
-      esta a la izquierda, y a la derecha el boton activaba algo que la
-      persona no veia. En celular no se dibuja, porque ahi el menu lo abre la
-      hamburguesa.
+      El control para colapsar/expandir el menú va junto al usuario para no
+      interferir con la zona de arrastre de la barra de título en Windows.
     -->
+
     <button
       type="button"
       class="sidebar-toggle"
@@ -32,41 +29,39 @@
       ></span>
     </button>
 
-    <!--
-      El logo va en una placa blanca y no suelto sobre el azul de la barra:
-      el archivo tiene partes en azul marino (rgb 0,32,128) que sobre
-      `--acento` (#1e40af) se perderian, y partes blancas que sobre el azul
-      si se verian. Con la placa, las dos se leen siempre. El `alt` va vacio
-      a proposito: el nombre lo dice el texto que va al lado, y ponerlo dos
-      veces hace que el lector de pantalla lo lea dos veces.
-    -->
-    <div class="agrupado">
-      <img class="logo" src="logo-nutricion.png" alt="" />
-      <span class="marca">Nutricion Especializada</span>
-    </div>
+    <span class="marca">Nutricion Especializada</span>
 
     <div class="usuario">
       <span class="nombre-usuario">{{ nombre() }}</span>
 
-      <!-- controles de zoom: hacer el sistema más grande o más pequeño -->
-      <div class=" controles-z zoom">
+      <!-- Controles de zoom: acercar/alejar con lupa -->
+      <div class="zoom">
         <button
           type="button"
-          class="btn-zoom btn-zoom-mas"
-          (click)="zoomIn()"
-          aria-label="Acercar"
-          title="Acercar ( + )"
+          class="btn-zoom"
+          (click)="zoomOut()"
+          aria-label="Alejar"
+          title="Alejar"
         >
-          <span class="icon-zum">+</span>
+          <svg class="zoom-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6" fill="none" />
+            <line x1="13.5" y1="13.5" x2="17" y2="17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <line x1="6.5" y1="9" x2="11.5" y2="9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
         </button>
         <button
           type="button"
-          class="btn-zoom btn-zoom-menos"
-          (click)="zoomOut()"
-          aria-label="Alejar"
-          title="Alejar ( - )"
+          class="btn-zoom"
+          (click)="zoomIn()"
+          aria-label="Acercar"
+          title="Acercar"
         >
-          <span class="icon-zum">-</span>
+          <svg class="zoom-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6" fill="none" />
+            <line x1="13.5" y1="13.5" x2="17" y2="17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <line x1="6.5" y1="9" x2="11.5" y2="9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <line x1="9" y1="6.5" x2="9" y2="11.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
         </button>
       </div>
 
@@ -145,6 +140,12 @@
       [class.colapsado]="sidebarColapsado()"
       aria-label="Menu principal"
     >
+      <div class="lateral-cabecera">
+        <img class="lateral-logo" src="logo-nutricion.png" alt="" />
+        @if (!sidebarColapsado()) {
+          <span class="lateral-marca">Nutricion Especializada</span>
+        }
+      </div>
       @for (grupo of menu(); track grupo.titulo) {
         @if (grupo.titulo !== 'Sistema') {
           @if (grupo.colapsable) {

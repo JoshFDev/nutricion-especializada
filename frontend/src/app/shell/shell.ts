@@ -84,10 +84,17 @@ export class Shell {
   /** Aplica el nivel de zoom actual al elemento raíz */
   private aplicarZoom(): void {
     try {
-      this.renderer.setStyle(document.documentElement, 'transformOrigin', '0 0');
-      this.renderer.setStyle(document.documentElement, 'transform', `scale(${this.zoom()})`);
+      const factor = this.zoom();
+      this.renderer.setStyle(document.documentElement, 'zoom', String(factor));
+      this.renderer.removeStyle(document.documentElement, 'transform');
+      this.renderer.removeStyle(document.documentElement, 'transformOrigin');
     } catch {
-      /* si falla, el zoom igual funciona */
+      try {
+        this.renderer.setStyle(document.documentElement, 'transformOrigin', '0 0');
+        this.renderer.setStyle(document.documentElement, 'transform', `scale(${this.zoom()})`);
+      } catch {
+        /* si falla, el zoom igual funciona */
+      }
     }
   }
 

@@ -23,39 +23,59 @@ function puertoEnUso(puerto: number): Promise<boolean> {
 }
 
 export async function iniciarPostgres(rutas: Rutas) {
-  // Si ya hay un PostgreSQL corriendo en el puerto esperado, no lo reiniciamos.
+  // Si ya hay un PostgreSQL corriendo en el puerto esperado, intentamos reutilizarlo
   const yaCorriendo = await puertoEnUso(rutas.puertoPg);
   if (yaCorriendo) {
-    console.log('[postgres] Ya hay un servidor PostgreSQL en el puerto', rutas.puertoPg, '(se omite el inicio embebido)');
-
-    // Asegurar que la base de datos existe aunque se reutilice el servidor
-    const admin = new pg.Client({
-      host: '127.0.0.1',
-      port: rutas.puertoPg,
-      user: rutas.usuario,
-      password: rutas.password,
-      database: 'postgres',
-      client_encoding: 'UTF8',
-    });
+    console.log('[postgres] Ya hay un servidor PostgreSQL en el puerto', rutas.puertoPg, '(intentando reutilizar...)');
 
     try {
-      await admin.connect();
-      const existe = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [rutas.baseDatos]);
-      if (!existe.rowCount || existe.rowCount === 0) {
-        console.log(`[postgres] Creando base de datos ${rutas.baseDatos}...`);
-        await admin.query(`CREATE DATABASE "${rutas.baseDatos}"`);
-      }
-    } finally {
-      await admin.end();
-    }
+      // Asegurar que la base de datos existe aunque se reutilice el servidor
+      const admin = new pg.Client({
+        host: '127.0.0.1',
+        port: rutas.puertoPg,
+        user: rutas.usuario,
+        password: rutas.password,
+        database: 'postgres',
+        client_encoding: 'UTF8',
+      });
 
-    return {
-      host: '127.0.0.1',
-      port: rutas.puertoPg,
-      database: rutas.baseDatos,
-      user: rutas.usuario,
-      password: rutas.password,
-    };
+      try {
+        await admin.connect();
+        const existe = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [rutas.baseDatos]);
+        if (!existe.rowCount || existe.rowCount === 0) {
+          console.log(`[postgres] Creando base de datos ${rutas.baseDatos}...`);
+          await admin.query(`CREATE DATABASE "${rutas.baseDatos}"`);
+        }
+      } finally {
+        await admin.end();
+      }
+
+      // Comprobar que podemos conectar con el usuario de la app a esa BD
+      const test = new pg.Client({
+        host: '127.0.0.1',
+        port: rutas.puertoPg,
+        user: rutas.usuario,
+        password: rutas.password,
+        database: rutas.baseDatos,
+        client_encoding: 'UTF8',
+      });
+      try {
+        await test.connect();
+        console.log('[postgres] Reutilización correcta, conectando a', rutas.baseDatos);
+        return {
+          host: '127.0.0.1',
+          port: rutas.puertoPg,
+          database: rutas.baseDatos,
+          user: rutas.usuario,
+          password: rutas.password,
+        };
+      } finally {
+        await test.end().catch(() => undefined);
+      }
+    } catch (error) {
+      console.warn('[postgres] No se pudo reutilizar el servidor existente, se arrancará el embebido:', error);
+      // Si falla la reutilización, continuar con el arranque embebido
+    }
   }
 
   const yaExiste = existsSync(join(rutas.pgData, 'PG_VERSION'));

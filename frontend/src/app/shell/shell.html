@@ -140,12 +140,6 @@
       [class.colapsado]="sidebarColapsado()"
       aria-label="Menu principal"
     >
-      <div class="lateral-cabecera">
-        <img class="lateral-logo" src="logo-nutricion.png" alt="" />
-        @if (!sidebarColapsado()) {
-          <span class="lateral-marca">Nutricion Especializada</span>
-        }
-      </div>
       @for (grupo of menu(); track grupo.titulo) {
         @if (grupo.titulo !== 'Sistema') {
           @if (grupo.colapsable) {
@@ -204,6 +198,10 @@
           }
         }
       }
+
+      <div class="lateral-pie">
+        <img class="lateral-logo-pie" src="logo-nutricion.png" alt="" />
+      </div>
     </nav>
 
     <main class="contenido">

@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, signal, Renderer2 } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { menuPara, modulosSistema, type Grupo } from '../nucleo/menu';
@@ -6,6 +6,10 @@ import { Sesion } from '../nucleo/sesion';
 import { ICONOS } from '../nucleo/iconos/iconos';
 import { ToastContainer } from '../nucleo/toast';
 import { Ayuda } from './ayuda';
+
+const ZOOM_MIN = 0.8;
+const ZOOM_MAX = 1.5;
+const ZOOM_STEP = 0.1;
 
 /**
  * El marco de la aplicación: cabecera, menú lateral y el hueco de la pantalla.
@@ -58,10 +62,66 @@ export class Shell {
   /** Estado del desplegable del menú de sistema en la barra superior */
   readonly sistemaDropdownAbierto = signal(false);
 
-  constructor() {
+  /** Nivel de zoom actual (1 = 100%, valores entre 0.8 y 1.5) */
+  readonly zoom = signal(1);
+
+  constructor(private readonly renderer: Renderer2) {
     // El ancho del menú es una preferencia, no un estado de la pantalla:
     // recargarla no debería devolverla al ancho que la persona eligió.
     effect(() => this.guardarSidebarColapsado(this.sidebarColapsado()));
+    // Cargar zoom guardado o valor por defecto
+    try {
+      const guardado = localStorage.getItem('app:zoom');
+      if (guardado) {
+        this.zoom.set(parseFloat(guardado));
+        this.aplicarZoom();
+      }
+    } catch {
+      /* si no se puede leer, usa el valor por defecto */
+    }
+  }
+
+  /** Aplica el nivel de zoom actual al elemento raíz */
+  private aplicarZoom(): void {
+    try {
+      this.renderer.setStyle(document.documentElement, 'transformOrigin', '0 0');
+      this.renderer.setStyle(document.documentElement, 'transform', `scale(${this.zoom()})`);
+    } catch {
+      /* si falla, el zoom igual funciona */
+    }
+  }
+
+  /** Aumenta el zoom en un paso, limitado al máximo */
+  zoomIn(): void {
+    this.zoom.update((v) => {
+      const nuevo = Math.min(ZOOM_MAX, v + ZOOM_STEP);
+      if (nuevo !== v) {
+        this.guardarZoom(nuevo);
+        this.aplicarZoom();
+      }
+      return nuevo;
+    });
+  }
+
+  /** Disminuye el zoom en un paso, limitado al mínimo */
+  zoomOut(): void {
+    this.zoom.update((v) => {
+      const nuevo = Math.max(ZOOM_MIN, v - ZOOM_STEP);
+      if (nuevo !== v) {
+        this.guardarZoom(nuevo);
+        this.aplicarZoom();
+      }
+      return nuevo;
+    });
+  }
+
+  /** Guarda el nivel de zoom en localStorage */
+  private guardarZoom(valor: number): void {
+    try {
+      localStorage.setItem('app:zoom', valor.toString());
+    } catch {
+      /* si no se puede guardar, el zoom igual funciona */
+    }
   }
 
   /** Obtiene el icono SVG como SafeHtml para usar con [innerHTML] */

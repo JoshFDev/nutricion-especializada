@@ -48,6 +48,28 @@
     <div class="usuario">
       <span class="nombre-usuario">{{ nombre() }}</span>
 
+      <!-- controles de zoom: hacer el sistema más grande o más pequeño -->
+      <div class=" controles-z zoom">
+        <button
+          type="button"
+          class="btn-zoom btn-zoom-mas"
+          (click)="zoomIn()"
+          aria-label="Acercar"
+          title="Acercar ( + )"
+        >
+          <span class="icon-zum">+</span>
+        </button>
+        <button
+          type="button"
+          class="btn-zoom btn-zoom-menos"
+          (click)="zoomOut()"
+          aria-label="Alejar"
+          title="Alejar ( - )"
+        >
+          <span class="icon-zum">-</span>
+        </button>
+      </div>
+
       <!-- La ayuda va antes del engrane: primero "¿cómo?", luego "¿qué configuro?" -->
       <app-ayuda />
 

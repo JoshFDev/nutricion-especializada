@@ -2,7 +2,7 @@ import './compatibilidad.js';
 import EmbeddedPostgres from 'embedded-postgres';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { net } from 'node:net';
+import { createServer } from 'net';
 import pg from 'pg';
 import type { obtenerRutas } from './rutas.js';
 
@@ -13,7 +13,7 @@ let pgInstance: EmbeddedPostgres | null = null;
 /** Devuelve `true` si el puerto ya está en uso (hay un PostgreSQL corriendo). */
 function puertoEnUso(puerto: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const server = net.createServer();
+    const server = createServer();
     server.listen(puerto, () => {
       server.close();
       resolve(false);
@@ -35,6 +35,8 @@ export async function iniciarPostgres(rutas: Rutas) {
       password: rutas.password,
     };
   }
+
+  const yaExiste = existsSync(join(rutas.pgData, 'PG_VERSION'));
 
   pgInstance = new EmbeddedPostgres({
     databaseDir: rutas.pgData,

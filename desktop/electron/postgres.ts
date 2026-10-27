@@ -27,6 +27,28 @@ export async function iniciarPostgres(rutas: Rutas) {
   const yaCorriendo = await puertoEnUso(rutas.puertoPg);
   if (yaCorriendo) {
     console.log('[postgres] Ya hay un servidor PostgreSQL en el puerto', rutas.puertoPg, '(se omite el inicio embebido)');
+
+    // Asegurar que la base de datos existe aunque se reutilice el servidor
+    const admin = new pg.Client({
+      host: '127.0.0.1',
+      port: rutas.puertoPg,
+      user: rutas.usuario,
+      password: rutas.password,
+      database: 'postgres',
+      client_encoding: 'UTF8',
+    });
+
+    try {
+      await admin.connect();
+      const existe = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [rutas.baseDatos]);
+      if (!existe.rowCount || existe.rowCount === 0) {
+        console.log(`[postgres] Creando base de datos ${rutas.baseDatos}...`);
+        await admin.query(`CREATE DATABASE "${rutas.baseDatos}"`);
+      }
+    } finally {
+      await admin.end();
+    }
+
     return {
       host: '127.0.0.1',
       port: rutas.puertoPg,

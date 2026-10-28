@@ -20,41 +20,43 @@
   align-items: center;
 }
 
-/* ------------------------------------------------------------------ el botón */
-
+/* Botón de ayuda con mismo estilo que otros botones de barra */
 .ayuda-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 1.875rem;
+  height: 1.875rem;
   padding: 0;
-  background: rgb(255 255 255 / 12%);
-  border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
   color: var(--sobre-acento);
   cursor: pointer;
   transition:
     background-color 0.12s ease,
-    transform 0.06s ease,
-    box-shadow 0.12s ease;
+    border-color 0.12s ease,
+    opacity 0.12s ease;
   flex-shrink: 0;
+  opacity: 0.9;
 }
 
 .ayuda-btn:hover {
-  background: rgb(255 255 255 / 22%);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
+  background: rgb(255 255 255 / 16%);
+  border-color: rgb(255 255 255 / 28%);
+  opacity: 1;
 }
 
 .ayuda-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+  background: rgb(255 255 255 / 22%);
 }
 
 .ayuda-btn:focus-visible {
   outline: 2px solid var(--sobre-acento);
   outline-offset: 2px;
+  background: rgb(255 255 255 / 16%);
+  border-color: rgb(255 255 255 / 28%);
+  opacity: 1;
 }
 
 .ayuda-icon,

@@ -237,9 +237,10 @@
   }
 }
 
-/* El usuario va a la derecha con una linea de separacion que lo despega del
-   centro de la barra. Antes flotaba en el mismo azul sin nada que dijera que
-   ahi empieza la zona de "esta persona, esta accion". */
+/* --- Controles de zoom posicionados a la izquierda ---
+ *
+ * Los botones de zoom (acercar/alejar) van a la izquierda del área de usuario
+ */
 .usuario {
   display: flex;
   align-items: center;
@@ -247,16 +248,22 @@
   margin-left: auto;
   padding-left: 1rem;
   border-left: 1px solid rgb(255 255 255 / 25%);
+  position: relative;
+}
 
-  .nombre-usuario {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--sobre-acento);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 150px;
-  }
+/* Cuando hay controles de zoom, agregamos espacio para ellos */
+.usuario:has(.zoom) {
+  padding-left: 5rem;
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* Botones de la barra: solo iconos, compactos */
@@ -363,19 +370,32 @@
     padding: 0.875rem 0.5rem 0.25rem;
   }
 
-  .lateral-logo-pie {
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0.25rem;
-    background: var(--superficie);
-    border: 1px solid var(--borde);
-    border-radius: 0.5rem;
-    box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
-    flex: 0 0 auto;
-    user-select: none;
-    -webkit-user-drag: none;
-    pointer-events: none;
-  }
+/* --- Logo de la sidebar más grande ---
+ *
+ * El logo ahora es visible en la parte inferior del menú lateral
+ * con un tamaño mayor para mejor visibilidad.
+ */
+.lateral-logo-pie {
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0.375rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.625rem;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
+  flex: 0 0 auto;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.lateral-logo-pie:hover {
+  transform: scale(1.05);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 12%);
+}
 
   &.colapsado {
     width: 4.5rem;
@@ -386,8 +406,9 @@
     }
 
     .lateral-logo-pie {
-      width: 2rem;
-      height: 2rem;
+      width: 3rem;
+      height: 3rem;
+      padding: 0.25rem;
     }
 
     .grupo-header,

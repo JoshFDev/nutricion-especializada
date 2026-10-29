@@ -237,10 +237,8 @@
   }
 }
 
-/* --- Controles de zoom posicionados a la izquierda ---
- *
- * Los botones de zoom (acercar/alejar) van a la izquierda del área de usuario
- */
+/* El usuario va a la derecha con una linea de separacion que lo despega del
+   centro de la barra. */
 .usuario {
   display: flex;
   align-items: center;
@@ -248,22 +246,22 @@
   margin-left: auto;
   padding-left: 1rem;
   border-left: 1px solid rgb(255 255 255 / 25%);
-  position: relative;
-}
 
-/* Cuando hay controles de zoom, agregamos espacio para ellos */
-.usuario:has(.zoom) {
-  padding-left: 5rem;
+  .nombre-usuario {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--sobre-acento);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+  }
 }
 
 .zoom {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 /* Botones de la barra: solo iconos, compactos */
@@ -406,8 +404,8 @@
     }
 
     .lateral-logo-pie {
-      width: 3rem;
-      height: 3rem;
+      width: 2.25rem;
+      height: 2.25rem;
       padding: 0.25rem;
     }
 

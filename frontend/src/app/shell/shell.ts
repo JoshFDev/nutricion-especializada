@@ -74,11 +74,13 @@ export class Shell {
       const guardado = localStorage.getItem('app:zoom');
       if (guardado) {
         this.zoom.set(parseFloat(guardado));
-        this.aplicarZoom();
       }
     } catch {
       /* si no se puede leer, usa el valor por defecto */
     }
+    // Aplicar el zoom inicial (incluido el valor por defecto) para que la
+    // variable CSS y el estilo queden sincronizados desde el arranque.
+    this.aplicarZoom();
   }
 
   /** Aplica el nivel de zoom actual al elemento raíz */
@@ -86,12 +88,15 @@ export class Shell {
     try {
       const factor = this.zoom();
       this.renderer.setStyle(document.documentElement, 'zoom', String(factor));
+      /* Variable CSS para que el marco se reajuste y no aparezca scroll de página. */
+      document.documentElement.style.setProperty('--zoom', String(factor));
       this.renderer.removeStyle(document.documentElement, 'transform');
       this.renderer.removeStyle(document.documentElement, 'transformOrigin');
     } catch {
       try {
         this.renderer.setStyle(document.documentElement, 'transformOrigin', '0 0');
         this.renderer.setStyle(document.documentElement, 'transform', `scale(${this.zoom()})`);
+        document.documentElement.style.setProperty('--zoom', String(this.zoom()));
       } catch {
         /* si falla, el zoom igual funciona */
       }
@@ -100,26 +105,24 @@ export class Shell {
 
   /** Aumenta el zoom en un paso, limitado al máximo */
   zoomIn(): void {
-    this.zoom.update((v) => {
-      const nuevo = Math.min(ZOOM_MAX, v + ZOOM_STEP);
-      if (nuevo !== v) {
-        this.guardarZoom(nuevo);
-        this.aplicarZoom();
-      }
-      return nuevo;
-    });
+    const v = this.zoom();
+    const nuevo = Math.min(ZOOM_MAX, v + ZOOM_STEP);
+    if (nuevo !== v) {
+      this.zoom.set(nuevo);
+      this.guardarZoom(nuevo);
+      this.aplicarZoom();
+    }
   }
 
   /** Disminuye el zoom en un paso, limitado al mínimo */
   zoomOut(): void {
-    this.zoom.update((v) => {
-      const nuevo = Math.max(ZOOM_MIN, v - ZOOM_STEP);
-      if (nuevo !== v) {
-        this.guardarZoom(nuevo);
-        this.aplicarZoom();
-      }
-      return nuevo;
-    });
+    const v = this.zoom();
+    const nuevo = Math.max(ZOOM_MIN, v - ZOOM_STEP);
+    if (nuevo !== v) {
+      this.zoom.set(nuevo);
+      this.guardarZoom(nuevo);
+      this.aplicarZoom();
+    }
   }
 
   /** Guarda el nivel de zoom en localStorage */

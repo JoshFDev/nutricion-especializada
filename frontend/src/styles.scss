@@ -60,6 +60,11 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* El scroll vive dentro del shell (`.contenido`) y del login, nunca en el
+     documento: con esto no aparece la barra de la página ni cuando el zoom
+     del shell escala el marco por encima de la ventana. */
+  overflow: hidden;
+  height: 100%;
 }
 
 body {

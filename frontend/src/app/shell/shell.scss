@@ -41,7 +41,11 @@
 }
 
 .app {
-  height: 100dvh;
+  /* El zoom se aplica al documento y escala el marco: para que el marco siga
+     cabiendo en la ventana (y no aparezca la barra de scroll de la página)
+     se divide el alto/ancho entre el factor de zoom. */
+  width: calc(100% / var(--zoom, 1));
+  height: calc(100dvh / var(--zoom, 1));
   display: flex;
   flex-direction: column;
   overflow: hidden;

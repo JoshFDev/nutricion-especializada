@@ -51,12 +51,19 @@
   background: rgb(255 255 255 / 22%);
 }
 
+/* El fondo lleno es SOLO para el hover. Al enfocar con teclado se marca con
+   el contorno, sin dejar el boton pintado despues de hacer clic. */
 .ayuda-btn:focus-visible {
   outline: 2px solid var(--sobre-acento);
   outline-offset: 2px;
-  background: rgb(255 255 255 / 16%);
-  border-color: rgb(255 255 255 / 28%);
-  opacity: 1;
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Solo el hover pinta el boton. */
+.ayuda-btn:not(:hover) {
+  background: transparent;
+  border-color: transparent;
 }
 
 .ayuda-icon,

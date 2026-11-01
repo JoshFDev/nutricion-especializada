@@ -38,6 +38,8 @@
   /* Sin esto el `.app` de 100dvh mide bien, pero el host queda en su alto
      automatico y en una pagina corta el fondo no llega al final. */
   height: 100%;
+  /* Evita que el marco escalado por el zoom deje barras de scroll en el host. */
+  overflow: hidden;
 }
 
 .app {

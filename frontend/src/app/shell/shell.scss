@@ -43,10 +43,12 @@
 }
 
 .app {
-  /* El zoom se aplica al documento y escala el marco: para que el marco siga
-     cabiendo en la ventana (y no aparezca la barra de scroll de la página)
-     se divide el alto/ancho entre el factor de zoom. */
-  width: calc(100% / var(--zoom, 1));
+  /* El zoom se aplica al documento con `zoom`. El ancho `100%` ya vive en el
+     sistema de coordenadas escalado: dividirlo entre el factor dejaba una
+     franja blanca a la derecha y corría el contenido a la izquierda.
+     El alto sí se divide: las unidades de viewport (`dvh`) NO se escalan con
+     `zoom`, así que sin la división el marco se salía por abajo. */
+  width: 100%;
   height: calc(100dvh / var(--zoom, 1));
   display: flex;
   flex-direction: column;

@@ -15,7 +15,7 @@ export const INFO_SISTEMA = {
   nombre: 'Nutrición Especializada',
   descripcion: 'Punto de venta, inventario y cobranza para alimento forrajero.',
   /** Se sube a mano. Ver la nota de arriba. */
-  version: '1.0.0',
+  version: '1.1.0',
   /** La razón social, la que va en el pie de "Acerca de". */
   empresa: 'Nutrición Especializada',
   /**

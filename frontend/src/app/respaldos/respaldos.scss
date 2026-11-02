@@ -1,0 +1,80 @@
+/*
+ * La pantalla de Respaldos.
+ *
+ * Lo comun (cabecera, tabla, estado vacio, botones, error) viene de
+ * `nucleo/pantallas.scss`. Lo propio es el resumen de arriba, la etiqueta
+ * del tipo de respaldo y el ancho del nombre de archivo, que es lo unico
+ * que esta pantalla tiene y las demas no.
+ */
+
+@use '../nucleo/pantallas';
+
+:host {
+  display: block;
+}
+
+.resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 2rem;
+  margin-bottom: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+.dato {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.dato-etiqueta {
+  font-size: 0.75rem;
+  color: var(--texto-tenue);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dato-valor {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+
+/* La explicacion de la rotacion va al final y ocupa el resto de la fila. */
+.nota {
+  flex: 1 1 22rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--texto-tenue);
+}
+
+/* El nombre del archivo es largo y no debe partirse a media palabra. */
+.archivo {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.tipo {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+}
+
+/* El automatico es el que corre solo: se distingue sin gritar. */
+.tipo-auto {
+  color: var(--acento-texto);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}

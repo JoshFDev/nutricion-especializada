@@ -53,15 +53,29 @@ export async function sumarIntentoFallido(
 ): Promise<number> {
   const r = await consultarUno<{ intentos: number }>(
     cliente,
-    `UPDATE usuarios
-        SET intentos_fallidos = intentos_fallidos + 1,
+    `UPDATE usuarios u
+        SET intentos_fallidos = CASE
+              -- Si el bloqueo ya vencio, la cuenta vuelve a empezar en 1.
+              -- Sin esto el contador se quedaba en 5 para siempre y el
+              -- primer error despues de esperar los 15 minutos la
+              -- bloqueaba otra vez de inmediato.
+              WHEN u.bloqueado_hasta IS NOT NULL AND u.bloqueado_hasta <= now()
+                THEN 1
+              ELSE u.intentos_fallidos + 1
+            END,
             bloqueado_hasta = CASE
-              WHEN intentos_fallidos + 1 >= $2
+              WHEN (CASE
+                      WHEN u.bloqueado_hasta IS NOT NULL AND u.bloqueado_hasta <= now()
+                        THEN 1
+                      ELSE u.intentos_fallidos + 1
+                    END) >= $2
                 THEN now() + ($3 || ' minutes')::INTERVAL
-              ELSE bloqueado_hasta
+              -- Si no llego al maximo, se limpia un bloqueo vencido que
+              -- hubiera quedado escrito.
+              ELSE NULL
             END
-      WHERE id = $1
-      RETURNING intentos_fallidos AS intentos`,
+      WHERE u.id = $1
+      RETURNING u.intentos_fallidos AS intentos`,
     [usuarioId, maxIntentos, String(minutosBloqueo)],
   );
   return r?.intentos ?? 0;

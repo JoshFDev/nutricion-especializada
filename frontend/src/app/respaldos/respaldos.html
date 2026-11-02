@@ -1,0 +1,128 @@
+<!--
+  Respaldos: copias de la base y restauracion.
+
+  La pantalla no habla con la API: todo pasa por el puente de Electron. Por
+  eso, cuando corre en un navegador normal, se muestra el aviso de que los
+  respaldos solo existen en la aplicacion de escritorio en vez de una tabla
+  vacia que pareceria un fallo.
+
+  Los botones de crear/restaurar solo salen con `respaldos.gestionar`. El
+  menu abre la pantalla con `respaldos.ver`, que es un permiso distinto a
+  proposito: ver que respaldos hay no es lo mismo que reemplazar la base.
+-->
+<div class="cabecera">
+  <div>
+    <h1>Respaldos</h1>
+    <p class="tenue">
+      Copias de seguridad de toda la base de datos. Se guardan en este equipo, dentro de la carpeta
+      de datos de la aplicacion.
+    </p>
+  </div>
+
+  @if (disponible) {
+    <div class="acciones-cabecera">
+      <button type="button" class="chico" (click)="abrirCarpeta()">Abrir carpeta</button>
+      @if (puedeGestionar()) {
+        <button type="button" class="primario" (click)="crear()" [disabled]="trabajando() !== null">
+          {{ trabajando() === 'crear' ? 'Creando...' : 'Crear respaldo ahora' }}
+        </button>
+      }
+    </div>
+  }
+</div>
+
+@if (!disponible) {
+  <div class="estado-vacio">
+    <h2>Los respaldos solo estan en la aplicacion de escritorio</h2>
+    <p>
+      Esta pantalla necesita acceso a los archivos del equipo, y el navegador no lo tiene. Abre
+      Nutricion Especializada desde el acceso directo instalado para crear o restaurar respaldos.
+    </p>
+  </div>
+} @else {
+  <section class="resumen">
+    <div class="dato">
+      <span class="dato-etiqueta">Ultimo respaldo automatico</span>
+      <span class="dato-valor">
+        @if (ultimoAutomatico(); as ultimo) {
+          {{ fecha(ultimo.creadoEn) }}
+        } @else {
+          Todavia no hay
+        }
+      </span>
+    </div>
+    <div class="dato">
+      <span class="dato-etiqueta">Respaldos guardados</span>
+      <span class="dato-valor">{{ total() }}</span>
+    </div>
+    <p class="nota">
+      El sistema crea un respaldo automatico al abrir y al cerrar la aplicacion. Conserva los
+      ultimos 30 automaticos; los manuales y los de seguridad no se borran solos.
+    </p>
+  </section>
+
+  @if (error(); as mensaje) {
+    <p class="error">{{ mensaje }}</p>
+  }
+
+  @if (cargando()) {
+    <p class="cargando">Cargando respaldos...</p>
+  } @else if (respaldos().length === 0) {
+    <div class="estado-vacio">
+      <h2>Todavia no hay respaldos</h2>
+      <p>
+        En cuanto abras o cierres la aplicacion se creara el primero. Tambien puedes crear uno ahora
+        con el boton de arriba.
+      </p>
+      @if (puedeGestionar()) {
+        <button type="button" class="primario" (click)="crear()" [disabled]="trabajando() !== null">
+          Crear el primer respaldo
+        </button>
+      }
+    </div>
+  } @else {
+    <div class="tabla-wrapper">
+      <table class="tabla listado">
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Fecha</th>
+            <th class="num">Tamano</th>
+            <th>Tipo</th>
+            @if (puedeGestionar()) {
+              <th class="centro">Acciones</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (respaldo of respaldos(); track respaldo.nombre) {
+            <tr>
+              <td class="archivo">{{ respaldo.nombre }}</td>
+              <td>{{ fecha(respaldo.creadoEn) }}</td>
+              <td class="num">{{ tamano(respaldo.tamano) }}</td>
+              <td>
+                <span class="tipo" [class.tipo-auto]="respaldo.tipo === 'automatico'">
+                  {{ tipo(respaldo.tipo) }}
+                </span>
+              </td>
+              @if (puedeGestionar()) {
+                <td class="centro">
+                  <button
+                    type="button"
+                    class="peligro chico"
+                    (click)="restaurar(respaldo)"
+                    [disabled]="trabajando() !== null"
+                  >
+                    Restaurar
+                  </button>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+<app-confirm-modal />

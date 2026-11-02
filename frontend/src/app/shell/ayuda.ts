@@ -13,6 +13,7 @@ import { ICONOS } from '../nucleo/iconos/iconos';
 import { INFO_SISTEMA } from '../nucleo/info';
 import { menuPara } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
+import { versionApp } from '../nucleo/version';
 
 /** Los paneles que cuelgan del botón de ayuda. */
 type Seccion = 'guia' | 'soporte' | 'acerca';
@@ -45,6 +46,8 @@ export class Ayuda {
   private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly info = INFO_SISTEMA;
+  /** La version real del paquete instalado (o la de `info.ts` si no hay Electron). */
+  readonly version = versionApp;
   readonly anio = new Date().getFullYear();
 
   /** El título de cada panel, por llave. */

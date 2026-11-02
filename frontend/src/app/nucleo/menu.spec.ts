@@ -134,12 +134,12 @@ describe('primerModulo', () => {
 });
 
 describe('el catalogo', () => {
-  it('tiene los quince modulos del sistema', () => {
+  it('tiene los dieciseis modulos del sistema', () => {
     // Es un candado, no una descripcion: si el sistema gana un modulo y
     // este archivo no, el modulo nuevo es invisible en la app y nadie se
-    // da cuenta hasta que alguien lo pide. Son los quince enrutadores de
+    // da cuenta hasta que alguien lo pide. Son los dieciseis enrutadores de
     // negocio que monta `app.ts`, sin `salud` ni `auth`.
-    expect(MODULOS).toHaveLength(15);
+    expect(MODULOS).toHaveLength(16);
     expect(MENU.length).toBeGreaterThan(1);
   });
 });

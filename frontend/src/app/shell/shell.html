@@ -136,6 +136,14 @@
                   <span>{{ opcion.etiqueta }}</span>
                 </button>
               }
+
+              <!--
+                La version va al pie del menu y no solo en "Acerca de".
+                Es lo primero que se pregunta cuando hay que dar soporte, y
+                tenerla a un clic evita que alguien tenga que abrir la Ayuda
+                para dictarla por telefono.
+              -->
+              <div class="sistema-version">Versión {{ version() }}</div>
             </div>
           }
         </div>

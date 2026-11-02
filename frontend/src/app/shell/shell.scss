@@ -1058,6 +1058,20 @@ a:hover .menu-icon,
 }
 
 /*
+ * El pie con la version. Va separado por una linea y con tipografia mas
+ * chica: no es una opcion del menu, es el dato que se dicta por telefono.
+ */
+.sistema-version {
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.75rem 0.25rem;
+  border-top: 1px solid var(--borde);
+  color: var(--texto-tenue);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/*
  * Lo que hay aqui abajo antes vivia como un bloque de "fixes" al final del
  * archivo que repetia reglas ya escritas mas arriba y las pisaba con
  * `!important`. Todo eso se borro y quedo una sola declaracion por cosa: los

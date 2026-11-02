@@ -1,6 +1,7 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
+import { cargarVersionApp } from './app/nucleo/version';
 
 /*
  * En la app de escritorio el marco nativo está oculto y los botones de la
@@ -13,5 +14,9 @@ import { App } from './app/app';
 if (navigator.userAgent.includes('Electron')) {
   document.documentElement.classList.add('escritorio');
 }
+
+// Se pregunta en paralelo: no bloquea el arranque y, cuando llega, actualiza
+// las dos etiquetas que muestran la version.
+void cargarVersionApp();
 
 bootstrapApplication(App, appConfig).catch((err) => console.error(err));

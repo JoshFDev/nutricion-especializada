@@ -223,6 +223,16 @@ export const MENU: Grupo[] = [
         carga: () => import('../auditoria/auditoria').then((m) => m.Auditoria),
       },
       {
+        ruta: 'respaldos',
+        etiqueta: 'Respaldos',
+        permiso: 'respaldos.ver',
+        icon: 'database',
+        pendiente: 'Copias de seguridad de la base y su restauración.',
+        ayuda:
+          'Las copias de seguridad de toda la base: crea una, revisa las que hay y restaura la que necesites.',
+        carga: () => import('../respaldos/respaldos').then((m) => m.Respaldos),
+      },
+      {
         ruta: 'caja',
         etiqueta: 'Caja y bancos',
         permiso: 'caja.ver',

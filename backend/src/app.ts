@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { env, origenesCORS } from './config/entorno.js';
 import { prepararSesion } from './middleware/sesion.js';
+import { crearLimiteIntentos } from './middleware/limite-intentos.js';
 import { manejadorErrores } from './middleware/errores.js';
 import { NoEncontrado } from './core/errores.js';
 import { rutasSalud } from './modules/salud/rutas.js';
@@ -83,6 +84,41 @@ export function crearApp(): Express {
 
   // 5. Logs de acceso
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+  /**
+   * 5 bis. Limite por IP de las dos rutas publicas que se pueden martillar:
+   * el login y la recuperacion de contrasena.
+   *
+   * Va ANTES de `prepararSesion` a proposito. Si fuera despues, cada intento
+   * rechazado abriria una conexion a la base solo para que el limite lo
+   * corte en la siguiente capa; con el limite delante, un ataque de fuerza
+   * bruta no toca PostgreSQL.
+   *
+   * Los numeros: el login aguanta 20 intentos cada 10 minutos por IP. La
+   * cuenta se bloquea a los 5, asi que este limite solo entra cuando alguien
+   * esta probando varias cuentas o scripteando. La recuperacion es mas
+   * estricta (5 cada 15 minutos) porque cada solicitud manda un correo.
+   */
+  app.use(
+    '/api/auth/login',
+    crearLimiteIntentos({
+      maximo: 20,
+      ventanaMs: 10 * 60 * 1000,
+      mensaje:
+        'Demasiados intentos de inicio de sesion desde este equipo. ' +
+        'Espera unos minutos antes de volver a intentarlo.',
+    }),
+  );
+  app.use(
+    '/api/auth/forgot-password',
+    crearLimiteIntentos({
+      maximo: 5,
+      ventanaMs: 15 * 60 * 1000,
+      mensaje:
+        'Demasiadas solicitudes de recuperacion de contrasena. ' +
+        'Espera unos minutos antes de volver a intentarlo.',
+    }),
+  );
 
   // 6. Sesion: abre la conexion dedicada del request y la devuelve al pool
   //    al terminar. Se monta en /api para que las rutas de salud no

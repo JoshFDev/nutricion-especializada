@@ -1,7 +1,35 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld('electronAPI', {
+/**
+ * La unica puerta entre la pantalla y el proceso principal.
+ *
+ * El renderer corre en sandbox y con `contextIsolation`: no ve `ipcRenderer`
+ * ni puede leer archivos. Lo que se expone aqui es la lista cerrada de cosas
+ * que la interfaz puede pedir, y cada una la resuelve un manejador concreto
+ * en `main.ts`.
+ */
+contextBridge.exposeInMainWorld("electronAPI", {
+  /** La version de Electron. Se conserva por compatibilidad. */
   version: () => process.versions.electron,
+
+  /**
+   * La version de la aplicacion, la que se muestra en "Acerca de" y en el
+   * menu Sistema. Sale de `app.getVersion()` en el proceso principal, que a
+   * su vez lee el `version` del package.json empaquetado.
+   */
+  appVersion: () => ipcRenderer.invoke("app:version"),
+
+  respaldos: {
+    /** Los archivos que hay en la carpeta de respaldos. */
+    listar: () => ipcRenderer.invoke("respaldos:listar"),
+    /** Crea un respaldo manual y devuelve su ficha. */
+    crear: () => ipcRenderer.invoke("respaldos:crear"),
+    /** Restaura un respaldo por nombre. La aplicacion se reinicia sola. */
+    restaurar: (nombre: string) =>
+      ipcRenderer.invoke("respaldos:restaurar", nombre),
+    /** Abre la carpeta de respaldos en el explorador de Windows. */
+    abrirCarpeta: () => ipcRenderer.invoke("respaldos:abrir-carpeta"),
+  },
 });
 
 /**
@@ -12,11 +40,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
  * de escritorio sí: la barra azul hace de barra de título.
  */
 function marcarEscritorio() {
-  document.documentElement.classList.add('escritorio');
+  document.documentElement.classList.add("escritorio");
 }
 
-if (document.readyState === 'loading') {
-  window.addEventListener('DOMContentLoaded', marcarEscritorio, { once: true });
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", marcarEscritorio, { once: true });
 } else {
   marcarEscritorio();
 }

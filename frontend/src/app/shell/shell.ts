@@ -1,10 +1,20 @@
-import { Component, HostListener, computed, effect, inject, signal, Renderer2 } from '@angular/core';
+import {
+  Component,
+  HostListener,
+  RendererFactory2,
+  computed,
+  effect,
+  inject,
+  signal,
+  type Renderer2,
+} from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { menuPara, modulosSistema, type Grupo } from '../nucleo/menu';
 import { Sesion } from '../nucleo/sesion';
 import { ICONOS } from '../nucleo/iconos/iconos';
 import { ToastContainer } from '../nucleo/toast';
+import { versionApp } from '../nucleo/version';
 import { Ayuda } from './ayuda';
 
 const ZOOM_MIN = 0.8;
@@ -36,6 +46,8 @@ export class Shell {
   private readonly router = inject(Router);
   private readonly sesion = inject(Sesion);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly rendererFactory = inject(RendererFactory2);
+  private readonly renderer: Renderer2 = this.rendererFactory.createRenderer(null, null);
 
   /** Los grupos con lo que la persona puede ver, en el orden del catálogo. */
   readonly menu = computed(() => menuPara(new Set(this.sesion.perfil()?.permisos ?? [])));
@@ -62,10 +74,13 @@ export class Shell {
   /** Estado del desplegable del menú de sistema en la barra superior */
   readonly sistemaDropdownAbierto = signal(false);
 
+  /** La versión instalada, para el pie del menú Sistema. */
+  readonly version = versionApp;
+
   /** Nivel de zoom actual (1 = 100%, valores entre 0.8 y 1.5) */
   readonly zoom = signal(1);
 
-  constructor(private readonly renderer: Renderer2) {
+  constructor() {
     // El ancho del menú es una preferencia, no un estado de la pantalla:
     // recargarla no debería devolverla al ancho que la persona eligió.
     effect(() => this.guardarSidebarColapsado(this.sidebarColapsado()));

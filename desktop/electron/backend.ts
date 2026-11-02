@@ -38,7 +38,7 @@ export async function iniciarBackend(config: {
 
   console.log(`[backend] Iniciando ${script} desde ${cwd}`);
 
-  proceso = fork(script, [], {
+  const hijo = fork(script, [], {
     cwd,
     env: {
       ...process.env,
@@ -72,9 +72,15 @@ export async function iniciarBackend(config: {
     stdio: 'inherit',
   });
 
-  proceso.on('exit', (codigo) => {
+  proceso = hijo;
+
+  hijo.on('exit', (codigo) => {
     console.log(`[backend] Proceso finalizado con codigo ${codigo}`);
-    proceso = null;
+    // Solo se limpia si sigue siendo el proceso actual. Sin esta
+    // comparacion, el `exit` del backend viejo (al restaurar y reiniciar)
+    // borraria la referencia al backend NUEVO y la aplicacion se quedaria
+    // creyendo que no hay ninguno.
+    if (proceso === hijo) proceso = null;
   });
 
   return new Promise<void>((resolveListo, reject) => {
@@ -99,10 +105,45 @@ export async function iniciarBackend(config: {
   });
 }
 
-export async function detenerBackend() {
-  if (proceso) {
-    console.log('[backend] Deteniendo...');
-    proceso.kill('SIGTERM');
-    proceso = null;
-  }
+/**
+ * Detiene el backend y ESPERA a que el proceso termine.
+ *
+ * La version anterior mandaba SIGTERM y ponia `proceso = null` de inmediato.
+ * Para apagar la aplicacion alcanzaba, pero para restaurar un respaldo no:
+ * la restauracion necesita el esquema sin conexiones activas, y si el
+ * backend seguia cerrando, el DROP SCHEMA se quedaba esperando sus locks.
+ *
+ * Si en cinco segundos no salio, se mata. Es el mismo plazo que usa
+ * PostgreSQL para un apagado ordenado; mas tiempo solo deja la ventana
+ * congelada.
+ */
+export async function detenerBackend(): Promise<void> {
+  const hijo = proceso;
+  if (!hijo) return;
+
+  proceso = null;
+  console.log('[backend] Deteniendo...');
+
+  await new Promise<void>((resolver) => {
+    const plazo = setTimeout(() => {
+      try {
+        hijo.kill('SIGKILL');
+      } catch {
+        // Ya habia terminado.
+      }
+      resolver();
+    }, 5000);
+
+    hijo.once('exit', () => {
+      clearTimeout(plazo);
+      resolver();
+    });
+
+    try {
+      hijo.kill('SIGTERM');
+    } catch {
+      clearTimeout(plazo);
+      resolver();
+    }
+  });
 }

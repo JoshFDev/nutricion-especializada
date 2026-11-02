@@ -48,6 +48,23 @@ export class NoEncontrado extends AppError {
   }
 }
 
+/**
+ * 429: demasiadas peticiones seguidas.
+ *
+ * Se usa para el limite por IP del login y de la recuperacion de
+ * contrasena. Va aparte del bloqueo por cuenta: el bloqueo de la cuenta es
+ * del usuario, este es de la direccion desde la que se esta intentando, y
+ * protege incluso cuando se prueban correos distintos.
+ */
+export class DemasiadasPeticiones extends AppError {
+  constructor(
+    mensaje = 'Demasiados intentos seguidos. Espera unos minutos e intentalo de nuevo.',
+    detalles?: unknown,
+  ) {
+    super(429, 'DEMASIADAS_PETICIONES', mensaje, detalles);
+  }
+}
+
 /** 409: choca con el estado actual (duplicado, referencia en uso). */
 export class Conflicto extends AppError {
   constructor(codigo: string, mensaje: string, detalles?: unknown) {

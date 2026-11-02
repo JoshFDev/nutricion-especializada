@@ -24,10 +24,25 @@ export interface ResultadoRestauracion {
   filas: number;
 }
 
+/** Resultado de la validacion de integridad de un respaldo. */
+export interface ResultadoValidacion {
+  valido: boolean;
+  errores: string[];
+  meta?: {
+    formato: number;
+    esquema: string;
+    creadoEn: string;
+    versionApp: string;
+    tablas: Array<{ nombre: string; columnas: string[] }>;
+  };
+  checksum: string;
+}
+
 interface RespaldosApi {
   listar: () => Promise<Respaldo[]>;
   crear: () => Promise<Respaldo>;
   restaurar: (nombre: string) => Promise<ResultadoRestauracion>;
+  validar: (nombre: string) => Promise<ResultadoValidacion>;
   abrirCarpeta: () => Promise<void>;
 }
 
@@ -70,6 +85,18 @@ export async function abrirCarpetaRespaldos(): Promise<void> {
   if (!puente)
     throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
   return puente.abrirCarpeta();
+}
+
+/**
+ * Valida la integridad de un respaldo antes de restaurarlo.
+ *
+ * Lanza si el puente no esta disponible.
+ */
+export async function validarIntegridad(nombre: string): Promise<ResultadoValidacion> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.validar(nombre);
 }
 
 /** El tamano en una unidad que se pueda leer de un vistazo. */

@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { createGunzip, createGzip } from "node:zlib";
 import { createReadStream, createWriteStream } from "node:fs";
-import { readdir, stat, unlink } from "node:fs/promises";
+import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { once } from "node:events";
 import { pipeline } from "node:stream/promises";
 import { basename, join } from "node:path";
@@ -45,6 +46,9 @@ const ESQUEMA = "pos";
 const LOTE_ESCRITURA = 500;
 const LOTE_LECTURA = 500;
 const MAX_AUTOMATICOS = 30;
+
+/** Extensión del archivo de checksum que acompaña a cada respaldo. */
+const EXTENSION_CHECKSUM = ".sha256";
 
 /** Tablas que no se exportan (ver la explicacion de arriba). */
 const TABLAS_EXCLUIDAS = new Set(["schema_migrations", "sesiones"]);
@@ -127,6 +131,169 @@ function nombreDeArchivo(tipo: TipoRespaldo): string {
         ? "seguridad"
         : "respaldo";
   return `${prefijo}-${marcaDeTiempo()}.json.gz`;
+}
+
+function nombreArchivoChecksum(nombre: string): string {
+  return `${nombre}${EXTENSION_CHECKSUM}`;
+}
+
+/**
+ * Resultado de la validación de integridad de un respaldo.
+ */
+export interface ResultadoValidacion {
+  /** Si el respaldo pasa todas las comprobaciones. */
+  valido: boolean;
+  /** Errores encontrados, si los hay. */
+  errores: string[];
+  /** Cabecera del respaldo, si se pudo leer. */
+  meta?: MetaRespaldo;
+  /** Checksum calculado del archivo. */
+  checksum: string;
+}
+
+/**
+ * Calcula el hash SHA-256 de un archivo.
+ */
+async function calcularChecksum(ruta: string): Promise<string> {
+  const hash = createHash("sha256");
+  const entrada = createReadStream(ruta);
+  for await (const fragmento of entrada) {
+    hash.update(fragmento);
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * Valida la integridad de un respaldo antes de restaurarlo.
+ *
+ * Comprueba:
+ *   - Que el archivo exista y termine en `.json.gz`.
+ * *   - Que la cabecera `meta` tenga formato, esquema y tablas válidos.
+ *   - Que el resumen `fin` exista y las filas esperadas coincidan con las
+ *     reales del archivo (detecta archivos truncados).
+ *   - Que el checksum del archivo coincida con el archivo `.sha256`
+ *     acompañado, si existe.
+ *
+ * No modifica la base de datos: es solo de lectura.
+ */
+export async function validarIntegridadRespaldo(
+  config: ConfiguracionPg,
+  carpeta: string,
+  nombre: string,
+): Promise<ResultadoValidacion> {
+  const errores: string[] = [];
+
+  if (basename(nombre) !== nombre || !nombre.endsWith(".json.gz")) {
+    return {
+      valido: false,
+      errores: ["El nombre del respaldo no es valido."],
+      meta: undefined,
+      checksum: "",
+    };
+  }
+
+  const ruta = join(carpeta, nombre);
+
+  let existe = false;
+  try {
+    await stat(ruta);
+    existe = true;
+  } catch {
+    /* archivo no existe */
+  }
+  if (!existe) {
+    return {
+      valido: false,
+      errores: ["El archivo del respaldo no existe."],
+      meta: undefined,
+      checksum: "",
+    };
+  }
+
+  const checksum = await calcularChecksum(ruta);
+
+  // Verificar el archivo .sha256 si lo hay.
+  const rutaChecksum = join(carpeta, nombreArchivoChecksum(nombre));
+  try {
+    const contenido = await readFile(rutaChecksum, "utf8");
+    const esperadoLimpio = contenido.split(/\s+/)[0] ?? "";
+    if (esperadoLimpio && esperadoLimpio !== checksum) {
+      errores.push(
+        "El checksum del archivo no coincide con el registro de seguridad. El archivo pudo haberse modificado o corrompido.",
+      );
+    }
+  } catch {
+    // No hay archivo de checksum: no es un error, solo no se puede verificar.
+  }
+
+  // Leer y validar la cabecera.
+  let meta: MetaRespaldo | undefined;
+  try {
+    meta = await leerMeta(ruta);
+  } catch (error) {
+    errores.push(
+      `No se pudo leer la cabecera del respaldo: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return {
+      valido: false,
+      errores,
+      meta: undefined,
+      checksum,
+    };
+  }
+
+  if (!meta || meta.formato !== FORMATO) {
+    errores.push("El formato del respaldo no es compatible con esta version.");
+  }
+  if (meta.esquema !== ESQUEMA) {
+    errores.push(
+      "El esquema del respaldo no coincide con el de la base actual.",
+    );
+  }
+  if (!Array.isArray(meta.tablas) || meta.tablas.length === 0) {
+    errores.push("El respaldo no contiene tablas definidas.");
+  }
+
+  // Leer el resumen final y comparar filas esperadas vs reales.
+  let filasReales: Record<string, number> = {};
+  try {
+    const entrada = createReadStream(ruta).pipe(createGunzip());
+    const lector = createInterface({ input: entrada, crlfDelay: Infinity });
+    let vistoFin = false;
+    try {
+      for await (const linea of lector) {
+        if (!linea.trim()) continue;
+        const valor = JSON.parse(linea) as Record<string, unknown>;
+        if (valor["t"] === "fin") {
+          const filas = valor["filas"];
+          filasReales =
+            filas !== null && typeof filas === "object"
+              ? (filas as Record<string, number>)
+              : {};
+          vistoFin = true;
+        }
+      }
+    } finally {
+      lector.close();
+      entrada.destroy();
+    }
+    if (!vistoFin) {
+      errores.push(
+        "El respaldo no trae el resumen final; puede estar incompleto.",
+      );
+    }
+  } catch (error) {
+    errores.push(
+      `No se pudo leer el resumen del respaldo: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  const valido = errores.length === 0;
+  return { valido, errores, meta, checksum };
 }
 
 /** Los respaldos que hay en la carpeta, del mas nuevo al mas viejo. */
@@ -290,6 +457,15 @@ export async function crearRespaldo(
     gzip.end();
     await completado;
 
+    // Escribir el archivo de checksum (.sha256) junto al respaldo para
+    // poder verificar su integridad antes de restaurar.
+    const checksum = await calcularChecksum(ruta);
+    await writeFile(
+      join(carpeta, nombreArchivoChecksum(nombre)),
+      `${checksum}  ${nombre}\n`,
+      "utf8",
+    );
+
     const info = await stat(ruta);
     console.log(`[respaldos] Creado ${nombre} (${info.size} bytes)`);
     return {
@@ -304,6 +480,9 @@ export async function crearRespaldo(
     salida.destroy();
     await completado.catch(() => undefined);
     await unlink(ruta).catch(() => undefined);
+    await unlink(join(carpeta, nombreArchivoChecksum(nombre))).catch(
+      () => undefined,
+    );
     throw error;
   } finally {
     await cliente.end().catch(() => undefined);
@@ -662,7 +841,19 @@ export async function restaurarRespaldo(
   }
 
   const ruta = join(carpeta, nombre);
-  const meta = await leerMeta(ruta);
+
+  // Validar integridad antes de tocar la base de datos. Si el archivo esta
+  // corrupto, truncado o modificado, se aborta aqui sin riesgo de perder datos.
+  const validacion = await validarIntegridadRespaldo(config, carpeta, nombre);
+  if (!validacion.valido) {
+    throw new Error(
+      `El respaldo no es valido y no se puede restaurar:\n- ${validacion.errores.join(
+        "\n- ",
+      )}`,
+    );
+  }
+
+  const meta = validacion.meta!;
 
   const cliente = new pg.Client({ ...config, client_encoding: "UTF8" });
   await cliente.connect();

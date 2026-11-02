@@ -78,3 +78,42 @@
   background: var(--acento-suave);
   border-color: var(--acento);
 }
+
+/* Estado de integridad del respaldo. */
+.estado-integridad {
+  min-width: 7rem;
+}
+
+.estado-valido {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--exito-texto);
+  background: var(--exito-suave);
+  border: 1px solid var(--exito-suave);
+  border-radius: 999px;
+}
+
+.estado-invalido {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--peligro-texto);
+  background: var(--peligro-suave);
+  border: 1px solid var(--peligro-suave);
+  border-radius: 999px;
+  cursor: help;
+}
+
+.estado-verificando {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--advertencia-texto);
+  background: var(--advertencia-suave);
+  border: 1px solid var(--advertencia-suave);
+  border-radius: 999px;
+}

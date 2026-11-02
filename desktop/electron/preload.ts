@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     /** Restaura un respaldo por nombre. La aplicacion se reinicia sola. */
     restaurar: (nombre: string) =>
       ipcRenderer.invoke("respaldos:restaurar", nombre),
+    /** Valida la integridad de un respaldo antes de restaurarlo. */
+    validar: (nombre: string) =>
+      ipcRenderer.invoke("respaldos:validar", nombre),
     /** Abre la carpeta de respaldos en el explorador de Windows. */
     abrirCarpeta: () => ipcRenderer.invoke("respaldos:abrir-carpeta"),
   },

@@ -18,7 +18,9 @@ import {
   respaldosDisponibles,
   restaurarRespaldo,
   tamanoLegible,
+  validarIntegridad,
   type Respaldo,
+  type ResultadoValidacion,
   type TipoRespaldo,
 } from '../nucleo/respaldos';
 
@@ -56,7 +58,12 @@ export class Respaldos implements OnInit {
   readonly respaldos = signal<Respaldo[]>([]);
   readonly cargando = signal(true);
   readonly error = signal<string | null>(null);
-  readonly trabajando = signal<'crear' | 'restaurar' | null>(null);
+  readonly trabajando = signal<'crear' | 'restaurar' | 'validar' | null>(null);
+
+  /** Estado de validacion de integridad por nombre de respaldo. */
+  readonly validaciones = signal<
+    Record<string, { valido: boolean | null; errores: string[]; verificando: boolean }>
+  >({});
 
   /** El ultimo respaldo automatico, para el resumen de arriba. */
   readonly ultimoAutomatico = computed(
@@ -96,8 +103,57 @@ export class Respaldos implements OnInit {
     }
   }
 
+  async validar(respaldo: Respaldo): Promise<void> {
+    if (this.trabajando() !== null) return;
+
+    this.trabajando.set('validar');
+    const anterior = this.validaciones();
+    this.validaciones.set({
+      ...anterior,
+      [respaldo.nombre]: { valido: null, errores: [], verificando: true },
+    });
+
+    try {
+      const resultado = await validarIntegridad(respaldo.nombre);
+      this.validaciones.set({
+        ...anterior,
+        [respaldo.nombre]: {
+          valido: resultado.valido,
+          errores: resultado.errores,
+          verificando: false,
+        },
+      });
+
+      if (resultado.valido) {
+        this.toast.exito('El respaldo es valido y se puede restaurar.');
+      } else {
+        this.toast.error('El respaldo no es valido: ' + resultado.errores.join('; '));
+      }
+    } catch (fallo) {
+      this.toast.error(this.mensaje(fallo));
+      this.validaciones.set({
+        ...anterior,
+        [respaldo.nombre]: {
+          valido: null,
+          errores: [this.mensaje(fallo)],
+          verificando: false,
+        },
+      });
+    } finally {
+      if (this.trabajando() === 'validar') this.trabajando.set(null);
+    }
+  }
+
   async restaurar(respaldo: Respaldo): Promise<void> {
     if (!this.puedeGestionar() || this.trabajando() !== null) return;
+
+    // Validar integridad antes de permitir la restauracion.
+    const previa = this.validaciones()[respaldo.nombre];
+    if (!previa?.valido) {
+      await this.validar(respaldo);
+      const despues = this.validaciones()[respaldo.nombre];
+      if (!despues?.valido) return;
+    }
 
     const confirmado = await this.confirmModal().abrir({
       titulo: 'Restaurar un respaldo',
@@ -153,6 +209,11 @@ export class Respaldos implements OnInit {
       default:
         return 'Manual';
     }
+  }
+
+  /** Estado de validacion de un respaldo para mostrar en la plantilla. */
+  estadoValidacion(nombre: string) {
+    return this.validaciones()[nombre] ?? null;
   }
 
   /**

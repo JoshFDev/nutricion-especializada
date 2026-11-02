@@ -13,6 +13,7 @@ import {
   crearRespaldoAutomatico,
   listarRespaldos,
   restaurarRespaldo,
+  validarIntegridadRespaldo,
   type ConfiguracionPg,
   type ResumenRespaldo,
 } from "./respaldos.js";
@@ -194,6 +195,23 @@ function registrarIpc(): void {
   ipcMain.handle("respaldos:abrir-carpeta", async () => {
     const error = await shell.openPath(obtenerRutas().backups);
     if (error) throw new Error(error);
+  });
+
+  ipcMain.handle("respaldos:validar", async (_evento, nombre: unknown) => {
+    if (typeof nombre !== "string" || nombre.trim() === "") {
+      throw new Error("El nombre del respaldo no es valido.");
+    }
+    return validarIntegridadRespaldo(
+      pgConfigActual ?? {
+        host: "",
+        port: 0,
+        database: "",
+        user: "",
+        password: "",
+      },
+      obtenerRutas().backups,
+      nombre.trim(),
+    );
   });
 
   ipcMain.handle("respaldos:restaurar", async (_evento, nombre: unknown) => {

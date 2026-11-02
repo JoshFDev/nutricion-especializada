@@ -90,6 +90,7 @@
             <th class="num">Tamano</th>
             <th>Tipo</th>
             @if (puedeGestionar()) {
+              <th class="centro">Estado</th>
               <th class="centro">Acciones</th>
             }
           </tr>
@@ -106,6 +107,30 @@
                 </span>
               </td>
               @if (puedeGestionar()) {
+                <td class="centro estado-integridad">
+                  @if (estadoValidacion(respaldo.nombre)?.verificando) {
+                    <span class="estado-verificando">Verificando...</span>
+                  } @else if (estadoValidacion(respaldo.nombre)?.valido === true) {
+                    <span class="estado-valido" title="El respaldo paso las pruebas de integridad."
+                      >Valido</span
+                    >
+                  } @else if (estadoValidacion(respaldo.nombre)?.valido === false) {
+                    <span
+                      class="estado-invalido"
+                      [title]="estadoValidacion(respaldo.nombre)?.errores.join(' ') ?? ''"
+                      >Invalido</span
+                    >
+                  } @else {
+                    <button
+                      type="button"
+                      class="chico"
+                      (click)="validar(respaldo)"
+                      [disabled]="trabajando() !== null"
+                    >
+                      Validar
+                    </button>
+                  }
+                </td>
                 <td class="centro">
                   <button
                     type="button"

@@ -72,6 +72,88 @@
     </p>
   </section>
 
+  @if (puedeGestionar()) {
+    <section class="configuracion">
+      <h2>Respaldos programados</h2>
+      <p class="descripcion">
+        Crea un respaldo automatico todos los dias a la hora indicada, sin que tengas que acordarte
+        de hacerlo a mano.
+      </p>
+
+      <div class="campo">
+        <label>
+          <input
+            type="checkbox"
+            [checked]="horarioRespaldos()!.activo"
+            (change)="horarioRespaldos().activo = $event.target.checked"
+          />
+          Activar respaldos programados
+        </label>
+      </div>
+
+      <div class="campo fila">
+        <label>Hora</label>
+        <input
+          type="number"
+          min="0"
+          max="23"
+          [value]="horarioRespaldos()!.hora"
+          (input)="actualizarHora($event.target.value)"
+          [disabled]="!horarioRespaldos()!.activo || guardandoHorario()"
+        />
+        <label>Minuto</label>
+        <input
+          type="number"
+          min="0"
+          max="59"
+          [value]="horarioRespaldos()!.minuto"
+          (input)="actualizarMinuto($event.target.value)"
+          [disabled]="!horarioRespaldos()!.activo || guardandoHorario()"
+        />
+      </div>
+
+      <div class="campo dias">
+        <span class="etiqueta">Dias de la semana</span>
+        <div class="botones-dias">
+          @for (dia of [0, 1, 2, 3, 4, 5, 6]; track dia) {
+            <button
+              type="button"
+              class="dia"
+              [class.seleccionado]="diaSeleccionado(dia)"
+              (click)="toggleDia(dia)"
+              [disabled]="!horarioRespaldos()!.activo || guardandoHorario()"
+            >
+              {{ diaSemanaNombre(dia) }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="primario"
+        (click)="guardarHorario()"
+        [disabled]="guardandoHorario()"
+      >
+        {{ guardandoHorario() ? 'Guardando...' : 'Guardar horario' }}
+      </button>
+
+      @if (horarioRespaldos()!.activo) {
+        <p class="nota siguiente">
+          Proximo respaldo programado: los dias
+          {{
+            horarioRespaldos()!
+              .diasSemana.map((d) => diaSemanaNombre(d))
+              .join(', ')
+          }}
+          a las {{ horarioRespaldos()!.hora.toString().padStart(2, '0') }}:{{
+            horarioRespaldos()!.minuto.toString().padStart(2, '0')
+          }}.
+        </p>
+      }
+    </section>
+  }
+
   @if (error(); as mensaje) {
     <p class="error">{{ mensaje }}</p>
   }

@@ -126,3 +126,112 @@
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   word-break: break-all;
 }
+
+/* Seccion de configuracion de respaldos programados. */
+.configuracion {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+.configuracion h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--texto);
+}
+
+.descripcion {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--texto-tenue);
+}
+
+.campo {
+  margin-bottom: 0.75rem;
+}
+
+.campo.fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.campo label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.campo input[type='number'] {
+  width: 4rem;
+  padding: 0.375rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+  background: var(--fondo);
+}
+
+.campo input[type='number']:disabled {
+  background: var(--fondo);
+  color: var(--texto-tenue);
+  cursor: not-allowed;
+}
+
+.dias {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.etiqueta {
+  font-size: 0.875rem;
+  color: var(--texto);
+}
+
+.botones-dias {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.dia {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--texto);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dia:hover:not(:disabled) {
+  border-color: var(--acento);
+}
+
+.dia.seleccionado {
+  background: var(--acento);
+  color: var(--sobre-acento);
+  border-color: var(--acento);
+}
+
+.dia:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nota.siguiente {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+}

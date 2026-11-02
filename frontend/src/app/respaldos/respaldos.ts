@@ -15,12 +15,15 @@ import {
   cambiarCarpetaRespaldos,
   crearRespaldo,
   fechaLegible,
+  guardarHorarioRespaldos,
   listarRespaldos,
   obtenerCarpetaRespaldos,
+  obtenerHorarioRespaldos,
   respaldosDisponibles,
   restaurarRespaldo,
   tamanoLegible,
   validarIntegridad,
+  type HorarioRespaldos,
   type Respaldo,
   type ResultadoValidacion,
   type TipoRespaldo,
@@ -65,6 +68,17 @@ export class Respaldos implements OnInit {
   /** Carpeta actual donde se guardan los respaldos. */
   readonly carpetaRespaldos = signal<string>('');
 
+  /** Horario de respaldos programados. */
+  readonly horarioRespaldos = signal<HorarioRespaldos>({
+    activo: false,
+    hora: 20,
+    minuto: 0,
+    diasSemana: [0, 1, 2, 3, 4, 5, 6],
+  });
+
+  /** Si se esta guardando el horario. */
+  readonly guardandoHorario = signal(false);
+
   /** Estado de validacion de integridad por nombre de respaldo. */
   readonly validaciones = signal<
     Record<string, { valido: boolean | null; errores: string[]; verificando: boolean }>
@@ -80,6 +94,7 @@ export class Respaldos implements OnInit {
   ngOnInit(): void {
     void this.cargar();
     void this.cargarCarpeta();
+    void this.cargarHorario();
   }
 
   async cargarCarpeta(): Promise<void> {
@@ -109,6 +124,67 @@ export class Respaldos implements OnInit {
     } finally {
       this.trabajando.set(null);
     }
+  }
+
+  async cargarHorario(): Promise<void> {
+    try {
+      const horario = await obtenerHorarioRespaldos();
+      this.horarioRespaldos.set(horario);
+    } catch {
+      // Si falla, se queda con los valores por defecto.
+    }
+  }
+
+  async guardarHorario(): Promise<void> {
+    if (this.guardandoHorario()) return;
+
+    this.guardandoHorario.set(true);
+    try {
+      const guardado = await guardarHorarioRespaldos(this.horarioRespaldos());
+      this.horarioRespaldos.set(guardado);
+      this.toast.exito(`Respaldos programados ${guardado.activo ? 'activados' : 'desactivados'}.`);
+    } catch (fallo) {
+      this.toast.error(this.mensaje(fallo));
+    } finally {
+      this.guardandoHorario.set(false);
+    }
+  }
+
+  /** Nombre corto del dia de la semana para mostrar en la UI. */
+  diaSemanaNombre(dia: number): string {
+    const nombres = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+    return nombres[dia] ?? String(dia);
+  }
+
+  /** Si un dia de la semana esta seleccionado en el horario. */
+  diaSeleccionado(dia: number): boolean {
+    return this.horarioRespaldos().diasSemana.includes(dia);
+  }
+
+  /** Toggle de un dia de la semana en el horario. */
+  toggleDia(dia: number): void {
+    const horario = { ...this.horarioRespaldos() };
+    const indice = horario.diasSemana.indexOf(dia);
+    if (indice >= 0) {
+      horario.diasSemana = horario.diasSemana.filter((d) => d !== dia);
+    } else {
+      horario.diasSemana = [...horario.diasSemana, dia].sort((a, b) => a - b);
+    }
+    this.horarioRespaldos.set(horario);
+  }
+
+  /** Actualiza la hora del horario desde un input. */
+  actualizarHora(valor: string): void {
+    const horario = { ...this.horarioRespaldos() };
+    horario.hora = Math.max(0, Math.min(23, parseInt(valor, 10) || 0));
+    this.horarioRespaldos.set(horario);
+  }
+
+  /** Actualiza el minuto del horario desde un input. */
+  actualizarMinuto(valor: string): void {
+    const horario = { ...this.horarioRespaldos() };
+    horario.minuto = Math.max(0, Math.min(59, parseInt(valor, 10) || 0));
+    this.horarioRespaldos.set(horario);
   }
 
   async cargar(): Promise<void> {

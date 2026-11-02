@@ -20,6 +20,8 @@ import {
 import {
   obtenerCarpetaRespaldos,
   establecerCarpetaRespaldos,
+  obtenerHorarioRespaldos,
+  guardarHorarioRespaldos,
 } from "./configuracion-respaldos.js";
 
 // Este archivo se compila como ESM (package.json tiene "type": "module"),
@@ -59,6 +61,9 @@ let respaldoEnCurso: Promise<unknown> | null = null;
 /** Evita dos restauraciones simultaneas. */
 let restaurando = false;
 
+/** Temporizador de respaldos programados (se revisa cada minuto). */
+let temporizadorProgramado: ReturnType<typeof setInterval> | null = null;
+
 /**
  * Devuelve la carpeta de respaldos activa: la elegida por el usuario si la hay,
  * o la por defecto de la aplicacion.
@@ -66,6 +71,59 @@ let restaurando = false;
 async function carpetaRespaldos(): Promise<string> {
   if (carpetaRespaldosElegida) return carpetaRespaldosElegida;
   return obtenerRutas().backups;
+}
+
+/**
+ * Crea un respaldo automatico programado si coincide con el horario configurado.
+ *
+ * Se llama cada minuto desde el temporizador. Si el horario no esta activo
+ * o no es el momento, no hace nada.
+ */
+async function respaldoProgramado(): Promise<void> {
+  if (respaldoEnCurso || !pgConfigActual) return;
+
+  try {
+    const horario = await obtenerHorarioRespaldos();
+    if (!horario.activo) return;
+
+    const ahora = new Date();
+    if (
+      ahora.getHours() !== horario.hora ||
+      ahora.getMinutes() !== horario.minuto
+    )
+      return;
+    if (!horario.diasSemana.includes(ahora.getDay())) return;
+
+    const carpeta = await carpetaRespaldos();
+    await crearRespaldoAutomatico(pgConfigActual, carpeta, 0);
+    console.log(
+      `[respaldos] Respaldo programado creado a las ${ahora.toLocaleTimeString()}`,
+    );
+  } catch (error) {
+    console.error("[respaldos] Error en respaldo programado:", error);
+  }
+}
+
+/**
+ * Inicia el temporizador que revisa cada minuto si toca crear un respaldo
+ * programado. Se lanza una vez que el backend ya esta listo.
+ */
+function iniciarTemporizadorProgramado(): void {
+  if (temporizadorProgramado) clearInterval(temporizadorProgramado);
+  temporizadorProgramado = setInterval(() => {
+    void respaldoProgramado();
+  }, 60_000);
+  temporizadorProgramado.unref?.();
+}
+
+/**
+ * Detiene el temporizador de respaldos programados.
+ */
+function detenerTemporizadorProgramado(): void {
+  if (temporizadorProgramado) {
+    clearInterval(temporizadorProgramado);
+    temporizadorProgramado = null;
+  }
 }
 
 function crearVentana() {
@@ -223,6 +281,45 @@ function registrarIpc(): void {
     return carpeta;
   });
 
+  ipcMain.handle("respaldos:obtener-horario", async () => {
+    return obtenerHorarioRespaldos();
+  });
+
+  ipcMain.handle(
+    "respaldos:guardar-horario",
+    async (_evento, horario: unknown) => {
+      if (!horario || typeof horario !== "object") {
+        throw new Error("El horario no es valido.");
+      }
+      const h = horario as Record<string, unknown>;
+      const valido =
+        typeof h.activo === "boolean" &&
+        typeof h.hora === "number" &&
+        h.hora >= 0 &&
+        h.hora <= 23 &&
+        typeof h.minuto === "number" &&
+        h.minuto >= 0 &&
+        h.minuto <= 59 &&
+        Array.isArray(h.diasSemana) &&
+        h.diasSemana.every(
+          (d: unknown) => typeof d === "number" && d >= 0 && d <= 6,
+        );
+      if (!valido) {
+        throw new Error("El horario no es valido.");
+      }
+      await guardarHorarioRespaldos({
+        activo: h.activo as boolean,
+        hora: h.hora as number,
+        minuto: h.minuto as number,
+        diasSemana: h.diasSemana as number[],
+      });
+      // Reiniciar el temporizador para que tome la nueva configuracion.
+      detenerTemporizadorProgramado();
+      iniciarTemporizadorProgramado();
+      return await obtenerHorarioRespaldos();
+    },
+  );
+
   ipcMain.handle("respaldos:listar", async () => {
     return listarRespaldos(await carpetaRespaldos());
   });
@@ -356,6 +453,9 @@ async function arrancar() {
     await arrancarBackend(pgConfig, configuracion);
     console.log("[main] Backend listo");
 
+    // Iniciar el temporizador de respaldos programados.
+    iniciarTemporizadorProgramado();
+
     crearVentana();
   } catch (error: any) {
     const mensaje =
@@ -426,6 +526,7 @@ async function apagar() {
   } catch (error) {
     console.error("[main] Error apagando:", error);
   } finally {
+    detenerTemporizadorProgramado();
     app.exit(0);
   }
 }

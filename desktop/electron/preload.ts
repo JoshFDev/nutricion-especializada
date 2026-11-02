@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     /** Abre el selector de carpeta y guarda la nueva ubicacion de respaldos. */
     cambiarCarpetaRespaldos: () =>
       ipcRenderer.invoke("respaldos:cambiar-carpeta"),
+    /** Devuelve la configuracion de respaldos programados (horario). */
+    obtenerHorarioRespaldos: () =>
+      ipcRenderer.invoke("respaldos:obtener-horario"),
+    /** Guarda la configuracion de respaldos programados y reinicia el temporizador. */
+    guardarHorarioRespaldos: (horario: unknown) =>
+      ipcRenderer.invoke("respaldos:guardar-horario", horario),
     /** Abre la carpeta de respaldos en el explorador de Windows. */
     abrirCarpeta: () => ipcRenderer.invoke("respaldos:abrir-carpeta"),
   },

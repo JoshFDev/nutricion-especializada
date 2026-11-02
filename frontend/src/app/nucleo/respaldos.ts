@@ -38,6 +38,18 @@ export interface ResultadoValidacion {
   checksum: string;
 }
 
+/** Configuracion de respaldos programados. */
+export interface HorarioRespaldos {
+  /** Si los respaldos programados estan activos. */
+  activo: boolean;
+  /** Hora del dia (0-23) para crear el respaldo automatico. */
+  hora: number;
+  /** Minuto de la hora (0-59) para crear el respaldo automatico. */
+  minuto: number;
+  /** Dias de la semana (0=domingo, 1=lunes, ... 6=Sabado) en que correr. */
+  diasSemana: number[];
+}
+
 interface RespaldosApi {
   listar: () => Promise<Respaldo[]>;
   crear: () => Promise<Respaldo>;
@@ -45,6 +57,8 @@ interface RespaldosApi {
   validar: (nombre: string) => Promise<ResultadoValidacion>;
   obtenerCarpetaRespaldos: () => Promise<string>;
   cambiarCarpetaRespaldos: () => Promise<string>;
+  obtenerHorarioRespaldos: () => Promise<HorarioRespaldos>;
+  guardarHorarioRespaldos: (horario: HorarioRespaldos) => Promise<HorarioRespaldos>;
   abrirCarpeta: () => Promise<void>;
 }
 
@@ -119,6 +133,28 @@ export async function cambiarCarpetaRespaldos(): Promise<string> {
   if (!puente)
     throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
   return puente.cambiarCarpetaRespaldos();
+}
+
+/**
+ * Devuelve la configuracion de respaldos programados (horario).
+ */
+export async function obtenerHorarioRespaldos(): Promise<HorarioRespaldos> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.obtenerHorarioRespaldos();
+}
+
+/**
+ * Guarda la configuracion de respaldos programados y reinicia el temporizador.
+ */
+export async function guardarHorarioRespaldos(
+  horario: HorarioRespaldos,
+): Promise<HorarioRespaldos> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.guardarHorarioRespaldos(horario);
 }
 
 /** El tamano en una unidad que se pueda leer de un vistazo. */

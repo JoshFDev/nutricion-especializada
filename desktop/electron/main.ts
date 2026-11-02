@@ -15,7 +15,9 @@ import {
   restaurarRespaldo,
   validarIntegridadRespaldo,
   obtenerSaludRespaldos,
+  obtenerEspacioDisponible,
   type ConfiguracionPg,
+  type EspacioDisco,
   type ResumenRespaldo,
 } from "./respaldos.js";
 import {
@@ -327,6 +329,10 @@ function registrarIpc(): void {
 
   ipcMain.handle("respaldos:salud", async () => {
     return obtenerSaludRespaldos(await carpetaRespaldos());
+  });
+
+  ipcMain.handle("respaldos:espacio-disco", async () => {
+    return obtenerEspacioDisponible(await carpetaRespaldos());
   });
 
   ipcMain.handle("respaldos:crear", () => respaldarManual());

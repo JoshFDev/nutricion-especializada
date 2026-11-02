@@ -50,6 +50,12 @@ export interface ResultadoSaludRespaldos {
   mensaje: string;
 }
 
+/** Espacio en disco disponible para la carpeta de respaldos. */
+export interface EspacioDisco {
+  libre: number;
+  total: number;
+}
+
 /** Configuracion de respaldos programados. */
 export interface HorarioRespaldos {
   /** Si los respaldos programados estan activos. */
@@ -72,6 +78,8 @@ interface RespaldosApi {
   obtenerHorarioRespaldos: () => Promise<HorarioRespaldos>;
   guardarHorarioRespaldos: (horario: HorarioRespaldos) => Promise<HorarioRespaldos>;
   obtenerSaludRespaldos: () => Promise<ResultadoSaludRespaldos>;
+  /** Espacio libre y total en disco para la carpeta de respaldos. */
+  obtenerEspacioDisco: () => Promise<EspacioDisco>;
   abrirCarpeta: () => Promise<void>;
 }
 
@@ -166,6 +174,16 @@ export async function obtenerSaludRespaldos(): Promise<ResultadoSaludRespaldos> 
   if (!puente)
     throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
   return puente.obtenerSaludRespaldos();
+}
+
+/**
+ * Devuelve el espacio libre y total en disco para la carpeta de respaldos.
+ */
+export async function obtenerEspacioDisco(): Promise<EspacioDisco> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.obtenerEspacioDisco();
 }
 
 /**

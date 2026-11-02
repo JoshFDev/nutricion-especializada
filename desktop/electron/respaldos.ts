@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createGunzip, createGzip } from "node:zlib";
 import { createReadStream, createWriteStream } from "node:fs";
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { statvfs } from "node:fs";
 import { once } from "node:events";
 import { pipeline } from "node:stream/promises";
 import { basename, join } from "node:path";
@@ -435,6 +436,45 @@ async function leerColumnas(
  * tanto. Sin eso, una venta podria quedar con su nota pero sin su pago (o al
  * reves) y el respaldo seria incoherente.
  */
+/** Informacion de espacio en disco para una ruta dada. */
+export interface EspacioDisco {
+  /** Espacio libre en bytes. */
+  libre: number;
+  /** Espacio total en bytes. */
+  total: number;
+}
+
+/**
+ * Devuelve el espacio libre y total en disco para la carpeta indicada.
+ *
+ * Usa `statvfs` para consultar el sistema de archivos sin necesidad de
+ * crear archivos temporales. No lanza: si falla, devuelve ceros.
+ */
+export async function obtenerEspacioDisponible(
+  ruta: string,
+): Promise<EspacioDisco> {
+  try {
+    const info = statvfs(ruta);
+    const bloqueSize = info.bsize || info.frsize || 4096;
+    return {
+      libre: info.bavail * bloqueSize,
+      total: info.blocks * bloqueSize,
+    };
+  } catch {
+    return { libre: 0, total: 0 };
+  }
+}
+
+/**
+ * Espacio minimo recomendado libre antes de crear un respaldo (50 MB).
+ */
+const ESPACIO_MINIMO_RECOMENDADO = 50 * 1024 * 1024;
+
+/**
+ * Umbral por debajo del cual se advierte que el disco esta casi lleno (100 MB).
+ */
+const ESPACIO_UMBRAL_ADVERTENCIA = 100 * 1024 * 1024;
+
 export async function crearRespaldo(
   config: ConfiguracionPg,
   carpeta: string,
@@ -442,6 +482,18 @@ export async function crearRespaldo(
 ): Promise<ResumenRespaldo> {
   const nombre = nombreDeArchivo(tipo);
   const ruta = join(carpeta, nombre);
+
+  // Verificar espacio en disco antes de empezar. Si queda menos del
+  // umbral recomendado, abortamos con un mensaje claro en vez de fallar
+  // a mitad de escritura con un archivo corrupto.
+  const espacio = await obtenerEspacioDisponible(carpeta);
+  if (espacio.libre < ESPACIO_MINIMO_RECOMENDADO) {
+    throw new Error(
+      `No hay suficiente espacio en disco para crear el respaldo. ` +
+        `Quedan ${Math.floor(espacio.libre / 1024 / 1024)} MB libres; ` +
+        `se recomiendan al menos 50 MB.`,
+    );
+  }
 
   const cliente = new pg.Client({ ...config, client_encoding: "UTF8" });
   await cliente.connect();

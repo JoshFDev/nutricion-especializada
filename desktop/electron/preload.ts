@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     listar: () => ipcRenderer.invoke("respaldos:listar"),
     /** Devuelve el estado de salud de los respaldos (dias sin copia, etc). */
     obtenerSaludRespaldos: () => ipcRenderer.invoke("respaldos:salud"),
+    /** Devuelve el espacio libre y total en disco para la carpeta de respaldos. */
+    obtenerEspacioDisco: () =>
+      ipcRenderer.invoke("respaldos:espacio-disco"),
     /** Crea un respaldo manual y devuelve su ficha. */
     crear: () => ipcRenderer.invoke("respaldos:crear"),
     /** Restaura un respaldo por nombre. La aplicacion se reinicia sola. */

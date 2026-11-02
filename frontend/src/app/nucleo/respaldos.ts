@@ -43,6 +43,8 @@ interface RespaldosApi {
   crear: () => Promise<Respaldo>;
   restaurar: (nombre: string) => Promise<ResultadoRestauracion>;
   validar: (nombre: string) => Promise<ResultadoValidacion>;
+  obtenerCarpetaRespaldos: () => Promise<string>;
+  cambiarCarpetaRespaldos: () => Promise<string>;
   abrirCarpeta: () => Promise<void>;
 }
 
@@ -97,6 +99,26 @@ export async function validarIntegridad(nombre: string): Promise<ResultadoValida
   if (!puente)
     throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
   return puente.validar(nombre);
+}
+
+/**
+ * Devuelve la carpeta actual donde se guardan los respaldos.
+ */
+export async function obtenerCarpetaRespaldos(): Promise<string> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.obtenerCarpetaRespaldos();
+}
+
+/**
+ * Abre el selector de carpeta y guarda la nueva ubicacion de respaldos.
+ */
+export async function cambiarCarpetaRespaldos(): Promise<string> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.cambiarCarpetaRespaldos();
 }
 
 /** El tamano en una unidad que se pueda leer de un vistazo. */

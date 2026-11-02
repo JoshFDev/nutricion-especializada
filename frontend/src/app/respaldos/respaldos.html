@@ -14,15 +14,26 @@
   <div>
     <h1>Respaldos</h1>
     <p class="tenue">
-      Copias de seguridad de toda la base de datos. Se guardan en este equipo, dentro de la carpeta
-      de datos de la aplicacion.
+      Copias de seguridad de toda la base de datos. Se guardan en la carpeta configurada de este
+      equipo.
     </p>
+    @if (disponible) {
+      <p class="tenue carpeta-actual">Carpeta: {{ carpetaRespaldos() }}</p>
+    }
   </div>
 
   @if (disponible) {
     <div class="acciones-cabecera">
       <button type="button" class="chico" (click)="abrirCarpeta()">Abrir carpeta</button>
       @if (puedeGestionar()) {
+        <button
+          type="button"
+          class="chico"
+          (click)="cambiarCarpeta()"
+          [disabled]="trabajando() !== null"
+        >
+          {{ trabajando() === 'cambiar-carpeta' ? 'Cambiando...' : 'Cambiar carpeta' }}
+        </button>
         <button type="button" class="primario" (click)="crear()" [disabled]="trabajando() !== null">
           {{ trabajando() === 'crear' ? 'Creando...' : 'Crear respaldo ahora' }}
         </button>

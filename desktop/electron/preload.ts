@@ -30,6 +30,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     /** Valida la integridad de un respaldo antes de restaurarlo. */
     validar: (nombre: string) =>
       ipcRenderer.invoke("respaldos:validar", nombre),
+    /** Devuelve la carpeta donde se guardan los respaldos. */
+    obtenerCarpetaRespaldos: () =>
+      ipcRenderer.invoke("respaldos:obtener-carpeta"),
+    /** Abre el selector de carpeta y guarda la nueva ubicacion de respaldos. */
+    cambiarCarpetaRespaldos: () =>
+      ipcRenderer.invoke("respaldos:cambiar-carpeta"),
     /** Abre la carpeta de respaldos en el explorador de Windows. */
     abrirCarpeta: () => ipcRenderer.invoke("respaldos:abrir-carpeta"),
   },

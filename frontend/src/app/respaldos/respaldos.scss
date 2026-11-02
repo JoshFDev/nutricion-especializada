@@ -117,3 +117,12 @@
   border: 1px solid var(--advertencia-suave);
   border-radius: 999px;
 }
+
+/* Ruta de la carpeta de respaldos mostrada en la cabecera. */
+.carpeta-actual {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  word-break: break-all;
+}

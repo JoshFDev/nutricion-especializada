@@ -12,9 +12,11 @@ import { Sesion } from '../nucleo/sesion';
 import { ToastService } from '../nucleo/toast.service';
 import {
   abrirCarpetaRespaldos,
+  cambiarCarpetaRespaldos,
   crearRespaldo,
   fechaLegible,
   listarRespaldos,
+  obtenerCarpetaRespaldos,
   respaldosDisponibles,
   restaurarRespaldo,
   tamanoLegible,
@@ -58,7 +60,10 @@ export class Respaldos implements OnInit {
   readonly respaldos = signal<Respaldo[]>([]);
   readonly cargando = signal(true);
   readonly error = signal<string | null>(null);
-  readonly trabajando = signal<'crear' | 'restaurar' | 'validar' | null>(null);
+  readonly trabajando = signal<'crear' | 'restaurar' | 'validar' | 'cambiar-carpeta' | null>(null);
+
+  /** Carpeta actual donde se guardan los respaldos. */
+  readonly carpetaRespaldos = signal<string>('');
 
   /** Estado de validacion de integridad por nombre de respaldo. */
   readonly validaciones = signal<
@@ -74,6 +79,36 @@ export class Respaldos implements OnInit {
 
   ngOnInit(): void {
     void this.cargar();
+    void this.cargarCarpeta();
+  }
+
+  async cargarCarpeta(): Promise<void> {
+    try {
+      const carpeta = await obtenerCarpetaRespaldos();
+      this.carpetaRespaldos.set(carpeta);
+    } catch {
+      // Si falla, se queda vacia y la UI muestra el valor por defecto.
+    }
+  }
+
+  async cambiarCarpeta(): Promise<void> {
+    if (this.trabajando() !== null) return;
+
+    this.trabajando.set('cambiar-carpeta');
+    try {
+      const carpeta = await cambiarCarpetaRespaldos();
+      this.carpetaRespaldos.set(carpeta);
+      this.toast.exito(`Carpeta de respaldos actualizada: ${carpeta}`);
+      await this.cargar();
+    } catch (fallo) {
+      if ((fallo as Error)?.message?.includes('selecciono')) {
+        // El usuario cancelo: no es un error.
+      } else {
+        this.toast.error(this.mensaje(fallo));
+      }
+    } finally {
+      this.trabajando.set(null);
+    }
   }
 
   async cargar(): Promise<void> {

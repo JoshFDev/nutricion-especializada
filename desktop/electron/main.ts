@@ -17,6 +17,10 @@ import {
   type ConfiguracionPg,
   type ResumenRespaldo,
 } from "./respaldos.js";
+import {
+  obtenerCarpetaRespaldos,
+  establecerCarpetaRespaldos,
+} from "./configuracion-respaldos.js";
 
 // Este archivo se compila como ESM (package.json tiene "type": "module"),
 // y en ESM no existe __dirname.
@@ -36,6 +40,13 @@ let pgConfigActual: ConfiguracionPg | null = null;
 let configuracionActual: Configuracion | null = null;
 
 /**
+ * Carpeta de respaldos elegida por el usuario. Se carga al arrancar desde
+ * `userData/configuracion-respaldos.json`. Si no hay una elegida, se usa
+ * la carpeta por defecto (`datos/backups`).
+ */
+let carpetaRespaldosElegida: string | null = null;
+
+/**
  * El respaldo que se esta escribiendo, si hay uno.
  *
  * Sirve para dos cosas: que dos clics seguidos no escriban dos archivos a la
@@ -47,6 +58,15 @@ let respaldoEnCurso: Promise<unknown> | null = null;
 
 /** Evita dos restauraciones simultaneas. */
 let restaurando = false;
+
+/**
+ * Devuelve la carpeta de respaldos activa: la elegida por el usuario si la hay,
+ * o la por defecto de la aplicacion.
+ */
+async function carpetaRespaldos(): Promise<string> {
+  if (carpetaRespaldosElegida) return carpetaRespaldosElegida;
+  return obtenerRutas().backups;
+}
 
 function crearVentana() {
   ventana = new BrowserWindow({
@@ -138,9 +158,10 @@ async function respaldarAutomatico(
 ): Promise<ResumenRespaldo | null> {
   if (respaldoEnCurso || !pgConfigActual) return null;
 
+  const carpeta = await carpetaRespaldos();
   const promesa = crearRespaldoAutomatico(
     pgConfigActual,
-    obtenerRutas().backups,
+    carpeta,
     horasMinimas,
   );
   respaldoEnCurso = promesa;
@@ -163,11 +184,8 @@ async function respaldarManual(): Promise<ResumenRespaldo> {
     throw new Error("La base de datos todavia no esta lista.");
   }
 
-  const promesa = crearRespaldo(
-    pgConfigActual,
-    obtenerRutas().backups,
-    "manual",
-  );
+  const carpeta = await carpetaRespaldos();
+  const promesa = crearRespaldo(pgConfigActual, carpeta, "manual");
   respaldoEnCurso = promesa;
   try {
     return await promesa;
@@ -186,14 +204,33 @@ async function respaldarManual(): Promise<ResumenRespaldo> {
 function registrarIpc(): void {
   ipcMain.handle("app:version", () => app.getVersion());
 
-  ipcMain.handle("respaldos:listar", () =>
-    listarRespaldos(obtenerRutas().backups),
-  );
+  ipcMain.handle("respaldos:obtener-carpeta", async () => {
+    return await carpetaRespaldos();
+  });
+
+  ipcMain.handle("respaldos:cambiar-carpeta", async () => {
+    const resultado = await dialog.showOpenDialog(ventana!, {
+      title: "Seleccionar carpeta de respaldos",
+      buttonLabel: "Seleccionar esta carpeta",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (resultado.canceled || resultado.filePaths.length === 0) {
+      throw new Error("No se selecciono ninguna carpeta.");
+    }
+    const carpeta = resultado.filePaths[0];
+    await establecerCarpetaRespaldos(carpeta);
+    carpetaRespaldosElegida = carpeta;
+    return carpeta;
+  });
+
+  ipcMain.handle("respaldos:listar", async () => {
+    return listarRespaldos(await carpetaRespaldos());
+  });
 
   ipcMain.handle("respaldos:crear", () => respaldarManual());
 
   ipcMain.handle("respaldos:abrir-carpeta", async () => {
-    const error = await shell.openPath(obtenerRutas().backups);
+    const error = await shell.openPath(await carpetaRespaldos());
     if (error) throw new Error(error);
   });
 
@@ -209,7 +246,7 @@ function registrarIpc(): void {
         user: "",
         password: "",
       },
-      obtenerRutas().backups,
+      await carpetaRespaldos(),
       nombre.trim(),
     );
   });
@@ -232,22 +269,19 @@ function registrarIpc(): void {
     const pg = pgConfigActual;
     const config = configuracionActual;
     const rutas = obtenerRutas();
+    const carpeta = await carpetaRespaldos();
 
     try {
       // Primero se guarda lo que hay AHORA. La restauracion ya es
       // transaccional y un fallo no toca nada, pero este archivo cubre el
       // error humano de restaurar el respaldo equivocado.
-      await crearRespaldo(pg, rutas.backups, "seguridad");
+      await crearRespaldo(pg, carpeta, "seguridad");
 
       // El backend tiene que soltar el esquema: si sigue conectado, el
       // DROP SCHEMA espera sus locks y la restauracion no avanza.
       await detenerBackend();
 
-      const resultado = await restaurarRespaldo(
-        pg,
-        rutas.backups,
-        nombre.trim(),
-      );
+      const resultado = await restaurarRespaldo(pg, carpeta, nombre.trim());
 
       // Se cierra PostgreSQL y se relanza la aplicacion. Es la forma de
       // garantizar que nadie quede con una conexion al esquema anterior.
@@ -290,6 +324,11 @@ async function arrancar() {
     // tenga con que crear el respaldo de seguridad.
     pgConfigActual = pgConfig;
     configuracionActual = configuracion;
+
+    // Cargar la carpeta de respaldos elegida por el usuario (si la hay).
+    carpetaRespaldosElegida = await obtenerCarpetaRespaldos(
+      obtenerRutas().backups,
+    );
 
     await aplicarMigracionesEscritorio(pgConfig);
     console.log("[main] Migraciones listas");

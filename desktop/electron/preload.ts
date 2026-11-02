@@ -20,8 +20,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   appVersion: () => ipcRenderer.invoke("app:version"),
 
   respaldos: {
-    /** Los archivos que hay en la carpeta de respaldos. */
+    /** Devuelve los archivos que hay en la carpeta de respaldos. */
     listar: () => ipcRenderer.invoke("respaldos:listar"),
+    /** Devuelve el estado de salud de los respaldos (dias sin copia, etc). */
+    obtenerSaludRespaldos: () => ipcRenderer.invoke("respaldos:salud"),
     /** Crea un respaldo manual y devuelve su ficha. */
     crear: () => ipcRenderer.invoke("respaldos:crear"),
     /** Restaura un respaldo por nombre. La aplicacion se reinicia sola. */

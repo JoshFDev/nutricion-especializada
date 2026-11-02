@@ -38,6 +38,18 @@ export interface ResultadoValidacion {
   checksum: string;
 }
 
+/** Resultado de la evaluacion de salud de los respaldos. */
+export interface ResultadoSaludRespaldos {
+  /** Estado general: saludable, advertencia o critico. */
+  estado: 'saludable' | 'advertencia' | 'critico';
+  /** Fecha del ultimo respaldo (cualquier tipo), si hay alguno. */
+  ultimoRespaldo: string | null;
+  /** Dias transcurridos desde el ultimo respaldo. */
+  diasDesdeUltimo: number | null;
+  /** Mensaje legible para mostrar al usuario. */
+  mensaje: string;
+}
+
 /** Configuracion de respaldos programados. */
 export interface HorarioRespaldos {
   /** Si los respaldos programados estan activos. */
@@ -59,6 +71,7 @@ interface RespaldosApi {
   cambiarCarpetaRespaldos: () => Promise<string>;
   obtenerHorarioRespaldos: () => Promise<HorarioRespaldos>;
   guardarHorarioRespaldos: (horario: HorarioRespaldos) => Promise<HorarioRespaldos>;
+  obtenerSaludRespaldos: () => Promise<ResultadoSaludRespaldos>;
   abrirCarpeta: () => Promise<void>;
 }
 
@@ -143,6 +156,16 @@ export async function obtenerHorarioRespaldos(): Promise<HorarioRespaldos> {
   if (!puente)
     throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
   return puente.obtenerHorarioRespaldos();
+}
+
+/**
+ * Devuelve el estado de salud de los respaldos.
+ */
+export async function obtenerSaludRespaldos(): Promise<ResultadoSaludRespaldos> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.obtenerSaludRespaldos();
 }
 
 /**

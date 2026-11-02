@@ -72,6 +72,16 @@
     </p>
   </section>
 
+  @if (saludRespaldos(); as salud) {
+    <section class="salud" [class.salud-saludable]="salud.estado === 'saludable'" [class.salud-advertencia]="salud.estado === 'advertencia'" [class.salud-critico]="salud.estado === 'critico'">
+      <span class="salud-icono">{{ iconoSalud(salud.estado) }}</span>
+      <span class="salud-mensaje">{{ salud.mensaje }}</span>
+      @if (salud.diasDesdeUltimo !== null && salud.diasDesdeUltimo > 0) {
+        <span class="salud-dias">Ultimo respaldo: {{ salud.diasDesdeUltimo }} dia(s) atras</span>
+      }
+    </section>
+  }
+
   @if (puedeGestionar()) {
     <section class="configuracion">
       <h2>Respaldos programados</h2>

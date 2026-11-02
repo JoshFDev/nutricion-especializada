@@ -14,6 +14,7 @@ import {
   listarRespaldos,
   restaurarRespaldo,
   validarIntegridadRespaldo,
+  obtenerSaludRespaldos,
   type ConfiguracionPg,
   type ResumenRespaldo,
 } from "./respaldos.js";
@@ -322,6 +323,10 @@ function registrarIpc(): void {
 
   ipcMain.handle("respaldos:listar", async () => {
     return listarRespaldos(await carpetaRespaldos());
+  });
+
+  ipcMain.handle("respaldos:salud", async () => {
+    return obtenerSaludRespaldos(await carpetaRespaldos());
   });
 
   ipcMain.handle("respaldos:crear", () => respaldarManual());

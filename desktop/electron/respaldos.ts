@@ -296,6 +296,74 @@ export async function validarIntegridadRespaldo(
   return { valido, errores, meta, checksum };
 }
 
+/** Estado de salud de los respaldos. */
+export type SaludRespaldos = "saludable" | "advertencia" | "critico";
+
+/** Resultado de la evaluacion de salud de los respaldos. */
+export interface ResultadoSaludRespaldos {
+  /** Estado general: saludable, advertencia o critico. */
+  estado: SaludRespaldos;
+  /** Fecha del ultimo respaldo (cualquier tipo), si hay alguno. */
+  ultimoRespaldo: string | null;
+  /** Dias transcurridos desde el ultimo respaldo. */
+  diasDesdeUltimo: number | null;
+  /** Mensaje legible para mostrar al usuario. */
+  mensaje: string;
+}
+
+/**
+ * Evalua la salud de los respaldos basado en la fecha del ultimo archivo.
+ *
+ * - saludable: menos de 7 dias sin respaldo.
+ * - advertencia: entre 7 y 14 dias sin respaldo.
+ * - critico: mas de 14 dias sin respaldo, o nunca hubo uno.
+ */
+export async function obtenerSaludRespaldos(
+  carpeta: string,
+): Promise<ResultadoSaludRespaldos> {
+  const respaldos = await listarRespaldos(carpeta);
+
+  const ahora = Date.now();
+  const DIAS_SALUDABLE = 7;
+  const DIAS_ADVERTENCIA = 14;
+
+  if (respaldos.length === 0) {
+    return {
+      estado: "critico",
+      ultimoRespaldo: null,
+      diasDesdeUltimo: null,
+      mensaje:
+        "No hay respaldos. Crea uno ahora para proteger los datos del negocio.",
+    };
+  }
+
+  const ultimo = respaldos[0]; // Ya estan ordenados del mas nuevo al mas viejo.
+  const dias = Math.floor(
+    (ahora - new Date(ultimo.creadoEn).getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  let estado: SaludRespaldos;
+  let mensaje: string;
+
+  if (dias < DIAS_SALUDABLE) {
+    estado = "saludable";
+    mensaje = `Ultimo respaldo hace ${dias} dia(s). Los datos estan protegidos.`;
+  } else if (dias < DIAS_ADVERTENCIA) {
+    estado = "advertencia";
+    mensaje = `Hace ${dias} dias sin respaldo. Se recomienda crear uno pronto.`;
+  } else {
+    estado = "critico";
+    mensaje = `Hace ${dias} dias sin respaldo. Los datos estan en riesgo.`;
+  }
+
+  return {
+    estado,
+    ultimoRespaldo: ultimo.creadoEn,
+    diasDesdeUltimo: dias,
+    mensaje,
+  };
+}
+
 /** Los respaldos que hay en la carpeta, del mas nuevo al mas viejo. */
 export async function listarRespaldos(
   carpeta: string,

@@ -235,3 +235,59 @@
   font-size: 0.8125rem;
   color: var(--texto-suave);
 }
+
+/* Indicador de salud de los respaldos. */
+.salud {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.salud-icono {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.salud-mensaje {
+  flex: 1;
+}
+
+.salud-dias {
+  font-size: 0.8125rem;
+  opacity: 0.9;
+}
+
+.salud-saludable {
+  background: var(--exito-suave);
+  color: var(--exito-texto);
+  border: 1px solid var(--exito-suave);
+}
+
+.salud-saludable .salud-icono {
+  color: var(--exito-texto);
+}
+
+.salud-advertencia {
+  background: var(--advertencia-suave);
+  color: var(--advertencia-texto);
+  border: 1px solid var(--advertencia-suave);
+}
+
+.salud-advertencia .salud-icono {
+  color: var(--advertencia-texto);
+}
+
+.salud-critico {
+  background: var(--peligro-suave);
+  color: var(--peligro-texto);
+  border: 1px solid var(--peligro-suave);
+}
+
+.salud-critico .salud-icono {
+  color: var(--peligro-texto);
+}

@@ -19,12 +19,14 @@ import {
   listarRespaldos,
   obtenerCarpetaRespaldos,
   obtenerHorarioRespaldos,
+  obtenerSaludRespaldos,
   respaldosDisponibles,
   restaurarRespaldo,
   tamanoLegible,
   validarIntegridad,
   type HorarioRespaldos,
   type Respaldo,
+  type ResultadoSaludRespaldos,
   type ResultadoValidacion,
   type TipoRespaldo,
 } from '../nucleo/respaldos';
@@ -79,6 +81,9 @@ export class Respaldos implements OnInit {
   /** Si se esta guardando el horario. */
   readonly guardandoHorario = signal(false);
 
+  /** Estado de salud de los respaldos. */
+  readonly saludRespaldos = signal<ResultadoSaludRespaldos | null>(null);
+
   /** Estado de validacion de integridad por nombre de respaldo. */
   readonly validaciones = signal<
     Record<string, { valido: boolean | null; errores: string[]; verificando: boolean }>
@@ -95,6 +100,16 @@ export class Respaldos implements OnInit {
     void this.cargar();
     void this.cargarCarpeta();
     void this.cargarHorario();
+    void this.cargarSalud();
+  }
+
+  async cargarSalud(): Promise<void> {
+    try {
+      const salud = await obtenerSaludRespaldos();
+      this.saludRespaldos.set(salud);
+    } catch {
+      // Si falla, se queda sin estado de salud.
+    }
   }
 
   async cargarCarpeta(): Promise<void> {
@@ -171,6 +186,18 @@ export class Respaldos implements OnInit {
       horario.diasSemana = [...horario.diasSemana, dia].sort((a, b) => a - b);
     }
     this.horarioRespaldos.set(horario);
+  }
+
+  /** Icono para el estado de salud del respaldo. */
+  iconoSalud(estado: ResultadoSaludRespaldos['estado']): string {
+    switch (estado) {
+      case 'saludable':
+        return '●';
+      case 'advertencia':
+        return '●';
+      case 'critico':
+        return '●';
+    }
   }
 
   /** Actualiza la hora del horario desde un input. */

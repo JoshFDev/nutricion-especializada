@@ -18,7 +18,7 @@ import { Catalogo } from '../catalogo/catalogo';
     recurso="especies"
     titulo="Especies"
     singular="Especie"
-    descripcion="La clasificación del producto que complementa a la categoría. Conviene darlas de alta primero: el formulario de /productos las ofrece para elegir."
+    descripcion="El tipo de animal o cliente, que ayuda a poner el precio. Conviene crearlos primero: después aparecen al dar de alta un producto."
   />`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

@@ -25,7 +25,7 @@ export const INFO_SISTEMA = {
    */
   proveedor: {
     nombre: 'Joshua Sebastián Aboytes Uribe',
-    rol: 'Desarrollo y soporte del sistema',
-    horario: 'Lunes a viernes, de 9:00 a 18:00',
+    rol: 'Desarrollador de software e ingeniero en computación',
+    horario: 'Atención de lunes a viernes, de 9:00 a 18:00',
   },
 } as const;

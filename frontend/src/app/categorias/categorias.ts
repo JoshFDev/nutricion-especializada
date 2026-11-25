@@ -17,7 +17,7 @@ import { Catalogo } from '../catalogo/catalogo';
     recurso="categorias"
     titulo="Categorias"
     singular="Categoría"
-    descripcion="Los grupos con los que se ordenan los productos, para encontrarlos de un vistazo. Conviene darlas de alta primero: el formulario de /productos las ofrece para elegir."
+    descripcion="Los grupos con los que ordenamos los productos para encontrarlos más rápido. Conviene crearlos primero: después aparecen al dar de alta un producto."
   />`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

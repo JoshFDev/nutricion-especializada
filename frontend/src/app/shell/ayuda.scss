@@ -447,6 +447,12 @@
   font-size: 0.8125rem;
 }
 
+.acerca-datos dd small {
+  display: block;
+  margin-top: 0.125rem;
+  color: var(--texto-tenue);
+}
+
 .acerca-pie {
   margin: 1.25rem 0 0;
   color: var(--texto-tenue);

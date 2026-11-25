@@ -118,10 +118,13 @@
               </div>
               <div>
                 <dt>Proveedor</dt>
-                <dd>{{ info.proveedor.nombre }}</dd>
+                <dd>
+                  {{ info.proveedor.nombre }}
+                  <small>{{ info.proveedor.rol }}</small>
+                </dd>
               </div>
               <div>
-                <dt>Contacto</dt>
+                <dt>Atención</dt>
                 <dd>{{ info.proveedor.horario }}</dd>
               </div>
             </dl>

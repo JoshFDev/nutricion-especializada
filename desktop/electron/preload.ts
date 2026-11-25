@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("respaldos:espacio-disco"),
     /** Crea un respaldo manual y devuelve su ficha. */
     crear: () => ipcRenderer.invoke("respaldos:crear"),
+    /** Guarda una copia del respaldo en un archivo elegido por el usuario. */
+    exportar: (nombre: string, formato: string) =>
+      ipcRenderer.invoke("respaldos:exportar", nombre, formato),
+    /** Importa un archivo de respaldo a la carpeta de la aplicacion. */
+    importar: () => ipcRenderer.invoke("respaldos:importar"),
     /** Restaura un respaldo por nombre. La aplicacion se reinicia sola. */
     restaurar: (nombre: string) =>
       ipcRenderer.invoke("respaldos:restaurar", nombre),

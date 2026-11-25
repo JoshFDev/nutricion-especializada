@@ -14,8 +14,8 @@
   <div>
     <h1>Respaldos</h1>
     <p class="tenue">
-      Copias de seguridad de toda la base de datos. Se guardan en la carpeta configurada de este
-      equipo.
+      Copias de seguridad de todo el sistema. Puedes guardarlas en otro equipo o traerlas de vuelta
+      cuando se actualice el programa.
     </p>
     @if (disponible) {
       <p class="tenue carpeta-actual">Carpeta: {{ carpetaRespaldos() }}</p>
@@ -26,6 +26,26 @@
     <div class="acciones-cabecera">
       <button type="button" class="chico" (click)="abrirCarpeta()">Abrir carpeta</button>
       @if (puedeGestionar()) {
+        <label class="formato-exportar">
+          Guardar como
+          <select
+            [value]="formatoExportar()"
+            (change)="actualizarFormato($any($event.target).value)"
+            [disabled]="trabajando() !== null"
+          >
+            <option value="json.gz">JSON comprimido</option>
+            <option value="json">JSON</option>
+            <option value="sql">SQL PostgreSQL</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          class="chico"
+          (click)="importar()"
+          [disabled]="trabajando() !== null"
+        >
+          {{ trabajando() === 'importar' ? 'Importando...' : 'Importar respaldo' }}
+        </button>
         <button
           type="button"
           class="chico"
@@ -68,7 +88,8 @@
     </div>
     <p class="nota">
       El sistema crea un respaldo automatico al abrir y al cerrar la aplicacion. Conserva los
-      ultimos 30 automaticos; los manuales y los de seguridad no se borran solos.
+      ultimos 30 automaticos. Con «Importar respaldo» puedes traer uno de otro equipo y con
+      «Exportar» guardar una copia en JSON o SQL para llevarlo a otro lado.
     </p>
   </section>
 
@@ -192,6 +213,7 @@
             <th>Fecha</th>
             <th class="num">Tamano</th>
             <th>Tipo</th>
+            <th>Formato</th>
             @if (puedeGestionar()) {
               <th class="centro">Estado</th>
               <th class="centro">Acciones</th>
@@ -209,18 +231,19 @@
                   {{ tipo(respaldo.tipo) }}
                 </span>
               </td>
+              <td>{{ formatoTexto(respaldo.formato) }}</td>
               @if (puedeGestionar()) {
                 <td class="centro estado-integridad">
-                  @if (estadoValidacion(respaldo.nombre)?.verificando) {
+                  @if (estadoValidacion(respaldo.nombre).verificando) {
                     <span class="estado-verificando">Verificando...</span>
-                  } @else if (estadoValidacion(respaldo.nombre)?.valido === true) {
+                  } @else if (estadoValidacion(respaldo.nombre).valido === true) {
                     <span class="estado-valido" title="El respaldo paso las pruebas de integridad."
                       >Valido</span
                     >
-                  } @else if (estadoValidacion(respaldo.nombre)?.valido === false) {
+                  } @else if (estadoValidacion(respaldo.nombre).valido === false) {
                     <span
                       class="estado-invalido"
-                      [title]="estadoValidacion(respaldo.nombre)?.errores.join(' ') ?? ''"
+                      [title]="estadoValidacion(respaldo.nombre).errores.join(' ')"
                       >Invalido</span
                     >
                   } @else {
@@ -234,7 +257,15 @@
                     </button>
                   }
                 </td>
-                <td class="centro">
+                <td class="centro acciones-fila">
+                  <button
+                    type="button"
+                    class="chico"
+                    (click)="exportar(respaldo)"
+                    [disabled]="trabajando() !== null"
+                  >
+                    {{ trabajando() === 'exportar' ? 'Guardando...' : 'Exportar' }}
+                  </button>
                   <button
                     type="button"
                     class="peligro chico"

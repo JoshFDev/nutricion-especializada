@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
 import { createGunzip, createGzip } from "node:zlib";
 import { createReadStream, createWriteStream } from "node:fs";
-import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
-import { statvfs } from "node:fs";
+import {
+  copyFile,
+  readFile,
+  readdir,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { statfsSync } from "node:fs";
 import { once } from "node:events";
-import { pipeline } from "node:stream/promises";
+import { finished, pipeline } from "node:stream/promises";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { app } from "electron";
@@ -51,6 +58,20 @@ const MAX_AUTOMATICOS = 30;
 /** Extensión del archivo de checksum que acompaña a cada respaldo. */
 const EXTENSION_CHECKSUM = ".sha256";
 
+/** Los formatos que la pantalla puede guardar y leer. */
+export type FormatoRespaldo = "json.gz" | "json" | "sql";
+
+/**
+ * Los archivos que se pueden dejar en la carpeta de respaldos.
+ *
+ * `json.gz` es el formato propio (NDJSON comprimido); `json` es el mismo
+ * texto sin comprimir, mas facil de revisar a mano; `sql` es un dump de
+ * PostgreSQL con INSERTs que cualquier instalacion de esta app puede leer.
+ */
+const EXTENSION_JSON_GZ = ".json.gz";
+const EXTENSION_JSON = ".json";
+const EXTENSION_SQL = ".sql";
+
 /** Tablas que no se exportan (ver la explicacion de arriba). */
 const TABLAS_EXCLUIDAS = new Set(["schema_migrations", "sesiones"]);
 
@@ -74,6 +95,8 @@ export interface ResumenRespaldo {
   /** Fecha de modificacion en ISO. */
   creadoEn: string;
   tipo: TipoRespaldo;
+  /** Formato del archivo, para saber como hay que restaurarlo. */
+  formato: "json" | "sql";
 }
 
 interface TablaRespaldo {
@@ -136,6 +159,54 @@ function nombreDeArchivo(tipo: TipoRespaldo): string {
 
 function nombreArchivoChecksum(nombre: string): string {
   return `${nombre}${EXTENSION_CHECKSUM}`;
+}
+
+/** Formato que corresponde al nombre de un archivo de respaldo. */
+function formatoDeNombre(nombre: string): "json" | "sql" | null {
+  // El `.json` sin comprimir solo se usa al exportar: en la carpeta de
+  // respaldos solo se guarda el formato propio (`.json.gz`) o el SQL.
+  if (nombre.endsWith(EXTENSION_JSON_GZ)) return "json";
+  if (nombre.endsWith(EXTENSION_SQL)) return "sql";
+  return null;
+}
+
+/** Extension real de un archivo que el usuario eligio para importar. */
+function extensionDeArchivo(ruta: string): FormatoRespaldo | null {
+  const nombre = basename(ruta).toLowerCase();
+  if (nombre.endsWith(EXTENSION_JSON_GZ)) return "json.gz";
+  if (nombre.endsWith(EXTENSION_JSON)) return "json";
+  if (nombre.endsWith(EXTENSION_SQL)) return "sql";
+  return null;
+}
+
+/**
+ * Nombre con el que se guarda un archivo importado.
+ *
+ * Siempre se pone un prefijo propio: asi dos impactos del mismo archivo no
+ * se sobrescriben y siempre se distingue lo que vino de fuera.
+ */
+function nombreImportado(formato: FormatoRespaldo): string {
+  const extension =
+    formato === "sql"
+      ? EXTENSION_SQL
+      : formato === "json"
+        ? EXTENSION_JSON_GZ // el texto se comprime al importar
+        : EXTENSION_JSON_GZ;
+  return `importado-${marcaDeTiempo()}${extension}`;
+}
+
+/**
+ * Comprueba que un nombre no intente salir de la carpeta de respaldos.
+ * Viene de un dialogo, pero la comprobacion evita sorpresas con `..` o rutas.
+ */
+function nombreSeguro(nombre: string): boolean {
+  return (
+    nombre.trim() !== "" &&
+    basename(nombre) === nombre &&
+    !nombre.includes("..") &&
+    !nombre.includes("/") &&
+    !nombre.includes("\\")
+  );
 }
 
 /**
@@ -257,8 +328,11 @@ export async function validarIntegridadRespaldo(
     errores.push("El respaldo no contiene tablas definidas.");
   }
 
-  // Leer el resumen final y comparar filas esperadas vs reales.
-  let filasReales: Record<string, number> = {};
+  // Leer todo el archivo: contar las filas de cada tabla y compararlas con
+  // el resumen `fin`. Sin esta comparacion un archivo cortado a mitad podia
+  // pasar la validacion y fallar luego en medio de la restauracion.
+  const filasEsperadas: Record<string, number> = {};
+  const filasContadas: Record<string, number> = {};
   try {
     const entrada = createReadStream(ruta).pipe(createGunzip());
     const lector = createInterface({ input: entrada, crlfDelay: Infinity });
@@ -269,11 +343,16 @@ export async function validarIntegridadRespaldo(
         const valor = JSON.parse(linea) as Record<string, unknown>;
         if (valor["t"] === "fin") {
           const filas = valor["filas"];
-          filasReales =
+          Object.assign(
+            filasEsperadas,
             filas !== null && typeof filas === "object"
               ? (filas as Record<string, number>)
-              : {};
+              : {},
+          );
           vistoFin = true;
+        } else if (valor["t"] === "f") {
+          const tabla = String(valor["tabla"] ?? "");
+          filasContadas[tabla] = (filasContadas[tabla] ?? 0) + 1;
         }
       }
     } finally {
@@ -284,6 +363,15 @@ export async function validarIntegridadRespaldo(
       errores.push(
         "El respaldo no trae el resumen final; puede estar incompleto.",
       );
+    } else {
+      for (const [tabla, cantidad] of Object.entries(filasEsperadas)) {
+        const reales = filasContadas[tabla] ?? 0;
+        if (reales !== cantidad) {
+          errores.push(
+            `El respaldo esta incompleto en ${tabla}: dice tener ${cantidad} filas y solo trae ${reales}.`,
+          );
+        }
+      }
     }
   } catch (error) {
     errores.push(
@@ -378,7 +466,8 @@ export async function listarRespaldos(
 
   const respaldos: ResumenRespaldo[] = [];
   for (const nombre of archivos) {
-    if (!nombre.endsWith(".json.gz")) continue;
+    const formato = formatoDeNombre(nombre);
+    if (!formato) continue;
     const ruta = join(carpeta, nombre);
     try {
       const info = await stat(ruta);
@@ -389,6 +478,7 @@ export async function listarRespaldos(
         tamano: info.size,
         creadoEn: info.mtime.toISOString(),
         tipo: tipoDe(nombre),
+        formato,
       });
     } catch {
       // Un archivo que se borro entre el readdir y el stat: se ignora.
@@ -447,14 +537,14 @@ export interface EspacioDisco {
 /**
  * Devuelve el espacio libre y total en disco para la carpeta indicada.
  *
- * Usa `statvfs` para consultar el sistema de archivos sin necesidad de
+ * Usa `statfsSync` para consultar el sistema de archivos sin necesidad de
  * crear archivos temporales. No lanza: si falla, devuelve ceros.
  */
 export async function obtenerEspacioDisponible(
   ruta: string,
 ): Promise<EspacioDisco> {
   try {
-    const info = statvfs(ruta);
+    const info = statfsSync(ruta);
     const bloqueSize = info.bsize || info.frsize || 4096;
     return {
       libre: info.bavail * bloqueSize,
@@ -594,6 +684,7 @@ export async function crearRespaldo(
       tamano: info.size,
       creadoEn: info.mtime.toISOString(),
       tipo,
+      formato: "json",
     };
   } catch (error) {
     gzip.destroy();
@@ -648,7 +739,506 @@ export async function rotarAutomaticos(carpeta: string): Promise<void> {
 
   for (const viejo of automaticos.slice(MAX_AUTOMATICOS)) {
     await unlink(viejo.ruta).catch(() => undefined);
+    // Sin esto quedan archivos .sha256 de respaldos que ya no existen.
+    await unlink(
+      join(carpeta, nombreArchivoChecksum(viejo.nombre)),
+    ).catch(() => undefined);
     console.log(`[respaldos] Rotado ${viejo.nombre}`);
+  }
+}
+
+/**
+ * Quita la extension que traiga el nombre y pone la del formato elegido.
+ * Asi el dialogo de guardar no deja un archivo `.json` que en realidad es SQL.
+ */
+function conExtension(ruta: string, formato: FormatoRespaldo): string {
+  const base = ruta.replace(/(\.json\.gz|\.json|\.sql|\.gz)$/i, "");
+  const extension =
+    formato === "sql"
+      ? EXTENSION_SQL
+      : formato === "json"
+        ? EXTENSION_JSON
+        : EXTENSION_JSON_GZ;
+  return `${base}${extension}`;
+}
+
+/** Escapa un texto para ponerlo entre comillas en una sentencia SQL. */
+function literalSql(texto: string): string {
+  return `'${texto.replace(/'/g, "''")}'`;
+}
+
+/** Lee la cabecera y el resumen de un respaldo propio sin cargar los datos. */
+async function leerResumenRespaldo(
+  ruta: string,
+): Promise<{ meta: MetaRespaldo; fin: FinRespaldo }> {
+  const entrada = createReadStream(ruta).pipe(createGunzip());
+  const lector = createInterface({ input: entrada, crlfDelay: Infinity });
+  let meta: MetaRespaldo | undefined;
+  let fin: FinRespaldo | undefined;
+  try {
+    for await (const linea of lector) {
+      if (!linea.trim()) continue;
+      const valor = JSON.parse(linea) as Record<string, unknown>;
+      if (valor["t"] === "meta" && !meta) meta = valor as unknown as MetaRespaldo;
+      if (valor["t"] === "fin" && !fin) fin = valor as unknown as FinRespaldo;
+      if (meta && fin) break;
+    }
+  } finally {
+    lector.close();
+    entrada.destroy();
+  }
+  if (!meta || !fin) {
+    throw new Error("El respaldo no trae la cabecera o el resumen final.");
+  }
+  return { meta, fin };
+}
+
+/**
+ * Convierte un respaldo propio en un archivo `.sql` de PostgreSQL.
+ *
+ * El esquema no va en el archivo: al importarlo, la aplicacion aplica las
+ * migraciones que correspondan a su version y despues ejecuta este SQL. Asi
+ * el mismo archivo sirve para actualizar el sistema y para llevarlo a otro
+ * equipo. Los datos van en `json_populate_recordset`, que es SQL estandar de
+ * PostgreSQL y no necesita `psql` ni `pg_dump`.
+ */
+async function generarSqlDesdeRespaldo(
+  config: ConfiguracionPg,
+  origen: string,
+  destino: string,
+): Promise<void> {
+  const { meta, fin } = await leerResumenRespaldo(origen);
+  const columnasPorTabla = new Map(
+    meta.tablas.map((tabla) => [tabla.nombre, tabla.columnas] as const),
+  );
+  const nombres = meta.tablas.map((tabla) => tabla.nombre);
+
+  // Si la base actual esta disponible se aprovecha para ordenar padres
+  // antes que hijos; si no, se mantiene el orden del respaldo.
+  let cliente: pg.Client | null = null;
+  let orden = nombres;
+  try {
+    if (config.host) {
+      cliente = new pg.Client({ ...config, client_encoding: "UTF8" });
+      await cliente.connect();
+      orden = await ordenarTablasPorDependencias(cliente, nombres);
+    }
+  } catch {
+    if (cliente) await cliente.end().catch(() => undefined);
+    cliente = null;
+    orden = nombres;
+  }
+
+  const salida = createWriteStream(destino);
+  const completado = finished(salida);
+  const escribir = async (texto: string): Promise<void> => {
+    if (!salida.write(texto)) await once(salida, "drain");
+  };
+
+  try {
+    await escribir(
+      "-- Respaldo de Nutricion Especializada para PostgreSQL.\n" +
+        "-- Importalo desde la pantalla Respaldos de la aplicacion.\n" +
+        `-- meta: ${JSON.stringify(meta)}\n` +
+        `-- fin: ${JSON.stringify(fin.filas)}\n` +
+        "BEGIN;\n" +
+        "SET client_encoding = 'UTF8';\n",
+    );
+
+    if (orden.length > 0) {
+      const lista = orden
+        .map((tabla) => `${ESQUEMA}.${ident(tabla)}`)
+        .join(", ");
+      await escribir(`TRUNCATE TABLE ${lista} CASCADE;\n`);
+    }
+
+    const lotes = new Map<string, Record<string, unknown>[]>();
+    for (const tabla of orden) lotes.set(tabla, []);
+
+    const vaciarLotes = async (): Promise<void> => {
+      for (const tabla of orden) {
+        const filas = lotes.get(tabla) ?? [];
+        if (filas.length === 0) continue;
+        const columnas = columnasPorTabla.get(tabla) ?? [];
+        if (columnas.length === 0) {
+          throw new Error(`El respaldo no describe las columnas de ${tabla}.`);
+        }
+        const lista = columnas.map(ident).join(", ");
+        await escribir(
+          `INSERT INTO ${ESQUEMA}.${ident(tabla)} (${lista})\n` +
+            `SELECT ${lista}\n` +
+            `  FROM json_populate_recordset(NULL::${ESQUEMA}.${ident(tabla)}, ${literalSql(
+              JSON.stringify(filas),
+            )}::json);\n`,
+        );
+        lotes.set(tabla, []);
+      }
+    };
+
+    const entrada = createReadStream(origen).pipe(createGunzip());
+    const lector = createInterface({ input: entrada, crlfDelay: Infinity });
+    try {
+      for await (const linea of lector) {
+        if (!linea.trim()) continue;
+        const valor = JSON.parse(linea) as Record<string, unknown>;
+        if (valor["t"] !== "f") continue;
+        const tabla = String(valor["tabla"] ?? "");
+        if (!columnasPorTabla.has(tabla)) {
+          throw new Error(`El respaldo trae una tabla no esperada: ${tabla}`);
+        }
+        const filas = lotes.get(tabla) ?? [];
+        const datos = valor["d"];
+        if (datos === null || typeof datos !== "object") {
+          throw new Error("El respaldo trae una fila sin datos.");
+        }
+        filas.push(datos as Record<string, unknown>);
+        lotes.set(tabla, filas);
+        if (filas.length >= LOTE_ESCRITURA) await vaciarLotes();
+      }
+    } finally {
+      lector.close();
+      entrada.destroy();
+    }
+    await vaciarLotes();
+
+    // Deja los contadores de claves donde deben, por si el archivo se usa
+    // con psql en vez de con la aplicacion.
+    for (const tabla of orden) {
+      if (!(columnasPorTabla.get(tabla) ?? []).includes("id")) continue;
+      await escribir(
+        `DO $seq$ DECLARE s text; BEGIN ` +
+          `s := pg_get_serial_sequence(${literalSql(`${ESQUEMA}.${ident(tabla)}`)}, 'id'); ` +
+          `IF s IS NOT NULL THEN PERFORM setval(s, COALESCE((SELECT MAX("id") FROM ${ESQUEMA}.${ident(tabla)}), 0) + 1, false); ` +
+          `END IF; END $seq$;\n`,
+      );
+    }
+
+    await escribir("COMMIT;\n");
+    salida.end();
+    await completado;
+  } catch (error) {
+    salida.destroy();
+    await completado.catch(() => undefined);
+    await unlink(destino).catch(() => undefined);
+    throw error;
+  } finally {
+    if (cliente) await cliente.end().catch(() => undefined);
+  }
+}
+
+/** Resultado de guardar un respaldo en un archivo elegido por el usuario. */
+export interface ResultadoExportacion {
+  /** Ruta final del archivo escrito. */
+  ruta: string;
+  /** Formato en que se guardo. */
+  formato: FormatoRespaldo;
+}
+
+/**
+ * Copia un respaldo de la carpeta de la aplicacion a otro lugar.
+ *
+ * Es la operacion que permite llevarse el archivo a otra computadora o
+ * guardar una copia fuera del disco antes de actualizar el sistema.
+ */
+export async function exportarRespaldo(
+  config: ConfiguracionPg,
+  carpeta: string,
+  nombre: string,
+  formato: FormatoRespaldo,
+  destinoElegido: string,
+): Promise<ResultadoExportacion> {
+  if (!nombreSeguro(nombre) || !formatoDeNombre(nombre)) {
+    throw new Error("El nombre del respaldo no es valido.");
+  }
+  const origen = join(carpeta, nombre);
+  try {
+    await stat(origen);
+  } catch {
+    throw new Error("El respaldo que quieres exportar ya no existe.");
+  }
+
+  const formatoOrigen = formatoDeNombre(nombre)!;
+  if (formatoOrigen === "sql" && formato !== "sql") {
+    throw new Error(
+      "Un respaldo guardado como SQL solo se puede volver a guardar como SQL.",
+    );
+  }
+
+  const destino = conExtension(destinoElegido, formato);
+  if (formato === "sql") {
+    if (formatoOrigen === "sql") {
+      await copyFile(origen, destino);
+    } else {
+      await generarSqlDesdeRespaldo(config, origen, destino);
+    }
+  } else if (formato === "json") {
+    await pipeline(
+      createReadStream(origen),
+      createGunzip(),
+      createWriteStream(destino),
+    );
+  } else {
+    await copyFile(origen, destino);
+  }
+
+  return { ruta: destino, formato };
+}
+
+/** Resultado de validar un respaldo escrito en SQL. */
+export interface ResultadoValidacionSql {
+  valido: boolean;
+  errores: string[];
+  meta?: MetaRespaldo;
+  filas: Record<string, number>;
+  checksum: string;
+}
+
+/**
+ * Valida un `.sql` generado por la aplicacion antes de dejarlo entrar.
+ *
+ * El archivo trae su cabecera en comentarios (`-- meta:` y `-- fin:`), asi
+ * que se puede revisar sin ejecutar nada. Tambien comprueba que tenga un
+ * `BEGIN` y un `COMMIT`, para no aceptar un archivo cortado a mitad.
+ */
+export async function validarIntegridadRespaldoSql(
+  carpeta: string,
+  nombre: string,
+): Promise<ResultadoValidacionSql> {
+  const errores: string[] = [];
+  if (!nombreSeguro(nombre) || !nombre.endsWith(EXTENSION_SQL)) {
+    return {
+      valido: false,
+      errores: ["El nombre del respaldo SQL no es valido."],
+      filas: {},
+      checksum: "",
+    };
+  }
+
+  const ruta = join(carpeta, nombre);
+  try {
+    await stat(ruta);
+  } catch {
+    return {
+      valido: false,
+      errores: ["El archivo del respaldo no existe."],
+      filas: {},
+      checksum: "",
+    };
+  }
+
+  const checksum = await calcularChecksum(ruta);
+  try {
+    const contenido = await readFile(
+      join(carpeta, nombreArchivoChecksum(nombre)),
+      "utf8",
+    );
+    const esperado = contenido.split(/\s+/)[0] ?? "";
+    if (esperado && esperado !== checksum) {
+      errores.push("El checksum del archivo no coincide con el registro de seguridad.");
+    }
+  } catch {
+    // No hay checksum: se valida igual por la estructura del archivo.
+  }
+
+  let meta: MetaRespaldo | undefined;
+  let filas: Record<string, number> = {};
+  let begin = false;
+  let commit = false;
+  let inserciones = 0;
+
+  const lector = createInterface({
+    input: createReadStream(ruta),
+    crlfDelay: Infinity,
+  });
+  try {
+    for await (const linea of lector) {
+      const texto = linea.trim();
+      if (texto.startsWith("-- meta:")) {
+        try {
+          meta = JSON.parse(texto.slice("-- meta:".length).trim()) as MetaRespaldo;
+        } catch {
+          errores.push("La cabecera del respaldo SQL no se puede leer.");
+        }
+      } else if (texto.startsWith("-- fin:")) {
+        try {
+          const leido = JSON.parse(texto.slice("-- fin:".length).trim()) as unknown;
+          filas =
+            leido !== null && typeof leido === "object"
+              ? (leido as Record<string, number>)
+              : {};
+        } catch {
+          errores.push("El resumen del respaldo SQL no se puede leer.");
+        }
+      } else if (/^BEGIN\s*;/i.test(texto)) {
+        begin = true;
+      } else if (/^COMMIT\s*;/i.test(texto)) {
+        commit = true;
+      } else if (/^INSERT\s+INTO\s/i.test(texto)) {
+        inserciones += 1;
+      }
+    }
+  } catch (error) {
+    errores.push(
+      `No se pudo leer el respaldo SQL: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  } finally {
+    lector.close();
+  }
+
+  if (!meta || meta.formato !== FORMATO || meta.esquema !== ESQUEMA) {
+    errores.push("El formato del respaldo SQL no es compatible con esta version.");
+  }
+  if (!meta || !Array.isArray(meta.tablas) || meta.tablas.length === 0) {
+    errores.push("El respaldo SQL no contiene tablas definidas.");
+  }
+  if (Object.keys(filas).length === 0 && inserciones > 0) {
+    errores.push("El respaldo SQL no trae el resumen final; puede estar incompleto.");
+  }
+  if (!begin || !commit) {
+    errores.push("El respaldo SQL no trae la transaccion completa; puede estar cortado.");
+  }
+
+  return { valido: errores.length === 0, errores, meta, filas, checksum };
+}
+
+/**
+ * Restaura un respaldo SQL.
+ *
+ * Igual que el respaldo propio: todo en una transaccion, con el esquema
+ * reconstruido por las migraciones actuales. El propio SQL se encarga de
+ * vaciar las tablas y poner los contadores en su sitio.
+ */
+export async function restaurarRespaldoSql(
+  config: ConfiguracionPg,
+  carpeta: string,
+  nombre: string,
+): Promise<ResultadoRestauracion> {
+  if (!nombreSeguro(nombre) || !nombre.endsWith(EXTENSION_SQL)) {
+    throw new Error("El nombre del respaldo SQL no es valido.");
+  }
+
+  const validacion = await validarIntegridadRespaldoSql(carpeta, nombre);
+  if (!validacion.valido) {
+    throw new Error(
+      `El respaldo SQL no es valido y no se puede restaurar:\n- ${validacion.errores.join(
+        "\n- ",
+      )}`,
+    );
+  }
+
+  const sql = await readFile(join(carpeta, nombre), "utf8");
+  const cliente = new pg.Client({ ...config, client_encoding: "UTF8" });
+  await cliente.connect();
+
+  try {
+    await cliente.query("BEGIN");
+    try {
+      await cliente.query("SET LOCAL session_replication_role = replica");
+      await cliente.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+      await cliente.query(`CREATE SCHEMA ${ESQUEMA}`);
+      await aplicarTodasLasMigraciones(cliente);
+      await cliente.query(sql);
+      await ajustarSecuencias(cliente);
+      await cliente.query("COMMIT");
+
+      const filas = Object.values(validacion.filas).reduce(
+        (total, cantidad) => total + (Number(cantidad) || 0),
+        0,
+      );
+      console.log(
+        `[respaldos] Restaurado SQL ${nombre}: ${filas} filas en ${
+          validacion.meta?.tablas.length ?? 0
+        } tablas`,
+      );
+      return {
+        tablas: validacion.meta?.tablas.length ?? 0,
+        filas,
+      };
+    } catch (error) {
+      await cliente.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    }
+  } finally {
+    await cliente.end().catch(() => undefined);
+  }
+}
+
+/**
+ * Trae un archivo elegido por el usuario a la carpeta de respaldos.
+ *
+ * Antes de aceptarlo se valida; si no sirve, se borra y se explica el motivo.
+ * Los `.json` se comprimen al entrar para que todos los respaldos propios
+ * tengan el mismo formato.
+ */
+export async function importarArchivoRespaldos(
+  carpeta: string,
+  rutaOrigen: string,
+): Promise<ResumenRespaldo> {
+  const formato = extensionDeArchivo(rutaOrigen);
+  if (!formato) {
+    throw new Error(
+      "Ese archivo no es un respaldo. Se pueden importar archivos .json.gz, .json y .sql.",
+    );
+  }
+  try {
+    await stat(rutaOrigen);
+  } catch {
+    throw new Error("No se encontro el archivo que elegiste.");
+  }
+
+  const nombre = nombreImportado(formato);
+  const destino = join(carpeta, nombre);
+  const rutaChecksum = join(carpeta, nombreArchivoChecksum(nombre));
+
+  try {
+    if (formato === "json") {
+      await pipeline(
+        createReadStream(rutaOrigen),
+        createGzip(),
+        createWriteStream(destino, { flags: "wx" }),
+      );
+    } else {
+      await copyFile(rutaOrigen, destino);
+    }
+
+    const checksum = await calcularChecksum(destino);
+    await writeFile(rutaChecksum, `${checksum}  ${nombre}\n`, "utf8");
+
+    const validacion =
+      formato === "sql"
+        ? await validarIntegridadRespaldoSql(carpeta, nombre)
+        : await validarIntegridadRespaldo(
+            {
+              host: "",
+              port: 0,
+              database: "",
+              user: "",
+              password: "",
+            },
+            carpeta,
+            nombre,
+          );
+    if (!validacion.valido) {
+      throw new Error(
+        `El archivo no es un respaldo valido:\n- ${validacion.errores.join("\n- ")}`,
+      );
+    }
+
+    const info = await stat(destino);
+    return {
+      nombre,
+      ruta: destino,
+      tamano: info.size,
+      creadoEn: info.mtime.toISOString(),
+      tipo: "manual",
+      formato: formato === "sql" ? "sql" : "json",
+    };
+  } catch (error) {
+    await unlink(destino).catch(() => undefined);
+    await unlink(rutaChecksum).catch(() => undefined);
+    throw error;
   }
 }
 

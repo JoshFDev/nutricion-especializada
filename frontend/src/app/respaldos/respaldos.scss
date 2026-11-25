@@ -45,6 +45,33 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Selector de formato de la cabecera: etiqueta y lista pegadas. */
+.formato-exportar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+}
+
+.formato-exportar select {
+  padding: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+}
+
+/* Los botones de cada renglon se alinean sin separar demasiado la tabla. */
+.acciones-fila {
+  white-space: nowrap;
+}
+
+.acciones-fila button + button {
+  margin-left: 0.375rem;
+}
+
 /* La explicacion de la rotacion va al final y ocupa el resto de la fila. */
 .nota {
   flex: 1 1 22rem;

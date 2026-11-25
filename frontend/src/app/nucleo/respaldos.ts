@@ -10,12 +10,22 @@
 
 export type TipoRespaldo = 'automatico' | 'manual' | 'seguridad';
 
+/** Formatos en que se puede guardar un respaldo. */
+export type FormatoRespaldo = 'json.gz' | 'json' | 'sql';
+
 export interface Respaldo {
   nombre: string;
   ruta: string;
   tamano: number;
   creadoEn: string;
   tipo: TipoRespaldo;
+  /** Formato del archivo: el propio o SQL para PostgreSQL. */
+  formato: 'json' | 'sql';
+}
+
+export interface ResultadoExportacion {
+  ruta: string;
+  formato: FormatoRespaldo;
 }
 
 export interface ResultadoRestauracion {
@@ -71,6 +81,8 @@ export interface HorarioRespaldos {
 interface RespaldosApi {
   listar: () => Promise<Respaldo[]>;
   crear: () => Promise<Respaldo>;
+  exportar: (nombre: string, formato: FormatoRespaldo) => Promise<ResultadoExportacion | null>;
+  importar: () => Promise<Respaldo | null>;
   restaurar: (nombre: string) => Promise<ResultadoRestauracion>;
   validar: (nombre: string) => Promise<ResultadoValidacion>;
   obtenerCarpetaRespaldos: () => Promise<string>;
@@ -108,6 +120,31 @@ export async function crearRespaldo(): Promise<Respaldo> {
   if (!puente)
     throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
   return puente.crear();
+}
+
+/**
+ * Guarda una copia del respaldo en el archivo que elija la persona.
+ * Devuelve `null` si cancela el dialogo.
+ */
+export async function exportarRespaldo(
+  nombre: string,
+  formato: FormatoRespaldo,
+): Promise<ResultadoExportacion | null> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.exportar(nombre, formato);
+}
+
+/**
+ * Importa un archivo de respaldo y lo deja listo en la carpeta de la app.
+ * Devuelve `null` si cancela el dialogo.
+ */
+export async function importarRespaldo(): Promise<Respaldo | null> {
+  const puente = api();
+  if (!puente)
+    throw new Error('Los respaldos solo estan disponibles en la aplicacion de escritorio.');
+  return puente.importar();
 }
 
 export async function restaurarRespaldo(nombre: string): Promise<ResultadoRestauracion> {

@@ -11,13 +11,18 @@ import { crearAdminInicial } from "./admin-inicial.js";
 import {
   crearRespaldo,
   crearRespaldoAutomatico,
+  exportarRespaldo,
+  importarArchivoRespaldos,
   listarRespaldos,
   restaurarRespaldo,
+  restaurarRespaldoSql,
   validarIntegridadRespaldo,
+  validarIntegridadRespaldoSql,
   obtenerSaludRespaldos,
   obtenerEspacioDisponible,
   type ConfiguracionPg,
   type EspacioDisco,
+  type FormatoRespaldo,
   type ResumenRespaldo,
 } from "./respaldos.js";
 import {
@@ -140,6 +145,11 @@ function crearVentana() {
     backgroundColor: "#f7f4ec",
     autoHideMenuBar: true,
     title: "Nutrición Especializada",
+    // El instalador usa resources/icon.ico (ver electron-builder.yml). En
+    // desarrollo se lee el mismo archivo desde el repositorio.
+    icon: app.isPackaged
+      ? join(process.resourcesPath, "icon.ico")
+      : join(dirname, "..", "resources", "icon.ico"),
     // En Windows quitamos la barra de título nativa y dejamos sólo los
     // botones de minimizar/maximizar/cerrar encima de la barra azul de la
     // aplicación. Así la ventana se ve integrada y no como un marco gris.
@@ -337,6 +347,84 @@ function registrarIpc(): void {
 
   ipcMain.handle("respaldos:crear", () => respaldarManual());
 
+  /**
+   * Guarda una copia del respaldo elegido donde la persona quiera.
+   * Devuelve `null` si se cancela el dialogo, para que la pantalla no muestre
+   * un error por una decision del usuario.
+   */
+  ipcMain.handle(
+    "respaldos:exportar",
+    async (
+      _evento,
+      nombre: unknown,
+      formato: unknown,
+    ): Promise<{ ruta: string; formato: FormatoRespaldo } | null> => {
+      if (typeof nombre !== "string" || typeof formato !== "string") {
+        throw new Error("El respaldo o el formato no son validos.");
+      }
+      if (
+        formato !== "json.gz" &&
+        formato !== "json" &&
+        formato !== "sql"
+      ) {
+        throw new Error("El formato de exportacion no es valido.");
+      }
+      if (!pgConfigActual) {
+        throw new Error("La base de datos todavia no esta lista.");
+      }
+
+      const extension =
+        formato === "sql" ? ".sql" : formato === "json" ? ".json" : ".json.gz";
+      const etiqueta =
+        formato === "sql"
+          ? "SQL para PostgreSQL (.sql)"
+          : formato === "json"
+            ? "JSON para leer (.json)"
+            : "JSON comprimido (.json.gz)";
+      const base = nombre.replace(/\.(json\.gz|json|sql)$/i, "");
+      const resultado = await dialog.showSaveDialog(ventana!, {
+        title: "Guardar respaldo en otro lugar",
+        defaultPath: `${base}${extension}`,
+        filters: [{ name: etiqueta, extensions: [extension.replace(/^\./, "")] }],
+      });
+      if (resultado.canceled || !resultado.filePath) return null;
+
+      return await exportarRespaldo(
+        pgConfigActual,
+        await carpetaRespaldos(),
+        nombre,
+        formato,
+        resultado.filePath,
+      );
+    },
+  );
+
+  /**
+   * Trae un archivo de respaldo de otra computadora o de una copia externa.
+   * Se valida antes de copiarlo a la carpeta de la aplicacion.
+   */
+  ipcMain.handle(
+    "respaldos:importar",
+    async (): Promise<ResumenRespaldo | null> => {
+      const resultado = await dialog.showOpenDialog(ventana!, {
+        title: "Elegir archivo de respaldo",
+        buttonLabel: "Importar respaldo",
+        filters: [
+          {
+            name: "Respaldos (.json.gz, .json, .sql)",
+            extensions: ["gz", "json", "sql"],
+          },
+        ],
+        properties: ["openFile"],
+      });
+      if (resultado.canceled || resultado.filePaths.length === 0) return null;
+      return await importarArchivoRespaldos(
+        await carpetaRespaldos(),
+        resultado.filePaths[0],
+      );
+    },
+  );
+
   ipcMain.handle("respaldos:abrir-carpeta", async () => {
     const error = await shell.openPath(await carpetaRespaldos());
     if (error) throw new Error(error);
@@ -346,6 +434,10 @@ function registrarIpc(): void {
     if (typeof nombre !== "string" || nombre.trim() === "") {
       throw new Error("El nombre del respaldo no es valido.");
     }
+    const carpeta = await carpetaRespaldos();
+    if (nombre.trim().endsWith(".sql")) {
+      return validarIntegridadRespaldoSql(carpeta, nombre.trim());
+    }
     return validarIntegridadRespaldo(
       pgConfigActual ?? {
         host: "",
@@ -354,7 +446,7 @@ function registrarIpc(): void {
         user: "",
         password: "",
       },
-      await carpetaRespaldos(),
+      carpeta,
       nombre.trim(),
     );
   });
@@ -389,7 +481,9 @@ function registrarIpc(): void {
       // DROP SCHEMA espera sus locks y la restauracion no avanza.
       await detenerBackend();
 
-      const resultado = await restaurarRespaldo(pg, carpeta, nombre.trim());
+      const resultado = nombre.trim().endsWith(".sql")
+        ? await restaurarRespaldoSql(pg, carpeta, nombre.trim())
+        : await restaurarRespaldo(pg, carpeta, nombre.trim());
 
       // Se cierra PostgreSQL y se relanza la aplicacion. Es la forma de
       // garantizar que nadie quede con una conexion al esquema anterior.

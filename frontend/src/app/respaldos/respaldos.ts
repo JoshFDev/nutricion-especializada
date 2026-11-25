@@ -14,8 +14,10 @@ import {
   abrirCarpetaRespaldos,
   cambiarCarpetaRespaldos,
   crearRespaldo,
+  exportarRespaldo,
   fechaLegible,
   guardarHorarioRespaldos,
+  importarRespaldo,
   listarRespaldos,
   obtenerCarpetaRespaldos,
   obtenerHorarioRespaldos,
@@ -24,6 +26,7 @@ import {
   restaurarRespaldo,
   tamanoLegible,
   validarIntegridad,
+  type FormatoRespaldo,
   type HorarioRespaldos,
   type Respaldo,
   type ResultadoSaludRespaldos,
@@ -65,7 +68,12 @@ export class Respaldos implements OnInit {
   readonly respaldos = signal<Respaldo[]>([]);
   readonly cargando = signal(true);
   readonly error = signal<string | null>(null);
-  readonly trabajando = signal<'crear' | 'restaurar' | 'validar' | 'cambiar-carpeta' | null>(null);
+  readonly trabajando = signal<
+    'crear' | 'restaurar' | 'validar' | 'cambiar-carpeta' | 'exportar' | 'importar' | null
+  >(null);
+
+  /** Formato elegido para guardar un respaldo fuera de la aplicacion. */
+  readonly formatoExportar = signal<FormatoRespaldo>('json.gz');
 
   /** Carpeta actual donde se guardan los respaldos. */
   readonly carpetaRespaldos = signal<string>('');
@@ -241,6 +249,57 @@ export class Respaldos implements OnInit {
     }
   }
 
+  /** Formato elegido en el selector de la cabecera. */
+  actualizarFormato(valor: string): void {
+    if (valor === 'json.gz' || valor === 'json' || valor === 'sql') {
+      this.formatoExportar.set(valor);
+    }
+  }
+
+  /** Etiqueta corta del formato en la tabla. */
+  formatoTexto(formato: Respaldo['formato']): string {
+    return formato === 'sql' ? 'SQL' : 'JSON';
+  }
+
+  /**
+   * Guarda una copia del respaldo donde la persona quiera: otro disco, una
+   * memoria USB o la carpeta del instalador nuevo.
+   */
+  async exportar(respaldo: Respaldo): Promise<void> {
+    if (!this.puedeGestionar() || this.trabajando() !== null) return;
+
+    this.trabajando.set('exportar');
+    try {
+      const resultado = await exportarRespaldo(respaldo.nombre, this.formatoExportar());
+      if (resultado) {
+        this.toast.exito(`Respaldo guardado en: ${resultado.ruta}`);
+      }
+    } catch (fallo) {
+      this.toast.error(this.mensaje(fallo));
+    } finally {
+      this.trabajando.set(null);
+    }
+  }
+
+  /** Trae un respaldo de otra computadora o de una copia guardada. */
+  async importar(): Promise<void> {
+    if (!this.puedeGestionar() || this.trabajando() !== null) return;
+
+    this.trabajando.set('importar');
+    try {
+      const respaldo = await importarRespaldo();
+      if (respaldo) {
+        this.toast.exito(`Respaldo importado: ${respaldo.nombre}`);
+        await this.cargar();
+        await this.cargarSalud();
+      }
+    } catch (fallo) {
+      this.toast.error(this.mensaje(fallo));
+    } finally {
+      this.trabajando.set(null);
+    }
+  }
+
   async validar(respaldo: Respaldo): Promise<void> {
     if (this.trabajando() !== null) return;
 
@@ -350,8 +409,18 @@ export class Respaldos implements OnInit {
   }
 
   /** Estado de validacion de un respaldo para mostrar en la plantilla. */
-  estadoValidacion(nombre: string) {
-    return this.validaciones()[nombre] ?? null;
+  estadoValidacion(nombre: string): {
+    valido: boolean | null;
+    errores: string[];
+    verificando: boolean;
+  } {
+    return (
+      this.validaciones()[nombre] ?? {
+        valido: null,
+        errores: [],
+        verificando: false,
+      }
+    );
   }
 
   /**

@@ -29,6 +29,8 @@ describe('htmlCuentaCreada', () => {
     expect(html).toContain('maria@example.com');
     expect(html).toContain('Maria Lopez');
     expect(html).toContain('cambiar');
+    // El botón web no aplica a la app de escritorio.
+    expect(html).not.toContain('Iniciar sesión');
   });
 
   it('si la clave la escribio el administrador no la suelta en el correo', () => {

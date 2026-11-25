@@ -1,7 +1,6 @@
 import { env } from '../../config/entorno.js';
 import {
   adjuntoLogo,
-  botonCorreo,
   cajaDatos,
   envolver,
   escaparHtml,
@@ -16,7 +15,8 @@ import { enviarCorreo } from '../../core/correo.js';
  * que vale la pena revisar sin abrir un socket SMTP.
  */
 export function htmlRecuperacion(nombre: string, contrasenaTemporal: string): string {
-  const enlace = `${env.APP_URL}/login`;
+  // No se pone botón de "Iniciar sesión": en la versión de escritorio no hay
+  // una URL web a la que lleve, y confundía a quien recibía el correo.
   const contenido = [
     parrafo(`Hola <strong>${escaparHtml(nombre)}</strong>,`),
     parrafo('Has solicitado recuperar tu contraseña. Usa estos datos para iniciar sesión ahora:'),
@@ -24,7 +24,6 @@ export function htmlRecuperacion(nombre: string, contrasenaTemporal: string): st
     parrafo(
       'Por seguridad, al iniciar sesión el sistema te pedirá cambiar esa contraseña temporal por una tuya.',
     ),
-    botonCorreo(enlace, 'Iniciar sesión'),
     parrafo('Si no solicitaste este cambio, ignora este mensaje.'),
   ].join('\n');
 
@@ -37,7 +36,6 @@ export async function enviarRecuperacionContrasena(
   contrasenaTemporal: string,
 ): Promise<void> {
   const subject = `Recuperación de contraseña - ${env.EMPRESA_NOMBRE}`;
-  const resetLink = `${env.APP_URL}/login`;
   const text = [
     `Hola ${nombre},`,
     '',
@@ -47,7 +45,7 @@ export async function enviarRecuperacionContrasena(
     '',
     'Por seguridad, al iniciar sesión el sistema te pedirá cambiar esa contraseña temporal por una tuya.',
     '',
-    `Inicia sesión en: ${resetLink}`,
+    'Abre la aplicación de escritorio y entra con esa contraseña.',
     '',
     'Si no solicitaste este cambio, ignora este mensaje.',
   ].join('\n');

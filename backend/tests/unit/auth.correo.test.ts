@@ -15,7 +15,8 @@ describe('htmlRecuperacion', () => {
     expect(html).toContain(`cid:${LOGO_CID}`);
     expect(html).toContain('Ab3#xY9');
     expect(html).toContain('Ana');
-    expect(html).toContain('Iniciar sesión');
+    // En escritorio no hay enlace web al que mandar: el correo solo da la clave.
+    expect(html).not.toContain('Iniciar sesión');
   });
 
   it('escapa el nombre', () => {

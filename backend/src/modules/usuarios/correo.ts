@@ -1,7 +1,6 @@
 import { env } from '../../config/entorno.js';
 import {
   adjuntoLogo,
-  botonCorreo,
   cajaDatos,
   envolver,
   escaparHtml,
@@ -22,8 +21,6 @@ export interface CuentaCreada {
    */
   contrasenaTemporal: string | null;
 }
-
-const ENLACE = () => `${env.APP_URL}/login`;
 
 /**
  * El cuerpo del correo de alta.
@@ -49,6 +46,7 @@ export function htmlCuentaCreada(datos: CuentaCreada): string {
       )
     : '';
 
+  // Igual que en la recuperación: sin botón web, porque esto es una app local.
   const contenido = [
     parrafo(`Hola <strong>${escaparHtml(datos.nombre)}</strong>,`),
     parrafo(
@@ -56,7 +54,6 @@ export function htmlCuentaCreada(datos: CuentaCreada): string {
     ),
     credenciales,
     aviso,
-    botonCorreo(ENLACE(), 'Iniciar sesión'),
     parrafo('Si no esperabas este correo, avisa al administrador.'),
   ].join('\n');
 
@@ -79,7 +76,7 @@ export async function enviarCuentaCreada(datos: CuentaCreada): Promise<void> {
       ? `\nCorreo: ${datos.correo}\nContraseña temporal: ${datos.contrasenaTemporal}\n\nPor seguridad, al iniciar sesión el sistema te pedirá cambiarla.`
       : `\nEntra con tu correo ${datos.correo} y la contraseña que te entregó quien creó la cuenta.`,
     '',
-    `Inicia sesión en: ${ENLACE()}`,
+    'Abre la aplicación de escritorio y entra con esos datos.',
     '',
     'Si no esperabas este correo, avisa al administrador.',
   ].join('\n');

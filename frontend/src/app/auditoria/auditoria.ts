@@ -11,6 +11,7 @@ import {
   cambiosDeFila,
   campoLegible,
   eventoSospechoso,
+  fechaDetalleLegible,
   fechaLegible,
   rangoDelMes,
   rangoIncoherente,
@@ -199,6 +200,7 @@ export class Auditoria {
   });
 
   // Para la plantilla: funciones puras, para que se lean ahi sin this.
+  fechaDetalleLegible = fechaDetalleLegible;
   fechaLegible = fechaLegible;
   eventoSospechoso = eventoSospechoso;
   montoComoTexto = montoComoTexto;

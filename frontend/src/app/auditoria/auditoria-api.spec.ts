@@ -5,6 +5,7 @@ import {
   cambiosDeFila,
   campoLegible,
   eventoSospechoso,
+  fechaDetalleLegible,
   fechaLegible,
   rangoDelMes,
   rangoIncoherente,
@@ -55,6 +56,18 @@ describe('un valor del JSON del trigger', () => {
   it('un objeto que no se sabe que es se muestra como JSON', () => {
     expect(valorLegible({ a: 1 })).toBe('{"a":1}');
   });
+
+  it('las fechas de la base se leen como dia, mes, ano y hora', () => {
+    // Tal como llegan del trigger: antes eran cadenas imposibles de leer en
+    // el detalle de cambios.
+    expect(valorLegible('2026-11-24T22:21:30.226201')).toBe('24 nov 2026, 22:21:30');
+    expect(valorLegible('2026-11-24T23:13:12.215998')).toBe('24 nov 2026, 23:13:12');
+    expect(valorLegible('2026-11-24')).toBe('24 nov 2026');
+  });
+
+  it('un texto que solo parece fecha se deja como esta', () => {
+    expect(valorLegible('2026-11-24 es la fecha')).toBe('2026-11-24 es la fecha');
+  });
 });
 
 // --------------------------------------------------------- los campos que se movieron
@@ -101,6 +114,17 @@ describe('los campos que se movieron', () => {
     // distintas llegan como '10.00' y '10.50' y no como 10 y 10.5.
     const cambios = cambiosDeFila({ monto: '10.00' }, { monto: '10.50' });
     expect(cambios).toHaveLength(1);
+  });
+
+  it('el cambio de la fecha del registro se entiende de un vistazo', () => {
+    const cambios = cambiosDeFila(
+      { actualizado_en: '2026-11-24T22:21:30.226201' },
+      { actualizado_en: '2026-11-24T23:13:12.215998' },
+    );
+    expect(campoLegible(cambios[0].campo)).toBe('Fecha del cambio');
+    expect(comoTexto(cambios)).toEqual([
+      'actualizado_en: 24 nov 2026, 22:21:30 -> 24 nov 2026, 23:13:12',
+    ]);
   });
 
   it('recorre los campos en el orden del registro nuevo, no en el del viejo', () => {
@@ -212,6 +236,11 @@ describe('los codigos de la base, en palabras', () => {
 describe('las fechas', () => {
   it('se muestran con dia y hora, y sin la T del ISO', () => {
     expect(fechaLegible('2026-06-01T14:35:02.000Z')).toBe('2026-06-01 14:35');
+  });
+
+  it('el detalle de un cambio se lee en palabras', () => {
+    expect(fechaDetalleLegible('2026-11-25T05:13:12.215998')).toBe('25 nov 2026, 05:13');
+    expect(fechaDetalleLegible('no es una fecha')).toBe('no es una fecha');
   });
 
   it('el rango por omision es el mes que va, del dia 1 a hoy', () => {

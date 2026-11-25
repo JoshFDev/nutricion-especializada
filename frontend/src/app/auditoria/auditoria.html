@@ -630,9 +630,14 @@
       </div>
 
       <p class="tenue">
-        {{ fechaLegible(renglon.fecha) }} · {{ renglon.usuario ?? 'sin usuario' }}
-        @if (renglon.usuario_rfc) {
-          ({{ renglon.usuario_rfc }})
+        {{ fechaDetalleLegible(renglon.fecha) }}
+        @if (renglon.usuario) {
+          · {{ renglon.usuario }}
+          @if (renglon.usuario_rfc) {
+            ({{ renglon.usuario_rfc }})
+          }
+        } @else {
+          · No se registró el usuario que lo hizo
         }
       </p>
 
@@ -670,8 +675,9 @@
       }
 
       <p class="nota">
-        Estos datos los guardó la regla automática de la base cuando alguien modificó el registro.
-        La pantalla solo los compara: no los puede cambiar.
+        Estos datos los guarda el sistema cuando alguien modifica el registro. La fecha del cambio
+        la pone el sistema solo; nadie la escribe a mano. La pantalla solo compara: no permite
+        cambiarlos.
       </p>
     </section>
   </div>

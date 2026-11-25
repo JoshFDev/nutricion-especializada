@@ -160,6 +160,55 @@ export interface Cambio {
   lado?: 'antes' | 'despues';
 }
 
+const MESES_CORTOS = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
+
+/**
+ * Una fecha de la base en palabras, sin correr la zona horaria.
+ *
+ * El trigger guarda `2026-11-24T23:13:12.215998` y esa cadena en el detalle de
+ * cambios no se lee: parece un error. Se corta el texto tal cual (igual que
+ * `fechaLegible`) para que la hora no se mueva segun donde abra la bitacora.
+ * Los segundos se conservan en el detalle porque dos guardados seguidos pueden
+ * caer en el mismo minuto. Solo se convierte una fecha completa: un texto que
+ * empieza por fecha pero sigue con mas palabras no es una fecha.
+ */
+function fechaComoTexto(texto: string, conSegundos: boolean): string | null {
+  const coincidencia =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(
+      texto,
+    );
+  if (!coincidencia) return null;
+  const [, anio, mes, dia, hora, minuto, segundo] = coincidencia;
+  const nombreMes = MESES_CORTOS[Number(mes) - 1];
+  if (!nombreMes) return null;
+  if (hora === undefined || minuto === undefined) return `${dia} ${nombreMes} ${anio}`;
+  const horaTexto = conSegundos && segundo ? `${hora}:${minuto}:${segundo}` : `${hora}:${minuto}`;
+  return `${dia} ${nombreMes} ${anio}, ${horaTexto}`;
+}
+
+/**
+ * La fecha del encabezado del detalle: dia, mes y hora, sin segundos.
+ *
+ * En la lista se usa `fechaLegible` (tal cual viene de la base); aqui, que es
+ * el panel que alguien abre para entender un cambio, se pone en palabras.
+ */
+export function fechaDetalleLegible(iso: string): string {
+  return fechaComoTexto(iso, false) ?? iso;
+}
+
 /**
  * Cómo se muestra un valor de los datos de la regla automática.
  *
@@ -167,13 +216,17 @@ export interface Cambio {
  * las fechas como texto, y los booleanos como `true`/`false`. Aquí solo se
  * quiere una línea legible, no una revisión de tipos: un `"12.50"` y un `12.5`
  * se pintan igual y a quien lee la bitácora le sirve el número, no el tipo de
- * la columna.
+ * la columna. Las fechas ISO se convierten a texto entendible; el resto se
+ * deja como está.
  */
 export function valorLegible(valor: unknown): string {
   if (valor === null || valor === undefined) return '—';
   if (typeof valor === 'boolean') return valor ? 'sí' : 'no';
   if (typeof valor === 'number') return String(valor);
-  if (typeof valor === 'string') return valor === '' ? '(vacío)' : valor;
+  if (typeof valor === 'string') {
+    if (valor === '') return '(vacío)';
+    return fechaComoTexto(valor, true) ?? valor;
+  }
   if (Array.isArray(valor)) return valor.length === 0 ? '—' : valor.map(valorLegible).join(', ');
   return JSON.stringify(valor);
 }
@@ -337,7 +390,7 @@ export function tablaLegible(tabla: string): string {
 const ETIQUETA_CAMPO: Record<string, string> = {
   id: 'Número',
   creado_en: 'Cuándo se creó',
-  actualizado_en: 'Cuándo se actualizó',
+  actualizado_en: 'Fecha del cambio',
   contrasena: 'Contraseña',
   motivo_cancelacion: 'Motivo de cancelación',
   forma_pago: 'Forma de pago',

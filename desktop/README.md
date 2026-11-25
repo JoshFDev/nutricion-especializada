@@ -32,7 +32,9 @@ pnpm build      # crea instalador NSIS
 - `electron/postgres.ts` - PostgreSQL portable con embedded-postgres
 - `electron/migrar-escritorio.ts` - Aplica migraciones sin psql
 - `electron/backend.ts` - Lanza el backend Node como proceso hijo
-- Los datos se guardan en `%LOCALAPPDATA%\nutricion-especializada-desktop\datos\`
+- `src/iconoEscritorio.png` - imagen original; se convierte a `resources/icon.ico`
+  para el instalador y la ventana
+- Los datos se guardan en `%APPDATA%\nutricion-especializada-desktop\datos\`
 
 ## Notas
 

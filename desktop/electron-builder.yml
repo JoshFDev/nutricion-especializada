@@ -39,6 +39,9 @@ extraResources:
   # scripts/preparar-configuracion.mjs y está ignorado por git.
   - from: configuracion.local.json
     to: configuracion.json
+  # Icono de la ventana (el instalador ya lo toma de win.icon).
+  - from: resources/icon.ico
+    to: icon.ico
 
 asar: false
 

@@ -23,15 +23,6 @@ const desktop = resolve(aqui, '..');
 const raiz = resolve(desktop, '..');
 const destino = join(desktop, 'configuracion.local.json');
 
-const administrador = {
-  nombre: 'Joshua',
-  apellidoPaterno: 'Administrador',
-  email: 'nutricionespecializada899@gmail.com',
-  rfc: 'XAXX010101000',
-  puesto: 'Administrador',
-  contrasena: 'Nutricion2026!',
-};
-
 let smtp = {
   host: 'localhost',
   port: 25,
@@ -40,6 +31,10 @@ let smtp = {
   pass: '',
   from: 'Nutrición Especializada <no-reply@localhost>',
 };
+
+// La cuenta administradora es la misma del correo de la empresa: así quien
+// recibe la contraseña temporal por SMTP puede entrar con ese mismo correo.
+let correoAdministrador = 'nutricionespecializada899@gmail.com';
 
 try {
   const env = dotenv.parse(await readFile(join(raiz, 'backend', '.env'), 'utf8'));
@@ -51,12 +46,22 @@ try {
     pass: env.SMTP_PASS || '',
     from: env.SMTP_FROM || smtp.from,
   };
+  correoAdministrador = env.SMTP_USER || correoAdministrador;
 } catch {
   console.warn(
     '[config] No se encontró backend/.env. Se generará la configuración sin SMTP; ' +
       'la recuperación por correo no funcionará hasta configurarla.',
   );
 }
+
+const administrador = {
+  nombre: 'Joshua',
+  apellidoPaterno: 'Administrador',
+  email: correoAdministrador,
+  rfc: 'XAXX010101000',
+  puesto: 'Administrador',
+  contrasena: 'Nutricion2026!',
+};
 
 try {
   await access(destino);
